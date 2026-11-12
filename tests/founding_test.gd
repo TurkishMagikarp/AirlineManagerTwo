@@ -35,7 +35,7 @@ func _run() -> void:
 	var airline: Dictionary = main.simulation.get_airline_info()
 	if not _check(main.overview.visible and not main.founding.visible and airline["name"] == "Bosporus 日本 Air" and airline["airport_icao"] == "LTFJ", "Actual founding button opens overview with canonical company"):
 		return
-	if not _check(main.heading.text == airline["name"] and "LTFJ" in main.description.text and "%d EUR" % airline["capital_eur"] in main.description.text and "%d EUR" % airline["capital_eur"] == main.simulation.get_starting_capital(), "Overview displays Rust company and configured capital"):
+	if not _check(main.heading.text == airline["name"] and "LTFJ" in main.description.text and main.metrics["balance"].is_visible_in_tree() and main.metrics["balance"].text == main.UI.money(airline["capital_eur"]) and "%d EUR" % airline["capital_eur"] == main.simulation.get_starting_capital(), "Overview displays Rust company and configured capital"):
 		return
 	if not _check(not main.simulation.is_running() and main.simulation.get_elapsed_seconds() == 0.0 and main.simulation.get_speed() == 1, "Founding starts a fresh paused clock"):
 		return

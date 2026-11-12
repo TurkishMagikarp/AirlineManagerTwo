@@ -58,7 +58,7 @@ func _run() -> void:
 	var airline: Dictionary = clock.get_airline_info()
 	if not _check(airline.get("name") == "Neustart 日本 Air" and airline.get("country_code") == "TR" and airline.get("airport_icao") == "LTFJ" and airline.get("capital_eur", -1) >= 0, "Airline survives complete process restart"):
 		return
-	if not _check(main.overview.visible and not main.founding.visible and main.heading.text == airline["name"] and "LTFJ" in main.description.text and str(airline["capital_eur"]) in main.description.text, "Overview shows founded or loaded airline"):
+	if not _check(main.overview.visible and not main.founding.visible and main.heading.text == airline["name"] and "LTFJ" in main.description.text and main.metrics["balance"].text == main.UI.money(airline["capital_eur"]), "Overview shows founded or loaded airline"):
 		return
 	var fleet: Array = clock.get_fleet()
 	var routes: Array = clock.get_routes()

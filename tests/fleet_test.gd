@@ -27,7 +27,7 @@ func _run() -> void:
 			atr_index = index
 		if model["id"] == "a320_200":
 			a320_index = index
-		if not _check("%d EUR" % model["price_eur"] in main.model_details.text and str(model["seats"]) in main.model_details.text and "%d km" % model["range_km"] in main.model_details.text, "Purchase shows Rust price, seat capacity and range"):
+		if not _check(main.UI.money(model["price_eur"]) in main.model_details.text and str(model["seats"]) in main.model_details.text and "%d km" % model["range_km"] in main.model_details.text, "Purchase shows Rust price, seat capacity and range"):
 			return
 	if not _check(atr_index >= 0 and a320_index >= 0 and main.model_select.item_count == 3, "Three real aircraft models available"):
 		return
@@ -55,7 +55,7 @@ func _run() -> void:
 	if not await _capture("fleet.png"):
 		return
 	await _click(main.navigation[0])
-	if not _check("Guthaben: %d EUR" % balance_before in main.description.text, "Overview displays remaining balance, not original start capital"):
+	if not _check(main.metrics["balance"].is_visible_in_tree() and main.metrics["balance"].text == main.UI.money(balance_before), "Overview displays remaining balance, not original start capital"):
 		return
 	await _click(main.new_game_button)
 	await _click(main.cancel_founding_button)

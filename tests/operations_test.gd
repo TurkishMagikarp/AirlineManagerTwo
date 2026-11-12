@@ -81,7 +81,7 @@ func _run() -> void:
 	if not _check(results[0]["passengers"] > 0 and results[0]["passengers"] < results[0]["seats"] and financial["profit_eur"] > 0, "Partial flight earns profit"):
 		return
 	main._process(0.0)
-	if not _check("Gewinn/Verlust" in main.routes_panel.results_label.text, "Flight financial result displayed"):
+	if not _check(main.routes_panel.results_tree.get_root().get_first_child().get_text(5) == main.UI.money(main.simulation.get_flight_results()[0]["profit_eur"]), "Flight financial result displayed"):
 		return
 	if not _check(main.simulation.get_fleet()[0]["status"] == "ground" and main.simulation.get_fleet()[0]["location_icao"] == "EDDM", "16x lands exactly and starts ground time"):
 		return
@@ -97,7 +97,7 @@ func _run() -> void:
 	if not _check(main.simulation.get_financial_summary()["flights"] == 101 and main.simulation.get_flight_results().size() == 100, "16x settles all flights and bounds history"):
 		return
 	await _click(main.navigation[0])
-	if not _check("Betriebsgewinn/-verlust" in main.detail.text and "Guthaben:" in main.description.text, "Company financial overview displayed"):
+	if not _check(main.metrics["profit"].is_visible_in_tree() and main.metrics["balance"].text == main.UI.money(main.simulation.get_airline_info()["capital_eur"]) and main.metrics["profit"].text == main.UI.money(main.simulation.get_financial_summary()["profit_eur"]), "Company financial overview displayed"):
 		return
 	await _click(main.navigation[1])
 	if not _check("Unterwegs" in main.fleet_tree.get_root().get_child(0).get_text(3), "Fleet displays live flight status"):

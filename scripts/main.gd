@@ -2,22 +2,20 @@ extends Control
 ## Presentation only. No simulation state or economic calculations.
 
 const RoutesPanel = preload("res://scripts/routes_panel.gd")
+const UI = preload("res://scripts/ui/components.gd")
 
 const PAGES: Array[Dictionary] = [
-	{"title": "Übersicht", "heading": "Ein klarer Anfang.",
-	"body": "Die Spielzeit kommt direkt aus dem Rust-Simulationskern.\nStart, Pause und Zeitraffer sind unten verfügbar.",
-	"detail": "Die Verbindung zur Simulation steht.\n\nNoch keine Finanzzahlen, Flugbewegungen oder Unternehmensdaten. Spielregeln und Berechnungen bleiben ausschließlich in Rust."},
+	{"title": "Übersicht", "heading": "Unternehmensübersicht", "body": ""},
 	{"title": "Flotte", "heading": "Deine Flotte",
-	"body": "", "detail": ""},
+	"body": ""},
 	{"title": "Routen", "heading": "Dein Routennetz",
-	"body": "Verbindungen planen und Flugzeuge zuweisen.", "detail": ""},
+	"body": "Verbindungen planen und Flugzeuge zuweisen."},
 ]
 
 var navigation: Array[Button] = []
 var page_title: Label
 var heading: Label
 var description: Label
-var detail: Label
 var current_page: int = 0
 var simulation := SimulationClock.new()
 var time_label: Label
@@ -50,29 +48,39 @@ var empty_fleet: Label
 var fleet_tree: Tree
 var routes_panel: VBoxContainer
 var last_operation_second: int = -1
+var finance_panel: VBoxContainer
+var metrics: Dictionary = {}
+var finance_breakdown: Label
+var operation_summary: Label
+var metric_grid: GridContainer
 
 
 func _ready() -> void:
 	get_window().min_size = Vector2i(680, 520)
-	theme = _make_theme()
 	var margin := MarginContainer.new()
 	overview = margin
 	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	for side in ["left", "top", "right", "bottom"]:
-		margin.add_theme_constant_override("margin_" + side, 28)
+		margin.add_theme_constant_override("margin_" + side, 20)
 	add_child(margin)
 	var column := VBoxContainer.new()
-	column.add_theme_constant_override("separation", 22)
+	column.add_theme_constant_override("separation", 14)
 	margin.add_child(column)
-	column.add_child(_label("AIRLINE MANAGER", 22))
-	column.add_child(_label("OFFLINE  /  RUST-SIMULATION · SPIELZEIT", 14, Color("a8c7d5")))
+	var brand := HBoxContainer.new()
+	column.add_child(brand)
+	var wordmark := _label("AM  /  AIRLINE MANAGER", 21)
+	wordmark.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	brand.add_child(wordmark)
+	brand.add_child(_label("OPERATIONS CENTER", 12, UI.ACCENT))
 	var nav := HBoxContainer.new()
 	nav.add_theme_constant_override("separation", 12)
 	column.add_child(nav)
 	for index in range(PAGES.size()):
 		var button := Button.new()
 		button.text = PAGES[index]["title"]
-		button.custom_minimum_size = Vector2(150, 48)
+		button.icon = load("res://resources/icons/%s.svg" % ["overview", "fleet", "routes"][index])
+		button.custom_minimum_size = Vector2(120, 42)
+		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		button.toggle_mode = true
 		button.pressed.connect(_show_page.bind(index))
 		nav.add_child(button)
@@ -88,43 +96,45 @@ func _ready() -> void:
 	column.add_child(scroll)
 	var content := VBoxContainer.new()
 	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	content.add_theme_constant_override("separation", 18)
+	content.add_theme_constant_override("separation", 12)
 	scroll.add_child(content)
 	page_title = _label("", 16, Color("90d6dc"))
 	heading = _label("", 30)
 	description = _label("", 18)
-	detail = _label("", 17, Color("c2cedc"))
-	for label in [page_title, heading, description, detail]:
+	for label in [page_title, heading, description]:
 		label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		content.add_child(label)
+	_build_finance(content)
 	_build_fleet(content)
 	routes_panel = RoutesPanel.new()
 	routes_panel.simulation = simulation
 	routes_panel.changed.connect(func(): save_status.text = "Routen geändert · bitte Spielstand speichern.")
 	content.add_child(routes_panel)
 	_add_time_controls(column)
-	column.add_child(_label("Navigation: Tab / Umschalt+Tab · Öffnen: Enter / Leertaste", 14, Color("b0becf")))
 	_build_founding()
 	_sync_view()
 
 
 func _add_time_controls(column: VBoxContainer) -> void:
-	var panel := VBoxContainer.new()
-	panel.add_theme_constant_override("separation", 8)
-	column.add_child(panel)
+	var panel := UI.panel(column, "")
+	var layout := GridContainer.new()
+	layout.add_theme_constant_override("h_separation", 24)
+	panel.add_child(layout)
+	layout.resized.connect(func(): layout.columns = 2 if layout.size.x >= 980 else 1)
 	var clock_row := HBoxContainer.new()
 	clock_row.add_theme_constant_override("separation", 24)
-	panel.add_child(clock_row)
-	time_label = _label("", 24, Color("90d6dc"))
+	layout.add_child(clock_row)
+	time_label = _label("", 21, UI.ACCENT)
 	clock_row.add_child(time_label)
 	state_label = _label("", 16)
 	state_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	clock_row.add_child(state_label)
 	var controls := HBoxContainer.new()
 	controls.add_theme_constant_override("separation", 8)
-	panel.add_child(controls)
+	layout.add_child(controls)
 	start_button = Button.new()
 	start_button.text = "Start"
+	start_button.theme_type_variation = "PrimaryButton"
 	start_button.pressed.connect(func():
 		simulation.start()
 		_refresh_time()
@@ -203,6 +213,7 @@ func _process(delta: float) -> void:
 func _refresh_time() -> void:
 	time_label.text = simulation.get_display_time()
 	state_label.text = "%s · %d×" % ["Läuft" if simulation.is_running() else "Pausiert", simulation.get_speed()]
+	state_label.add_theme_color_override("font_color", UI.POSITIVE if simulation.is_running() else UI.MUTED)
 	start_button.disabled = simulation.is_running()
 	pause_button.disabled = not simulation.is_running()
 	for button in speed_buttons:
@@ -218,8 +229,8 @@ func _show_page(index: int) -> void:
 	page_title.visible = index == 0
 	heading.text = page["heading"]
 	description.text = page["body"]
-	detail.text = page["detail"]
-	detail.visible = index == 0
+	finance_panel.visible = index == 0
+	description.show()
 	fleet_panel.visible = index == 1
 	routes_panel.visible = index == 2
 	if index == 2:
@@ -236,8 +247,18 @@ func _refresh_finance() -> void:
 	var airline: Dictionary = simulation.get_airline_info()
 	var finance: Dictionary = simulation.get_financial_summary()
 	heading.text = airline["name"]
-	description.text = "Heimatland: %s\nHeimatflughafen: %s (%s)\nGuthaben: %d EUR" % [airline["country_name"], airline["airport_name"], airline["airport_icao"], airline["capital_eur"]]
-	detail.text = "Finanzen seit Einführung der Wirtschaft · vereinfachte Werte\n%d Flüge · %d Passagiere · %.1f %% Auslastung\nTicketeinnahmen: %d EUR\nBetriebskosten: %d EUR (Treibstoff %d · Flughäfen %d · Personal %d · Wartung/Verwaltung %d)\nBetriebsgewinn/-verlust: %d EUR\nFlugzeugkäufe (separat, nicht in Betriebskosten): %d EUR\n\nAbrechnung bei Landung. Negative Kontostände sind möglich; noch keine Insolvenzregeln.\nTicketpreise und Flugergebnisse im Routen-Tab. Bitte ausdrücklich speichern." % [finance["flights"], finance["passengers"], finance["load_percent"], finance["revenue_eur"], finance["costs_eur"], finance["fuel_eur"], finance["airport_eur"], finance["crew_eur"], finance["overhead_eur"], finance["profit_eur"], finance["purchases_eur"]]
+	description.text = "%s  /  %s · %s" % [airline["airport_icao"], airline["airport_name"], airline["country_name"]]
+	metrics["balance"].text = UI.money(airline["capital_eur"])
+	metrics["balance"].add_theme_color_override("font_color", UI.NEGATIVE if airline["capital_eur"] < 0 else Color("e2eaf4"))
+	metrics["profit"].text = UI.money(finance["profit_eur"])
+	metrics["profit"].add_theme_color_override("font_color", UI.POSITIVE if finance["profit_eur"] >= 0 else UI.NEGATIVE)
+	metrics["load"].text = "%.1f %%" % finance["load_percent"]
+	metrics["flights"].text = "%d  /  %d Pax" % [finance["flights"], finance["passengers"]]
+	finance_breakdown.text = "Ticketeinnahmen     %s\nBetriebskosten          %s\n\nTreibstoff                    %s\nFlughäfen                   %s\nPersonal                      %s\nWartung / Verwaltung  %s\n\nFlugzeugkäufe             %s" % [UI.money(finance["revenue_eur"]), UI.money(finance["costs_eur"]), UI.money(finance["fuel_eur"]), UI.money(finance["airport_eur"]), UI.money(finance["crew_eur"]), UI.money(finance["overhead_eur"]), UI.money(finance["purchases_eur"])]
+	var operations: Array = simulation.get_operations()
+	operation_summary.text = "%d Flugzeuge  ·  %d Routen  ·  %d aktive Flugpläne" % [simulation.get_fleet().size(), simulation.get_routes().size(), operations.size()]
+	for operation in operations:
+		operation_summary.text += "\n\n%s  /  Route #%d\n%s\nNächster Abflug: %s" % [operation["identifier"], operation["route_id"], operation["status_text"], operation["next_departure"]]
 
 
 func _build_fleet(content: VBoxContainer) -> void:
@@ -248,12 +269,8 @@ func _build_fleet(content: VBoxContainer) -> void:
 	grid.add_theme_constant_override("h_separation", 24)
 	grid.add_theme_constant_override("v_separation", 18)
 	fleet_panel.add_child(grid)
-	grid.resized.connect(func(): grid.columns = 2 if grid.size.x >= 980 else 1)
-	var shop := VBoxContainer.new()
-	shop.custom_minimum_size.x = 400
-	shop.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	shop.add_theme_constant_override("separation", 12)
-	grid.add_child(shop)
+	grid.resized.connect(func(): grid.columns = 2 if grid.size.x >= 1250 else 1)
+	var shop := UI.panel(grid, "BESCHAFFUNG  /  FLUGZEUGMARKT")
 	var purchase := HBoxContainer.new()
 	purchase.add_theme_constant_override("separation", 12)
 	shop.add_child(purchase)
@@ -268,6 +285,7 @@ func _build_fleet(content: VBoxContainer) -> void:
 	purchase.add_child(model_select)
 	buy_button = Button.new()
 	buy_button.text = "Flugzeug kaufen"
+	buy_button.theme_type_variation = "PrimaryButton"
 	buy_button.tooltip_text = "Kauft das gewählte Modell sofort zum angezeigten Preis."
 	buy_button.pressed.connect(_buy_aircraft)
 	purchase.add_child(buy_button)
@@ -280,23 +298,21 @@ func _build_fleet(content: VBoxContainer) -> void:
 	var hint := _label("Vorläufige Kaufpreise · Sitzkonfiguration und Reichweite sind vereinfachte Modellangaben.", 14, Color("b0becf"))
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	shop.add_child(hint)
-	var owned := VBoxContainer.new()
-	owned.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	owned.add_theme_constant_override("separation", 12)
-	grid.add_child(owned)
-	owned.add_child(_label("Eigene Flugzeuge", 20))
+	var owned := UI.panel(grid, "FLOTTENREGISTER  /  EIGENE FLUGZEUGE")
 	empty_fleet = _label("Noch keine Flugzeuge gekauft.", 17, Color("c2cedc"))
 	owned.add_child(empty_fleet)
 	fleet_tree = Tree.new()
 	fleet_tree.columns = 4
 	fleet_tree.hide_root = true
 	fleet_tree.column_titles_visible = true
-	fleet_tree.custom_minimum_size.y = 180
+	fleet_tree.custom_minimum_size.y = 220
 	for index in range(4):
 		fleet_tree.set_column_title(index, ["Kennung", "Typ", "Standort", "Status"][index])
 		fleet_tree.set_column_expand(index, index == 1)
-		fleet_tree.set_column_custom_minimum_width(index, [140, 160, 95, 95][index])
+		fleet_tree.set_column_custom_minimum_width(index, [115, 145, 90, 210][index])
 	owned.add_child(fleet_tree)
+	# The operational register takes precedence over procurement.
+	grid.move_child(owned.get_parent(), 0)
 	_model_selected(model_select.selected)
 
 
@@ -306,7 +322,7 @@ func _model_selected(index: int) -> void:
 		model_details.text = "Kein Flugzeugmodell verfügbar. Bitte Katalog und Preise prüfen."
 		return
 	var model: Dictionary = model_select.get_item_metadata(index)
-	model_details.text = "Kaufpreis: %d EUR\nSitzplätze: %d · Reichweite: %d km" % [model["price_eur"], model["seats"], model["range_km"]]
+	model_details.text = "%s\n%d Sitzplätze   /   %d km Referenzreichweite" % [UI.money(model["price_eur"]), model["seats"], model["range_km"]]
 
 
 func _buy_aircraft() -> void:
@@ -329,7 +345,7 @@ func _refresh_fleet() -> void:
 	var fleet: Array = simulation.get_fleet()
 	var airline: Dictionary = simulation.get_airline_info()
 	if current_page == 1:
-		description.text = "Guthaben: %d EUR · Flugzeuge: %d" % [airline.get("capital_eur", 0), fleet.size()]
+		description.text = "%d Flugzeuge  /  Verfügbares Guthaben: %s" % [fleet.size(), UI.money(airline.get("capital_eur", 0))]
 	empty_fleet.visible = fleet.is_empty()
 	fleet_tree.visible = not fleet.is_empty()
 	fleet_tree.clear()
@@ -341,6 +357,7 @@ func _refresh_fleet() -> void:
 		row.set_text(2, plane["location_icao"])
 		var phase: String = {"parked": "Geparkt", "in_flight": "Unterwegs", "ground": "Gelandet · Bodenzeit"}.get(plane["status"], "Unbekannt")
 		row.set_text(3, "%s · Route #%d" % [phase, plane["route_id"]] if plane["route_id"] != 0 else phase)
+		row.set_custom_color(3, UI.ACCENT if plane["status"] == "in_flight" else UI.POSITIVE if plane["status"] == "parked" else Color("e4c287"))
 		if plane["status"] == "in_flight":
 			row.set_text(2, "Ab %s (in der Luft)" % plane["location_icao"])
 		row.set_tooltip_text(0, plane["identifier"])
@@ -399,6 +416,7 @@ func _build_founding() -> void:
 	column.add_child(actions)
 	found_button = Button.new()
 	found_button.text = "Airline gründen"
+	found_button.theme_type_variation = "PrimaryButton"
 	found_button.pressed.connect(_found_airline)
 	actions.add_child(found_button)
 	founding_load_button = Button.new()
@@ -472,34 +490,28 @@ func _label(text: String, size: int, color: Color = Color("f0f4fa")) -> Label:
 	return label
 
 
-func _make_theme() -> Theme:
-	var result := Theme.new()
-	result.default_font_size = 18
-	for state in ["normal", "hover", "pressed", "focus"]:
-		var style := StyleBoxFlat.new()
-		style.bg_color = Color("18283b")
-		style.set_corner_radius_all(8)
-		style.set_content_margin_all(12)
-		if state == "hover":
-			style.bg_color = Color("29455c")
-		elif state == "pressed":
-			style.bg_color = Color("235866")
-		elif state == "focus":
-			style.bg_color = Color.TRANSPARENT
-			style.border_color = Color("b5f3f4")
-			style.set_border_width_all(3)
-		result.set_stylebox(state, "Button", style)
-	for state in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]:
-		result.set_color(state, "Button", Color("f0f4fa"))
-	for state in ["normal", "focus", "read_only"]:
-		var field_style := StyleBoxFlat.new()
-		field_style.bg_color = Color("18283b")
-		field_style.set_corner_radius_all(8)
-		field_style.set_content_margin_all(12)
-		if state == "focus":
-			field_style.border_color = Color("b5f3f4")
-			field_style.set_border_width_all(2)
-		result.set_stylebox(state, "LineEdit", field_style)
-	result.set_color("font_color", "LineEdit", Color("f0f4fa"))
-	result.set_color("font_placeholder_color", "LineEdit", Color("b0becf"))
-	return result
+func _build_finance(content: VBoxContainer) -> void:
+	finance_panel = VBoxContainer.new()
+	content.add_child(finance_panel)
+	metric_grid = GridContainer.new()
+	metric_grid.add_theme_constant_override("h_separation", 12)
+	metric_grid.add_theme_constant_override("v_separation", 12)
+	finance_panel.add_child(metric_grid)
+	metric_grid.resized.connect(func(): metric_grid.columns = 4 if metric_grid.size.x >= 1150 else 2)
+	for item in [["balance", "KONTOSTAND"], ["profit", "BETRIEBSERGEBNIS"], ["load", "AUSLASTUNG · GESAMT"], ["flights", "LANDUNGEN / PASSAGIERE"]]:
+		metrics[item[0]] = UI.metric(metric_grid, item[1])
+	var grid := GridContainer.new()
+	grid.add_theme_constant_override("h_separation", 12)
+	grid.add_theme_constant_override("v_separation", 12)
+	finance_panel.add_child(grid)
+	grid.resized.connect(func(): grid.columns = 2 if grid.size.x >= 900 else 1)
+	var finance := UI.panel(grid, "FINANZÜBERSICHT  /  KUMULIERT")
+	finance_breakdown = UI.label("")
+	finance.add_child(finance_breakdown)
+	var operations := UI.panel(grid, "LIVE-BETRIEB  /  FLOTTE & NETZWERK")
+	operation_summary = UI.label("")
+	operation_summary.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	operations.add_child(operation_summary)
+	var note := UI.label("Abrechnung bei Landung · Käufe separat ausgewiesen.\nVereinfachte Wirtschaftswerte · Fortschritt manuell speichern.", 13, UI.MUTED)
+	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	finance_panel.add_child(note)

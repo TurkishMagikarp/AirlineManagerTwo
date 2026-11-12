@@ -63,9 +63,9 @@ func _run() -> void:
 		return
 	main._sync_view()
 	main._show_page(0)
-	if not _check("Betriebsgewinn/-verlust" in main.detail.text, "Restored finances visible in company overview"):
+	if not _check(main.metrics["profit"].is_visible_in_tree() and main.metrics["profit"].text == main.UI.money(totals["profit_eur"]), "Restored finances visible in company overview"):
 		return
-	if not _check("Wartung/Verwaltung" in main.detail.text, "Operating allowance is transparently displayed"):
+	if not _check(main.finance_breakdown.is_visible_in_tree() and "Wartung / Verwaltung" in main.finance_breakdown.text and main.UI.money(totals["overhead_eur"]) in main.finance_breakdown.text, "Operating allowance is transparently displayed"):
 		return
 	simulation.start()
 	simulation.advance(7200.0 / 16.0)

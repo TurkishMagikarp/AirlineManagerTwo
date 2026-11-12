@@ -2,6 +2,7 @@ extends VBoxContainer
 ## Presentation only: Rust owns routes, availability, distances and validation.
 
 signal changed
+const UI = preload("res://scripts/ui/components.gd")
 
 var simulation: RefCounted
 var origin: OptionButton
@@ -22,7 +23,7 @@ var stop_button: Button
 var operations_label: Label
 var ticket_input: SpinBox
 var ticket_button: Button
-var results_label: Label
+var results_tree: Tree
 
 
 func _ready() -> void:
@@ -42,6 +43,7 @@ func _ready() -> void:
 	add_child(preview)
 	create_button = Button.new()
 	create_button.text = "Route erstellen"
+	create_button.theme_type_variation = "PrimaryButton"
 	create_button.pressed.connect(_create)
 	add_child(create_button)
 	for select in [origin, destination, aircraft]:
@@ -53,6 +55,7 @@ func _ready() -> void:
 	route_tree = Tree.new()
 	route_tree.columns = 4
 	route_tree.hide_root = true
+	route_tree.select_mode = Tree.SELECT_ROW
 	route_tree.column_titles_visible = true
 	route_tree.custom_minimum_size.y = 180
 	for i in range(4):
@@ -70,6 +73,7 @@ func _ready() -> void:
 	actions.add_child(assign_button)
 	delete_button = Button.new()
 	delete_button.text = "Route löschen"
+	delete_button.theme_type_variation = "DangerButton"
 	delete_button.pressed.connect(_delete)
 	actions.add_child(delete_button)
 	assignment.item_selected.connect(func(_index: int): _assignment_preview())
@@ -80,14 +84,17 @@ func _ready() -> void:
 	ticket_input.step = 1
 	add_child(ticket_input)
 	ticket_button = Button.new()
-	ticket_button.text = "Ticketpreis übernehmen (Flugplan vorher beenden)"
+	ticket_button.text = "Ticketpreis übernehmen"
+	ticket_button.tooltip_text = "Flugplan vorher beenden."
 	ticket_button.pressed.connect(func():
 		var route := _route()
 		if not route.is_empty():
 			_feedback(simulation.set_ticket_price(route["id"], int(ticket_input.value)), "Ticketpreis geändert.")
 	)
 	add_child(ticket_button)
-	add_child(_label(simulation.get_economy_rules()))
+	var rules := _label("Wirtschaftsregeln & Berechnung: Details im Tooltip")
+	rules.tooltip_text = simulation.get_economy_rules()
+	add_child(rules)
 	add_child(_label("Flugplan für ausgewählte Route · erster Abflug in Spielminuten"))
 	delay_input = SpinBox.new()
 	delay_input.min_value = 1
@@ -109,7 +116,8 @@ func _ready() -> void:
 	)
 	add_child(schedule_button)
 	stop_button = Button.new()
-	stop_button.text = "Flugplan beenden (nur nach Bodenzeit)"
+	stop_button.text = "Flugplan beenden"
+	stop_button.tooltip_text = "Nur nach Ende der Bodenzeit möglich."
 	stop_button.pressed.connect(func():
 		var route := _route()
 		if not route.is_empty():
@@ -118,9 +126,50 @@ func _ready() -> void:
 	add_child(stop_button)
 	operations_label = _label("")
 	add_child(operations_label)
-	results_label = _label("")
-	add_child(results_label)
+	_arrange_workspace()
 	refresh()
+
+
+func _arrange_workspace() -> void:
+	var original := get_children()
+	var grid := GridContainer.new()
+	grid.add_theme_constant_override("h_separation", 12)
+	grid.add_theme_constant_override("v_separation", 12)
+	add_child(grid)
+	grid.resized.connect(func(): grid.columns = 2 if grid.size.x >= 1050 else 1)
+	var network := UI.panel(grid, "01  /  ROUTENREGISTER & LIVE-BETRIEB")
+	var planner := UI.panel(grid, "02  /  VERBINDUNG PLANEN")
+	var editor := UI.panel(self, "03  /  AUSGEWÄHLTE ROUTE · ZUWEISUNG & FLUGPLAN")
+	var editor_grid := GridContainer.new()
+	editor_grid.add_theme_constant_override("h_separation", 18)
+	editor_grid.add_theme_constant_override("v_separation", 18)
+	editor.add_child(editor_grid)
+	editor_grid.resized.connect(func(): editor_grid.columns = 3 if editor_grid.size.x >= 1000 else 1)
+	var editor_columns: Array[VBoxContainer] = []
+	for i in range(3):
+		var column := VBoxContainer.new()
+		column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		editor_grid.add_child(column)
+		editor_columns.append(column)
+	var assignment_title: Node = original[original.find(assignment) - 1]
+	var ticket_title: Node = original[original.find(ticket_input) - 1]
+	var schedule_title: Node = original[original.find(delay_input) - 1]
+	var result_panel := UI.panel(self, "04  /  FLUGERGEBNISSE · LETZTE 100 LANDUNGEN")
+	var target := planner
+	for node in original:
+		if node == empty_label:
+			target = network
+		if node == assignment_title:
+			target = editor_columns[0]
+		if node == ticket_title:
+			target = editor_columns[1]
+		if node == schedule_title:
+			target = editor_columns[2]
+		if node == operations_label:
+			target = network
+		node.reparent(target)
+	results_tree = UI.table(["Landung / Route", "Strecke", "Pax / Auslastung", "Einnahmen", "Kosten", "Ergebnis"], [170, 145, 135, 110, 110, 110], 240)
+	result_panel.add_child(results_tree)
 
 
 func _label(text: String) -> Label:
@@ -190,10 +239,19 @@ func refresh_operations() -> void:
 	for operation in simulation.get_operations():
 		lines.append("%s · Route #%d · Flug %d min · Boden %d min\n%s\nNächster Abflug: %s" % [operation["identifier"], operation["route_id"], ceili(operation["flight_seconds"] / 60.0), operation["ground_seconds"] / 60, operation["status_text"], operation["next_departure"]])
 	operations_label.text = "\n\n".join(lines)
-	lines = ["Flugergebnisse · letzte 100 Landungen · neueste zuerst (vorläufige EUR-Werte)"]
+	results_tree.clear()
+	var root_item := results_tree.create_item()
+	if simulation.get_flight_results().is_empty():
+		var empty := results_tree.create_item(root_item)
+		empty.set_text(0, "Noch keine Landungen")
+		empty.set_selectable(0, false)
 	for result in simulation.get_flight_results():
-		lines.append("%s · Route #%d · %s → %s · Ticket %d EUR\n%d / %d Passagiere · %.1f %% Auslastung · Einnahmen %d EUR\nKosten %d EUR (Treibstoff %d · Flughäfen %d · Personal %d · Wartung/Verwaltung %d) · Gewinn/Verlust %d EUR" % [result["landing"], result["route_id"], result["origin"], result["destination"], result["ticket_eur"], result["passengers"], result["seats"], result["load_percent"], result["revenue_eur"], result["costs_eur"], result["fuel_eur"], result["airport_eur"], result["crew_eur"], result["overhead_eur"], result["profit_eur"]])
-	results_label.text = "\n\n".join(lines)
+		var row := results_tree.create_item(root_item)
+		var values := ["%s / #%d" % [result["landing"], result["route_id"]], "%s → %s" % [result["origin"], result["destination"]], "%d/%d · %.1f %%" % [result["passengers"], result["seats"], result["load_percent"]], UI.money(result["revenue_eur"]), UI.money(result["costs_eur"]), UI.money(result["profit_eur"])]
+		for i in range(values.size()):
+			row.set_text(i, values[i])
+			row.set_tooltip_text(i, "Ticket: %s\nTreibstoff: %s\nFlughäfen: %s\nPersonal: %s\nWartung / Verwaltung: %s" % [UI.money(result["ticket_eur"]), UI.money(result["fuel_eur"]), UI.money(result["airport_eur"]), UI.money(result["crew_eur"]), UI.money(result["overhead_eur"])])
+		row.set_custom_color(5, UI.POSITIVE if result["profit_eur"] >= 0 else UI.NEGATIVE)
 
 
 func _preview() -> void:

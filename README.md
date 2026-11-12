@@ -19,6 +19,13 @@ zuvor mit `cargo build --release --locked --manifest-path rust/Cargo.toml` bauen
 macOS/Linux sind in der Extension konfiguriert, aber noch nicht getestet;
 die Bibliothek muss auf der jeweiligen Zielplattform gebaut werden.
 
+## Oberfläche
+
+Übersicht, Flotte und Routen verwenden ein gemeinsames Navy-Operations-Theme mit
+Kennzahlen-Karten, Statusfarben und Ergebnistabellen. Neue untergeordnete Controls
+erben das Theme automatisch. Bausteine, Layoutregeln und reproduzierbare echte
+Godot-Screenshots: [UI-Design](docs/ui-design.md).
+
 ## Kleiner Simulationskern
 
 Rust (`rust/src/game.rs`, `rust/src/clock.rs`) besitzt Airline und Spielzeit,
