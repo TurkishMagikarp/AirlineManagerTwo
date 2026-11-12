@@ -39,6 +39,17 @@ impl IRefCounted for SimulationClock {
 
 #[godot_api]
 impl SimulationClock {
+    /// Departure snapshots, not live estimates or already settled finances.
+    #[func]
+    fn get_active_flights(&self) -> Array<VarDictionary> {
+        self.game
+            .routes
+            .iter()
+            .filter_map(|r| r.plan.as_ref()?.airborne.as_ref())
+            .map(flight_dictionary)
+            .collect()
+    }
+
     #[func]
     fn get_finance_history_info(&self) -> VarDictionary {
         self.game

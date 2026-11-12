@@ -268,15 +268,19 @@ Der aktuelle Projektname ist `Airline Manager — UI-Basis`. Der tatsächliche P
 steht auch im Tooltip der Speichermeldung. macOS ist hier nicht praktisch getestet.
 
 Rust (`rust/src/save.rs`) übernimmt Dateizugriff, JSON-Format und Validierung.
-Das Format hat Version **7** und einen `state`-Bereich mit `clock`, `airline`,
+Das Format hat Version **8** und einen `state`-Bereich mit `clock`, `airline`,
 `fleet`, `routes` (einschließlich Ticketpreis und optionalem Flugplan) und `finance`
 (Finanzsummen und letzte 100 Flugergebnisse) sowie `history` (Beginn, Anfangssaldo,
 vorherige Finanzsummen, verlustfreie Flugblöcke und zeitgestempelte Käufe).
 Archivzeiten, Summen und Flugdaten werden beim Laden und Speichern validiert.
+Laufende Flüge enthalten ihr beim Abflug fixiertes Ergebnis (Passagiere, Einnahmen,
+Sitze/Auslastung und Kosten). Änderungen anderer Flugpläne wirken erst auf künftige
+Abflüge. Versionen **1–7** erhalten für bereits laufende Flüge einmal beim Laden
+eine Schätzung aus dem gespeicherten Angebot; vergangene Ergebnisse bleiben erhalten.
 Version **6** übernimmt unverändert ihre Finanzsummen und eröffnet das neue Archiv
 am Ladezeitpunkt. Additives Feld `overhead`: bei alten
 Version-6-Ergebnissen null. Historische Ergebnisse werden nicht
-mit neuen Konfigurationswerten nachberechnet; künftige Landungen nutzen die aktuelle
+mit neuen Konfigurationswerten nachberechnet; künftige Abflüge nutzen die aktuelle
 Build-Konfiguration. Version **5** behält Flugbetrieb und Kontostand und erhält
 Standardticketpreise sowie leere Finanzsummen, ohne vergangene Flüge nachträglich
 abzurechnen. Ein bereits laufender Flug wird erst bei seiner nächsten Landung abgerechnet.
@@ -356,7 +360,7 @@ Tabellen ohne neue Buchungen und Layouts bis 680×520. Der separate Neustarttest
 lädt dieses Archiv in einem neuen Godot-Prozess und setzt es ohne Doppelbuchung
 fort. Rust prüft außerdem Preis-/Auslastungswechsel, identische Archive bei
 kleinen/großen 16×-Schritten, Migration aus Version 6 und ungültige Archivdaten.
-Verifiziert: 50 Rust-Tests, Clippy ohne Warnungen, Nachfrage-UI samt separatem
+Verifiziert: 54 Rust-Tests, Clippy ohne Warnungen, Nachfrage-UI samt separatem
 Ladeprozess, bestehende Godot-Tests und alle vier
 Prozess-Neustarttests sowie `START.bat --headless --quit-after 10` erfolgreich.
 Reale Grafikprüfung bei 1440×1000, 1100×720 und 680×520 erfolgreich. Gemessen im

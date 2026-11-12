@@ -8,7 +8,7 @@ use std::io::{Read, Write};
 use std::path::Path;
 use std::time::Duration;
 
-const VERSION: u32 = 7;
+const VERSION: u32 = 8;
 const MAX_BYTES: u64 = 1024 * 1024;
 
 #[derive(Serialize, Deserialize)]
@@ -172,7 +172,7 @@ pub fn load(path: &Path) -> Result<Game, String> {
     } else {
         crate::economy::Finance::default()
     };
-    let game = Game {
+    let mut game = Game {
         history: if data.version >= 7 {
             if data.state.airline.is_some() && data.state.history.is_none() {
                 return Err("Finanzhistorie fehlt.".into());
@@ -197,6 +197,36 @@ pub fn load(path: &Path) -> Result<Game, String> {
     game.validate_routes()?;
     if data.version < 5 && game.routes.iter().any(|r| r.plan.is_some()) {
         return Err("Unerwarteter Flugplan im alten Spielstand.".into());
+    }
+    if data.version < 8 {
+        // Old saves never stored departure quotes. Freeze the current estimate
+        // once on migration; do not replay or charge already completed flights.
+        for i in 0..game.routes.len() {
+            let route = &game.routes[i];
+            if route.plan.is_some() {
+                let plane = game
+                    .fleet
+                    .iter()
+                    .find(|p| Some(p.id) == route.aircraft_id)
+                    .ok_or("Flugplan ohne Flugzeug.")?;
+                let state = crate::operations::movement(
+                    route,
+                    &plane.model_id,
+                    game.clock.elapsed().as_secs(),
+                )?;
+                let airborne = if state.status == crate::aircraft::AircraftStatus::InFlight {
+                    Some(crate::operations::departure_quote(
+                        route,
+                        &plane.model_id,
+                        state.completed,
+                        &game.routes,
+                    )?)
+                } else {
+                    None
+                };
+                game.routes[i].plan.as_mut().unwrap().airborne = airborne;
+            }
+        }
     }
     game.validate_operations()?;
     game.validate_finance()?;

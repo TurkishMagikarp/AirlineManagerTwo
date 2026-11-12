@@ -246,6 +246,7 @@ mod tests {
                         first_departure: 60,
                         interval_seconds: interval,
                         completed_flights: 0,
+                        airborne: None,
                     });
                     let t = quote(&route, &model.id).unwrap();
                     assert!(t.passengers <= previous && t.passengers <= t.seats);
@@ -399,7 +400,7 @@ pub fn default_ticket() -> i64 {
 }
 
 pub fn rules_text() -> String {
-    "Tagesmarkt je Richtung: Flughafengröße, Bedeutung und Entfernung. Geschäftsreisende sind weniger preissensibel als Urlaubsreisende. Alle aktiven Pendelflugpläne derselben Flughafenverbindung teilen die Nachfrage nach Frequenz, auch bei umgekehrter Route. Gleichmäßiger Tagesdurchschnitt, kein Tageskontingent oder Rückstau. Ganze Passagiere abgerundet und auf Sitze begrenzt. Abrechnung und Kosten bei Landung, auch leer. Details: docs/demand.md; Werte: config/demand.json und config/economy.json.".into()
+    "Tagesmarkt je Richtung: Flughafengröße, Bedeutung und Entfernung. Geschäftsreisende sind weniger preissensibel als Urlaubsreisende. Alle aktiven Pendelflugpläne derselben Flughafenverbindung teilen die Nachfrage nach Frequenz, auch bei umgekehrter Route. Gleichmäßiger Tagesdurchschnitt, kein Tageskontingent oder Rückstau. Ganze Passagiere abgerundet und auf Sitze begrenzt. Passagiere, Einnahmen, Auslastung und Kosten stehen bei Abflug fest; Abrechnung bei Landung, auch leer. Details: docs/demand.md; Werte: config/demand.json und config/economy.json.".into()
 }
 
 pub fn reference_price(km: f64) -> f64 {

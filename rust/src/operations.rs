@@ -11,6 +11,35 @@ pub struct FlightPlan {
     pub first_departure: u64,
     pub interval_seconds: u64,
     pub completed_flights: u64,
+    /// Immutable departure quote. Settled exactly once, at landing.
+    #[serde(default)]
+    pub airborne: Option<crate::economy::FlightResult>,
+}
+
+pub fn departure_quote(
+    route: &Route,
+    model: &str,
+    index: u64,
+    routes: &[Route],
+) -> Result<crate::economy::FlightResult, String> {
+    let plan = route.plan.as_ref().ok_or("Kein Flugplan.")?;
+    let mut directed = route.clone();
+    if !index.is_multiple_of(2) {
+        std::mem::swap(&mut directed.origin_icao, &mut directed.destination_icao);
+    }
+    let landing = index
+        .checked_mul(plan.interval_seconds)
+        .and_then(|t| t.checked_add(plan.first_departure))
+        .and_then(|t| t.checked_add(timings(route, model).ok()?.0))
+        .ok_or("Flugplan-Zeitüberlauf.")?;
+    Ok(crate::economy::FlightResult {
+        route_id: route.id,
+        landing,
+        origin: directed.origin_icao.clone(),
+        destination: directed.destination_icao.clone(),
+        ticket_eur: route.ticket_eur,
+        totals: crate::economy::quote_shared(&directed, model, routes)?,
+    })
 }
 
 pub struct Movement {
@@ -149,6 +178,7 @@ impl Game {
             first_departure: first,
             interval_seconds: interval,
             completed_flights: 0,
+            airborne: None,
         });
         Ok(())
     }
@@ -204,13 +234,29 @@ impl Game {
                 return false;
             };
             let plan = route.plan.as_ref().unwrap();
-            let count = state.completed - plan.completed_flights;
+            let Some(count) = state.completed.checked_sub(plan.completed_flights) else {
+                return false;
+            };
+            // No user actions occur inside an advance. The stationary market permits
+            // batching all new departures; only the pre-existing flight may differ.
+            let mut batches = Vec::new();
+            let mut index = plan.completed_flights;
             if count > 0 {
-                let Ok(totals) =
-                    crate::economy::quote_shared(route, &self.fleet[p].model_id, &self.routes)
-                else {
-                    return false;
-                };
+                if let Some(f) = &plan.airborne {
+                    batches.push((1, f.clone()));
+                    index += 1;
+                }
+                if index < state.completed {
+                    let Ok(f) =
+                        departure_quote(route, &self.fleet[p].model_id, index, &self.routes)
+                    else {
+                        return false;
+                    };
+                    batches.push((state.completed - index, f));
+                }
+            }
+            for (count, result) in batches {
+                let totals = result.totals;
                 if finance.totals.add(&totals, count).is_none() {
                     return false;
                 }
@@ -222,45 +268,50 @@ impl Game {
                     return false;
                 };
                 delta = change;
-                let flight = timings(route, &self.fleet[p].model_id).unwrap().0;
-                let index = plan.completed_flights;
-                let (a, b) = if index % 2 == 0 {
-                    (&route.origin_icao, &route.destination_icao)
-                } else {
-                    (&route.destination_icao, &route.origin_icao)
-                };
                 archive.push(crate::history::Batch {
                     route_id: route.id,
-                    first: plan.first_departure + index * plan.interval_seconds + flight,
+                    first: result.landing,
                     interval: plan.interval_seconds,
                     count,
-                    origin: a.clone(),
-                    destination: b.clone(),
-                    ticket_eur: route.ticket_eur,
+                    origin: result.origin.clone(),
+                    destination: result.destination.clone(),
+                    ticket_eur: result.ticket_eur,
                     totals: totals.clone(),
                 });
-                for index in plan.completed_flights.max(
-                    state
-                        .completed
-                        .saturating_sub(crate::economy::HISTORY_LIMIT as u64),
-                )..state.completed
-                {
-                    let (a, b) = if index % 2 == 0 {
-                        (&route.origin_icao, &route.destination_icao)
+                for offset in count.saturating_sub(crate::economy::HISTORY_LIMIT as u64)..count {
+                    let (a, b) = if offset % 2 == 0 {
+                        (&result.origin, &result.destination)
                     } else {
-                        (&route.destination_icao, &route.origin_icao)
+                        (&result.destination, &result.origin)
                     };
                     finance.recent.push(crate::economy::FlightResult {
                         route_id: route.id,
-                        landing: plan.first_departure + index * plan.interval_seconds + flight,
+                        landing: result.landing + offset * plan.interval_seconds,
                         origin: a.clone(),
                         destination: b.clone(),
-                        ticket_eur: route.ticket_eur,
+                        ticket_eur: result.ticket_eur,
                         totals: totals.clone(),
                     });
                 }
             }
-            updates.push((i, p, state));
+            let airborne = if state.status == AircraftStatus::InFlight {
+                if count == 0 && plan.airborne.is_some() {
+                    plan.airborne.clone()
+                } else {
+                    let Ok(f) = departure_quote(
+                        route,
+                        &self.fleet[p].model_id,
+                        state.completed,
+                        &self.routes,
+                    ) else {
+                        return false;
+                    };
+                    Some(f)
+                }
+            } else {
+                None
+            };
+            updates.push((i, p, state, airborne));
         }
         let balance = match &self.airline {
             Some(a) => match a.capital_eur.checked_add(delta) {
@@ -286,10 +337,11 @@ impl Game {
             self.airline.as_mut().unwrap().capital_eur = balance;
         }
         self.clock = clock;
-        for (r, p, state) in updates {
+        for (r, p, state, airborne) in updates {
             self.fleet[p].status = state.status;
             self.fleet[p].location_icao = state.location;
             self.routes[r].plan.as_mut().unwrap().completed_flights = state.completed;
+            self.routes[r].plan.as_mut().unwrap().airborne = airborne;
         }
         true
     }
@@ -302,6 +354,31 @@ impl Game {
                 .find(|r| r.aircraft_id == Some(plane.id) && r.plan.is_some())
             {
                 let expected = movement(route, &plane.model_id, self.clock.elapsed().as_secs())?;
+                let airborne = &route.plan.as_ref().unwrap().airborne;
+                if (expected.status == AircraftStatus::InFlight) != airborne.is_some() {
+                    return Err("Abflugergebnis fehlt oder Flug ist nicht unterwegs.".into());
+                }
+                if let Some(f) = airborne {
+                    let t = &f.totals;
+                    let mut checked = crate::economy::Totals::default();
+                    if f.route_id != route.id
+                        || f.landing != expected.landing
+                        || f.origin != expected.origin
+                        || f.destination != expected.destination
+                        || !(0..=100_000).contains(&f.ticket_eur)
+                        || t.flights != 1
+                        || t.seats != i64::from(aircraft::model(&plane.model_id)?.seats)
+                        || t.passengers < 0
+                        || t.passengers > t.seats
+                        || t.passengers.checked_mul(f.ticket_eur) != Some(t.revenue)
+                        || [t.fuel, t.airport, t.crew, t.overhead]
+                            .iter()
+                            .any(|v| *v < 0)
+                        || checked.add(t, 1).is_none()
+                    {
+                        return Err("Ungültiges Abflugergebnis im Spielstand.".into());
+                    }
+                }
                 if plane.status != expected.status
                     || plane.location_icao != expected.location
                     || route.plan.as_ref().unwrap().completed_flights != expected.completed
@@ -333,6 +410,172 @@ mod tests {
         g.create_route("EDDF", "EDDM", 1).unwrap();
         g.schedule(1, 1, 120).unwrap();
         g
+    }
+
+    #[test]
+    fn departure_snapshot_survives_supply_changes_and_restart_until_settlement() {
+        let mut g = game();
+        g.buy_aircraft("atr72_600").unwrap();
+        g.create_route("EDDF", "EDDM", 2).unwrap();
+        g.schedule(2, 30, 120).unwrap(); // still parked when flight 1 starts
+        g.clock.set_running(true);
+        assert!(g.advance(60.0));
+        let frozen = g.routes[0].plan.as_ref().unwrap().airborne.clone().unwrap();
+        assert_eq!(frozen.origin, "EDDF");
+        assert_eq!(frozen.destination, "EDDM");
+        assert_eq!(g.finance.totals.flights, 0);
+        g.stop_schedule(2).unwrap();
+        assert!(
+            crate::economy::quote_shared(&g.routes[0], "atr72_600", &g.routes)
+                .unwrap()
+                .passengers
+                > frozen.totals.passengers
+        );
+        assert!(g.advance(10.0));
+        assert_eq!(
+            g.routes[0].plan.as_ref().unwrap().airborne.as_ref(),
+            Some(&frozen)
+        );
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("snapshot.json");
+        crate::save::save(&path, &g).unwrap();
+        let mut loaded = crate::save::load(&path).unwrap();
+        assert_eq!(loaded.routes, g.routes);
+        // The first frozen flight differs from all later quotes. Batching must
+        // keep that boundary even when fast-forward skips many complete cycles.
+        let mut fast = crate::save::load(&path).unwrap();
+        let mut slow = crate::save::load(&path).unwrap();
+        assert!(fast.advance(86400.0 * 10.0));
+        for _ in 0..1440 {
+            assert!(slow.advance(600.0));
+        }
+        assert_eq!(fast.routes, slow.routes);
+        assert_eq!(fast.finance, slow.finance);
+        assert_eq!(fast.history, slow.history);
+        assert_eq!(fast.airline, slow.airline);
+        fast.validate_history().unwrap();
+        // Changing the future offer after loading must not rewrite the snapshot.
+        loaded.schedule(2, 1, 80).unwrap();
+        assert!(g.advance((frozen.landing - 70) as f64));
+        assert!(loaded.advance((frozen.landing - 70) as f64));
+        assert_eq!(g.finance.recent[0], frozen);
+        assert_eq!(
+            loaded.finance.recent.iter().find(|f| f.route_id == 1),
+            Some(&frozen)
+        );
+        assert!(g.routes[0].plan.as_ref().unwrap().airborne.is_none());
+        let totals = g.finance.clone();
+        assert!(g.advance(0.0));
+        assert_eq!(g.finance, totals);
+        assert!(g.advance((7260 - frozen.landing) as f64));
+        let back = g.routes[0]
+            .plan
+            .as_ref()
+            .unwrap()
+            .airborne
+            .as_ref()
+            .unwrap();
+        assert_eq!((&back.origin[..], &back.destination[..]), ("EDDM", "EDDF"));
+        assert!(back.totals.passengers > frozen.totals.passengers);
+        g.validate_operations().unwrap();
+        g.validate_history().unwrap();
+    }
+
+    #[test]
+    fn parallel_opposite_services_are_order_independent_with_mixed_steps() {
+        let mut large = game();
+        large.buy_aircraft("atr72_600").unwrap();
+        large.fleet[1].location_icao = "EDDM".into();
+        large.create_route("EDDM", "EDDF", 2).unwrap();
+        large.schedule(2, 1, 80).unwrap();
+        large.clock.set_running(true);
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("parallel.json");
+        crate::save::save(&path, &large).unwrap();
+        let mut small = crate::save::load(&path).unwrap();
+        small.routes.reverse();
+        assert!(large.advance(60.0));
+        let a = large.routes[0]
+            .plan
+            .as_ref()
+            .unwrap()
+            .airborne
+            .as_ref()
+            .unwrap();
+        let b = large.routes[1]
+            .plan
+            .as_ref()
+            .unwrap()
+            .airborne
+            .as_ref()
+            .unwrap();
+        assert_eq!(a.origin, b.destination);
+        assert_eq!(a.destination, b.origin);
+        assert_eq!(a.totals.passengers, b.totals.passengers);
+        assert!(large.advance(86400.0 * 30.0 - 60.0));
+        for _ in 0..8640 {
+            assert!(small.advance(300.0));
+        }
+        assert_eq!(large.finance, small.finance);
+        // Archive insertion order follows route order, not allocation priority.
+        small
+            .history
+            .as_mut()
+            .unwrap()
+            .batches
+            .sort_by_key(|b| (b.route_id, b.first));
+        assert_eq!(large.history, small.history);
+        assert_eq!(large.airline, small.airline);
+        large.validate_operations().unwrap();
+        large.validate_history().unwrap();
+    }
+
+    #[test]
+    fn v7_airborne_migration_freezes_once_and_v8_rejects_corrupt_snapshots() {
+        let mut g = game();
+        g.clock.set_running(true);
+        assert!(g.advance(100.0));
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("legacy.json");
+        crate::save::save(&path, &g).unwrap();
+        let valid: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        let mut old = valid.clone();
+        old["version"] = 7.into();
+        old["state"]["routes"]["routes"][0]["plan"]
+            .as_object_mut()
+            .unwrap()
+            .remove("airborne");
+        std::fs::write(&path, serde_json::to_vec(&old).unwrap()).unwrap();
+        let mut loaded = crate::save::load(&path).unwrap();
+        assert_eq!(loaded.routes, g.routes);
+        assert_eq!(loaded.airline, g.airline);
+        assert_eq!(loaded.finance, g.finance);
+        assert!(loaded.advance(0.0));
+        assert_eq!(loaded.finance, g.finance);
+        crate::save::save(&path, &loaded).unwrap();
+        for (field, value) in [
+            ("landing", serde_json::json!(999)),
+            ("origin", serde_json::json!("EDDM")),
+            ("route_id", serde_json::json!(2)),
+            ("ticket_eur", serde_json::json!(999)),
+            (
+                "totals",
+                serde_json::json!({"flights":1,"passengers":100,"seats":72,"revenue":10000,"fuel":0,"airport":0,"crew":0}),
+            ),
+        ] {
+            let mut bad = valid.clone();
+            bad["state"]["routes"]["routes"][0]["plan"]["airborne"][field] = value;
+            std::fs::write(&path, serde_json::to_vec(&bad).unwrap()).unwrap();
+            assert!(crate::save::load(&path).is_err(), "accepted {field}");
+        }
+        let mut bad = valid;
+        bad["state"]["routes"]["routes"][0]["plan"]
+            .as_object_mut()
+            .unwrap()
+            .remove("airborne");
+        std::fs::write(&path, serde_json::to_vec(&bad).unwrap()).unwrap();
+        assert!(crate::save::load(&path).is_err());
     }
 
     #[test]

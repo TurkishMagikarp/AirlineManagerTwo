@@ -4,8 +4,9 @@
 
 Rust berechnet einen **gleichmäßigen Tagesdurchschnitt je Flughafenpaar und
 Richtung**, unabhängig von Flugzeug und Sitzplätzen. Hin- und Rückrichtung sind
-symmetrisch. Mehrere Routen-IDs, auch mit umgekehrtem Start/Ziel, gehören zum selben
-Markt. Das ist ein Ratenmodell, **kein hartes Kontingent je Kalendertag**:
+symmetrisch groß, aber getrennte Märkte: A→B ist nicht B→A. Mehrere Routen-IDs,
+auch mit umgekehrtem Start/Ziel, teilen jeweils den passenden Richtungsmarkt.
+Das ist ein Ratenmodell, **kein hartes Kontingent je Kalendertag**:
 Abflugphasen und ganze Flüge können einzelne Tage vom Durchschnitt abweichen lassen.
 Es gibt keine angesammelten oder über Tage wartenden Passagiere.
 
@@ -61,10 +62,21 @@ nicht mehrere Tagesmärkte an. Nicht verkaufte Anteile teurer oder kleiner Flüg
 werden noch **nicht umverteilt**. Auch ein aktiver Plan mit zukünftigem Erstabflug
 zählt bereits zum angebotenen Dauerfahrplan; ungeplante Routen zählen nicht.
 
-Wie bisher werden Ergebnisse erst bei Landung ermittelt und verbucht. Dabei gilt
-das aktuelle Flugplanangebot; ein zusätzlicher/beendeter Plan kann deshalb auch
-die Nachfrage eines schon gestarteten Flugs beeinflussen. Noch keine separaten
-Buchungen bei Abflug. Preise eigener laufender Flugpläne bleiben unveränderbar.
+**Beim Abflug** werden Richtung, Landetermin, Ticketpreis, Passagierzahl, Sitze,
+Ticketeinnahmen und Betriebskosten als unveränderliches Flugergebnis gespeichert.
+Damit steht auch die Auslastung fest. Aktivieren/Beenden anderer Flugpläne ändert
+nur künftige Abflüge, nicht bereits gestartete Flüge. **Bei Landung** wird genau
+dieses Ergebnis einmal in Guthaben, Finanzsummen und Archiv übernommen. Es gibt
+weiterhin keine vorgezogene Auszahlung. Preise eigener laufender Flugpläne
+bleiben wie bisher unveränderbar.
+
+Die Verteilung erhält gerichtete Angebote (`demand::Offer`) ohne Airlinebindung.
+Spätere Konkurrenten können ihre Frequenzen in dieselbe Angebotsliste einspeisen,
+statt je Airline einen neuen Markt zu erzeugen. Hin- und Rückflug eines Pendelplans
+liefern je ein Angebot für ihren jeweiligen Markt, nicht zwei für dieselbe Richtung.
+Noch keine individuellen Buchungen oder Reservierungsliste: Bei Fahrplanwechseln
+gilt ab dem nächsten Abflug die neue Durchschnittsrate; eine strenge Tagesobergrenze
+wird nicht nachträglich erzwungen.
 
 Alle Werte und Berechnungen liegen in Rust; Stellwerte in `config/demand.json`,
 Referenzpreis/Kosten in `config/economy.json`. Anschließend über `START.bat` neu bauen.
@@ -78,11 +90,13 @@ geteilter Anteil vor Sitzlimit. Tatsächliche Auslastung = archivierte Passagier
 archivierte angebotene Sitze, sitzgewichtet über alle Landungen dieser Route.
 Ohne Archivflüge steht „Keine Flüge“.
 
-Das Speicherformat bleibt **Version 7**: Nachfrage leitet sich aus bereits
-gespeicherten Flughafencodes, Preisen und Flugplänen ab. Kein zusätzlicher Pool,
-der beim Laden zurückgesetzt werden könnte. Finanzarchiv und Kontostand bleiben
-unverändert; neue Regeln gelten erst für künftige Landungen. Versionen 1–6 nutzen
-die bestehenden Migrationen; deren Route-Auslastung beginnt am Archivbeginn.
+Speicherformat **Version 8** speichert das Abflugergebnis im laufenden Flugplan.
+Laden berechnet es nicht neu. Fehlende/widersprüchliche Ergebnisse in neuen
+Spielständen werden abgelehnt. Versionen **1–7** bleiben ladbar: Für einen bereits
+laufenden Altflug wird einmal beim Laden anhand des gespeicherten Angebots ein
+Ergebnis eingefroren, da sein tatsächlicher Abflugzustand früher nicht gespeichert
+wurde. Vergangene Landungen, Finanzarchiv und Kontostand bleiben unverändert.
+Danach wird der migrierte Flug wie jeder andere nur bei seiner Landung abgerechnet.
 
 Rust- und Godot-Tests prüfen Größen, Preise, beide Segmente, Sitzlimits,
 Parallelrouten, umgekehrte Strecken, Frequenzen, Pause/16×, große/kleine Zeitschritte,
