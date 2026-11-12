@@ -2,6 +2,7 @@ extends Control
 ## Presentation only. No simulation state or economic calculations.
 
 const RoutesPanel = preload("res://scripts/routes_panel.gd")
+const MapPanel = preload("res://scripts/map_panel.gd")
 const UI = preload("res://scripts/ui/components.gd")
 
 const PAGES: Array[Dictionary] = [
@@ -10,6 +11,7 @@ const PAGES: Array[Dictionary] = [
 	"body": ""},
 	{"title": "Routen", "heading": "Dein Routennetz",
 	"body": "Verbindungen planen und Flugzeuge zuweisen."},
+	{"title": "Karte", "heading": "Live-Flugkarte", "body": "Dein Routennetz · Positionen zur simulierten Spielzeit"},
 ]
 
 var navigation: Array[Button] = []
@@ -47,6 +49,7 @@ var fleet_status: Label
 var empty_fleet: Label
 var fleet_tree: Tree
 var routes_panel: VBoxContainer
+var map_panel: VBoxContainer
 var last_operation_second: int = -1
 var finance_panel: VBoxContainer
 var metrics: Dictionary = {}
@@ -78,8 +81,8 @@ func _ready() -> void:
 	for index in range(PAGES.size()):
 		var button := Button.new()
 		button.text = PAGES[index]["title"]
-		button.icon = load("res://resources/icons/%s.svg" % ["overview", "fleet", "routes"][index])
-		button.custom_minimum_size = Vector2(120, 42)
+		button.icon = load("res://resources/icons/%s.svg" % ["overview", "fleet", "routes", "map"][index])
+		button.custom_minimum_size = Vector2(100, 42)
 		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		button.toggle_mode = true
 		button.pressed.connect(_show_page.bind(index))
@@ -110,6 +113,9 @@ func _ready() -> void:
 	routes_panel.simulation = simulation
 	routes_panel.changed.connect(func(): save_status.text = "Routen geändert · bitte Spielstand speichern.")
 	content.add_child(routes_panel)
+	map_panel = MapPanel.new()
+	map_panel.simulation = simulation
+	content.add_child(map_panel)
 	_add_time_controls(column)
 	_build_founding()
 	_sync_view()
@@ -201,6 +207,8 @@ func _process(delta: float) -> void:
 		push_error("Rust konnte die Spielzeit nicht fortschreiben; Simulation pausiert.")
 	_refresh_time()
 	var second := int(simulation.get_elapsed_seconds())
+	if current_page == 3:
+		map_panel.refresh_flights()
 	if second != last_operation_second:
 		last_operation_second = second
 		routes_panel.refresh_operations()
@@ -233,6 +241,9 @@ func _show_page(index: int) -> void:
 	description.show()
 	fleet_panel.visible = index == 1
 	routes_panel.visible = index == 2
+	map_panel.visible = index == 3
+	if index == 3:
+		map_panel.refresh()
 	if index == 2:
 		routes_panel.refresh()
 	if index == 0 and simulation.has_airline():

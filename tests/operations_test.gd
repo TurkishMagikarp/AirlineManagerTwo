@@ -22,6 +22,9 @@ func _run() -> void:
 		if not _check(main.simulation.get_fleet()[0]["status"] == "in_flight" and main.simulation.get_elapsed_seconds() == 60.0, "Exact in-flight state restored"):
 			return
 		main._sync_view()
+		var map_flights: Array = main.simulation.get_map_flights()
+		if not _check(map_flights.size() == 1 and map_flights[0]["progress"] == 0.0 and map_flights[0]["origin"] == "EDDF", "Map position reconstructed in fresh process"):
+			return
 	else:
 		main.name_input.text = "Flight UI Air"
 		await _click(main.found_button)

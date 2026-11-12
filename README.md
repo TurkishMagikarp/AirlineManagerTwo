@@ -149,7 +149,9 @@ Die vollständige Berechnung liegt in `rust/src/operations.rs`. Der Zustand wird
 aus ganzzahligen Ereignisgrenzen abgeleitet: Auch über beliebig viele Umläufe
 werden sämtliche Landungen gezählt, ohne frameabhängige Abflugprüfungen oder
 eine Schleife über jeden Flug. Pause friert den Betrieb ein; 1×/4×/16× nutzen
-dieselbe Rust-Uhr. Es gibt noch keine Karte oder animierten Flugzeuge.
+dieselbe Rust-Uhr. Der neue Tab **Karte** zeigt Flughäfen, Großkreisrouten und
+anklickbare Live-Flugzeuge auf einer offline verfügbaren 2D-Weltkarte.
+Mausrad zoomt, Ziehen verschiebt; Details und Tests: [Flugkarte](docs/map.md).
 
 ## Vereinfachte Wirtschaftssimulation
 
@@ -273,6 +275,7 @@ Godot --headless --path . --script res://tests/fleet_test.gd
 Godot --headless --path . --script res://tests/routes_test.gd
 Godot --headless --path . --script res://tests/operations_test.gd
 Godot --headless --path . --script res://tests/economy_test.gd
+Godot --headless --path . --script res://tests/map_test.gd
 powershell -ExecutionPolicy Bypass -File tests/run_save_restart_test.ps1
 powershell -ExecutionPolicy Bypass -File tests/run_flight_restart_test.ps1
 powershell -ExecutionPolicy Bypass -File tests/run_economy_restart_test.ps1

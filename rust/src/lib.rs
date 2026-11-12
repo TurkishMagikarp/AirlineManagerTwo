@@ -3,6 +3,7 @@ mod airports;
 mod clock;
 mod economy;
 mod game;
+mod map;
 mod operations;
 mod routes;
 mod save;
@@ -36,6 +37,65 @@ impl IRefCounted for SimulationClock {
 
 #[godot_api]
 impl SimulationClock {
+    #[func]
+    fn get_map_airports(&self) -> Array<VarDictionary> {
+        airports::catalog()
+            .map(|c| {
+                c.airports
+                    .iter()
+                    .map(|a| {
+                        vdict! {
+                            "icao" => a.icao.as_str(), "name" => a.name.as_str(),
+                            "position" => Vector2::new(a.longitude as f32, a.latitude as f32)
+                        }
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    #[func]
+    fn get_map_routes(&self) -> Array<VarDictionary> {
+        self.game
+            .routes
+            .iter()
+            .filter_map(|r| {
+                let a = map::airport(&r.origin_icao)?;
+                let b = map::airport(&r.destination_icao)?;
+                let points: PackedVector2Array = (0..=128)
+                    .map(|i| {
+                        let (lon, lat) = map::position(a, b, f64::from(i) / 128.0);
+                        Vector2::new(lon as f32, lat as f32)
+                    })
+                    .collect();
+                Some(vdict! { "id" => r.id, "points" => &points, "active" => r.plan.is_some() })
+            })
+            .collect()
+    }
+
+    #[func]
+    fn get_map_flights(&self) -> Array<VarDictionary> {
+        map::flights(&self.game)
+            .iter()
+            .map(|f| {
+                let p = self
+                    .game
+                    .fleet
+                    .iter()
+                    .find(|p| p.id == f.aircraft_id)
+                    .unwrap();
+                let model = aircraft::model(&p.model_id).unwrap();
+                vdict! { "aircraft_id" => f.aircraft_id, "route_id" => f.route_id,
+                "flight_number" => format!("AM-{}-{}", f.route_id, f.departure).as_str(),
+                "identifier" => p.identifier().as_str(), "model" => model.name.as_str(),
+                "origin" => f.origin.as_str(), "destination" => f.destination.as_str(),
+                "progress" => f.progress, "arrival" => operations::display_time(f.landing).as_str(),
+                "position" => Vector2::new(f.position.0 as f32, f.position.1 as f32),
+                "ahead" => Vector2::new(f.ahead.0 as f32, f.ahead.1 as f32) }
+            })
+            .collect()
+    }
+
     #[func]
     fn get_economy_rules(&self) -> GString {
         economy::rules_text().as_str().into()
