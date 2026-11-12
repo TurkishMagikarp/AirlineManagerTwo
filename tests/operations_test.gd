@@ -38,9 +38,9 @@ func _run() -> void:
 		var row: TreeItem = main.routes_panel.route_tree.get_root().get_child(0)
 		row.select(0)
 		main.routes_panel.route_tree.item_selected.emit()
-		main.routes_panel.ticket_input.value = 150
+		main.routes_panel.ticket_input.value = 100
 		await _click(main.routes_panel.ticket_button)
-		if not _check(main.simulation.get_routes()[0]["ticket_eur"] == 150, "Ticket price set through actual UI"):
+		if not _check(main.simulation.get_routes()[0]["ticket_eur"] == 100, "Ticket price set through actual UI"):
 			return
 		main.routes_panel.delay_input.value = 1
 		root.size = Vector2i(680, 520)
@@ -76,7 +76,7 @@ func _run() -> void:
 	main.simulation.advance(operation["flight_seconds"] / 16.0)
 	var financial: Dictionary = main.simulation.get_financial_summary()
 	var results: Array = main.simulation.get_flight_results()
-	if not _check(financial["flights"] == 1 and results.size() == 1 and results[0]["ticket_eur"] == 150, "First landing settles saved ticket price exactly once"):
+	if not _check(financial["flights"] == 1 and results.size() == 1 and results[0]["ticket_eur"] == 100, "First landing settles saved ticket price exactly once"):
 		return
 	if not _check(results[0]["passengers"] > 0 and results[0]["passengers"] < results[0]["seats"] and financial["profit_eur"] > 0, "Partial flight earns profit"):
 		return

@@ -62,7 +62,7 @@ impl SimulationClock {
             .sum::<i128>()
             .min(i128::from(i64::MAX)) as i64;
         vdict! { "flights" => t.flights, "passengers" => t.passengers, "revenue_eur" => t.revenue,
-        "fuel_eur" => t.fuel, "airport_eur" => t.airport, "crew_eur" => t.crew,
+        "fuel_eur" => t.fuel, "airport_eur" => t.airport, "crew_eur" => t.crew, "overhead_eur" => t.overhead,
         "costs_eur" => t.costs(), "profit_eur" => t.profit(), "purchases_eur" => purchases,
         "load_percent" => t.load_percent() }
     }
@@ -75,7 +75,7 @@ impl SimulationClock {
                 "origin" => f.origin.as_str(), "destination" => f.destination.as_str(), "ticket_eur" => f.ticket_eur,
                 "passengers" => t.passengers, "seats" => t.seats, "load_percent" => t.load_percent(),
                 "revenue_eur" => t.revenue, "fuel_eur" => t.fuel, "airport_eur" => t.airport,
-                "crew_eur" => t.crew, "costs_eur" => t.costs(), "profit_eur" => t.profit() }
+                "crew_eur" => t.crew, "overhead_eur" => t.overhead, "costs_eur" => t.costs(), "profit_eur" => t.profit() }
         }).collect()
     }
 

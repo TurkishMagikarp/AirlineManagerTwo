@@ -1,15 +1,17 @@
 {
   "default_ticket_eur": 100,
   "base_demand": 140,
-  "demand_per_1000_km": 20,
+  "demand_per_1000_km": 3,
+  "reference_load_percent": 83,
+  "demand_full_distance_km": 300,
   "reference_base_eur": 60,
-  "reference_eur_per_100_km": 12,
-  "fuel_eur_per_kg": 1,
-  "airport_base_eur": 400,
-  "airport_eur_per_passenger": 12,
+  "reference_eur_per_100_km": 4,
+  "fuel_cents_per_kg": 80,
+  "crew_extra_minutes": 30,
+  "airport_eur_per_passenger": 25,
   "models": {
-    "a320_200": { "fuel_kg_per_hour": 2500, "crew_eur_per_hour": 650 },
-    "b737_800": { "fuel_kg_per_hour": 2600, "crew_eur_per_hour": 650 },
-    "atr72_600": { "fuel_kg_per_hour": 750, "crew_eur_per_hour": 350 }
+    "a320_200": { "fuel_kg_per_hour": 2500, "fuel_cycle_kg": 550, "crew_eur_per_hour": 650, "airport_base_eur": 1400, "overhead_eur_per_hour": 2400, "overhead_cycle_eur": 700 },
+    "b737_800": { "fuel_kg_per_hour": 2600, "fuel_cycle_kg": 550, "crew_eur_per_hour": 650, "airport_base_eur": 1400, "overhead_eur_per_hour": 2400, "overhead_cycle_eur": 700 },
+    "atr72_600": { "fuel_kg_per_hour": 750, "fuel_cycle_kg": 120, "crew_eur_per_hour": 350, "airport_base_eur": 600, "overhead_eur_per_hour": 800, "overhead_cycle_eur": 300 }
   }
 }

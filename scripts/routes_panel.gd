@@ -192,7 +192,7 @@ func refresh_operations() -> void:
 	operations_label.text = "\n\n".join(lines)
 	lines = ["Flugergebnisse · letzte 100 Landungen · neueste zuerst (vorläufige EUR-Werte)"]
 	for result in simulation.get_flight_results():
-		lines.append("%s · Route #%d · %s → %s · Ticket %d EUR\n%d / %d Passagiere · %.1f %% Auslastung · Einnahmen %d EUR\nKosten %d EUR (Treibstoff %d · Flughäfen %d · Personal %d) · Gewinn/Verlust %d EUR" % [result["landing"], result["route_id"], result["origin"], result["destination"], result["ticket_eur"], result["passengers"], result["seats"], result["load_percent"], result["revenue_eur"], result["costs_eur"], result["fuel_eur"], result["airport_eur"], result["crew_eur"], result["profit_eur"]])
+		lines.append("%s · Route #%d · %s → %s · Ticket %d EUR\n%d / %d Passagiere · %.1f %% Auslastung · Einnahmen %d EUR\nKosten %d EUR (Treibstoff %d · Flughäfen %d · Personal %d · Wartung/Verwaltung %d) · Gewinn/Verlust %d EUR" % [result["landing"], result["route_id"], result["origin"], result["destination"], result["ticket_eur"], result["passengers"], result["seats"], result["load_percent"], result["revenue_eur"], result["costs_eur"], result["fuel_eur"], result["airport_eur"], result["crew_eur"], result["overhead_eur"], result["profit_eur"]])
 	results_label.text = "\n\n".join(lines)
 
 

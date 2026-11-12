@@ -53,6 +53,8 @@ func _run() -> void:
 	var revenue := 0
 	var costs := 0
 	for result in results:
+		if not _check(result["overhead_eur"] > 0 and result["costs_eur"] == result["fuel_eur"] + result["airport_eur"] + result["crew_eur"] + result["overhead_eur"], "All cost components including operating allowance reconcile"):
+			return
 		revenue += result["revenue_eur"]
 		costs += result["costs_eur"]
 	if not _check(results[0]["passengers"] == 0 and results[0]["load_percent"] == 0.0 and results[0]["costs_eur"] > 0, "Empty flight still incurs operating costs"):
@@ -62,6 +64,8 @@ func _run() -> void:
 	main._sync_view()
 	main._show_page(0)
 	if not _check("Betriebsgewinn/-verlust" in main.detail.text, "Restored finances visible in company overview"):
+		return
+	if not _check("Wartung/Verwaltung" in main.detail.text, "Operating allowance is transparently displayed"):
 		return
 	simulation.start()
 	simulation.advance(7200.0 / 16.0)

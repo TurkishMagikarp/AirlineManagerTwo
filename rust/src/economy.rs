@@ -9,10 +9,12 @@ pub struct Config {
     pub default_ticket_eur: i64,
     base_demand: i64,
     demand_per_1000_km: i64,
+    reference_load_percent: i64,
+    demand_full_distance_km: i64,
     reference_base_eur: i64,
     reference_eur_per_100_km: i64,
-    fuel_eur_per_kg: i64,
-    airport_base_eur: i64,
+    fuel_cents_per_kg: i64,
+    crew_extra_minutes: i64,
     airport_eur_per_passenger: i64,
     models: HashMap<String, Rates>,
 }
@@ -37,11 +39,11 @@ mod tests {
         assert_eq!(full.passengers, full.seats);
         assert_eq!(full.revenue, 0);
         assert!(full.profit() < 0);
-        g.routes[0].ticket_eur = 150;
+        g.routes[0].ticket_eur = 100;
         let middle = quote(&g.routes[0], "atr72_600").unwrap();
-        assert_eq!(middle.passengers, 61);
+        assert_eq!(middle.passengers, 34);
         assert!(middle.passengers > 0 && middle.passengers < middle.seats);
-        assert_eq!(middle.revenue, middle.passengers * 150);
+        assert_eq!(middle.revenue, middle.passengers * 100);
         assert!(middle.profit() > 0);
         g.routes[0].ticket_eur = 100000;
         let empty = quote(&g.routes[0], "atr72_600").unwrap();
@@ -157,6 +159,8 @@ mod tests {
             ("revenue", -1),
             ("passengers", i64::MAX),
             ("crew", i64::MAX),
+            ("overhead", -1),
+            ("overhead", i64::MAX),
         ] {
             let mut bad = valid.clone();
             bad["state"]["finance"]["totals"][field] = value.into();
@@ -170,7 +174,7 @@ mod tests {
     }
     #[test]
     fn financial_overflow_rolls_back_clock_flights_and_balance() {
-        let mut g = game(150);
+        let mut g = game(100);
         g.airline.as_mut().unwrap().capital_eur = i64::MAX;
         let before = g.routes.clone();
         assert!(!g.advance(10000.0));
@@ -201,11 +205,151 @@ mod tests {
             crate::game::starting_capital().unwrap()
         );
     }
+
+    #[test]
+    fn calibrated_route_matrix_and_price_sensitivity() {
+        for (origin, destination) in [
+            ("EDDF", "EDDM"),
+            ("EDDF", "LTFM"),
+            ("KJFK", "KLAX"),
+            ("LTFM", "LTFJ"),
+        ] {
+            for model in aircraft::models().unwrap() {
+                let km = crate::routes::distance_km(origin, destination).unwrap();
+                if km > f64::from(model.range_km) {
+                    continue;
+                }
+                let reference = CONFIG.reference_base_eur
+                    + km.round() as i64 * CONFIG.reference_eur_per_100_km / 100;
+                let mut previous = i64::MAX;
+                let mut prices = vec![
+                    0,
+                    default_ticket(),
+                    reference,
+                    reference * 3 / 2,
+                    reference * 19 / 10,
+                    reference * 2,
+                    100_000,
+                ];
+                prices.sort_unstable();
+                prices.dedup();
+                for price in prices {
+                    let route = Route {
+                        id: 1,
+                        origin_icao: origin.into(),
+                        destination_icao: destination.into(),
+                        aircraft_id: Some(1),
+                        ticket_eur: price,
+                        plan: None,
+                    };
+                    let t = quote(&route, &model.id).unwrap();
+                    assert!(t.passengers <= previous && t.passengers <= t.seats);
+                    previous = t.passengers;
+                    assert_eq!(t.costs(), t.fuel + t.airport + t.crew + t.overhead);
+                    // Exercise real landings and the ledger for every model/price,
+                    // not just isolated quotes. No personal save file is touched.
+                    let country = match origin {
+                        "KJFK" => "US",
+                        "LTFM" => "TR",
+                        _ => "DE",
+                    };
+                    let mut g = Game::default();
+                    g.found("Calibration Air", country, origin).unwrap();
+                    g.buy_aircraft(&model.id).unwrap();
+                    g.create_route(origin, destination, 1).unwrap();
+                    g.set_ticket_price(1, price).unwrap();
+                    let (flight, ground) = operations::timings(&g.routes[0], &model.id).unwrap();
+                    g.schedule(1, 1, (flight + ground).div_ceil(60) as u32)
+                        .unwrap();
+                    let balance = g.airline.as_ref().unwrap().capital_eur;
+                    g.clock.set_running(true);
+                    assert!(g.advance((60 + flight) as f64));
+                    assert_eq!(g.finance.totals, t);
+                    assert_eq!(g.finance.recent[0].totals, t);
+                    assert_eq!(
+                        g.airline.as_ref().unwrap().capital_eur,
+                        balance + t.profit()
+                    );
+                    g.validate_finance().unwrap();
+                    assert!(t.fuel > 0 && t.airport > 0 && t.crew > 0 && t.overhead > 0);
+                    if price == 0 || price >= 2 * reference {
+                        assert!(t.profit() < 0);
+                    }
+                    if price == 100 && destination == "KLAX" {
+                        assert!(t.profit() < 0); // full does not mean profitable
+                    }
+                    if price >= reference * 19 / 10 {
+                        assert!(t.load_percent() < 10.0);
+                    }
+                    // A same-city airport pair is not a healthy airline market.
+                    if origin == "LTFM" {
+                        assert!(t.profit() < 0);
+                    }
+                    if price == reference && origin != "LTFM" {
+                        assert!(t.profit() > 0);
+                        assert!(t.profit() * 100 / t.revenue < 30);
+                    }
+                    println!("{origin}-{destination} {} {km:.0}km ticket={price} pax={}/{} fuel={} airport={} crew={} overhead={} cost={} profit={}",
+                        model.id, t.passengers, t.seats, t.fuel, t.airport, t.crew,
+                        t.overhead, t.costs(), t.profit());
+                }
+            }
+        }
+        let mut g = game(100);
+        let viable = quote(&g.routes[0], "atr72_600").unwrap();
+        g.routes[0].ticket_eur = 140;
+        let overpriced = quote(&g.routes[0], "atr72_600").unwrap();
+        assert!(viable.profit() > 0 && overpriced.profit() < 0);
+        assert!(overpriced.load_percent() < 10.0 && overpriced.passengers > 0);
+    }
+
+    #[test]
+    fn historical_v6_costs_and_active_flight_survive_rebalancing() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("v6.json");
+        let mut g = game(100);
+        g.advance(7261.0); // first result, return flight already airborne
+        crate::save::save(&path, &g).unwrap();
+        let mut json: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        json["state"]["finance"]["totals"]
+            .as_object_mut()
+            .unwrap()
+            .remove("overhead");
+        for result in json["state"]["finance"]["recent"].as_array_mut().unwrap() {
+            result["totals"].as_object_mut().unwrap().remove("overhead");
+            // Deliberately old costs, not reproducible by today's quote.
+            result["totals"]["fuel"] = 123.into();
+        }
+        json["state"]["finance"]["totals"]["fuel"] = 123.into();
+        std::fs::write(&path, serde_json::to_vec(&json).unwrap()).unwrap();
+        let mut loaded = crate::save::load(&path).unwrap();
+        assert_eq!(loaded.airline, g.airline);
+        assert_eq!(loaded.routes, g.routes);
+        assert_eq!(loaded.fleet, g.fleet);
+        assert_eq!(loaded.finance.totals.overhead, 0);
+        assert_eq!(loaded.finance.totals.fuel, 123);
+        let historical = loaded.finance.recent[0].clone();
+        loaded.advance(
+            operations::timings(&loaded.routes[0], "atr72_600")
+                .unwrap()
+                .0 as f64,
+        );
+        assert_eq!(loaded.finance.totals.flights, 2);
+        assert_eq!(loaded.finance.recent[0], historical);
+        assert!(loaded.finance.recent[1].totals.overhead > 0);
+        crate::save::save(&path, &loaded).unwrap();
+        assert_eq!(crate::save::load(&path).unwrap().finance, loaded.finance);
+    }
 }
 #[derive(Deserialize)]
 struct Rates {
     fuel_kg_per_hour: i64,
+    fuel_cycle_kg: i64,
     crew_eur_per_hour: i64,
+    airport_base_eur: i64,
+    overhead_eur_per_hour: i64,
+    overhead_cycle_eur: i64,
 }
 static CONFIG: LazyLock<Config> = LazyLock::new(|| {
     let c: Config =
@@ -216,19 +360,28 @@ static CONFIG: LazyLock<Config> = LazyLock::new(|| {
         c.demand_per_1000_km,
         c.reference_base_eur,
         c.reference_eur_per_100_km,
-        c.fuel_eur_per_kg,
-        c.airport_base_eur,
+        c.fuel_cents_per_kg,
+        c.crew_extra_minutes,
+        c.demand_full_distance_km,
         c.airport_eur_per_passenger,
     ] {
         assert!((0..=100_000).contains(&n));
     }
     assert!(c.reference_base_eur > 0);
+    assert!((1..=100).contains(&c.reference_load_percent));
+    assert!(c.demand_full_distance_km > 0);
     for m in aircraft::models().expect("models") {
         let r = &c.models[&m.id];
-        assert!(
-            (0..=100_000).contains(&r.fuel_kg_per_hour)
-                && (0..=100_000).contains(&r.crew_eur_per_hour)
-        );
+        for n in [
+            r.fuel_kg_per_hour,
+            r.fuel_cycle_kg,
+            r.crew_eur_per_hour,
+            r.airport_base_eur,
+            r.overhead_eur_per_hour,
+            r.overhead_cycle_eur,
+        ] {
+            assert!((0..=100_000).contains(&n));
+        }
     }
     c
 });
@@ -239,14 +392,16 @@ pub fn default_ticket() -> i64 {
 pub fn rules_text() -> String {
     let c = &*CONFIG;
     format!(
-        "Vorläufige Nachfrage: Basis = {} + {} × km / 1000; Referenzpreis = {} + {} × km / 100 EUR.\nNachfrage = Basis × max(0, 2 − Preis / Referenzpreis), begrenzt auf Sitzplätze.\nStrecke auf ganze km gerundet; Basis, Referenzpreis und Passagiere ganzzahlig abgerundet.\nKosten: Treibstoff ({} EUR/kg), Flughäfen ({} EUR + {} EUR/Passagier insgesamt) und Personal nach Flugzeit.\nAbrechnung bei Landung, auch bei leeren Flügen. Modellwerte: config/economy.json.",
+        "Basisnachfrage: min({} + {} × km / 1000, {} % der Sitze); unter {} km proportional reduziert.\nReferenzpreis = {} + {} × km / 100 EUR. Nachfrage = Basis × max(0, 2 − Preis / Referenzpreis), begrenzt auf Sitze.\nStrecke auf ganze km gerundet; Zwischenwerte und Passagiere abgerundet.\nKosten: Treibstoff ({} Cent/kg, inklusive Start-/Landeanteil), Flughäfen (Modellpauschale + {} EUR/Passagier insgesamt), Personal (Flugzeit + {} Minuten) und Wartungs-/Verwaltungspauschale.\nAbrechnung bei Landung, auch leer. Annahmen: docs/economy.md; Werte: config/economy.json.",
         c.base_demand,
         c.demand_per_1000_km,
+        c.reference_load_percent,
+        c.demand_full_distance_km,
         c.reference_base_eur,
         c.reference_eur_per_100_km,
-        c.fuel_eur_per_kg,
-        c.airport_base_eur,
-        c.airport_eur_per_passenger
+        c.fuel_cents_per_kg,
+        c.airport_eur_per_passenger,
+        c.crew_extra_minutes
     )
 }
 
@@ -259,10 +414,13 @@ pub struct Totals {
     pub fuel: i64,
     pub airport: i64,
     pub crew: i64,
+    // Additive field: historical version-6 results keep their original costs.
+    #[serde(default)]
+    pub overhead: i64,
 }
 impl Totals {
     pub fn costs(&self) -> i64 {
-        self.fuel + self.airport + self.crew
+        self.fuel + self.airport + self.crew + self.overhead
     }
     pub fn profit(&self) -> i64 {
         self.revenue - self.costs()
@@ -277,10 +435,11 @@ impl Totals {
     pub fn add(&mut self, other: &Self, count: u64) -> Option<()> {
         let count = i64::try_from(count).ok()?;
         macro_rules! add { ($($f:ident),*) => { $(self.$f = self.$f.checked_add(other.$f.checked_mul(count)?)?;)* }; }
-        add!(flights, passengers, seats, revenue, fuel, airport, crew);
+        add!(flights, passengers, seats, revenue, fuel, airport, crew, overhead);
         self.fuel
             .checked_add(self.airport)?
-            .checked_add(self.crew)?;
+            .checked_add(self.crew)?
+            .checked_add(self.overhead)?;
         Some(())
     }
 }
@@ -305,7 +464,10 @@ pub fn quote(route: &Route, model_id: &str) -> Result<Totals, String> {
     let km =
         crate::routes::distance_km(&route.origin_icao, &route.destination_icao)?.round() as i64;
     let reference = c.reference_base_eur + km * c.reference_eur_per_100_km / 100;
-    let base = c.base_demand + km * c.demand_per_1000_km / 1000;
+    let market = c.base_demand + km * c.demand_per_1000_km / 1000;
+    let base = market.min(i64::from(model.seats) * c.reference_load_percent / 100)
+        * km.min(c.demand_full_distance_km)
+        / c.demand_full_distance_km;
     let demand = base * (2 * reference - route.ticket_eur).max(0) / reference;
     let passengers = demand.min(i64::from(model.seats));
     let seconds = operations::timings(route, model_id)?.0 as i64;
@@ -315,9 +477,13 @@ pub fn quote(route: &Route, model_id: &str) -> Result<Totals, String> {
         passengers,
         seats: model.seats.into(),
         revenue: passengers * route.ticket_eur,
-        fuel: (seconds * rates.fuel_kg_per_hour * c.fuel_eur_per_kg + 3599) / 3600,
-        airport: c.airport_base_eur + c.airport_eur_per_passenger * passengers,
-        crew: (seconds * rates.crew_eur_per_hour + 3599) / 3600,
+        fuel: ((seconds * rates.fuel_kg_per_hour + rates.fuel_cycle_kg * 3600)
+            * c.fuel_cents_per_kg
+            + 359999)
+            / 360000,
+        airport: rates.airport_base_eur + c.airport_eur_per_passenger * passengers,
+        crew: ((seconds + c.crew_extra_minutes * 60) * rates.crew_eur_per_hour + 3599) / 3600,
+        overhead: rates.overhead_cycle_eur + (seconds * rates.overhead_eur_per_hour + 3599) / 3600,
     })
 }
 
@@ -343,9 +509,11 @@ impl Game {
                 && t.fuel >= 0
                 && t.airport >= 0
                 && t.crew >= 0
+                && t.overhead >= 0
                 && t.fuel
                     .checked_add(t.airport)
                     .and_then(|v| v.checked_add(t.crew))
+                    .and_then(|v| v.checked_add(t.overhead))
                     .is_some()
         };
         if !valid(&self.finance.totals)
@@ -385,6 +553,7 @@ impl Game {
             || sum.fuel > t.fuel
             || sum.airport > t.airport
             || sum.crew > t.crew
+            || sum.overhead > t.overhead
         {
             return Err("Widersprüchliche Finanzsummen.".into());
         }

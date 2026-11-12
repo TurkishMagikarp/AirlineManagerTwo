@@ -144,7 +144,7 @@ werden sämtliche Landungen gezählt, ohne frameabhängige Abflugprüfungen oder
 eine Schleife über jeden Flug. Pause friert den Betrieb ein; 1×/4×/16× nutzen
 dieselbe Rust-Uhr. Es gibt noch keine Karte oder animierten Flugzeuge.
 
-## Erste Wirtschaftssimulation (vorläufig)
+## Vereinfachte Wirtschaftssimulation
 
 Im **Routen**-Tab eine Route auswählen, **Ticketpreis** (0–100.000 ganze EUR pro
 Passagier und Einzelflug) einstellen und **Ticketpreis übernehmen** drücken.
@@ -159,15 +159,19 @@ bauen. Dieselbe Ausgangslage **mit derselben Konfiguration** liefert dasselbe Er
 
 Für die auf ganze Kilometer gerundete Streckenlänge `km`:
 
-- Basisnachfrage: `140 + floor(20 × km / 1000)` Passagiere pro Flug.
-- Referenzpreis: `60 + floor(12 × km / 100)` EUR.
+- Basisnachfrage: Minimum aus `140 + floor(3 × km / 1000)` und 83 % der Sitze,
+  unter 300 km proportional reduziert.
+- Referenzpreis: `60 + floor(4 × km / 100)` EUR.
 - Nachfrage: `floor(Basis × max(0, 2 × Referenzpreis − Ticketpreis) / Referenzpreis)`.
 - Verkaufte Tickets: Minimum aus Nachfrage und Sitzplätzen. Ab dem doppelten
   Referenzpreis fliegt das Flugzeug leer, bei 0 EUR sind Tickets kostenlos.
 - Einnahmen: Passagiere × Ticketpreis.
-- Treibstoff: Flugzeit × modellabhängiger Verbrauch × **1 EUR/kg**, auf volle EUR aufgerundet.
-- Flughafengebühren für beide Flughäfen zusammen: **400 EUR + 12 EUR/Passagier**.
-- Personal: Flugzeit × modellabhängiger Stundensatz, auf volle EUR aufgerundet.
+- Treibstoff: Reisezeitverbrauch plus fester Start-/Landeanteil, **0,80 EUR/kg**.
+- Flughäfen/Abfertigung beider Endpunkte zusammen: **1.400 EUR (Jets) / 600 EUR
+  (ATR) + 25 EUR/Passagier**.
+- Personal: (Flugzeit + 30 Minuten) × modellabhängiger Stundensatz.
+- Wartung/Verwaltung: einfache Zyklus-/Stundenpauschale, kein Wartungssystem.
+  Stundenkosten je Kategorie auf volle EUR aufgerundet.
 
 | Modell | Treibstoff kg/h | Personal EUR/h |
 | --- | ---: | ---: |
@@ -175,15 +179,17 @@ Für die auf ganze Kilometer gerundete Streckenlänge `km`:
 | 737-800 | 2.600 | 650 |
 | ATR 72-600 | 750 | 350 |
 
-Beispiel EDDF–EDDM mit ATR bei 150 EUR: 61 Passagiere, rund 84,7 % Auslastung,
-9.150 EUR Einnahmen; Kosten werden nach der tatsächlichen Rust-Flugzeit berechnet.
+Beispiel EDDF–EDDM mit ATR bei 71 EUR: 58 Passagiere, 80,6 % Auslastung,
+4.118 EUR Einnahmen, 3.649 EUR Kosten, 469 EUR Ergebnis. Bei 134 EUR bleiben
+nur 6 Passagiere und 1.545 EUR Verlust. [Referenzen, Annahmen und Testmatrix](docs/economy.md).
 Die Nachfrage gilt pro Flug, unabhängig von Häufigkeit, Konkurrenz und anderen Routen;
 sie ist noch keine tägliche Marktnachfrage. Beide Richtungen haben dieselbe Nachfrage.
 
 Bei jeder **Landung** werden Einnahmen und sämtliche Kosten genau einmal verbucht,
 auch für leere Flüge. Unterwegs noch keine Abbuchung, keine Treibstofflagerhaltung.
 Negative Kontostände sind erlaubt; Käufe benötigen weiterhin ausreichend Guthaben.
-Noch keine Kredite, Zinsen, Insolvenz, Wartung, Steuern oder Personalkosten am Boden.
+Noch keine Kredite, Zinsen, Insolvenz, Wartungsereignisse, Steuerregeln oder
+laufenden Kosten geparkter Flugzeuge; Wartung wird nur pauschal berücksichtigt.
 
 Der Routen-Tab zeigt die **letzten 100 Landungen** einzeln mit Richtung, Zeitpunkt,
 Preis, Passagieren, Auslastung, Einnahmen, Kostenaufschlüsselung und Gewinn/Verlust.
@@ -219,7 +225,8 @@ steht auch im Tooltip der Speichermeldung. macOS ist hier nicht praktisch getest
 Rust (`rust/src/save.rs`) übernimmt Dateizugriff, JSON-Format und Validierung.
 Das Format hat Version **6** und einen `state`-Bereich mit `clock`, `airline`,
 `fleet`, `routes` (einschließlich Ticketpreis und optionalem Flugplan) und `finance`
-(Finanzsummen und letzte 100 Flugergebnisse). Historische Ergebnisse werden nicht
+(Finanzsummen und letzte 100 Flugergebnisse; additives Feld `overhead`, bei alten
+Version-6-Ergebnissen null). Historische Ergebnisse werden nicht
 mit neuen Konfigurationswerten nachberechnet; künftige Landungen nutzen die aktuelle
 Build-Konfiguration. Version **5** behält Flugbetrieb und Kontostand und erhält
 Standardticketpreise sowie leere Finanzsummen, ohne vergangene Flüge nachträglich
