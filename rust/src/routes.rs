@@ -9,6 +9,8 @@ pub struct Route {
     pub origin_icao: String,
     pub destination_icao: String,
     pub aircraft_id: Option<u32>,
+    #[serde(default = "crate::economy::default_ticket")]
+    pub ticket_eur: i64,
     #[serde(default)]
     pub plan: Option<crate::operations::FlightPlan>,
 }
@@ -84,6 +86,7 @@ impl Game {
             origin_icao: origin.into(),
             destination_icao: destination.into(),
             aircraft_id: Some(aircraft_id),
+            ticket_eur: crate::economy::default_ticket(),
             plan: None,
         });
         self.next_route_id = next;
@@ -130,6 +133,9 @@ impl Game {
         }
         let mut ids = HashSet::new();
         for route in &self.routes {
+            if !(0..=100_000).contains(&route.ticket_eur) {
+                return Err("Ungültiger Ticketpreis im Spielstand.".into());
+            }
             if route.id == 0 || route.id >= self.next_route_id || !ids.insert(route.id) {
                 return Err("Ungültige Routenkennung im Spielstand.".into());
             }

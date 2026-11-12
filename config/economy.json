@@ -1,0 +1,15 @@
+{
+  "default_ticket_eur": 100,
+  "base_demand": 140,
+  "demand_per_1000_km": 20,
+  "reference_base_eur": 60,
+  "reference_eur_per_100_km": 12,
+  "fuel_eur_per_kg": 1,
+  "airport_base_eur": 400,
+  "airport_eur_per_passenger": 12,
+  "models": {
+    "a320_200": { "fuel_kg_per_hour": 2500, "crew_eur_per_hour": 650 },
+    "b737_800": { "fuel_kg_per_hour": 2600, "crew_eur_per_hour": 650 },
+    "atr72_600": { "fuel_kg_per_hour": 750, "crew_eur_per_hour": 350 }
+  }
+}

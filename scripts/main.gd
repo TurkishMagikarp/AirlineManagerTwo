@@ -194,6 +194,8 @@ func _process(delta: float) -> void:
 	if second != last_operation_second:
 		last_operation_second = second
 		routes_panel.refresh_operations()
+		if current_page == 0 and simulation.has_airline():
+			_refresh_finance()
 		if current_page == 1:
 			_refresh_fleet()
 
@@ -223,14 +225,19 @@ func _show_page(index: int) -> void:
 	if index == 2:
 		routes_panel.refresh()
 	if index == 0 and simulation.has_airline():
-		var airline: Dictionary = simulation.get_airline_info()
-		heading.text = airline["name"]
-		description.text = "Heimatland: %s\nHeimatflughafen: %s (%s)\nGuthaben: %d EUR" % [airline["country_name"], airline["airport_name"], airline["airport_icao"], airline["capital_eur"]]
-		detail.text = "Flugzeuge im Flotte-Tab kaufen, im Routen-Tab zuweisen und dort einen Pendelflugplan aktivieren.\n\nNoch keine Passagiere, Einnahmen oder Betriebskosten."
+		_refresh_finance()
 	if index == 1:
 		_refresh_fleet()
 	for button_index in range(navigation.size()):
 		navigation[button_index].set_pressed_no_signal(button_index == index)
+
+
+func _refresh_finance() -> void:
+	var airline: Dictionary = simulation.get_airline_info()
+	var finance: Dictionary = simulation.get_financial_summary()
+	heading.text = airline["name"]
+	description.text = "Heimatland: %s\nHeimatflughafen: %s (%s)\nGuthaben: %d EUR" % [airline["country_name"], airline["airport_name"], airline["airport_icao"], airline["capital_eur"]]
+	detail.text = "Finanzen seit Einführung der Wirtschaft · vorläufige Werte\n%d Flüge · %d Passagiere · %.1f %% Auslastung\nTicketeinnahmen: %d EUR\nBetriebskosten: %d EUR (Treibstoff %d · Flughäfen %d · Personal %d)\nBetriebsgewinn/-verlust: %d EUR\nFlugzeugkäufe (separat, nicht in Betriebskosten): %d EUR\n\nAbrechnung bei Landung. Negative Kontostände sind möglich; noch keine Insolvenzregeln.\nTicketpreise und Flugergebnisse im Routen-Tab. Bitte ausdrücklich speichern." % [finance["flights"], finance["passengers"], finance["load_percent"], finance["revenue_eur"], finance["costs_eur"], finance["fuel_eur"], finance["airport_eur"], finance["crew_eur"], finance["profit_eur"], finance["purchases_eur"]]
 
 
 func _build_fleet(content: VBoxContainer) -> void:

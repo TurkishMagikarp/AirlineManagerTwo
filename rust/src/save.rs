@@ -8,7 +8,7 @@ use std::io::{Read, Write};
 use std::path::Path;
 use std::time::Duration;
 
-const VERSION: u32 = 5;
+const VERSION: u32 = 6;
 const MAX_BYTES: u64 = 1024 * 1024;
 
 #[derive(Serialize, Deserialize)]
@@ -24,6 +24,7 @@ struct GameState {
     airline: Option<Airline>,
     fleet: Option<SavedFleet>,
     routes: Option<SavedRoutes>,
+    finance: Option<crate::economy::Finance>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -53,10 +54,12 @@ pub fn save(path: &Path, game: &Game) -> Result<(), String> {
     game.validate_fleet()?;
     game.validate_routes()?;
     game.validate_operations()?;
+    game.validate_finance()?;
     let clock = &game.clock;
     let data = SaveGame {
         version: VERSION,
         state: GameState {
+            finance: Some(game.finance.clone()),
             airline: game.airline.clone(),
             routes: Some(SavedRoutes {
                 routes: game.routes.clone(),
@@ -160,6 +163,13 @@ pub fn load(path: &Path) -> Result<Game, String> {
     )
     .ok_or_else(|| "Ungültige Geschwindigkeit im Spielstand.".to_string())?;
     let game = Game {
+        finance: if data.version >= 6 {
+            data.state
+                .finance
+                .ok_or("Finanzdaten fehlen im Spielstand.")?
+        } else {
+            crate::economy::Finance::default()
+        },
         clock,
         airline: data.state.airline,
         fleet: fleet.aircraft,
@@ -173,6 +183,7 @@ pub fn load(path: &Path) -> Result<Game, String> {
         return Err("Unerwarteter Flugplan im alten Spielstand.".into());
     }
     game.validate_operations()?;
+    game.validate_finance()?;
     Ok(game)
 }
 
@@ -335,7 +346,6 @@ mod tests {
             ("name", serde_json::json!("   ")),
             ("country_code", serde_json::json!("TR")),
             ("home_airport_icao", serde_json::json!("XXXX")),
-            ("capital_eur", serde_json::json!(-1)),
         ] {
             let mut bad = valid.clone();
             bad["state"]["airline"][field] = value;

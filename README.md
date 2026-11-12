@@ -33,8 +33,8 @@ kein erfundenes Kalenderdatum). **Start / Pause**, **1× / 4× / 16×** steuern 
 technische Testwerte, keine endgültige Balancing-Entscheidung. Navigation bleibt
 per Maus oder Tab / Umschalt+Tab und Enter / Leertaste bedienbar.
 
-Noch keine Offline-Fortschreibung, Bedienung zum Springen zu
-Ereignissen/Zeitpunkten oder laufende Wirtschaft. Spätere Spielregeln und
+Noch keine Offline-Fortschreibung oder Bedienung zum Springen zu
+Ereignissen/Zeitpunkten. Spätere Spielregeln und
 Berechnungen gehören in den Rust-Kern, nicht in Godot.
 
 Produktregeln und offene Fragen: [Game Design](docs/game-design/README.md).
@@ -59,7 +59,7 @@ Darstellungswährung EUR sind technische Testkonfiguration, keine beschlossenen
 Wirtschafts- oder Länderregeln. Datei ändern, Spiel/Editor schließen und über
 `START.bat` neu bauen. Die Einstellung gilt nur für neue Gründungen; geladene
 Airlines behalten ihr gespeichertes Guthaben. Flugzeugkäufe werden davon abgezogen;
-noch keine laufenden Einnahmen oder Betriebskosten.
+Flüge verbuchen Ticketeinnahmen und Betriebskosten bei Landung.
 
 Sechs echte Flughäfen in Deutschland, Türkei und USA stehen zur Verfügung.
 Der [Katalog](data/README.md) liegt getrennt in `data/airports.json` und verwendet
@@ -109,7 +109,7 @@ ihre Zuweisung frei. Die Flotte zeigt reservierte Flugzeuge mit ihrer Routennumm
 Mehrere Verbindungen auf derselben Strecke sind mit verschiedenen Flugzeugen möglich.
 
 Ohne aktivierten Flugplan bleiben Routen reine Planungen und der Standort unverändert.
-Noch keine Überführungen, Nachfrage, Einnahmen oder Betriebskosten.
+Noch keine Überführungen; Nachfrage und Wirtschaft siehe unten.
 Entfernung: Großkreis mit Haversine und mittlerem Erdradius
 6371,0088 km; Reichweite: vereinfachter Modellwert ohne Wetter oder Reserven.
 Rust prüft den ungerundeten Wert; die UI zeigt eine Nachkommastelle.
@@ -136,13 +136,63 @@ und nach Zeit sortierte nächste Abflüge. Während eines Flugs bezeichnet der
 gespeicherte Standort den letzten Abflugort, nicht einen aktuellen Bodenstandort.
 Flugpläne lassen sich nur im geparkten Zustand beenden, nicht während Flug oder
 Bodenzeit. Vor Zuweisungsänderung oder Löschen zuerst den Flugplan beenden.
-Ein neuer Flugplan startet einen neuen Landungszähler; noch kein Flugbuch.
+Ein neuer Flugplan startet einen neuen Landungszähler; Finanzsummen und Flugergebnisse bleiben erhalten.
 
 Die vollständige Berechnung liegt in `rust/src/operations.rs`. Der Zustand wird
 aus ganzzahligen Ereignisgrenzen abgeleitet: Auch über beliebig viele Umläufe
 werden sämtliche Landungen gezählt, ohne frameabhängige Abflugprüfungen oder
 eine Schleife über jeden Flug. Pause friert den Betrieb ein; 1×/4×/16× nutzen
 dieselbe Rust-Uhr. Es gibt noch keine Karte oder animierten Flugzeuge.
+
+## Erste Wirtschaftssimulation (vorläufig)
+
+Im **Routen**-Tab eine Route auswählen, **Ticketpreis** (0–100.000 ganze EUR pro
+Passagier und Einzelflug) einstellen und **Ticketpreis übernehmen** drücken.
+Neue und migrierte Routen starten mit **100 EUR**. Der Preis gilt für beide
+Pendelrichtungen. Preisänderungen benötigen zunächst einen beendeten Flugplan;
+dadurch bleibt der Preis laufender Flüge unverändert.
+
+Alle Regeln, Rundungen und Geldbewegungen liegen in `rust/src/economy.rs` und
+`rust/src/operations.rs`, Godot stellt nur dar. Kein Zufall, keine Frameabhängigkeit.
+Vorläufige, leicht anpassbare Werte: `config/economy.json`; nach Änderungen neu
+bauen. Dieselbe Ausgangslage **mit derselben Konfiguration** liefert dasselbe Ergebnis.
+
+Für die auf ganze Kilometer gerundete Streckenlänge `km`:
+
+- Basisnachfrage: `140 + floor(20 × km / 1000)` Passagiere pro Flug.
+- Referenzpreis: `60 + floor(12 × km / 100)` EUR.
+- Nachfrage: `floor(Basis × max(0, 2 × Referenzpreis − Ticketpreis) / Referenzpreis)`.
+- Verkaufte Tickets: Minimum aus Nachfrage und Sitzplätzen. Ab dem doppelten
+  Referenzpreis fliegt das Flugzeug leer, bei 0 EUR sind Tickets kostenlos.
+- Einnahmen: Passagiere × Ticketpreis.
+- Treibstoff: Flugzeit × modellabhängiger Verbrauch × **1 EUR/kg**, auf volle EUR aufgerundet.
+- Flughafengebühren für beide Flughäfen zusammen: **400 EUR + 12 EUR/Passagier**.
+- Personal: Flugzeit × modellabhängiger Stundensatz, auf volle EUR aufgerundet.
+
+| Modell | Treibstoff kg/h | Personal EUR/h |
+| --- | ---: | ---: |
+| A320-200 | 2.500 | 650 |
+| 737-800 | 2.600 | 650 |
+| ATR 72-600 | 750 | 350 |
+
+Beispiel EDDF–EDDM mit ATR bei 150 EUR: 61 Passagiere, rund 84,7 % Auslastung,
+9.150 EUR Einnahmen; Kosten werden nach der tatsächlichen Rust-Flugzeit berechnet.
+Die Nachfrage gilt pro Flug, unabhängig von Häufigkeit, Konkurrenz und anderen Routen;
+sie ist noch keine tägliche Marktnachfrage. Beide Richtungen haben dieselbe Nachfrage.
+
+Bei jeder **Landung** werden Einnahmen und sämtliche Kosten genau einmal verbucht,
+auch für leere Flüge. Unterwegs noch keine Abbuchung, keine Treibstofflagerhaltung.
+Negative Kontostände sind erlaubt; Käufe benötigen weiterhin ausreichend Guthaben.
+Noch keine Kredite, Zinsen, Insolvenz, Wartung, Steuern oder Personalkosten am Boden.
+
+Der Routen-Tab zeigt die **letzten 100 Landungen** einzeln mit Richtung, Zeitpunkt,
+Preis, Passagieren, Auslastung, Einnahmen, Kostenaufschlüsselung und Gewinn/Verlust.
+Die Unternehmensübersicht zeigt den aktuellen Kontostand sowie kumulierte Flüge,
+Passagiere, Auslastung, Einnahmen, Betriebskosten und Betriebsgewinn/-verlust.
+Flugzeugkäufe werden separat ausgewiesen. Finanzsummen zählen über die begrenzte
+Ergebnisliste hinaus weiter, auch nach Beenden oder Löschen einer Route.
+Große Zeitsprünge werden gebündelt abgerechnet, ohne Schleife über alle Flüge.
+Pause, 1×/4×/16×, Speichern/Laden und erneute Flugpläne verursachen keine Doppelbuchungen.
 
 ## Speichern und Laden
 
@@ -167,8 +217,14 @@ Der aktuelle Projektname ist `Airline Manager — UI-Basis`. Der tatsächliche P
 steht auch im Tooltip der Speichermeldung. macOS ist hier nicht praktisch getestet.
 
 Rust (`rust/src/save.rs`) übernimmt Dateizugriff, JSON-Format und Validierung.
-Das Format hat Version **5** und einen `state`-Bereich mit `clock`, `airline`,
-`fleet` und `routes` (einschließlich optionalem Flugplan). Version **4** behält
+Das Format hat Version **6** und einen `state`-Bereich mit `clock`, `airline`,
+`fleet`, `routes` (einschließlich Ticketpreis und optionalem Flugplan) und `finance`
+(Finanzsummen und letzte 100 Flugergebnisse). Historische Ergebnisse werden nicht
+mit neuen Konfigurationswerten nachberechnet; künftige Landungen nutzen die aktuelle
+Build-Konfiguration. Version **5** behält Flugbetrieb und Kontostand und erhält
+Standardticketpreise sowie leere Finanzsummen, ohne vergangene Flüge nachträglich
+abzurechnen. Ein bereits laufender Flug wird erst bei seiner nächsten Landung abgerechnet.
+Version **4** behält
 Routen und Zuweisungen ohne Flugpläne. Widersprüchliche Flugzustände, Zeitgrenzen
 oder Landungszähler werden abgelehnt. Version **3** behält Airline und Flotte und erhält eine
 leere Routenliste. Ungültige Routen, fehlende Referenzen, Reichweitenüberschreitungen
@@ -202,8 +258,10 @@ Godot --headless --path . --script res://tests/founding_test.gd
 Godot --headless --path . --script res://tests/fleet_test.gd
 Godot --headless --path . --script res://tests/routes_test.gd
 Godot --headless --path . --script res://tests/operations_test.gd
+Godot --headless --path . --script res://tests/economy_test.gd
 powershell -ExecutionPolicy Bypass -File tests/run_save_restart_test.ps1
 powershell -ExecutionPolicy Bypass -File tests/run_flight_restart_test.ps1
+powershell -ExecutionPolicy Bypass -File tests/run_economy_restart_test.ps1
 ```
 
 `Godot` durch den eigenen Executable-Pfad ersetzen. Der Verbindungstest lädt die
@@ -221,6 +279,12 @@ exaktes Restguthaben null, alte Spielstände und fehlerhafte Flottendaten ab.
 Routentests prüfen zusätzlich ungültige Strecken, Reichweitenüberschreitungen,
 doppelte Zuweisungen, Wechsel/Freigabe/Löschen und die Bedienung im kleinen Fenster.
 Die Testdateien liegen isoliert im Temp-Ordner, nicht im persönlichen Spielstand.
+Wirtschaftstests prüfen verschiedene Ticketpreise, volle/teilweise/leere Flüge,
+Sitzplatzgrenzen, positive und negative Ergebnisse, exakte Kontobewegungen,
+negative Kontostände, ungültige Preise, Finanzüberläufe ohne Teilbuchungen,
+gleichzeitige Routen, 16× mit kleinen/großen Schritten und eine Million Landungen.
+Zusätzlich: Finanzmigration aus Version 5 ohne Nachberechnung, begrenzte Historie,
+Routenlöschung/Neugründung sowie Speichern/Laden und Fortsetzung in getrennten Prozessen.
 Optional `-Godot "C:\Pfad\Godot.exe"` angeben. Auf macOS kann dasselbe GDScript
 in separaten Prozessen mit `--save-test-mode=write-running` / `read-running` /
 `write-paused` / `read-paused` und `--save-test-path=/absoluter/testpfad.json`

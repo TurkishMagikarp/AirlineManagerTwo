@@ -38,6 +38,10 @@ func _run() -> void:
 		var row: TreeItem = main.routes_panel.route_tree.get_root().get_child(0)
 		row.select(0)
 		main.routes_panel.route_tree.item_selected.emit()
+		main.routes_panel.ticket_input.value = 150
+		await _click(main.routes_panel.ticket_button)
+		if not _check(main.simulation.get_routes()[0]["ticket_eur"] == 150, "Ticket price set through actual UI"):
+			return
 		main.routes_panel.delay_input.value = 1
 		root.size = Vector2i(680, 520)
 		main.routes_panel.interval_input.value = 1
@@ -70,6 +74,15 @@ func _run() -> void:
 	await _click(main.speed_buttons[2])
 	await _click(main.start_button)
 	main.simulation.advance(operation["flight_seconds"] / 16.0)
+	var financial: Dictionary = main.simulation.get_financial_summary()
+	var results: Array = main.simulation.get_flight_results()
+	if not _check(financial["flights"] == 1 and results.size() == 1 and results[0]["ticket_eur"] == 150, "First landing settles saved ticket price exactly once"):
+		return
+	if not _check(results[0]["passengers"] > 0 and results[0]["passengers"] < results[0]["seats"] and financial["profit_eur"] > 0, "Partial flight earns profit"):
+		return
+	main._process(0.0)
+	if not _check("Gewinn/Verlust" in main.routes_panel.results_label.text, "Flight financial result displayed"):
+		return
 	if not _check(main.simulation.get_fleet()[0]["status"] == "ground" and main.simulation.get_fleet()[0]["location_icao"] == "EDDM", "16x lands exactly and starts ground time"):
 		return
 	main.simulation.advance(operation["ground_seconds"] / 16.0)
@@ -80,6 +93,11 @@ func _run() -> void:
 		return
 	main.simulation.advance(7200.0 * 100 / 16.0)
 	if not _check(main.simulation.get_operations()[0]["completed_flights"] == 101, "Fast forward counts every landing once"):
+		return
+	if not _check(main.simulation.get_financial_summary()["flights"] == 101 and main.simulation.get_flight_results().size() == 100, "16x settles all flights and bounds history"):
+		return
+	await _click(main.navigation[0])
+	if not _check("Betriebsgewinn/-verlust" in main.detail.text and "Guthaben:" in main.description.text, "Company financial overview displayed"):
 		return
 	await _click(main.navigation[1])
 	if not _check("Unterwegs" in main.fleet_tree.get_root().get_child(0).get_text(3), "Fleet displays live flight status"):

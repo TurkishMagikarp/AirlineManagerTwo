@@ -13,6 +13,7 @@ pub struct Game {
     pub next_aircraft_id: u32,
     pub routes: Vec<crate::routes::Route>,
     pub next_route_id: u32,
+    pub finance: crate::economy::Finance,
 }
 
 impl Default for Game {
@@ -24,6 +25,7 @@ impl Default for Game {
             next_aircraft_id: 1,
             routes: Vec::new(),
             next_route_id: 1,
+            finance: crate::economy::Finance::default(),
         }
     }
 }
@@ -33,7 +35,7 @@ pub struct Airline {
     pub name: String,
     pub country_code: String,
     pub home_airport_icao: String,
-    // Current spendable balance; field name retained for existing saves.
+    // Current balance (may be negative after operating losses); legacy field name.
     pub capital_eur: i64,
 }
 
@@ -62,9 +64,6 @@ impl Airline {
                 "Bitte einen Airline-Namen mit 1 bis 80 Zeichen ohne Steuerzeichen eingeben."
                     .into(),
             );
-        }
-        if self.capital_eur < 0 {
-            return Err("Ungültiges Kapital im Spielstand.".into());
         }
         let catalog = airports::catalog()?;
         if !catalog

@@ -20,6 +20,9 @@ var interval_input: SpinBox
 var schedule_button: Button
 var stop_button: Button
 var operations_label: Label
+var ticket_input: SpinBox
+var ticket_button: Button
+var results_label: Label
 
 
 func _ready() -> void:
@@ -70,6 +73,21 @@ func _ready() -> void:
 	delete_button.pressed.connect(_delete)
 	actions.add_child(delete_button)
 	assignment.item_selected.connect(func(_index: int): _assignment_preview())
+	add_child(_label("Ticketpreis der ausgewählten Route · EUR pro Passagier und Einzelflug (vorläufig)"))
+	ticket_input = SpinBox.new()
+	ticket_input.min_value = 0
+	ticket_input.max_value = 100000
+	ticket_input.step = 1
+	add_child(ticket_input)
+	ticket_button = Button.new()
+	ticket_button.text = "Ticketpreis übernehmen (Flugplan vorher beenden)"
+	ticket_button.pressed.connect(func():
+		var route := _route()
+		if not route.is_empty():
+			_feedback(simulation.set_ticket_price(route["id"], int(ticket_input.value)), "Ticketpreis geändert.")
+	)
+	add_child(ticket_button)
+	add_child(_label(simulation.get_economy_rules()))
 	add_child(_label("Flugplan für ausgewählte Route · erster Abflug in Spielminuten"))
 	delay_input = SpinBox.new()
 	delay_input.min_value = 1
@@ -100,6 +118,8 @@ func _ready() -> void:
 	add_child(stop_button)
 	operations_label = _label("")
 	add_child(operations_label)
+	results_label = _label("")
+	add_child(results_label)
 	refresh()
 
 
@@ -170,6 +190,10 @@ func refresh_operations() -> void:
 	for operation in simulation.get_operations():
 		lines.append("%s · Route #%d · Flug %d min · Boden %d min\n%s\nNächster Abflug: %s" % [operation["identifier"], operation["route_id"], ceili(operation["flight_seconds"] / 60.0), operation["ground_seconds"] / 60, operation["status_text"], operation["next_departure"]])
 	operations_label.text = "\n\n".join(lines)
+	lines = ["Flugergebnisse · letzte 100 Landungen · neueste zuerst (vorläufige EUR-Werte)"]
+	for result in simulation.get_flight_results():
+		lines.append("%s · Route #%d · %s → %s · Ticket %d EUR\n%d / %d Passagiere · %.1f %% Auslastung · Einnahmen %d EUR\nKosten %d EUR (Treibstoff %d · Flughäfen %d · Personal %d) · Gewinn/Verlust %d EUR" % [result["landing"], result["route_id"], result["origin"], result["destination"], result["ticket_eur"], result["passengers"], result["seats"], result["load_percent"], result["revenue_eur"], result["costs_eur"], result["fuel_eur"], result["airport_eur"], result["crew_eur"], result["profit_eur"]])
+	results_label.text = "\n\n".join(lines)
 
 
 func _preview() -> void:
@@ -183,6 +207,10 @@ func _preview() -> void:
 func _selection_changed() -> void:
 	var route := _route()
 	status.text = ""
+	if ticket_button != null:
+		ticket_button.disabled = route.is_empty() or route.get("has_plan", false)
+		ticket_input.editable = not ticket_button.disabled
+		ticket_input.value = route.get("ticket_eur", 100)
 	if schedule_button != null:
 		schedule_button.disabled = route.is_empty() or route.get("has_plan", false)
 		stop_button.disabled = route.is_empty() or not route.get("has_plan", false)

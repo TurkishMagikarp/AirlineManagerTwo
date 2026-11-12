@@ -1,6 +1,7 @@
 mod aircraft;
 mod airports;
 mod clock;
+mod economy;
 mod game;
 mod operations;
 mod routes;
@@ -35,6 +36,49 @@ impl IRefCounted for SimulationClock {
 
 #[godot_api]
 impl SimulationClock {
+    #[func]
+    fn get_economy_rules(&self) -> GString {
+        economy::rules_text().as_str().into()
+    }
+
+    #[func]
+    fn set_ticket_price(&mut self, route_id: u32, price: i64) -> GString {
+        self.game
+            .set_ticket_price(route_id, price)
+            .err()
+            .unwrap_or_default()
+            .as_str()
+            .into()
+    }
+
+    #[func]
+    fn get_financial_summary(&self) -> VarDictionary {
+        let t = &self.game.finance.totals;
+        let purchases: i64 = self
+            .game
+            .fleet
+            .iter()
+            .map(|p| i128::from(p.purchase_price_eur))
+            .sum::<i128>()
+            .min(i128::from(i64::MAX)) as i64;
+        vdict! { "flights" => t.flights, "passengers" => t.passengers, "revenue_eur" => t.revenue,
+        "fuel_eur" => t.fuel, "airport_eur" => t.airport, "crew_eur" => t.crew,
+        "costs_eur" => t.costs(), "profit_eur" => t.profit(), "purchases_eur" => purchases,
+        "load_percent" => t.load_percent() }
+    }
+
+    #[func]
+    fn get_flight_results(&self) -> Array<VarDictionary> {
+        self.game.finance.recent.iter().rev().map(|f| {
+            let t = &f.totals;
+            vdict! { "route_id" => f.route_id, "landing" => operations::display_time(f.landing).as_str(),
+                "origin" => f.origin.as_str(), "destination" => f.destination.as_str(), "ticket_eur" => f.ticket_eur,
+                "passengers" => t.passengers, "seats" => t.seats, "load_percent" => t.load_percent(),
+                "revenue_eur" => t.revenue, "fuel_eur" => t.fuel, "airport_eur" => t.airport,
+                "crew_eur" => t.crew, "costs_eur" => t.costs(), "profit_eur" => t.profit() }
+        }).collect()
+    }
+
     #[func]
     fn schedule_route(
         &mut self,
@@ -170,7 +214,7 @@ impl SimulationClock {
             "id" => r.id, "origin_icao" => r.origin_icao.as_str(),
             "destination_icao" => r.destination_icao.as_str(),
             "distance_km" => routes::distance_km(&r.origin_icao, &r.destination_icao).unwrap_or(0.0),
-            "aircraft_id" => r.aircraft_id.unwrap_or(0), "has_plan" => r.plan.is_some()
+            "aircraft_id" => r.aircraft_id.unwrap_or(0), "has_plan" => r.plan.is_some(), "ticket_eur" => r.ticket_eur
         }).collect()
     }
 

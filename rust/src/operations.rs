@@ -183,6 +183,8 @@ impl Game {
             return false;
         }
         let mut updates = Vec::new();
+        let mut finance = self.finance.clone();
+        let mut delta = 0i64;
         for (i, route) in self
             .routes
             .iter()
@@ -200,7 +202,64 @@ impl Game {
             else {
                 return false;
             };
+            let plan = route.plan.as_ref().unwrap();
+            let count = state.completed - plan.completed_flights;
+            if count > 0 {
+                let Ok(totals) = crate::economy::quote(route, &self.fleet[p].model_id) else {
+                    return false;
+                };
+                if finance.totals.add(&totals, count).is_none() {
+                    return false;
+                }
+                let Some(change) = i64::try_from(count)
+                    .ok()
+                    .and_then(|n| totals.profit().checked_mul(n))
+                    .and_then(|n| delta.checked_add(n))
+                else {
+                    return false;
+                };
+                delta = change;
+                let flight = timings(route, &self.fleet[p].model_id).unwrap().0;
+                for index in plan.completed_flights.max(
+                    state
+                        .completed
+                        .saturating_sub(crate::economy::HISTORY_LIMIT as u64),
+                )..state.completed
+                {
+                    let (a, b) = if index % 2 == 0 {
+                        (&route.origin_icao, &route.destination_icao)
+                    } else {
+                        (&route.destination_icao, &route.origin_icao)
+                    };
+                    finance.recent.push(crate::economy::FlightResult {
+                        route_id: route.id,
+                        landing: plan.first_departure + index * plan.interval_seconds + flight,
+                        origin: a.clone(),
+                        destination: b.clone(),
+                        ticket_eur: route.ticket_eur,
+                        totals: totals.clone(),
+                    });
+                }
+            }
             updates.push((i, p, state));
+        }
+        let balance = match &self.airline {
+            Some(a) => match a.capital_eur.checked_add(delta) {
+                Some(v) => Some(v),
+                None => return false,
+            },
+            None if delta == 0 => None,
+            None => return false,
+        };
+        finance.recent.sort_by_key(|f| (f.landing, f.route_id));
+        let excess = finance
+            .recent
+            .len()
+            .saturating_sub(crate::economy::HISTORY_LIMIT);
+        finance.recent.drain(..excess);
+        self.finance = finance;
+        if let Some(balance) = balance {
+            self.airline.as_mut().unwrap().capital_eur = balance;
         }
         self.clock = clock;
         for (r, p, state) in updates {
@@ -270,6 +329,10 @@ mod tests {
         assert!(g.fleet.iter().all(|p| p.status == AircraftStatus::InFlight));
         g.advance(flight as f64);
         assert!(g.fleet.iter().all(|p| p.status == AircraftStatus::Ground));
+        assert_eq!(g.finance.totals.flights, 2);
+        assert_eq!(g.finance.recent.len(), 2);
+        assert_eq!(g.finance.recent[0].route_id, 1);
+        assert_eq!(g.finance.recent[1].route_id, 2);
         g.advance((u64::from(interval) * 60 - flight) as f64);
         assert!(g.fleet.iter().all(|p| p.status == AircraftStatus::InFlight));
         assert!(
@@ -329,6 +392,8 @@ mod tests {
             assert_eq!(large.clock.elapsed(), small.clock.elapsed());
             assert_eq!(large.fleet, small.fleet);
             assert_eq!(large.routes, small.routes);
+            assert_eq!(large.finance, small.finance);
+            assert_eq!(large.airline, small.airline);
             let before = large.routes.clone();
             large.advance(0.0);
             assert_eq!(large.routes, before);
@@ -349,6 +414,8 @@ mod tests {
             1_000_000
         );
         assert_eq!(g.fleet[0].status, AircraftStatus::InFlight);
+        assert_eq!(g.finance.totals.flights, 1_000_000);
+        assert_eq!(g.finance.recent.len(), crate::economy::HISTORY_LIMIT);
     }
 
     #[test]
