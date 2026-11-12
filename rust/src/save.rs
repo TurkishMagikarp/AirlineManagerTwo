@@ -8,7 +8,7 @@ use std::io::{Read, Write};
 use std::path::Path;
 use std::time::Duration;
 
-const VERSION: u32 = 3;
+const VERSION: u32 = 4;
 const MAX_BYTES: u64 = 1024 * 1024;
 
 #[derive(Serialize, Deserialize)]
@@ -23,6 +23,13 @@ struct GameState {
     clock: SavedClock,
     airline: Option<Airline>,
     fleet: Option<SavedFleet>,
+    routes: Option<SavedRoutes>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct SavedRoutes {
+    routes: Vec<crate::routes::Route>,
+    next_route_id: u32,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -40,11 +47,20 @@ struct SavedClock {
 }
 
 pub fn save(path: &Path, game: &Game) -> Result<(), String> {
+    if let Some(airline) = &game.airline {
+        airline.validate()?;
+    }
+    game.validate_fleet()?;
+    game.validate_routes()?;
     let clock = &game.clock;
     let data = SaveGame {
         version: VERSION,
         state: GameState {
             airline: game.airline.clone(),
+            routes: Some(SavedRoutes {
+                routes: game.routes.clone(),
+                next_route_id: game.next_route_id,
+            }),
             fleet: Some(SavedFleet {
                 aircraft: game.fleet.clone(),
                 next_aircraft_id: game.next_aircraft_id,
@@ -93,7 +109,7 @@ pub fn load(path: &Path) -> Result<Game, String> {
     }
     let data: SaveGame = serde_json::from_slice(&bytes)
         .map_err(|_| "Spielstand ist beschädigt oder unvollständig.".to_string())?;
-    if !matches!(data.version, 1 | 2 | VERSION) {
+    if !(1..=VERSION).contains(&data.version) {
         return Err(format!(
             "Nicht unterstützte Spielstand-Version: {}.",
             data.version
@@ -106,7 +122,7 @@ pub fn load(path: &Path) -> Result<Game, String> {
     if let Some(airline) = &data.state.airline {
         airline.validate()?;
     }
-    let fleet = if data.version == VERSION {
+    let fleet = if data.version >= 3 {
         data.state
             .fleet
             .ok_or_else(|| "Flottendaten fehlen im Spielstand.".to_string())?
@@ -117,6 +133,19 @@ pub fn load(path: &Path) -> Result<Game, String> {
         SavedFleet {
             aircraft: Vec::new(),
             next_aircraft_id: 1,
+        }
+    };
+    let routes = if data.version == VERSION {
+        data.state
+            .routes
+            .ok_or_else(|| "Routendaten fehlen im Spielstand.".to_string())?
+    } else {
+        if data.state.routes.is_some() {
+            return Err("Unerwartete Routendaten im alten Spielstand.".into());
+        }
+        SavedRoutes {
+            routes: Vec::new(),
+            next_route_id: 1,
         }
     };
     let clock = data.state.clock;
@@ -134,14 +163,82 @@ pub fn load(path: &Path) -> Result<Game, String> {
         airline: data.state.airline,
         fleet: fleet.aircraft,
         next_aircraft_id: fleet.next_aircraft_id,
+        routes: routes.routes,
+        next_route_id: routes.next_route_id,
     };
     game.validate_fleet()?;
+    game.validate_routes()?;
     Ok(game)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn routes_roundtrip_migration_and_rejecting_corrupt_assignments() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("routes.json");
+        let mut game = Game::default();
+        game.found("Route Save", "DE", "EDDF").unwrap();
+        game.buy_aircraft("atr72_600").unwrap();
+        game.buy_aircraft("atr72_600").unwrap();
+        game.create_route("EDDF", "EDDM", 1).unwrap();
+        game.create_route("LTFM", "LTFJ", 2).unwrap();
+        save(&path, &game).unwrap();
+        let mut restored = load(&path).unwrap();
+        assert_eq!(restored.routes, game.routes);
+        assert_eq!(restored.next_route_id, 3);
+        assert!(restored.create_route("EDDF", "EDDM", 1).is_err());
+        restored.assign_route(2, None).unwrap();
+        restored.assign_route(1, Some(2)).unwrap();
+        restored.delete_route(2).unwrap();
+        restored.create_route("EDDM", "EDDF", 1).unwrap();
+        assert_eq!(restored.routes[1].id, 3);
+        restored.assign_route(1, None).unwrap();
+        save(&path, &restored).unwrap();
+        assert_eq!(load(&path).unwrap().routes, restored.routes);
+        save(&path, &game).unwrap();
+        let valid: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        for (field, value) in [
+            ("id", serde_json::json!(0)),
+            ("id", serde_json::json!(2)),
+            ("origin_icao", serde_json::json!("XXXX")),
+            ("destination_icao", serde_json::json!("EDDF")),
+            ("destination_icao", serde_json::json!("KJFK")),
+            ("aircraft_id", serde_json::json!(99)),
+            ("aircraft_id", serde_json::json!(2)),
+        ] {
+            let mut bad = valid.clone();
+            bad["state"]["routes"]["routes"][0][field] = value;
+            fs::write(&path, serde_json::to_vec(&bad).unwrap()).unwrap();
+            assert!(load(&path).is_err(), "accepted invalid route {field}");
+        }
+        for value in [0, 1, 2] {
+            let mut bad = valid.clone();
+            bad["state"]["routes"]["next_route_id"] = serde_json::json!(value);
+            fs::write(&path, serde_json::to_vec(&bad).unwrap()).unwrap();
+            assert!(load(&path).is_err());
+        }
+        let mut old = valid.clone();
+        old["version"] = serde_json::json!(3);
+        old["state"].as_object_mut().unwrap().remove("routes");
+        fs::write(&path, serde_json::to_vec(&old).unwrap()).unwrap();
+        let migrated = load(&path).unwrap();
+        assert_eq!(migrated.fleet, game.fleet);
+        assert_eq!(migrated.airline, game.airline);
+        assert!(migrated.routes.is_empty());
+        assert_eq!(migrated.next_route_id, 1);
+        let mut bad = valid.clone();
+        bad["state"].as_object_mut().unwrap().remove("routes");
+        fs::write(&path, serde_json::to_vec(&bad).unwrap()).unwrap();
+        assert!(load(&path).is_err());
+        save(&path, &game).unwrap();
+        let previous = fs::read(&path).unwrap();
+        game.routes[0].aircraft_id = Some(2);
+        assert!(save(&path, &game).is_err());
+        assert_eq!(fs::read(&path).unwrap(), previous);
+    }
 
     #[test]
     fn exact_roundtrip_and_overwrite_for_all_clock_states() {
@@ -274,6 +371,7 @@ mod tests {
         let mut old: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
         old["version"] = serde_json::json!(2);
         old["state"].as_object_mut().unwrap().remove("fleet");
+        old["state"].as_object_mut().unwrap().remove("routes");
         fs::write(&path, serde_json::to_vec(&old).unwrap()).unwrap();
         let restored = load(&path).unwrap();
         assert_eq!(restored.airline, game.airline);

@@ -2,7 +2,7 @@
 
 ## Flughäfen
 
-`airports.json` enthält ausschließlich reale Identitätsdaten, keine erfundenen
+`airports.json` enthält reale Identitätsdaten und geografische Koordinaten, keine erfundenen
 Nachfrage-, Kapazitäts-, Gebühren- oder Wirtschaftswerte. Die kleine Auswahl ist
 keine weltweite Abdeckung und noch keine vollständige geografische Datenbasis.
 
@@ -10,6 +10,11 @@ keine weltweite Abdeckung und noch keine vollständige geografische Datenbasis.
 - Flughäfen werden über ICAO-Codes referenziert; IATA ist optionale Anzeigeinformation.
 - Die Airline speichert Codes, keine Array-Indizes oder kopierten Flughafennamen.
 - Godot erhält Länder und gefilterte Flughäfen ausschließlich aus Rust.
+- `latitude` / `longitude`: geografische Breite/Länge in Dezimalgrad (WGS84),
+  gerundete Flughafen-Referenzpositionen, nicht einzelne Startbahnen oder Gates.
+  Referenz: [OurAirports Flughafen-Datensätze](https://ourairports.com/data/)
+  (Public Domain), Codes EDDF, EDDM, LTFM, LTFJ, KJFK und KLAX.
+  Rust leitet daraus die Großkreisentfernung ab; Spielstände speichern nur Codes.
 - Der Katalog wird einmal in Rust eingelesen. Später kann der Loader eine größere,
   lizenzierte Datenquelle verwenden; die Referenzen im Spielstand bleiben stabil.
 - Neue Einträge ergänzen, `START.bat` erneut starten: Cargo baut die eingebettete

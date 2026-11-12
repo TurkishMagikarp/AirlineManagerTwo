@@ -1,15 +1,16 @@
 extends Control
 ## Presentation only. No simulation state or economic calculations.
 
+const RoutesPanel = preload("res://scripts/routes_panel.gd")
+
 const PAGES: Array[Dictionary] = [
 	{"title": "Übersicht", "heading": "Ein klarer Anfang.",
 	"body": "Die Spielzeit kommt direkt aus dem Rust-Simulationskern.\nStart, Pause und Zeitraffer sind unten verfügbar.",
 	"detail": "Die Verbindung zur Simulation steht.\n\nNoch keine Finanzzahlen, Flugbewegungen oder Unternehmensdaten. Spielregeln und Berechnungen bleiben ausschließlich in Rust."},
 	{"title": "Flotte", "heading": "Deine Flotte",
 	"body": "", "detail": ""},
-	{"title": "Routen", "heading": "Routennetz noch nicht verfügbar",
-	"body": "Es liegt kein Routenzustand aus einer Simulation vor.",
-	"detail": "Hier wird später die Planung des Streckennetzes zugänglich.\n\nEs werden noch keine Verbindungen, Flugpläne oder Nachfragewerte berechnet."},
+	{"title": "Routen", "heading": "Dein Routennetz",
+	"body": "Verbindungen planen und Flugzeuge zuweisen.", "detail": ""},
 ]
 
 var navigation: Array[Button] = []
@@ -47,6 +48,7 @@ var buy_button: Button
 var fleet_status: Label
 var empty_fleet: Label
 var fleet_tree: Tree
+var routes_panel: VBoxContainer
 
 
 func _ready() -> void:
@@ -95,6 +97,10 @@ func _ready() -> void:
 		label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		content.add_child(label)
 	_build_fleet(content)
+	routes_panel = RoutesPanel.new()
+	routes_panel.simulation = simulation
+	routes_panel.changed.connect(func(): save_status.text = "Routen geändert · bitte Spielstand speichern.")
+	content.add_child(routes_panel)
 	_add_time_controls(column)
 	column.add_child(_label("Navigation: Tab / Umschalt+Tab · Öffnen: Enter / Leertaste", 14, Color("b0becf")))
 	_build_founding()
@@ -200,12 +206,15 @@ func _show_page(index: int) -> void:
 	current_page = index
 	var page: Dictionary = PAGES[index]
 	page_title.text = page["title"]
-	page_title.visible = index != 1
+	page_title.visible = index == 0
 	heading.text = page["heading"]
 	description.text = page["body"]
 	detail.text = page["detail"]
-	detail.visible = index != 1
+	detail.visible = index == 0
 	fleet_panel.visible = index == 1
+	routes_panel.visible = index == 2
+	if index == 2:
+		routes_panel.refresh()
 	if index == 0 and simulation.has_airline():
 		var airline: Dictionary = simulation.get_airline_info()
 		heading.text = airline["name"]
@@ -316,7 +325,7 @@ func _refresh_fleet() -> void:
 		row.set_text(0, plane["identifier"])
 		row.set_text(1, plane["model_name"])
 		row.set_text(2, plane["location_icao"])
-		row.set_text(3, "Geparkt" if plane["status"] == "parked" else plane["status"])
+		row.set_text(3, "Route #%d" % plane["route_id"] if plane["route_id"] != 0 else "Geparkt")
 		row.set_tooltip_text(0, plane["identifier"])
 		row.set_tooltip_text(1, "%s · gezahlter Kaufpreis: %d EUR" % [plane["model_name"], plane["purchase_price_eur"]])
 		row.set_tooltip_text(2, plane["location_name"])
@@ -417,6 +426,7 @@ func _found_airline() -> void:
 
 func _sync_view() -> void:
 	fleet_status.text = ""
+	routes_panel.status.text = ""
 	overview.visible = simulation.has_airline()
 	founding.visible = not simulation.has_airline()
 	cancel_founding_button.visible = simulation.has_airline()

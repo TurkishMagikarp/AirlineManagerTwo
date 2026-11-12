@@ -1,0 +1,191 @@
+extends VBoxContainer
+## Presentation only: Rust owns routes, availability, distances and validation.
+
+signal changed
+
+var simulation: RefCounted
+var origin: OptionButton
+var destination: OptionButton
+var aircraft: OptionButton
+var preview: Label
+var create_button: Button
+var status: Label
+var route_tree: Tree
+var empty_label: Label
+var assignment: OptionButton
+var assign_button: Button
+var delete_button: Button
+
+
+func _ready() -> void:
+	add_theme_constant_override("separation", 12)
+	var hint := _label("Luftlinie · vereinfachte Referenzreichweite, ohne Wetter oder Reserven.\nZuweisung reserviert das Flugzeug; noch kein Flugbetrieb oder Überführungsflug.")
+	add_child(hint)
+	origin = _select("Startflughafen")
+	destination = _select("Zielflughafen")
+	for country in simulation.get_countries():
+		for airport in simulation.get_airports(country["code"]):
+			for select in [origin, destination]:
+				select.add_item("%s · %s (%s)" % [airport["iata"], airport["name"], airport["icao"]])
+				select.set_item_metadata(select.item_count - 1, airport["icao"])
+	destination.select(1)
+	aircraft = _select("Verfügbares Flugzeug")
+	preview = _label("")
+	add_child(preview)
+	create_button = Button.new()
+	create_button.text = "Route erstellen"
+	create_button.pressed.connect(_create)
+	add_child(create_button)
+	for select in [origin, destination, aircraft]:
+		select.item_selected.connect(func(_index: int): _preview())
+	status = _label("")
+	add_child(status)
+	empty_label = _label("Noch keine Routen erstellt.")
+	add_child(empty_label)
+	route_tree = Tree.new()
+	route_tree.columns = 4
+	route_tree.hide_root = true
+	route_tree.column_titles_visible = true
+	route_tree.custom_minimum_size.y = 180
+	for i in range(4):
+		route_tree.set_column_title(i, ["Route", "Strecke", "Entfernung", "Flugzeug"][i])
+		route_tree.set_column_expand(i, i == 1 or i == 3)
+		route_tree.set_column_custom_minimum_width(i, [65, 140, 110, 170][i])
+	route_tree.item_selected.connect(_selection_changed)
+	add_child(route_tree)
+	assignment = _select("Ausgewählte Route: Flugzeugzuweisung")
+	var actions := HBoxContainer.new()
+	add_child(actions)
+	assign_button = Button.new()
+	assign_button.text = "Zuweisung übernehmen"
+	assign_button.pressed.connect(_assign)
+	actions.add_child(assign_button)
+	delete_button = Button.new()
+	delete_button.text = "Route löschen"
+	delete_button.pressed.connect(_delete)
+	actions.add_child(delete_button)
+	assignment.item_selected.connect(func(_index: int): _assignment_preview())
+	refresh()
+
+
+func _label(text: String) -> Label:
+	var label := Label.new()
+	label.text = text
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	return label
+
+
+func _select(title: String) -> OptionButton:
+	add_child(_label(title))
+	var select := OptionButton.new()
+	select.fit_to_longest_item = false
+	select.clip_text = true
+	select.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	add_child(select)
+	return select
+
+
+func _selected_id(select: OptionButton) -> int:
+	return int(select.get_selected_metadata()) if select.selected >= 0 else 0
+
+
+func _route() -> Dictionary:
+	var row := route_tree.get_selected()
+	return row.get_metadata(0) if row != null else {}
+
+
+func refresh() -> void:
+	var selected_route: int = _route().get("id", 0)
+	var selected_plane := _selected_id(aircraft)
+	var fleet: Array = simulation.get_fleet()
+	aircraft.clear()
+	for plane in fleet:
+		if plane["route_id"] == 0:
+			aircraft.add_item("%s · %s · %d km Reichweite" % [plane["identifier"], plane["model_name"], plane["range_km"]])
+			aircraft.set_item_metadata(aircraft.item_count - 1, plane["id"])
+			if plane["id"] == selected_plane:
+				aircraft.select(aircraft.item_count - 1)
+	aircraft.disabled = aircraft.item_count == 0
+	var routes: Array = simulation.get_routes()
+	empty_label.visible = routes.is_empty()
+	route_tree.visible = not routes.is_empty()
+	route_tree.clear()
+	var root_item := route_tree.create_item()
+	for route in routes:
+		var row := route_tree.create_item(root_item)
+		row.set_metadata(0, route)
+		row.set_text(0, "#%d" % route["id"])
+		row.set_text(1, "%s → %s" % [route["origin_icao"], route["destination_icao"]])
+		row.set_text(2, "%.1f km" % route["distance_km"])
+		row.set_text(3, "Nicht zugewiesen")
+		for plane in fleet:
+			if plane["id"] == route["aircraft_id"]:
+				row.set_text(3, "%s · %s" % [plane["identifier"], plane["model_name"]])
+		for i in range(4):
+			row.set_tooltip_text(i, row.get_text(i))
+		if route["id"] == selected_route:
+			row.select(0)
+	_selection_changed()
+	_preview()
+
+
+func _preview() -> void:
+	var result: Dictionary = simulation.preview_route(origin.get_selected_metadata(), destination.get_selected_metadata(), _selected_id(aircraft), 0)
+	preview.text = "Entfernung: %.1f km · %s" % [result["distance_km"], "Reichweite ausreichend" if result["error"].is_empty() else result["error"]]
+	create_button.disabled = not result["error"].is_empty()
+	if aircraft.item_count == 0:
+		preview.text += "\nKein freies Flugzeug. Im Flotte-Tab kaufen oder eine Zuweisung lösen."
+
+
+func _selection_changed() -> void:
+	var route := _route()
+	status.text = ""
+	assignment.clear()
+	assignment.add_item("Keine Zuweisung (Flugzeug freigeben)")
+	assignment.set_item_metadata(0, 0)
+	for plane in simulation.get_fleet():
+		if plane["route_id"] == 0 or plane["route_id"] == route.get("id", -1):
+			assignment.add_item("%s · %s · %d km Reichweite" % [plane["identifier"], plane["model_name"], plane["range_km"]])
+			assignment.set_item_metadata(assignment.item_count - 1, plane["id"])
+			if plane["id"] == route.get("aircraft_id", 0):
+				assignment.select(assignment.item_count - 1)
+	assignment.disabled = route.is_empty()
+	delete_button.disabled = route.is_empty()
+	_assignment_preview()
+
+
+func _assignment_preview() -> void:
+	var route := _route()
+	assign_button.disabled = route.is_empty()
+	assign_button.tooltip_text = ""
+	if not route.is_empty() and _selected_id(assignment) != 0:
+		var result: Dictionary = simulation.preview_route(route["origin_icao"], route["destination_icao"], _selected_id(assignment), route["id"])
+		assign_button.disabled = not result["error"].is_empty()
+		assign_button.tooltip_text = result["error"]
+		status.text = result["error"]
+
+
+func _feedback(error: String, success: String) -> void:
+	refresh()
+	status.text = success + " Bitte speichern." if error.is_empty() else error
+	if error.is_empty():
+		changed.emit()
+	await get_tree().process_frame
+	var scroll := get_parent().get_parent() as ScrollContainer
+	scroll.ensure_control_visible(status)
+
+
+func _create() -> void:
+	_feedback(simulation.create_route(origin.get_selected_metadata(), destination.get_selected_metadata(), _selected_id(aircraft)), "Route erstellt.")
+
+
+func _assign() -> void:
+	var route := _route()
+	if not route.is_empty():
+		_feedback(simulation.assign_route(route["id"], _selected_id(assignment)), "Zuweisung geändert.")
+
+
+func _delete() -> void:
+	var route := _route()
+	if not route.is_empty():
+		_feedback(simulation.delete_route(route["id"]), "Route gelöscht; Flugzeug freigegeben.")

@@ -5,11 +5,11 @@
     {"code": "US", "name": "USA"}
   ],
   "airports": [
-    {"icao": "EDDF", "iata": "FRA", "name": "Frankfurt Airport", "country_code": "DE"},
-    {"icao": "EDDM", "iata": "MUC", "name": "Munich Airport", "country_code": "DE"},
-    {"icao": "LTFM", "iata": "IST", "name": "Istanbul Airport", "country_code": "TR"},
-    {"icao": "LTFJ", "iata": "SAW", "name": "Istanbul Sabiha Gökçen International Airport", "country_code": "TR"},
-    {"icao": "KJFK", "iata": "JFK", "name": "John F. Kennedy International Airport", "country_code": "US"},
-    {"icao": "KLAX", "iata": "LAX", "name": "Los Angeles International Airport", "country_code": "US"}
+    {"icao": "EDDF", "iata": "FRA", "name": "Frankfurt Airport", "country_code": "DE", "latitude": 50.033333, "longitude": 8.570556},
+    {"icao": "EDDM", "iata": "MUC", "name": "Munich Airport", "country_code": "DE", "latitude": 48.353783, "longitude": 11.786086},
+    {"icao": "LTFM", "iata": "IST", "name": "Istanbul Airport", "country_code": "TR", "latitude": 41.275278, "longitude": 28.751944},
+    {"icao": "LTFJ", "iata": "SAW", "name": "Istanbul Sabiha Gökçen International Airport", "country_code": "TR", "latitude": 40.898553, "longitude": 29.309219},
+    {"icao": "KJFK", "iata": "JFK", "name": "John F. Kennedy International Airport", "country_code": "US", "latitude": 40.639447, "longitude": -73.779317},
+    {"icao": "KLAX", "iata": "LAX", "name": "Los Angeles International Airport", "country_code": "US", "latitude": 33.9425, "longitude": -118.408056}
   ]
 }

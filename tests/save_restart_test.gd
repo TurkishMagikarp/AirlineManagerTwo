@@ -43,6 +43,8 @@ func _run() -> void:
 		_select_atr(main)
 		await _click(main.buy_button)
 		await _click(main.buy_button)
+		await _click(main.navigation[2])
+		await _click(main.routes_panel.create_button)
 		await _click(main.navigation[0])
 		await _click(main.save_button)
 		if not _check(main.save_status.text == "Spielstand gespeichert.", "Save button writes via Rust"):
@@ -59,6 +61,12 @@ func _run() -> void:
 	if not _check(main.overview.visible and not main.founding.visible and main.heading.text == airline["name"] and "LTFJ" in main.description.text and str(airline["capital_eur"]) in main.description.text, "Overview shows founded or loaded airline"):
 		return
 	var fleet: Array = clock.get_fleet()
+	var routes: Array = clock.get_routes()
+	if not _check(routes.size() == 1 and routes[0]["origin_icao"] == "EDDF" and routes[0]["destination_icao"] == "EDDM" and routes[0]["aircraft_id"] == 1 and fleet[0]["route_id"] == 1, "Route and exclusive assignment survive complete restart"):
+		return
+	if mode.begins_with("read-"):
+		if not _check(not clock.create_route("LTFM", "LTFJ", 1).is_empty() and clock.get_routes() == routes, "Duplicate assignment rejected after restart"):
+			return
 	var atr_price := 0
 	for model in clock.get_aircraft_models():
 		if model["id"] == "atr72_600":
@@ -102,6 +110,14 @@ func _run() -> void:
 			if not _check(main.save_status.text != "Spielstand geladen." and clock.get_elapsed_seconds() == expected and clock.is_running() == running and clock.get_speed() == speed, "Corrupt load preserves live state"):
 				return
 		var invalid_company: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(path))
+		var invalid_routes: Dictionary = invalid_company.duplicate(true)
+		invalid_routes["state"]["routes"]["routes"][0]["aircraft_id"] = 999
+		var route_file := FileAccess.open(main.save_path, FileAccess.WRITE)
+		route_file.store_string(JSON.stringify(invalid_routes))
+		route_file.close()
+		await _click(main.load_button)
+		if not _check(main.save_status.text != "Spielstand geladen." and clock.get_routes() == routes and clock.get_fleet() == fleet, "Invalid route load preserves live routes and aircraft"):
+			return
 		invalid_company["state"]["airline"]["country_code"] = "DE"
 		var invalid_file := FileAccess.open(main.save_path, FileAccess.WRITE)
 		invalid_file.store_string(JSON.stringify(invalid_company))

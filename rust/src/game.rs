@@ -11,6 +11,8 @@ pub struct Game {
     pub airline: Option<Airline>,
     pub fleet: Vec<Aircraft>,
     pub next_aircraft_id: u32,
+    pub routes: Vec<crate::routes::Route>,
+    pub next_route_id: u32,
 }
 
 impl Default for Game {
@@ -20,6 +22,8 @@ impl Default for Game {
             airline: None,
             fleet: Vec::new(),
             next_aircraft_id: 1,
+            routes: Vec::new(),
+            next_route_id: 1,
         }
     }
 }

@@ -13,6 +13,8 @@ pub struct Airport {
     pub iata: Option<String>,
     pub name: String,
     pub country_code: String,
+    pub latitude: f64,
+    pub longitude: f64,
 }
 
 #[derive(Deserialize)]
@@ -52,6 +54,8 @@ mod tests {
             assert!(!airport.name.is_empty());
             assert!(airports.insert(&airport.icao));
             assert!(countries.contains(&airport.country_code));
+            assert!(airport.latitude.is_finite() && airport.latitude.abs() <= 90.0);
+            assert!(airport.longitude.is_finite() && airport.longitude.abs() <= 180.0);
         }
         assert!(airports.contains(&"EDDF".to_string()));
         assert!(airports.contains(&"LTFM".to_string()));

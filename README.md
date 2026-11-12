@@ -34,7 +34,7 @@ technische Testwerte, keine endgültige Balancing-Entscheidung. Navigation bleib
 per Maus oder Tab / Umschalt+Tab und Enter / Leertaste bedienbar.
 
 Noch keine Offline-Fortschreibung, Ereignisse, Zeitsprünge zu
-Ereignissen/Zeitpunkten, laufende Wirtschaft oder Routen. Spätere Spielregeln und
+Ereignissen/Zeitpunkten oder laufende Wirtschaft. Spätere Spielregeln und
 Berechnungen gehören in den Rust-Kern, nicht in Godot.
 
 Produktregeln und offene Fragen: [Game Design](docs/game-design/README.md).
@@ -93,12 +93,35 @@ Noch kein Verkauf, Leasing, Bestell-/Lieferprozess, Wartung, Flugauftrag oder
 separates Buchhaltungsjournal. Sofortige Verfügbarkeit und Testpreise sind
 vorläufige Vereinfachungen, keine endgültigen Wirtschaftsregeln.
 
+## Routenplanung
+
+Im **Routen**-Tab Start und Ziel aus den sechs vorhandenen Flughäfen sowie ein
+freies eigenes Flugzeug wählen. Die Vorschau zeigt die Luftlinienentfernung und
+die Reichweitenprüfung aus Rust. Gleiche oder unbekannte Flughäfen, fremde bzw.
+nicht vorhandene Flugzeuge und Strecken oberhalb der Modellreichweite werden
+abgelehnt, ohne Zustand oder Kennungszähler zu ändern.
+
+**Route erstellen** reserviert das Flugzeug exklusiv. Die Liste zeigt Kennung,
+Strecke, Entfernung und Flugzeug. Eine Zeile auswählen, dann unten ein freies
+Flugzeug wählen und **Zuweisung übernehmen** drücken. **Keine Zuweisung** gibt das
+Flugzeug frei und behält die Route; **Route löschen** entfernt die Route und gibt
+ihre Zuweisung frei. Die Flotte zeigt reservierte Flugzeuge mit ihrer Routennummer.
+Mehrere Verbindungen auf derselben Strecke sind mit verschiedenen Flugzeugen möglich.
+
+Alle vorhandenen Routen sind Planungen: noch keine Flugpläne, Flugbewegungen,
+Überführungen, Nachfrage, Einnahmen oder Betriebskosten. Der Standort bleibt beim
+Planen unverändert. Entfernung: Großkreis mit Haversine und mittlerem Erdradius
+6371,0088 km; Reichweite: vereinfachter Modellwert ohne Wetter oder Reserven.
+Rust prüft den ungerundeten Wert; die UI zeigt eine Nachkommastelle.
+Änderungen wie gewohnt ausdrücklich **Speichern**.
+
 ## Speichern und Laden
 
 **Speichern** ersetzt den einen lokalen Spielstand; **Laden** stellt ihn wieder
 her. Nach einem Neustart **Spielstand laden** drücken: Airline einschließlich
 Name, Land, Heimatflughafen und verbleibendem Guthaben, die komplette Flotte
-einschließlich bezahlter Preise und Kennungszähler sowie Spielzeit (nanosekundengenau),
+einschließlich bezahlter Preise und Kennungszähler, Routen mit Flugzeugzuweisungen
+und Routenkennungszähler sowie Spielzeit (nanosekundengenau),
 Pausenstatus und Geschwindigkeit werden wiederhergestellt. Ein laufender
 Spielstand läuft anschließend weiter, ein pausierter bleibt pausiert. Die Zeit
 während des geschlossenen Spiels wird nicht angerechnet. Es gibt bewusst kein
@@ -114,8 +137,10 @@ Der aktuelle Projektname ist `Airline Manager — UI-Basis`. Der tatsächliche P
 steht auch im Tooltip der Speichermeldung. macOS ist hier nicht praktisch getestet.
 
 Rust (`rust/src/save.rs`) übernimmt Dateizugriff, JSON-Format und Validierung.
-Das Format hat Version **3** und einen `state`-Bereich mit `clock`, `airline` und
-`fleet`, der später um weitere Simulationsdaten ergänzt werden kann. Spielstände
+Das Format hat Version **4** und einen `state`-Bereich mit `clock`, `airline`,
+`fleet` und `routes`. Version **3** behält Airline und Flotte und erhält eine
+leere Routenliste. Ungültige Routen, fehlende Referenzen, Reichweitenüberschreitungen
+und doppelte Flugzeugbelegungen werden beim Laden vollständig abgelehnt. Spielstände
 der Version **2** behalten ihre Airline und ihr Guthaben und erhalten eine leere
 Flotte, ohne zusätzliche Kosten oder erfundene Flugzeuge. Alte Zeit-Spielstände
 der Version **1** bleiben ebenfalls lesbar, enthalten jedoch noch keine Airline. Ihre Uhr
@@ -143,6 +168,7 @@ Godot --headless --path . --script res://tests/navigation_test.gd
 Godot --headless --path . --script res://tests/simulation_test.gd
 Godot --headless --path . --script res://tests/founding_test.gd
 Godot --headless --path . --script res://tests/fleet_test.gd
+Godot --headless --path . --script res://tests/routes_test.gd
 powershell -ExecutionPolicy Bypass -File tests/run_save_restart_test.ps1
 ```
 
@@ -154,10 +180,12 @@ Die Godot-Tests können ohne `--headless` mit echtem Fenster ausgeführt werden.
 Der Neustarttest startet vier vollständig getrennte Godot-Prozesse: jeweils
 Speichern und Wiederherstellen eines laufenden und eines pausierten Spielstands.
 Er gründet eine Airline über die UI, klickt die echten Buttons und prüft nach
-vollständigem Neustart Airline, Flotte, Guthaben, Kennungen, exakte Zeit und
+vollständigem Neustart Airline, Flotte, Routen, exklusive Zuweisungen, Guthaben, Kennungen, exakte Zeit und
 Geschwindigkeit. Er prüft auch einen weiteren Kauf nach dem Laden, unzureichendes
 Guthaben und defekte Spielstände. Rust-Tests decken zusätzlich Käufe aller Modelle,
 exaktes Restguthaben null, alte Spielstände und fehlerhafte Flottendaten ab.
+Routentests prüfen zusätzlich ungültige Strecken, Reichweitenüberschreitungen,
+doppelte Zuweisungen, Wechsel/Freigabe/Löschen und die Bedienung im kleinen Fenster.
 Die Testdateien liegen isoliert im Temp-Ordner, nicht im persönlichen Spielstand.
 Optional `-Godot "C:\Pfad\Godot.exe"` angeben. Auf macOS kann dasselbe GDScript
 in separaten Prozessen mit `--save-test-mode=write-running` / `read-running` /

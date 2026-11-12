@@ -2,6 +2,7 @@ mod aircraft;
 mod airports;
 mod clock;
 mod game;
+mod routes;
 mod save;
 
 use game::Game;
@@ -33,6 +34,65 @@ impl IRefCounted for SimulationClock {
 
 #[godot_api]
 impl SimulationClock {
+    #[func]
+    fn preview_route(
+        &self,
+        origin: GString,
+        destination: GString,
+        aircraft_id: u32,
+        route_id: u32,
+    ) -> VarDictionary {
+        let a = origin.to_string();
+        let b = destination.to_string();
+        let distance = routes::distance_km(&a, &b).unwrap_or(0.0);
+        let error = self
+            .game
+            .check_route(&a, &b, aircraft_id, (route_id != 0).then_some(route_id))
+            .err()
+            .unwrap_or_default();
+        vdict! { "distance_km" => distance, "error" => error.as_str() }
+    }
+
+    #[func]
+    fn create_route(&mut self, origin: GString, destination: GString, aircraft_id: u32) -> GString {
+        self.game
+            .create_route(&origin.to_string(), &destination.to_string(), aircraft_id)
+            .err()
+            .unwrap_or_default()
+            .as_str()
+            .into()
+    }
+
+    #[func]
+    fn assign_route(&mut self, route_id: u32, aircraft_id: u32) -> GString {
+        self.game
+            .assign_route(route_id, (aircraft_id != 0).then_some(aircraft_id))
+            .err()
+            .unwrap_or_default()
+            .as_str()
+            .into()
+    }
+
+    #[func]
+    fn delete_route(&mut self, route_id: u32) -> GString {
+        self.game
+            .delete_route(route_id)
+            .err()
+            .unwrap_or_default()
+            .as_str()
+            .into()
+    }
+
+    #[func]
+    fn get_routes(&self) -> Array<VarDictionary> {
+        self.game.routes.iter().map(|r| vdict! {
+            "id" => r.id, "origin_icao" => r.origin_icao.as_str(),
+            "destination_icao" => r.destination_icao.as_str(),
+            "distance_km" => routes::distance_km(&r.origin_icao, &r.destination_icao).unwrap_or(0.0),
+            "aircraft_id" => r.aircraft_id.unwrap_or(0)
+        }).collect()
+    }
+
     #[func]
     fn get_aircraft_models(&self) -> Array<VarDictionary> {
         let Ok(models) = aircraft::models() else {
@@ -77,7 +137,9 @@ impl SimulationClock {
                     "location_icao" => plane.location_icao.as_str(),
                     "location_name" => location_name,
                     "status" => match plane.status { aircraft::AircraftStatus::Parked => "parked" },
-                    "purchase_price_eur" => plane.purchase_price_eur
+                    "purchase_price_eur" => plane.purchase_price_eur,
+                    "range_km" => aircraft::model(&plane.model_id).map(|m| m.range_km).unwrap_or(0),
+                    "route_id" => self.game.routes.iter().find(|r| r.aircraft_id == Some(plane.id)).map(|r| r.id).unwrap_or(0)
                 }
             })
             .collect()
