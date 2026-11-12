@@ -1,10 +1,27 @@
-use crate::{airports, clock::Clock};
+use crate::{
+    aircraft::{self, Aircraft, AircraftStatus},
+    airports,
+    clock::Clock,
+};
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 
-#[derive(Default)]
 pub struct Game {
     pub clock: Clock,
     pub airline: Option<Airline>,
+    pub fleet: Vec<Aircraft>,
+    pub next_aircraft_id: u32,
+}
+
+impl Default for Game {
+    fn default() -> Self {
+        Self {
+            clock: Clock::default(),
+            airline: None,
+            fleet: Vec::new(),
+            next_aircraft_id: 1,
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -12,6 +29,7 @@ pub struct Airline {
     pub name: String,
     pub country_code: String,
     pub home_airport_icao: String,
+    // Current spendable balance; field name retained for existing saves.
     pub capital_eur: i64,
 }
 
@@ -75,9 +93,64 @@ impl Game {
         };
         airline.validate()?;
         *self = Self {
-            clock: Clock::default(),
             airline: Some(airline),
+            ..Self::default()
         };
+        Ok(())
+    }
+
+    /// All checks precede the single synchronous purchase: no debit or ID on failure.
+    pub fn buy_aircraft(&mut self, model_id: &str) -> Result<(), String> {
+        let airline = self
+            .airline
+            .as_mut()
+            .ok_or_else(|| "Bitte zuerst eine Airline gründen.".to_string())?;
+        let model = aircraft::model(model_id)?;
+        if airline.capital_eur < model.price_eur {
+            return Err(format!(
+                "Nicht genügend Guthaben: {} EUR benötigt, {} EUR verfügbar.",
+                model.price_eur, airline.capital_eur
+            ));
+        }
+        let next_id = self
+            .next_aircraft_id
+            .checked_add(1)
+            .ok_or_else(|| "Keine weitere Flugzeugkennung verfügbar.".to_string())?;
+        let plane = Aircraft {
+            id: self.next_aircraft_id,
+            model_id: model.id.clone(),
+            location_icao: airline.home_airport_icao.clone(),
+            status: AircraftStatus::Parked,
+            purchase_price_eur: model.price_eur,
+        };
+        self.fleet.push(plane);
+        airline.capital_eur -= model.price_eur;
+        self.next_aircraft_id = next_id;
+        Ok(())
+    }
+
+    pub fn validate_fleet(&self) -> Result<(), String> {
+        if self.next_aircraft_id == 0 || (self.airline.is_none() && !self.fleet.is_empty()) {
+            return Err("Ungültige Flottendaten im Spielstand.".into());
+        }
+        let airports = airports::catalog()?;
+        let mut ids = HashSet::new();
+        for plane in &self.fleet {
+            aircraft::model(&plane.model_id)?;
+            if plane.id == 0
+                || plane.id >= self.next_aircraft_id
+                || !ids.insert(plane.id)
+                || plane.purchase_price_eur <= 0
+                || !airports
+                    .airports
+                    .iter()
+                    .any(|airport| airport.icao == plane.location_icao)
+            {
+                return Err(
+                    "Ungültige Flugzeugkennung, Kaufdaten oder Standort im Spielstand.".into(),
+                );
+            }
+        }
         Ok(())
     }
 }
@@ -121,5 +194,60 @@ mod tests {
             assert_eq!(game.clock.elapsed().as_secs(), 12);
             assert!(game.clock.is_running());
         }
+    }
+
+    #[test]
+    fn purchases_debit_exact_prices_and_create_individual_home_based_aircraft() {
+        let mut game = Game::default();
+        game.found("Fleet Air", "DE", "EDDM").unwrap();
+        let total: i64 = aircraft::models()
+            .unwrap()
+            .iter()
+            .map(|model| model.price_eur)
+            .sum();
+        game.airline.as_mut().unwrap().capital_eur = total;
+        for model in aircraft::models().unwrap() {
+            game.buy_aircraft(&model.id).unwrap();
+            let plane = game.fleet.last().unwrap();
+            assert_eq!(plane.model_id, model.id);
+            assert_eq!(plane.purchase_price_eur, model.price_eur);
+            assert_eq!(plane.location_icao, "EDDM");
+            assert_eq!(plane.status, AircraftStatus::Parked);
+        }
+        assert_eq!(game.airline.as_ref().unwrap().capital_eur, 0);
+        assert_eq!(game.fleet[0].identifier(), "AM-000001");
+        assert_eq!(game.fleet[2].identifier(), "AM-000003");
+        game.validate_fleet().unwrap();
+    }
+
+    #[test]
+    fn failed_purchases_do_not_change_money_fleet_or_identifier_sequence() {
+        let mut game = Game::default();
+        assert!(game.buy_aircraft("atr72_600").is_err());
+        game.found("Fleet Air", "TR", "LTFM").unwrap();
+        let price = aircraft::model("atr72_600").unwrap().price_eur;
+        game.airline.as_mut().unwrap().capital_eur = price - 1;
+        for id in ["atr72_600", "unknown"] {
+            assert!(game.buy_aircraft(id).is_err());
+            assert_eq!(game.airline.as_ref().unwrap().capital_eur, price - 1);
+            assert!(game.fleet.is_empty());
+            assert_eq!(game.next_aircraft_id, 1);
+        }
+        game.airline.as_mut().unwrap().capital_eur = price * 2;
+        game.buy_aircraft("atr72_600").unwrap();
+        game.buy_aircraft("atr72_600").unwrap();
+        assert_eq!(game.fleet[0].id, 1);
+        assert_eq!(game.fleet[1].id, 2);
+        assert_eq!(game.airline.as_ref().unwrap().capital_eur, 0);
+        assert!(game.buy_aircraft("atr72_600").is_err());
+        assert_eq!(game.next_aircraft_id, 3);
+        game.next_aircraft_id = u32::MAX;
+        game.airline.as_mut().unwrap().capital_eur = price;
+        assert!(game.buy_aircraft("atr72_600").is_err());
+        assert_eq!(game.airline.as_ref().unwrap().capital_eur, price);
+        assert_eq!(game.fleet.len(), 2);
+        game.found("New Air", "DE", "EDDF").unwrap();
+        assert!(game.fleet.is_empty());
+        assert_eq!(game.next_aircraft_id, 1);
     }
 }

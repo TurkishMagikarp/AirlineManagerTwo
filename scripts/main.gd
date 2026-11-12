@@ -5,9 +5,8 @@ const PAGES: Array[Dictionary] = [
 	{"title": "Übersicht", "heading": "Ein klarer Anfang.",
 	"body": "Die Spielzeit kommt direkt aus dem Rust-Simulationskern.\nStart, Pause und Zeitraffer sind unten verfügbar.",
 	"detail": "Die Verbindung zur Simulation steht.\n\nNoch keine Finanzzahlen, Flugbewegungen oder Unternehmensdaten. Spielregeln und Berechnungen bleiben ausschließlich in Rust."},
-	{"title": "Flotte", "heading": "Flotte noch nicht verfügbar",
-	"body": "Es liegt kein Flottenzustand aus einer Simulation vor.",
-	"detail": "Hier werden später Flugzeuge und ihr Betriebszustand dargestellt.\n\nDiese Ansicht zeigt bewusst keine Beispiel-Flugzeuge und bietet noch keinen Kauf oder Leasing an."},
+	{"title": "Flotte", "heading": "Deine Flotte",
+	"body": "", "detail": ""},
 	{"title": "Routen", "heading": "Routennetz noch nicht verfügbar",
 	"body": "Es liegt kein Routenzustand aus einer Simulation vor.",
 	"detail": "Hier wird später die Planung des Streckennetzes zugänglich.\n\nEs werden noch keine Verbindungen, Flugpläne oder Nachfragewerte berechnet."},
@@ -41,6 +40,13 @@ var cancel_founding_button: Button
 var founding_status: Label
 var founding_capital: Label
 var new_game_button: Button
+var fleet_panel: VBoxContainer
+var model_select: OptionButton
+var model_details: Label
+var buy_button: Button
+var fleet_status: Label
+var empty_fleet: Label
+var fleet_tree: Tree
 
 
 func _ready() -> void:
@@ -75,6 +81,7 @@ func _ready() -> void:
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.follow_focus = true
 	column.add_child(scroll)
 	var content := VBoxContainer.new()
 	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -87,6 +94,7 @@ func _ready() -> void:
 	for label in [page_title, heading, description, detail]:
 		label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		content.add_child(label)
+	_build_fleet(content)
 	_add_time_controls(column)
 	column.add_child(_label("Navigation: Tab / Umschalt+Tab · Öffnen: Enter / Leertaste", 14, Color("b0becf")))
 	_build_founding()
@@ -94,13 +102,20 @@ func _ready() -> void:
 
 
 func _add_time_controls(column: VBoxContainer) -> void:
+	var panel := VBoxContainer.new()
+	panel.add_theme_constant_override("separation", 8)
+	column.add_child(panel)
+	var clock_row := HBoxContainer.new()
+	clock_row.add_theme_constant_override("separation", 24)
+	panel.add_child(clock_row)
 	time_label = _label("", 24, Color("90d6dc"))
-	column.add_child(time_label)
+	clock_row.add_child(time_label)
 	state_label = _label("", 16)
-	column.add_child(state_label)
+	state_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	clock_row.add_child(state_label)
 	var controls := HBoxContainer.new()
 	controls.add_theme_constant_override("separation", 8)
-	column.add_child(controls)
+	panel.add_child(controls)
 	start_button = Button.new()
 	start_button.text = "Start"
 	start_button.pressed.connect(func():
@@ -133,7 +148,7 @@ func _add_time_controls(column: VBoxContainer) -> void:
 	save_status = _label("Ein lokaler Spielstand · manuell speichern und laden", 14, Color("b0becf"))
 	save_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	save_status.tooltip_text = save_path
-	column.add_child(save_status)
+	panel.add_child(save_status)
 	_refresh_time()
 
 
@@ -185,16 +200,127 @@ func _show_page(index: int) -> void:
 	current_page = index
 	var page: Dictionary = PAGES[index]
 	page_title.text = page["title"]
+	page_title.visible = index != 1
 	heading.text = page["heading"]
 	description.text = page["body"]
 	detail.text = page["detail"]
+	detail.visible = index != 1
+	fleet_panel.visible = index == 1
 	if index == 0 and simulation.has_airline():
 		var airline: Dictionary = simulation.get_airline_info()
 		heading.text = airline["name"]
-		description.text = "Heimatland: %s\nHeimatflughafen: %s (%s)\nStartkapital: %d EUR" % [airline["country_name"], airline["airport_name"], airline["airport_icao"], airline["capital_eur"]]
-		detail.text = "Deine Fluggesellschaft ist gegründet.\n\nDas Startkapital ist ein konfigurierbarer Testwert, keine endgültige Wirtschaftsregel. Noch keine Flugzeuge, Routen oder laufenden Einnahmen und Ausgaben."
+		description.text = "Heimatland: %s\nHeimatflughafen: %s (%s)\nGuthaben: %d EUR" % [airline["country_name"], airline["airport_name"], airline["airport_icao"], airline["capital_eur"]]
+		detail.text = "Deine Fluggesellschaft ist gegründet.\n\nFlugzeuge kannst du im Flotte-Tab kaufen. Startkapital und Kaufpreise sind vorläufige Testkonfiguration; noch keine Flugbewegungen oder laufenden Betriebskosten."
+	if index == 1:
+		_refresh_fleet()
 	for button_index in range(navigation.size()):
 		navigation[button_index].set_pressed_no_signal(button_index == index)
+
+
+func _build_fleet(content: VBoxContainer) -> void:
+	fleet_panel = VBoxContainer.new()
+	fleet_panel.add_theme_constant_override("separation", 12)
+	content.add_child(fleet_panel)
+	var grid := GridContainer.new()
+	grid.add_theme_constant_override("h_separation", 24)
+	grid.add_theme_constant_override("v_separation", 18)
+	fleet_panel.add_child(grid)
+	grid.resized.connect(func(): grid.columns = 2 if grid.size.x >= 980 else 1)
+	var shop := VBoxContainer.new()
+	shop.custom_minimum_size.x = 400
+	shop.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	shop.add_theme_constant_override("separation", 12)
+	grid.add_child(shop)
+	var purchase := HBoxContainer.new()
+	purchase.add_theme_constant_override("separation", 12)
+	shop.add_child(purchase)
+	model_select = OptionButton.new()
+	model_select.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	model_select.fit_to_longest_item = false
+	model_select.clip_text = true
+	for model in simulation.get_aircraft_models():
+		model_select.add_item(model["name"])
+		model_select.set_item_metadata(model_select.item_count - 1, model)
+	model_select.item_selected.connect(_model_selected)
+	purchase.add_child(model_select)
+	buy_button = Button.new()
+	buy_button.text = "Flugzeug kaufen"
+	buy_button.tooltip_text = "Kauft das gewählte Modell sofort zum angezeigten Preis."
+	buy_button.pressed.connect(_buy_aircraft)
+	purchase.add_child(buy_button)
+	model_details = _label("", 18, Color("90d6dc"))
+	model_details.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	shop.add_child(model_details)
+	fleet_status = _label("", 16)
+	fleet_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	shop.add_child(fleet_status)
+	var hint := _label("Vorläufige Kaufpreise · Sitzkonfiguration und Reichweite sind vereinfachte Modellangaben.", 14, Color("b0becf"))
+	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	shop.add_child(hint)
+	var owned := VBoxContainer.new()
+	owned.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	owned.add_theme_constant_override("separation", 12)
+	grid.add_child(owned)
+	owned.add_child(_label("Eigene Flugzeuge", 20))
+	empty_fleet = _label("Noch keine Flugzeuge gekauft.", 17, Color("c2cedc"))
+	owned.add_child(empty_fleet)
+	fleet_tree = Tree.new()
+	fleet_tree.columns = 4
+	fleet_tree.hide_root = true
+	fleet_tree.column_titles_visible = true
+	fleet_tree.custom_minimum_size.y = 180
+	for index in range(4):
+		fleet_tree.set_column_title(index, ["Kennung", "Typ", "Standort", "Status"][index])
+		fleet_tree.set_column_expand(index, index == 1)
+		fleet_tree.set_column_custom_minimum_width(index, [140, 160, 95, 95][index])
+	owned.add_child(fleet_tree)
+	_model_selected(model_select.selected)
+
+
+func _model_selected(index: int) -> void:
+	buy_button.disabled = index < 0
+	if index < 0:
+		model_details.text = "Kein Flugzeugmodell verfügbar. Bitte Katalog und Preise prüfen."
+		return
+	var model: Dictionary = model_select.get_item_metadata(index)
+	model_details.text = "Kaufpreis: %d EUR\nSitzplätze: %d · Reichweite: %d km" % [model["price_eur"], model["seats"], model["range_km"]]
+
+
+func _buy_aircraft() -> void:
+	if model_select.selected < 0:
+		return
+	var model: Dictionary = model_select.get_selected_metadata()
+	var error: String = simulation.buy_aircraft(model["id"])
+	fleet_status.text = "Flugzeug gekauft und am Heimatflughafen geparkt. Bitte speichern." if error.is_empty() else error
+	if error.is_empty():
+		save_status.text = "Flugzeug gekauft · bitte Spielstand speichern."
+	_refresh_fleet()
+	# Feedback must remain visible even in a small, scrolled window.
+	await get_tree().process_frame
+	if current_page == 1 and overview.visible:
+		var scroll := fleet_panel.get_parent().get_parent() as ScrollContainer
+		scroll.ensure_control_visible(fleet_status)
+
+
+func _refresh_fleet() -> void:
+	var fleet: Array = simulation.get_fleet()
+	var airline: Dictionary = simulation.get_airline_info()
+	if current_page == 1:
+		description.text = "Guthaben: %d EUR · Flugzeuge: %d" % [airline.get("capital_eur", 0), fleet.size()]
+	empty_fleet.visible = fleet.is_empty()
+	fleet_tree.visible = not fleet.is_empty()
+	fleet_tree.clear()
+	var root_item := fleet_tree.create_item()
+	for plane in fleet:
+		var row := fleet_tree.create_item(root_item)
+		row.set_text(0, plane["identifier"])
+		row.set_text(1, plane["model_name"])
+		row.set_text(2, plane["location_icao"])
+		row.set_text(3, "Geparkt" if plane["status"] == "parked" else plane["status"])
+		row.set_tooltip_text(0, plane["identifier"])
+		row.set_tooltip_text(1, "%s · gezahlter Kaufpreis: %d EUR" % [plane["model_name"], plane["purchase_price_eur"]])
+		row.set_tooltip_text(2, plane["location_name"])
+		row.set_metadata(0, plane["id"])
 
 
 func _build_founding() -> void:
@@ -290,6 +416,7 @@ func _found_airline() -> void:
 
 
 func _sync_view() -> void:
+	fleet_status.text = ""
 	overview.visible = simulation.has_airline()
 	founding.visible = not simulation.has_airline()
 	cancel_founding_button.visible = simulation.has_airline()

@@ -1,3 +1,4 @@
+mod aircraft;
 mod airports;
 mod clock;
 mod game;
@@ -32,6 +33,56 @@ impl IRefCounted for SimulationClock {
 
 #[godot_api]
 impl SimulationClock {
+    #[func]
+    fn get_aircraft_models(&self) -> Array<VarDictionary> {
+        let Ok(models) = aircraft::models() else {
+            return Array::new();
+        };
+        models.iter().map(|model| vdict! {
+            "id" => model.id.as_str(), "name" => model.name.as_str(),
+            "seats" => model.seats, "range_km" => model.range_km, "price_eur" => model.price_eur
+        }).collect()
+    }
+
+    #[func]
+    fn buy_aircraft(&mut self, model_id: GString) -> GString {
+        match self.game.buy_aircraft(&model_id.to_string()) {
+            Ok(()) => GString::new(),
+            Err(error) => error.as_str().into(),
+        }
+    }
+
+    #[func]
+    fn get_fleet(&self) -> Array<VarDictionary> {
+        let airports = airports::catalog().ok();
+        self.game
+            .fleet
+            .iter()
+            .map(|plane| {
+                let name = aircraft::model(&plane.model_id)
+                    .map(|model| model.name.as_str())
+                    .unwrap_or("");
+                let location_name = airports
+                    .and_then(|catalog| {
+                        catalog
+                            .airports
+                            .iter()
+                            .find(|airport| airport.icao == plane.location_icao)
+                    })
+                    .map(|airport| airport.name.as_str())
+                    .unwrap_or("");
+                vdict! {
+                    "id" => plane.id, "identifier" => plane.identifier().as_str(),
+                    "model_id" => plane.model_id.as_str(), "model_name" => name,
+                    "location_icao" => plane.location_icao.as_str(),
+                    "location_name" => location_name,
+                    "status" => match plane.status { aircraft::AircraftStatus::Parked => "parked" },
+                    "purchase_price_eur" => plane.purchase_price_eur
+                }
+            })
+            .collect()
+    }
+
     #[func]
     fn get_countries(&self) -> Array<VarDictionary> {
         let Ok(catalog) = airports::catalog() else {

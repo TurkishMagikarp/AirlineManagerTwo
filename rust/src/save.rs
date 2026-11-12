@@ -1,4 +1,5 @@
 //! Versioned disk format, deliberately separate from the live clock and Godot.
+use crate::aircraft::Aircraft;
 use crate::clock::Clock;
 use crate::game::{Airline, Game};
 use serde::{Deserialize, Serialize};
@@ -7,7 +8,7 @@ use std::io::{Read, Write};
 use std::path::Path;
 use std::time::Duration;
 
-const VERSION: u32 = 2;
+const VERSION: u32 = 3;
 const MAX_BYTES: u64 = 1024 * 1024;
 
 #[derive(Serialize, Deserialize)]
@@ -21,6 +22,13 @@ struct SaveGame {
 struct GameState {
     clock: SavedClock,
     airline: Option<Airline>,
+    fleet: Option<SavedFleet>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct SavedFleet {
+    aircraft: Vec<Aircraft>,
+    next_aircraft_id: u32,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -37,6 +45,10 @@ pub fn save(path: &Path, game: &Game) -> Result<(), String> {
         version: VERSION,
         state: GameState {
             airline: game.airline.clone(),
+            fleet: Some(SavedFleet {
+                aircraft: game.fleet.clone(),
+                next_aircraft_id: game.next_aircraft_id,
+            }),
             clock: SavedClock {
                 elapsed_seconds: clock.elapsed().as_secs(),
                 elapsed_nanoseconds: clock.elapsed().subsec_nanos(),
@@ -47,6 +59,9 @@ pub fn save(path: &Path, game: &Game) -> Result<(), String> {
     };
     let bytes = serde_json::to_vec_pretty(&data)
         .map_err(|error| format!("Spielstand konnte nicht erzeugt werden: {error}"))?;
+    if bytes.len() as u64 > MAX_BYTES {
+        return Err("Spielstand ist zu groß.".into());
+    }
     let parent = path
         .parent()
         .filter(|p| !p.as_os_str().is_empty())
@@ -78,7 +93,7 @@ pub fn load(path: &Path) -> Result<Game, String> {
     }
     let data: SaveGame = serde_json::from_slice(&bytes)
         .map_err(|_| "Spielstand ist beschädigt oder unvollständig.".to_string())?;
-    if data.version != 1 && data.version != VERSION {
+    if !matches!(data.version, 1 | 2 | VERSION) {
         return Err(format!(
             "Nicht unterstützte Spielstand-Version: {}.",
             data.version
@@ -91,6 +106,19 @@ pub fn load(path: &Path) -> Result<Game, String> {
     if let Some(airline) = &data.state.airline {
         airline.validate()?;
     }
+    let fleet = if data.version == VERSION {
+        data.state
+            .fleet
+            .ok_or_else(|| "Flottendaten fehlen im Spielstand.".to_string())?
+    } else {
+        if data.state.fleet.is_some() {
+            return Err("Unerwartete Flottendaten im alten Spielstand.".into());
+        }
+        SavedFleet {
+            aircraft: Vec::new(),
+            next_aircraft_id: 1,
+        }
+    };
     let clock = data.state.clock;
     if clock.elapsed_nanoseconds >= 1_000_000_000 {
         return Err("Ungültige Spielzeit im Spielstand.".into());
@@ -101,10 +129,14 @@ pub fn load(path: &Path) -> Result<Game, String> {
         clock.speed,
     )
     .ok_or_else(|| "Ungültige Geschwindigkeit im Spielstand.".to_string())?;
-    Ok(Game {
+    let game = Game {
         clock,
         airline: data.state.airline,
-    })
+        fleet: fleet.aircraft,
+        next_aircraft_id: fleet.next_aircraft_id,
+    };
+    game.validate_fleet()?;
+    Ok(game)
 }
 
 #[cfg(test)]
@@ -208,5 +240,101 @@ mod tests {
             fs::write(&path, serde_json::to_vec(&bad).unwrap()).unwrap();
             assert!(load(&path).is_err());
         }
+    }
+
+    #[test]
+    fn fleet_and_balance_roundtrip_and_identifiers_continue_after_load() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("fleet.json");
+        let mut game = Game::default();
+        game.found("Fleet Save Air", "TR", "LTFJ").unwrap();
+        let price = crate::aircraft::model("atr72_600").unwrap().price_eur;
+        game.airline.as_mut().unwrap().capital_eur = price * 3;
+        game.buy_aircraft("atr72_600").unwrap();
+        game.buy_aircraft("atr72_600").unwrap();
+        // A historical purchase price need not equal the current catalog price.
+        game.fleet[0].purchase_price_eur = 123;
+        save(&path, &game).unwrap();
+        let mut restored = load(&path).unwrap();
+        assert_eq!(restored.fleet, game.fleet);
+        assert_eq!(restored.airline, game.airline);
+        assert_eq!(restored.next_aircraft_id, 3);
+        restored.buy_aircraft("atr72_600").unwrap();
+        assert_eq!(restored.fleet[2].identifier(), "AM-000003");
+        assert_eq!(restored.airline.as_ref().unwrap().capital_eur, 0);
+    }
+
+    #[test]
+    fn v2_company_migrates_without_buying_aircraft_or_changing_balance() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("old_company.json");
+        let mut game = Game::default();
+        game.found("Old Air", "DE", "EDDF").unwrap();
+        save(&path, &game).unwrap();
+        let mut old: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        old["version"] = serde_json::json!(2);
+        old["state"].as_object_mut().unwrap().remove("fleet");
+        fs::write(&path, serde_json::to_vec(&old).unwrap()).unwrap();
+        let restored = load(&path).unwrap();
+        assert_eq!(restored.airline, game.airline);
+        assert!(restored.fleet.is_empty());
+        assert_eq!(restored.next_aircraft_id, 1);
+    }
+
+    #[test]
+    fn rejects_corrupt_fleet_instead_of_silently_losing_aircraft() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("bad_fleet.json");
+        let mut game = Game::default();
+        game.found("Fleet Air", "DE", "EDDF").unwrap();
+        let price = crate::aircraft::model("atr72_600").unwrap().price_eur;
+        game.airline.as_mut().unwrap().capital_eur = price * 2;
+        game.buy_aircraft("atr72_600").unwrap();
+        game.buy_aircraft("atr72_600").unwrap();
+        save(&path, &game).unwrap();
+        let valid: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        for (field, value) in [
+            ("id", serde_json::json!(0)),
+            ("id", serde_json::json!(2)),
+            ("model_id", serde_json::json!("unknown")),
+            ("location_icao", serde_json::json!("XXXX")),
+            ("status", serde_json::json!("flying")),
+            ("purchase_price_eur", serde_json::json!(-1)),
+        ] {
+            let mut bad = valid.clone();
+            bad["state"]["fleet"]["aircraft"][0][field] = value;
+            fs::write(&path, serde_json::to_vec(&bad).unwrap()).unwrap();
+            assert!(load(&path).is_err(), "accepted invalid {field}");
+        }
+        for field in ["fleet", "airline"] {
+            let mut bad = valid.clone();
+            bad["state"][field] = serde_json::Value::Null;
+            fs::write(&path, serde_json::to_vec(&bad).unwrap()).unwrap();
+            assert!(load(&path).is_err());
+        }
+        for next_id in [0, 1, 2] {
+            let mut bad = valid.clone();
+            bad["state"]["fleet"]["next_aircraft_id"] = serde_json::json!(next_id);
+            fs::write(&path, serde_json::to_vec(&bad).unwrap()).unwrap();
+            assert!(load(&path).is_err());
+        }
+    }
+
+    #[test]
+    fn oversized_fleet_cannot_overwrite_a_loadable_save() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("fleet_limit.json");
+        let mut game = Game::default();
+        game.found("Large Fleet Air", "DE", "EDDF").unwrap();
+        save(&path, &game).unwrap();
+        let previous = fs::read(&path).unwrap();
+        game.airline.as_mut().unwrap().capital_eur =
+            crate::aircraft::model("atr72_600").unwrap().price_eur * 10_000;
+        for _ in 0..10_000 {
+            game.buy_aircraft("atr72_600").unwrap();
+        }
+        assert!(save(&path, &game).is_err());
+        assert_eq!(fs::read(&path).unwrap(), previous);
+        assert!(load(&path).unwrap().fleet.is_empty());
     }
 }

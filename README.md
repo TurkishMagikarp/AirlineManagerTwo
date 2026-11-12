@@ -34,7 +34,7 @@ technische Testwerte, keine endgültige Balancing-Entscheidung. Navigation bleib
 per Maus oder Tab / Umschalt+Tab und Enter / Leertaste bedienbar.
 
 Noch keine Offline-Fortschreibung, Ereignisse, Zeitsprünge zu
-Ereignissen/Zeitpunkten, Wirtschaft, Flotten oder Routen. Spätere Spielregeln und
+Ereignissen/Zeitpunkten, laufende Wirtschaft oder Routen. Spätere Spielregeln und
 Berechnungen gehören in den Rust-Kern, nicht in Godot.
 
 Produktregeln und offene Fragen: [Game Design](docs/game-design/README.md).
@@ -58,17 +58,47 @@ ganze Euro). Der mitgelieferte Wert **10.000.000 EUR** und die vorläufige
 Darstellungswährung EUR sind technische Testkonfiguration, keine beschlossenen
 Wirtschafts- oder Länderregeln. Datei ändern, Spiel/Editor schließen und über
 `START.bat` neu bauen. Die Einstellung gilt nur für neue Gründungen; geladene
-Airlines behalten ihr gespeichertes Kapital. Noch keine Buchungen oder Kontobewegungen.
+Airlines behalten ihr gespeichertes Guthaben. Flugzeugkäufe werden davon abgezogen;
+noch keine laufenden Einnahmen oder Betriebskosten.
 
 Sechs echte Flughäfen in Deutschland, Türkei und USA stehen zur Verfügung.
 Der [Katalog](data/README.md) liegt getrennt in `data/airports.json` und verwendet
 stabile ICAO-/Ländercodes als Grundlage für eine spätere weltweite Datenquelle.
 
+## Flotte und Flugzeugkauf
+
+Im **Flotte**-Tab ein Modell wählen: Preis, Sitzplätze und Referenzreichweite
+werden vor dem Kauf angezeigt. **Flugzeug kaufen** kauft sofort ein Exemplar.
+Rust prüft die Airline und das Guthaben, vergibt die Kennung und zieht genau den
+angezeigten Preis ab. Bei Fehlern bleiben Flotte, Guthaben und Kennungszähler
+unverändert; die Meldung wird im Tab angezeigt. Die Übersicht zeigt nun das
+verbleibende **Guthaben**, nicht mehr unverändert das ursprüngliche Startkapital.
+
+Flugzeuge gehören der einzigen Spieler-Airline, stehen zunächst **geparkt** am
+Heimatflughafen und erscheinen einzeln mit Kennung, Typ, ICAO-Standort und Status.
+Der Flughafenname und der tatsächlich bezahlte Kaufpreis stehen in den Tooltips.
+Die laufenden Kennungen `AM-000001`, `AM-000002`, … sind spielinterne IDs, keine
+nationalen Luftfahrzeugregistrierungen. Mehrere Exemplare desselben Modells sind
+möglich. Bei kleineren Fenstern ist der Tab scrollbar; in breiten Fenstern stehen
+Kaufbereich und eigene Flotte nebeneinander.
+
+Modellangaben: `data/aircraft_models.json` ([Referenzen und Einschränkungen](data/README.md)).
+Vorläufige Kaufpreise: `config/aircraft_prices.json`, aktuell A320-200 **8.000.000**,
+737-800 **7.000.000**, ATR 72-600 **3.000.000 EUR**. Preise ändern, Spiel/Editor
+schließen und mit `START.bat` neu bauen. Historisch bezahlte Kaufpreise werden
+pro Flugzeug gespeichert und bei späteren Preisänderungen nicht neu berechnet.
+Nach Käufen weiterhin ausdrücklich **Speichern** drücken.
+
+Noch kein Verkauf, Leasing, Bestell-/Lieferprozess, Wartung, Flugauftrag oder
+separates Buchhaltungsjournal. Sofortige Verfügbarkeit und Testpreise sind
+vorläufige Vereinfachungen, keine endgültigen Wirtschaftsregeln.
+
 ## Speichern und Laden
 
 **Speichern** ersetzt den einen lokalen Spielstand; **Laden** stellt ihn wieder
 her. Nach einem Neustart **Spielstand laden** drücken: Airline einschließlich
-Name, Land, Heimatflughafen und Kapital sowie Spielzeit (nanosekundengenau),
+Name, Land, Heimatflughafen und verbleibendem Guthaben, die komplette Flotte
+einschließlich bezahlter Preise und Kennungszähler sowie Spielzeit (nanosekundengenau),
 Pausenstatus und Geschwindigkeit werden wiederhergestellt. Ein laufender
 Spielstand läuft anschließend weiter, ein pausierter bleibt pausiert. Die Zeit
 während des geschlossenen Spiels wird nicht angerechnet. Es gibt bewusst kein
@@ -84,9 +114,11 @@ Der aktuelle Projektname ist `Airline Manager — UI-Basis`. Der tatsächliche P
 steht auch im Tooltip der Speichermeldung. macOS ist hier nicht praktisch getestet.
 
 Rust (`rust/src/save.rs`) übernimmt Dateizugriff, JSON-Format und Validierung.
-Das Format hat Version **2** und einen `state`-Bereich mit `clock` und `airline`,
-der später um weitere Simulationsdaten ergänzt werden kann. Alte Zeit-Spielstände
-der Version **1** bleiben lesbar, enthalten jedoch noch keine Airline. Ihre Uhr
+Das Format hat Version **3** und einen `state`-Bereich mit `clock`, `airline` und
+`fleet`, der später um weitere Simulationsdaten ergänzt werden kann. Spielstände
+der Version **2** behalten ihre Airline und ihr Guthaben und erhalten eine leere
+Flotte, ohne zusätzliche Kosten oder erfundene Flugzeuge. Alte Zeit-Spielstände
+der Version **1** bleiben ebenfalls lesbar, enthalten jedoch noch keine Airline. Ihre Uhr
 wird ohne erfundene Unternehmensdaten geladen; der Gründungsbildschirm erklärt,
 dass eine anschließende Gründung ein neues Spiel beginnt. Inkompatible Änderungen
 brauchen eine neue Version und gegebenenfalls eine Migration; unbekannte Versionen
@@ -96,8 +128,10 @@ Eine vollständig geschriebene und synchronisierte temporäre Datei im selben
 Ordner ersetzt erst zum Schluss den bisherigen Spielstand. Fehler beim Laden
 (fehlende, defekte, zu große oder ungültige Dateien) erscheinen als Meldung und
 verändern die laufende Simulation nicht. Noch keine mehreren Speicherplätze,
-Backups oder automatische Wiederherstellung. Ungültige Airline-Daten werden
+Backups oder automatische Wiederherstellung. Ungültige Airline- und Flottendaten werden
 ebenso abgelehnt wie defekte Zeitdaten, ohne den laufenden Zustand zu ersetzen.
+Das bisherige Dateilimit beträgt 1 MiB; auch Speichern prüft es, damit keine
+zu große, anschließend nicht mehr ladbare Datei einen guten Spielstand ersetzt.
 
 ## Tests
 
@@ -108,6 +142,7 @@ cargo test --locked --manifest-path rust/Cargo.toml
 Godot --headless --path . --script res://tests/navigation_test.gd
 Godot --headless --path . --script res://tests/simulation_test.gd
 Godot --headless --path . --script res://tests/founding_test.gd
+Godot --headless --path . --script res://tests/fleet_test.gd
 powershell -ExecutionPolicy Bypass -File tests/run_save_restart_test.ps1
 ```
 
@@ -119,7 +154,10 @@ Die Godot-Tests können ohne `--headless` mit echtem Fenster ausgeführt werden.
 Der Neustarttest startet vier vollständig getrennte Godot-Prozesse: jeweils
 Speichern und Wiederherstellen eines laufenden und eines pausierten Spielstands.
 Er gründet eine Airline über die UI, klickt die echten Buttons und prüft nach
-vollständigem Neustart Airline, Kapital, exakte Zeit, Geschwindigkeit und Fehlerfälle.
+vollständigem Neustart Airline, Flotte, Guthaben, Kennungen, exakte Zeit und
+Geschwindigkeit. Er prüft auch einen weiteren Kauf nach dem Laden, unzureichendes
+Guthaben und defekte Spielstände. Rust-Tests decken zusätzlich Käufe aller Modelle,
+exaktes Restguthaben null, alte Spielstände und fehlerhafte Flottendaten ab.
 Die Testdateien liegen isoliert im Temp-Ordner, nicht im persönlichen Spielstand.
 Optional `-Godot "C:\Pfad\Godot.exe"` angeben. Auf macOS kann dasselbe GDScript
 in separaten Prozessen mit `--save-test-mode=write-running` / `read-running` /

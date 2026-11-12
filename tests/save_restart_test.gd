@@ -39,6 +39,11 @@ func _run() -> void:
 		clock.advance(86400.125 / speed)
 		if not running:
 			await _click(main.pause_button)
+		await _click(main.navigation[1])
+		_select_atr(main)
+		await _click(main.buy_button)
+		await _click(main.buy_button)
+		await _click(main.navigation[0])
 		await _click(main.save_button)
 		if not _check(main.save_status.text == "Spielstand gespeichert.", "Save button writes via Rust"):
 			return
@@ -53,6 +58,17 @@ func _run() -> void:
 		return
 	if not _check(main.overview.visible and not main.founding.visible and main.heading.text == airline["name"] and "LTFJ" in main.description.text and str(airline["capital_eur"]) in main.description.text, "Overview shows founded or loaded airline"):
 		return
+	var fleet: Array = clock.get_fleet()
+	var atr_price := 0
+	for model in clock.get_aircraft_models():
+		if model["id"] == "atr72_600":
+			atr_price = model["price_eur"]
+	var start_capital := int(clock.get_starting_capital().trim_suffix(" EUR"))
+	if not _check(fleet.size() == 2 and airline["capital_eur"] == start_capital - 2 * atr_price, "Fleet and debited balance survive complete restart"):
+		return
+	for index in range(2):
+		if not _check(fleet[index]["identifier"] == "AM-%06d" % (index + 1) and fleet[index]["model_id"] == "atr72_600" and fleet[index]["location_icao"] == "LTFJ" and fleet[index]["status"] == "parked" and fleet[index]["purchase_price_eur"] == atr_price, "Aircraft identity, model, location, status and paid price restored"):
+			return
 	if mode.begins_with("read-"):
 		if not _check(main.time_label.text == "Tag 2 · 00:00:00" and main.start_button.disabled == running, "Loaded UI matches Rust"):
 			return
@@ -62,6 +78,19 @@ func _run() -> void:
 		var expected: float = 86400.125 + (speed if running else 0)
 		if not _check(clock.get_elapsed_seconds() == expected, "Restored state continues at correct speed or stays paused"):
 			return
+		await _click(main.navigation[1])
+		if not _check(main.fleet_tree.get_root().get_child_count() == 2, "Loaded aircraft appear in fleet table"):
+			return
+		_select_atr(main)
+		await _click(main.buy_button)
+		fleet = clock.get_fleet()
+		airline = clock.get_airline_info()
+		if not _check(fleet.size() == 3 and fleet[2]["identifier"] == "AM-000003" and airline["capital_eur"] == start_capital - 3 * atr_price, "Buying after restart continues IDs and debits saved balance"):
+			return
+		await _click(main.buy_button)
+		if not _check("Nicht genügend Guthaben" in main.fleet_status.text and clock.get_fleet() == fleet and clock.get_airline_info() == airline, "Insufficient funds after restart does not alter state"):
+			return
+		await _click(main.navigation[0])
 		# All failures must preserve the current live state and the good on-disk save.
 		var good_bytes := FileAccess.get_file_as_bytes(path)
 		main.save_path = path + ".corrupt"
@@ -79,6 +108,14 @@ func _run() -> void:
 		invalid_file.close()
 		await _click(main.load_button)
 		if not _check(main.save_status.text != "Spielstand geladen." and clock.get_airline_info() == airline and clock.get_elapsed_seconds() == expected and clock.get_speed() == speed and clock.is_running() == running, "Invalid airline data cannot replace company or clock"):
+			return
+		var invalid_fleet: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(path))
+		invalid_fleet["state"]["fleet"]["aircraft"][0]["id"] = 2
+		invalid_file = FileAccess.open(main.save_path, FileAccess.WRITE)
+		invalid_file.store_string(JSON.stringify(invalid_fleet))
+		invalid_file.close()
+		await _click(main.load_button)
+		if not _check(main.save_status.text != "Spielstand geladen." and clock.get_fleet() == fleet and clock.get_airline_info() == airline and clock.get_elapsed_seconds() == expected, "Corrupt fleet cannot erase aircraft or money"):
 			return
 		main.save_path = path + ".missing"
 		await _click(main.load_button)
@@ -102,6 +139,12 @@ func _run() -> void:
 
 func _click(button: Button) -> void:
 	await process_frame
+	var parent := button.get_parent()
+	while parent != null:
+		if parent is ScrollContainer:
+			parent.ensure_control_visible(button)
+		parent = parent.get_parent()
+	await process_frame
 	for pressed in [true, false]:
 		var event := InputEventMouseButton.new()
 		event.button_index = MOUSE_BUTTON_LEFT
@@ -109,6 +152,14 @@ func _click(button: Button) -> void:
 		event.pressed = pressed
 		Input.parse_input_event(event)
 		await process_frame
+
+
+func _select_atr(main) -> void:
+	for index in range(main.model_select.item_count):
+		if main.model_select.get_item_metadata(index)["id"] == "atr72_600":
+			main.model_select.select(index)
+			main.model_select.item_selected.emit(index)
+			return
 
 
 func _check(condition: bool, message: String) -> bool:
