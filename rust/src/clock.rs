@@ -36,6 +36,15 @@ impl Clock {
         self.elapsed
     }
 
+    pub fn from_state(elapsed: Duration, running: bool, speed: u32) -> Option<Self> {
+        let mut clock = Self {
+            elapsed,
+            running,
+            ..Self::default()
+        };
+        clock.set_speed(speed).then_some(clock)
+    }
+
     /// Godot supplies real frame duration; Rust alone decides time progression.
     /// Invalid inputs and overflow leave the clock unchanged, never panicking over FFI.
     pub fn advance(&mut self, real_seconds: f64) -> bool {

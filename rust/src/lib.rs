@@ -1,4 +1,5 @@
 mod clock;
+mod save;
 
 use clock::Clock;
 use godot::prelude::*;
@@ -29,6 +30,26 @@ impl IRefCounted for SimulationClock {
 
 #[godot_api]
 impl SimulationClock {
+    /// Empty string means success; errors are safe, user-visible messages.
+    #[func]
+    fn save_game(&self, path: GString) -> GString {
+        match save::save(std::path::Path::new(&path.to_string()), &self.clock) {
+            Ok(()) => GString::new(),
+            Err(error) => error.as_str().into(),
+        }
+    }
+
+    #[func]
+    fn load_game(&mut self, path: GString) -> GString {
+        match save::load(std::path::Path::new(&path.to_string())) {
+            Ok(clock) => {
+                self.clock = clock;
+                GString::new()
+            }
+            Err(error) => error.as_str().into(),
+        }
+    }
+
     #[func]
     fn start(&mut self) {
         self.clock.set_running(true);

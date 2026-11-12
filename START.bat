@@ -23,6 +23,11 @@ if errorlevel 1 (
 )
 rem Import registers the extension even on a fresh clone without .godot cache.
 "%GODOT_EXE%" --headless --editor --path "%~dp0." --import
+rem Godot can fail during shutdown of the first extension import; retry once.
+if errorlevel 1 (
+  echo Godot-Import fehlgeschlagen. Einmaliger Neuversuch...
+  "%GODOT_EXE%" --headless --editor --path "%~dp0." --import
+)
 if errorlevel 1 exit /b 1
 "%GODOT_EXE%" --path "%~dp0." %*
 exit /b %ERRORLEVEL%

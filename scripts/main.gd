@@ -25,6 +25,11 @@ var state_label: Label
 var start_button: Button
 var pause_button: Button
 var speed_buttons: Array[Button] = []
+var save_button: Button
+var load_button: Button
+var save_status: Label
+# Platform path only; file format, validation and all state remain in Rust.
+var save_path := ProjectSettings.globalize_path("user://savegame.json")
 
 
 func _ready() -> void:
@@ -101,6 +106,31 @@ func _add_time_controls(column: VBoxContainer) -> void:
 		button.pressed.connect(_set_speed.bind(speed))
 		controls.add_child(button)
 		speed_buttons.append(button)
+	save_button = Button.new()
+	save_button.text = "Speichern"
+	save_button.pressed.connect(_save_game)
+	controls.add_child(save_button)
+	load_button = Button.new()
+	load_button.text = "Laden"
+	load_button.pressed.connect(_load_game)
+	controls.add_child(load_button)
+	save_status = _label("Ein lokaler Spielstand · manuell speichern und laden", 14, Color("b0becf"))
+	save_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	save_status.tooltip_text = save_path
+	column.add_child(save_status)
+	_refresh_time()
+
+
+func _save_game() -> void:
+	var error: String = simulation.save_game(save_path)
+	save_status.text = "Spielstand gespeichert." if error.is_empty() else error
+	save_status.tooltip_text = save_path
+
+
+func _load_game() -> void:
+	var error: String = simulation.load_game(save_path)
+	save_status.text = "Spielstand geladen." if error.is_empty() else error
+	save_status.tooltip_text = save_path
 	_refresh_time()
 
 
