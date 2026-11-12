@@ -46,6 +46,14 @@ Referenzen: [Airbus A320ceo](https://www.aircraft.airbus.com/en/aircraft/a320-fa
 [Boeing 737 Next Generation](https://www.boeing.com/commercial/737ng),
 [ATR 72-600](https://www.atr-aircraft.com/our-aircraft/atr-72-600/).
 
+`cruise_kmh` verwendet vereinfachte typische Reisegeschwindigkeiten: A320 **830**,
+737-800 **840**, ATR **510 km/h**, keine garantierte durchschnittliche Blockgeschwindigkeit.
+Flugzeit = auf volle Sekunden aufgerundete Luftlinie / Geschwindigkeit.
+`turnaround_minutes` ist eine vorläufige Spielregel: **45** für Jets, **30** für ATR.
+Keine zusätzliche Roll-/Steig-/Sinkflugzeit, Wetter- oder Beladungskorrektur.
+Aktive Spielstände referenzieren diese Modellwerte; Änderungen können bestehende
+Flugpläne ungültig machen und benötigen künftig eine gezielte Migration.
+
 Die **vorläufigen Spielpreise** stehen bewusst getrennt in
 `config/aircraft_prices.json` (positive ganze EUR pro Modell-ID). Es sind keine
 Hersteller-Listenpreise, Marktpreise oder endgültigen Wirtschaftsregeln. Änderungen

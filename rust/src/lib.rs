@@ -2,6 +2,7 @@ mod aircraft;
 mod airports;
 mod clock;
 mod game;
+mod operations;
 mod routes;
 mod save;
 
@@ -34,6 +35,86 @@ impl IRefCounted for SimulationClock {
 
 #[godot_api]
 impl SimulationClock {
+    #[func]
+    fn schedule_route(
+        &mut self,
+        route_id: u32,
+        delay_minutes: u32,
+        interval_minutes: u32,
+    ) -> GString {
+        self.game
+            .schedule(route_id, delay_minutes, interval_minutes)
+            .err()
+            .unwrap_or_default()
+            .as_str()
+            .into()
+    }
+
+    #[func]
+    fn stop_schedule(&mut self, route_id: u32) -> GString {
+        self.game
+            .stop_schedule(route_id)
+            .err()
+            .unwrap_or_default()
+            .as_str()
+            .into()
+    }
+
+    #[func]
+    fn get_operations(&self) -> Array<VarDictionary> {
+        let mut rows = Vec::new();
+        for route in &self.game.routes {
+            let Some(plane) = self
+                .game
+                .fleet
+                .iter()
+                .find(|p| Some(p.id) == route.aircraft_id)
+            else {
+                continue;
+            };
+            let Ok((flight, ground)) = operations::timings(route, &plane.model_id) else {
+                continue;
+            };
+            let state =
+                operations::movement(route, &plane.model_id, self.game.clock.elapsed().as_secs())
+                    .ok();
+            let text = if let Some(s) = &state {
+                let phase = match s.status {
+                    aircraft::AircraftStatus::InFlight => format!(
+                        "Unterwegs {} → {} · Landung {}",
+                        s.origin,
+                        s.destination,
+                        operations::display_time(s.landing)
+                    ),
+                    aircraft::AircraftStatus::Ground => format!(
+                        "Gelandet in {} · Bodenzeit bis {}",
+                        s.location,
+                        operations::display_time(s.ready)
+                    ),
+                    aircraft::AircraftStatus::Parked => {
+                        format!("Geplant · bereit in {}", s.location)
+                    }
+                };
+                format!("{} · {} Landungen", phase, s.completed)
+            } else {
+                "Kein Flugplan".into()
+            };
+            rows.push((state.as_ref().map(|s| s.next_departure).unwrap_or(u64::MAX), vdict! {
+                "route_id" => route.id, "aircraft_id" => plane.id,
+                "identifier" => plane.identifier().as_str(), "status_text" => text.as_str(),
+                "has_plan" => route.plan.is_some(),
+                "flight_seconds" => flight as i64, "ground_seconds" => ground as i64,
+                "completed_flights" => state.as_ref().map(|s| s.completed as i64).unwrap_or(0),
+                "next_departure_seconds" => state.as_ref().map(|s| s.next_departure as i64).unwrap_or(-1),
+                "next_departure" => state.as_ref().map(|s| operations::display_time(s.next_departure)).unwrap_or_else(|| "—".into()).as_str(),
+                "landing_seconds" => state.as_ref().map(|s| s.landing as i64).unwrap_or(-1),
+                "ready_seconds" => state.as_ref().map(|s| s.ready as i64).unwrap_or(-1),
+            }));
+        }
+        rows.sort_by_key(|(time, _)| *time);
+        rows.into_iter().map(|(_, row)| row).collect()
+    }
+
     #[func]
     fn preview_route(
         &self,
@@ -89,7 +170,7 @@ impl SimulationClock {
             "id" => r.id, "origin_icao" => r.origin_icao.as_str(),
             "destination_icao" => r.destination_icao.as_str(),
             "distance_km" => routes::distance_km(&r.origin_icao, &r.destination_icao).unwrap_or(0.0),
-            "aircraft_id" => r.aircraft_id.unwrap_or(0)
+            "aircraft_id" => r.aircraft_id.unwrap_or(0), "has_plan" => r.plan.is_some()
         }).collect()
     }
 
@@ -136,7 +217,7 @@ impl SimulationClock {
                     "model_id" => plane.model_id.as_str(), "model_name" => name,
                     "location_icao" => plane.location_icao.as_str(),
                     "location_name" => location_name,
-                    "status" => match plane.status { aircraft::AircraftStatus::Parked => "parked" },
+                    "status" => match plane.status { aircraft::AircraftStatus::Parked => "parked", aircraft::AircraftStatus::InFlight => "in_flight", aircraft::AircraftStatus::Ground => "ground" },
                     "purchase_price_eur" => plane.purchase_price_eur,
                     "range_km" => aircraft::model(&plane.model_id).map(|m| m.range_km).unwrap_or(0),
                     "route_id" => self.game.routes.iter().find(|r| r.aircraft_id == Some(plane.id)).map(|r| r.id).unwrap_or(0)
@@ -278,7 +359,7 @@ impl SimulationClock {
 
     #[func]
     fn advance(&mut self, real_seconds: f64) -> bool {
-        self.game.clock.advance(real_seconds)
+        self.game.advance(real_seconds)
     }
 
     #[func]

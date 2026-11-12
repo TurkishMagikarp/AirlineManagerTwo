@@ -15,11 +15,16 @@ var empty_label: Label
 var assignment: OptionButton
 var assign_button: Button
 var delete_button: Button
+var delay_input: SpinBox
+var interval_input: SpinBox
+var schedule_button: Button
+var stop_button: Button
+var operations_label: Label
 
 
 func _ready() -> void:
 	add_theme_constant_override("separation", 12)
-	var hint := _label("Luftlinie · vereinfachte Referenzreichweite, ohne Wetter oder Reserven.\nZuweisung reserviert das Flugzeug; noch kein Flugbetrieb oder Überführungsflug.")
+	var hint := _label("Luftlinie · vereinfachte Referenzreichweite, ohne Wetter oder Reserven.\nFlugplan: Pendelverkehr mit abwechselndem Hin- und Rückflug. Keine automatische Überführung.")
 	add_child(hint)
 	origin = _select("Startflughafen")
 	destination = _select("Zielflughafen")
@@ -65,6 +70,36 @@ func _ready() -> void:
 	delete_button.pressed.connect(_delete)
 	actions.add_child(delete_button)
 	assignment.item_selected.connect(func(_index: int): _assignment_preview())
+	add_child(_label("Flugplan für ausgewählte Route · erster Abflug in Spielminuten"))
+	delay_input = SpinBox.new()
+	delay_input.min_value = 1
+	delay_input.max_value = 10080
+	delay_input.value = 5
+	add_child(delay_input)
+	add_child(_label("Abstand zwischen Abflügen in Spielminuten (mindestens Flug + Bodenzeit)"))
+	interval_input = SpinBox.new()
+	interval_input.min_value = 1
+	interval_input.max_value = 10080
+	interval_input.value = 120
+	add_child(interval_input)
+	schedule_button = Button.new()
+	schedule_button.text = "Flugplan aktivieren"
+	schedule_button.pressed.connect(func():
+		var route := _route()
+		if not route.is_empty():
+			_feedback(simulation.schedule_route(route["id"], int(delay_input.value), int(interval_input.value)), "Flugplan aktiviert.")
+	)
+	add_child(schedule_button)
+	stop_button = Button.new()
+	stop_button.text = "Flugplan beenden (nur nach Bodenzeit)"
+	stop_button.pressed.connect(func():
+		var route := _route()
+		if not route.is_empty():
+			_feedback(simulation.stop_schedule(route["id"]), "Flugplan beendet.")
+	)
+	add_child(stop_button)
+	operations_label = _label("")
+	add_child(operations_label)
 	refresh()
 
 
@@ -127,6 +162,14 @@ func refresh() -> void:
 			row.select(0)
 	_selection_changed()
 	_preview()
+	refresh_operations()
+
+
+func refresh_operations() -> void:
+	var lines: PackedStringArray = ["Flugbetrieb · nächste Abflüge (sortiert)"]
+	for operation in simulation.get_operations():
+		lines.append("%s · Route #%d · Flug %d min · Boden %d min\n%s\nNächster Abflug: %s" % [operation["identifier"], operation["route_id"], ceili(operation["flight_seconds"] / 60.0), operation["ground_seconds"] / 60, operation["status_text"], operation["next_departure"]])
+	operations_label.text = "\n\n".join(lines)
 
 
 func _preview() -> void:
@@ -140,6 +183,9 @@ func _preview() -> void:
 func _selection_changed() -> void:
 	var route := _route()
 	status.text = ""
+	if schedule_button != null:
+		schedule_button.disabled = route.is_empty() or route.get("has_plan", false)
+		stop_button.disabled = route.is_empty() or not route.get("has_plan", false)
 	assignment.clear()
 	assignment.add_item("Keine Zuweisung (Flugzeug freigeben)")
 	assignment.set_item_metadata(0, 0)

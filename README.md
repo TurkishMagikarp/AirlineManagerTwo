@@ -33,7 +33,7 @@ kein erfundenes Kalenderdatum). **Start / Pause**, **1× / 4× / 16×** steuern 
 technische Testwerte, keine endgültige Balancing-Entscheidung. Navigation bleibt
 per Maus oder Tab / Umschalt+Tab und Enter / Leertaste bedienbar.
 
-Noch keine Offline-Fortschreibung, Ereignisse, Zeitsprünge zu
+Noch keine Offline-Fortschreibung, Bedienung zum Springen zu
 Ereignissen/Zeitpunkten oder laufende Wirtschaft. Spätere Spielregeln und
 Berechnungen gehören in den Rust-Kern, nicht in Godot.
 
@@ -89,7 +89,7 @@ schließen und mit `START.bat` neu bauen. Historisch bezahlte Kaufpreise werden
 pro Flugzeug gespeichert und bei späteren Preisänderungen nicht neu berechnet.
 Nach Käufen weiterhin ausdrücklich **Speichern** drücken.
 
-Noch kein Verkauf, Leasing, Bestell-/Lieferprozess, Wartung, Flugauftrag oder
+Noch kein Verkauf, Leasing, Bestell-/Lieferprozess, Wartung oder
 separates Buchhaltungsjournal. Sofortige Verfügbarkeit und Testpreise sind
 vorläufige Vereinfachungen, keine endgültigen Wirtschaftsregeln.
 
@@ -108,12 +108,41 @@ Flugzeug frei und behält die Route; **Route löschen** entfernt die Route und g
 ihre Zuweisung frei. Die Flotte zeigt reservierte Flugzeuge mit ihrer Routennummer.
 Mehrere Verbindungen auf derselben Strecke sind mit verschiedenen Flugzeugen möglich.
 
-Alle vorhandenen Routen sind Planungen: noch keine Flugpläne, Flugbewegungen,
-Überführungen, Nachfrage, Einnahmen oder Betriebskosten. Der Standort bleibt beim
-Planen unverändert. Entfernung: Großkreis mit Haversine und mittlerem Erdradius
+Ohne aktivierten Flugplan bleiben Routen reine Planungen und der Standort unverändert.
+Noch keine Überführungen, Nachfrage, Einnahmen oder Betriebskosten.
+Entfernung: Großkreis mit Haversine und mittlerem Erdradius
 6371,0088 km; Reichweite: vereinfachter Modellwert ohne Wetter oder Reserven.
 Rust prüft den ungerundeten Wert; die UI zeigt eine Nachkommastelle.
 Änderungen wie gewohnt ausdrücklich **Speichern**.
+
+## Erster Flugbetrieb
+
+Im **Routen**-Tab eine Route auswählen, den ersten Abflug **in Spielminuten** und
+den **Abstand zwischen Abflügen** eingeben, dann **Flugplan aktivieren** drücken.
+Das zugewiesene Flugzeug muss am Startflughafen geparkt sein. Der Flugplan pendelt
+automatisch zwischen Start und Ziel; der Abstand gilt für jeden einzelnen Hin-
+oder Rückflug, nicht erst für den gesamten Umlauf. Erster Abflug frühestens in
+einer Minute; zu knappe Abstände werden ohne Zustandsänderung abgelehnt.
+
+Rust berechnet `ceil(Entfernung / Reisegeschwindigkeit × 3600)` Spielsekunden:
+A320 830 km/h, 737-800 840 km/h, ATR 72-600 510 km/h. Nach jeder Landung sind
+45 Minuten (Jets) bzw. 30 Minuten (ATR) Bodenzeit vorgeschrieben. Das sind bewusst
+vereinfachte Referenzgeschwindigkeiten und vorläufige Bodenzeiten; noch keine
+Steig-/Sinkflug-, Roll-, Wetter- oder Verspätungsmodelle.
+
+Die Flotte zeigt **Geparkt**, **Unterwegs** oder **Gelandet · Bodenzeit**. Der
+Routen-Tab zeigt aktuelle Flugrichtung, Landetermin/Bodenzeitende, gezählte Landungen
+und nach Zeit sortierte nächste Abflüge. Während eines Flugs bezeichnet der
+gespeicherte Standort den letzten Abflugort, nicht einen aktuellen Bodenstandort.
+Flugpläne lassen sich nur im geparkten Zustand beenden, nicht während Flug oder
+Bodenzeit. Vor Zuweisungsänderung oder Löschen zuerst den Flugplan beenden.
+Ein neuer Flugplan startet einen neuen Landungszähler; noch kein Flugbuch.
+
+Die vollständige Berechnung liegt in `rust/src/operations.rs`. Der Zustand wird
+aus ganzzahligen Ereignisgrenzen abgeleitet: Auch über beliebig viele Umläufe
+werden sämtliche Landungen gezählt, ohne frameabhängige Abflugprüfungen oder
+eine Schleife über jeden Flug. Pause friert den Betrieb ein; 1×/4×/16× nutzen
+dieselbe Rust-Uhr. Es gibt noch keine Karte oder animierten Flugzeuge.
 
 ## Speichern und Laden
 
@@ -121,7 +150,8 @@ Rust prüft den ungerundeten Wert; die UI zeigt eine Nachkommastelle.
 her. Nach einem Neustart **Spielstand laden** drücken: Airline einschließlich
 Name, Land, Heimatflughafen und verbleibendem Guthaben, die komplette Flotte
 einschließlich bezahlter Preise und Kennungszähler, Routen mit Flugzeugzuweisungen
-und Routenkennungszähler sowie Spielzeit (nanosekundengenau),
+und Routenkennungszähler, Pendelflugpläne samt Landungszählern und aktuellem
+Flug-/Bodenzustand sowie Spielzeit (nanosekundengenau),
 Pausenstatus und Geschwindigkeit werden wiederhergestellt. Ein laufender
 Spielstand läuft anschließend weiter, ein pausierter bleibt pausiert. Die Zeit
 während des geschlossenen Spiels wird nicht angerechnet. Es gibt bewusst kein
@@ -137,8 +167,10 @@ Der aktuelle Projektname ist `Airline Manager — UI-Basis`. Der tatsächliche P
 steht auch im Tooltip der Speichermeldung. macOS ist hier nicht praktisch getestet.
 
 Rust (`rust/src/save.rs`) übernimmt Dateizugriff, JSON-Format und Validierung.
-Das Format hat Version **4** und einen `state`-Bereich mit `clock`, `airline`,
-`fleet` und `routes`. Version **3** behält Airline und Flotte und erhält eine
+Das Format hat Version **5** und einen `state`-Bereich mit `clock`, `airline`,
+`fleet` und `routes` (einschließlich optionalem Flugplan). Version **4** behält
+Routen und Zuweisungen ohne Flugpläne. Widersprüchliche Flugzustände, Zeitgrenzen
+oder Landungszähler werden abgelehnt. Version **3** behält Airline und Flotte und erhält eine
 leere Routenliste. Ungültige Routen, fehlende Referenzen, Reichweitenüberschreitungen
 und doppelte Flugzeugbelegungen werden beim Laden vollständig abgelehnt. Spielstände
 der Version **2** behalten ihre Airline und ihr Guthaben und erhalten eine leere
@@ -169,7 +201,9 @@ Godot --headless --path . --script res://tests/simulation_test.gd
 Godot --headless --path . --script res://tests/founding_test.gd
 Godot --headless --path . --script res://tests/fleet_test.gd
 Godot --headless --path . --script res://tests/routes_test.gd
+Godot --headless --path . --script res://tests/operations_test.gd
 powershell -ExecutionPolicy Bypass -File tests/run_save_restart_test.ps1
+powershell -ExecutionPolicy Bypass -File tests/run_flight_restart_test.ps1
 ```
 
 `Godot` durch den eigenen Executable-Pfad ersetzen. Der Verbindungstest lädt die

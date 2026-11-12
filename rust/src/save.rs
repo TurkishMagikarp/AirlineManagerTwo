@@ -8,7 +8,7 @@ use std::io::{Read, Write};
 use std::path::Path;
 use std::time::Duration;
 
-const VERSION: u32 = 4;
+const VERSION: u32 = 5;
 const MAX_BYTES: u64 = 1024 * 1024;
 
 #[derive(Serialize, Deserialize)]
@@ -52,6 +52,7 @@ pub fn save(path: &Path, game: &Game) -> Result<(), String> {
     }
     game.validate_fleet()?;
     game.validate_routes()?;
+    game.validate_operations()?;
     let clock = &game.clock;
     let data = SaveGame {
         version: VERSION,
@@ -135,7 +136,7 @@ pub fn load(path: &Path) -> Result<Game, String> {
             next_aircraft_id: 1,
         }
     };
-    let routes = if data.version == VERSION {
+    let routes = if data.version >= 4 {
         data.state
             .routes
             .ok_or_else(|| "Routendaten fehlen im Spielstand.".to_string())?
@@ -168,6 +169,10 @@ pub fn load(path: &Path) -> Result<Game, String> {
     };
     game.validate_fleet()?;
     game.validate_routes()?;
+    if data.version < 5 && game.routes.iter().any(|r| r.plan.is_some()) {
+        return Err("Unerwarteter Flugplan im alten Spielstand.".into());
+    }
+    game.validate_operations()?;
     Ok(game)
 }
 

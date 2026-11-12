@@ -9,6 +9,8 @@ pub struct Route {
     pub origin_icao: String,
     pub destination_icao: String,
     pub aircraft_id: Option<u32>,
+    #[serde(default)]
+    pub plan: Option<crate::operations::FlightPlan>,
 }
 
 pub fn distance_km(origin: &str, destination: &str) -> Result<f64, String> {
@@ -82,12 +84,14 @@ impl Game {
             origin_icao: origin.into(),
             destination_icao: destination.into(),
             aircraft_id: Some(aircraft_id),
+            plan: None,
         });
         self.next_route_id = next;
         Ok(())
     }
 
     pub fn assign_route(&mut self, route_id: u32, aircraft_id: Option<u32>) -> Result<(), String> {
+        self.require_no_plan(route_id)?;
         let route = self
             .routes
             .iter()
@@ -110,6 +114,7 @@ impl Game {
     }
 
     pub fn delete_route(&mut self, route_id: u32) -> Result<(), String> {
+        self.require_no_plan(route_id)?;
         let index = self
             .routes
             .iter()

@@ -49,6 +49,7 @@ var fleet_status: Label
 var empty_fleet: Label
 var fleet_tree: Tree
 var routes_panel: VBoxContainer
+var last_operation_second: int = -1
 
 
 func _ready() -> void:
@@ -189,6 +190,12 @@ func _process(delta: float) -> void:
 		simulation.pause()
 		push_error("Rust konnte die Spielzeit nicht fortschreiben; Simulation pausiert.")
 	_refresh_time()
+	var second := int(simulation.get_elapsed_seconds())
+	if second != last_operation_second:
+		last_operation_second = second
+		routes_panel.refresh_operations()
+		if current_page == 1:
+			_refresh_fleet()
 
 
 func _refresh_time() -> void:
@@ -219,7 +226,7 @@ func _show_page(index: int) -> void:
 		var airline: Dictionary = simulation.get_airline_info()
 		heading.text = airline["name"]
 		description.text = "Heimatland: %s\nHeimatflughafen: %s (%s)\nGuthaben: %d EUR" % [airline["country_name"], airline["airport_name"], airline["airport_icao"], airline["capital_eur"]]
-		detail.text = "Deine Fluggesellschaft ist gegründet.\n\nFlugzeuge kannst du im Flotte-Tab kaufen. Startkapital und Kaufpreise sind vorläufige Testkonfiguration; noch keine Flugbewegungen oder laufenden Betriebskosten."
+		detail.text = "Flugzeuge im Flotte-Tab kaufen, im Routen-Tab zuweisen und dort einen Pendelflugplan aktivieren.\n\nNoch keine Passagiere, Einnahmen oder Betriebskosten."
 	if index == 1:
 		_refresh_fleet()
 	for button_index in range(navigation.size()):
@@ -325,7 +332,10 @@ func _refresh_fleet() -> void:
 		row.set_text(0, plane["identifier"])
 		row.set_text(1, plane["model_name"])
 		row.set_text(2, plane["location_icao"])
-		row.set_text(3, "Route #%d" % plane["route_id"] if plane["route_id"] != 0 else "Geparkt")
+		var phase: String = {"parked": "Geparkt", "in_flight": "Unterwegs", "ground": "Gelandet · Bodenzeit"}.get(plane["status"], "Unbekannt")
+		row.set_text(3, "%s · Route #%d" % [phase, plane["route_id"]] if plane["route_id"] != 0 else phase)
+		if plane["status"] == "in_flight":
+			row.set_text(2, "Ab %s (in der Luft)" % plane["location_icao"])
 		row.set_tooltip_text(0, plane["identifier"])
 		row.set_tooltip_text(1, "%s · gezahlter Kaufpreis: %d EUR" % [plane["model_name"], plane["purchase_price_eur"]])
 		row.set_tooltip_text(2, plane["location_name"])

@@ -1,5 +1,5 @@
 [
-  {"id": "a320_200", "name": "Airbus A320-200", "seats": 180, "range_km": 6200},
-  {"id": "b737_800", "name": "Boeing 737-800", "seats": 189, "range_km": 5190},
-  {"id": "atr72_600", "name": "ATR 72-600", "seats": 72, "range_km": 1370}
+  {"id": "a320_200", "name": "Airbus A320-200", "seats": 180, "range_km": 6200, "cruise_kmh": 830, "turnaround_minutes": 45},
+  {"id": "b737_800", "name": "Boeing 737-800", "seats": 189, "range_km": 5190, "cruise_kmh": 840, "turnaround_minutes": 45},
+  {"id": "atr72_600", "name": "ATR 72-600", "seats": 72, "range_km": 1370, "cruise_kmh": 510, "turnaround_minutes": 30}
 ]

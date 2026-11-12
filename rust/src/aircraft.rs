@@ -8,6 +8,8 @@ pub struct Model {
     pub name: String,
     pub seats: u32,
     pub range_km: u32,
+    pub cruise_kmh: u32,
+    pub turnaround_minutes: u32,
     #[serde(skip)]
     pub price_eur: i64,
 }
@@ -29,6 +31,8 @@ static MODELS: LazyLock<Result<Vec<Model>, String>> = LazyLock::new(|| {
             || model.name.is_empty()
             || model.seats == 0
             || model.range_km == 0
+            || model.cruise_kmh == 0
+            || model.turnaround_minutes == 0
             || !ids.insert(model.id.clone())
         {
             return Err("Flugzeugkatalog enthält ungültige oder doppelte Modelle.".into());
@@ -55,6 +59,8 @@ pub fn model(id: &str) -> Result<&'static Model, String> {
 #[serde(rename_all = "snake_case")]
 pub enum AircraftStatus {
     Parked,
+    InFlight,
+    Ground,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
