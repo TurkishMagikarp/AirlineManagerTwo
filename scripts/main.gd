@@ -3,6 +3,7 @@ extends Control
 
 const RoutesPanel = preload("res://scripts/routes_panel.gd")
 const MapPanel = preload("res://scripts/map_panel.gd")
+const FinancesPanel = preload("res://scripts/finances_panel.gd")
 const UI = preload("res://scripts/ui/components.gd")
 
 const PAGES: Array[Dictionary] = [
@@ -12,6 +13,7 @@ const PAGES: Array[Dictionary] = [
 	{"title": "Routen", "heading": "Dein Routennetz",
 	"body": "Verbindungen planen und Flugzeuge zuweisen."},
 	{"title": "Karte", "heading": "Live-Flugkarte", "body": "Dein Routennetz · Positionen zur simulierten Spielzeit"},
+	{"title": "Finanzen", "heading": "Finanzen & Routencontrolling", "body": "Echte Buchungen · Abrechnung bei Landung · ganze EUR"},
 ]
 
 var navigation: Array[Button] = []
@@ -50,6 +52,7 @@ var empty_fleet: Label
 var fleet_tree: Tree
 var routes_panel: VBoxContainer
 var map_panel: VBoxContainer
+var finances_panel: VBoxContainer
 var last_operation_second: int = -1
 var finance_panel: VBoxContainer
 var metrics: Dictionary = {}
@@ -75,14 +78,17 @@ func _ready() -> void:
 	wordmark.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	brand.add_child(wordmark)
 	brand.add_child(_label("OPERATIONS CENTER", 12, UI.ACCENT))
-	var nav := HBoxContainer.new()
-	nav.add_theme_constant_override("separation", 12)
+	var nav := GridContainer.new()
+	nav.columns = 6
+	nav.add_theme_constant_override("h_separation", 8)
+	nav.add_theme_constant_override("v_separation", 8)
+	nav.resized.connect(func(): nav.columns = 6 if nav.size.x >= 900 else 3)
 	column.add_child(nav)
 	for index in range(PAGES.size()):
 		var button := Button.new()
 		button.text = PAGES[index]["title"]
-		button.icon = load("res://resources/icons/%s.svg" % ["overview", "fleet", "routes", "map"][index])
-		button.custom_minimum_size = Vector2(100, 42)
+		button.icon = load("res://resources/icons/%s.svg" % ["overview", "fleet", "routes", "map", "finance"][index])
+		button.custom_minimum_size = Vector2(85, 42)
 		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		button.toggle_mode = true
 		button.pressed.connect(_show_page.bind(index))
@@ -116,6 +122,9 @@ func _ready() -> void:
 	map_panel = MapPanel.new()
 	map_panel.simulation = simulation
 	content.add_child(map_panel)
+	finances_panel = FinancesPanel.new()
+	finances_panel.simulation = simulation
+	content.add_child(finances_panel)
 	_add_time_controls(column)
 	_build_founding()
 	_sync_view()
@@ -211,7 +220,8 @@ func _process(delta: float) -> void:
 		map_panel.refresh_flights()
 	if second != last_operation_second:
 		last_operation_second = second
-		routes_panel.refresh_operations()
+		if current_page == 2:
+			routes_panel.refresh_operations()
 		if current_page == 0 and simulation.has_airline():
 			_refresh_finance()
 		if current_page == 1:
@@ -242,6 +252,9 @@ func _show_page(index: int) -> void:
 	fleet_panel.visible = index == 1
 	routes_panel.visible = index == 2
 	map_panel.visible = index == 3
+	finances_panel.visible = index == 4
+	if index == 4:
+		finances_panel.refresh(true)
 	if index == 3:
 		map_panel.refresh()
 	if index == 2:

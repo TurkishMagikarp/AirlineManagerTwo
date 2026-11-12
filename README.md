@@ -21,7 +21,7 @@ die Bibliothek muss auf der jeweiligen Zielplattform gebaut werden.
 
 ## Oberfläche
 
-Übersicht, Flotte und Routen verwenden ein gemeinsames Navy-Operations-Theme mit
+Übersicht, Flotte, Routen und Finanzen verwenden ein gemeinsames Navy-Operations-Theme mit
 Kennzahlen-Karten, Statusfarben und Ergebnistabellen. Neue untergeordnete Controls
 erben das Theme automatisch. Bausteine, Layoutregeln und reproduzierbare echte
 Godot-Screenshots: [UI-Design](docs/ui-design.md).
@@ -209,6 +209,40 @@ Ergebnisliste hinaus weiter, auch nach Beenden oder Löschen einer Route.
 Große Zeitsprünge werden gebündelt abgerechnet, ohne Schleife über alle Flüge.
 Pause, 1×/4×/16×, Speichern/Laden und erneute Flugpläne verursachen keine Doppelbuchungen.
 
+## Finanzen und Routencontrolling
+
+Der Tab **Finanzen** zeigt Kontostand, Ticketeinnahmen, Betriebskosten und das
+signierte Betriebsergebnis. Käufe sind Investitionsausgaben, keine Betriebskosten.
+Einfache Diagramme zeigen Kontostand sowie Einnahmen, Kosten und Ergebnis je
+Zeitabschnitt. In der Routenübersicht sind profitable und verlustbringende Routen
+farblich markiert. Eine Route anklicken: Auslastungsverlauf und alle archivierten
+Landungen mit Ticketpreis, Passagieren, Umsatz, Kosten und Ergebnis erscheinen.
+Die Kostenarten stehen im Tooltip jeder Flugzeile. Auch gelöschte Routen bleiben
+im Finanzarchiv erhalten. Routen ohne Landungen zeigen ausdrücklich „Keine Flüge“.
+
+Rust speichert ab jetzt jede Landung verlustfrei in `rust/src/history.rs`: Folgen
+mit gleichem Preis, Kosten, Kapazität und Flugabstand werden zu einem Block
+zusammengefasst. Das sind die tatsächlich bei Landung verbuchten Ergebnisse,
+keine neue Wirtschaftslogik und keine Nachberechnung mit heutigen Preisen.
+Flugzeugkäufe erhalten Zeitstempel; Kontoverläufe ergeben sich aus Anfangssaldo,
+verbuchten Flugergebnissen und Käufen. Bei neuen Airlines beginnt das Archiv
+bei Gründung. Bei Spielständen der Versionen 1–6 beginnt es erst beim Laden;
+der Beginn wird angezeigt. Bestehende Gesamtsummen, Kontostand und die bisherige
+Liste der letzten 100 Landungen bleiben erhalten, fehlende ältere Details werden
+nicht erfunden. Gesamtkennzahlen und neues Routenarchiv können deshalb bei alten
+Spielständen unterschiedliche Erfassungszeiträume haben.
+
+Die Flugtabelle fordert nur **50 Zeilen pro Seite** aus Rust an; Blättern erzeugt
+nicht alle bisherigen Flüge. Diagramme verwenden maximal **64 Zeitpunkte** mit
+exakten Kontoständen an diesen Zeitpunkten bzw. summierten Ergebnissen seit dem
+vorherigen Zeitpunkt. Dazwischenliegende Kontobewegungen können im Diagramm
+ausgelassen werden, bleiben im Archiv erhalten. Auslastung je Zeitabschnitt ist
+nach angebotenen Sitzen gewichtet; Abschnitte ohne Landungen bleiben Lücken.
+Die sichtbare Finanzseite prüft höchstens zweimal pro realer Sekunde auf neue
+Buchungen und baut unveränderte Tabellen nicht neu auf. Versteckte Routen- und
+Finanzansichten aktualisieren keine Ergebnistabellen. Die Weltkarte ist unverändert.
+Bei kleinen Fenstern bricht die Navigation in zwei Zeilen um.
+
 ## Speichern und Laden
 
 **Speichern** ersetzt den einen lokalen Spielstand; **Laden** stellt ihn wieder
@@ -232,10 +266,14 @@ Der aktuelle Projektname ist `Airline Manager — UI-Basis`. Der tatsächliche P
 steht auch im Tooltip der Speichermeldung. macOS ist hier nicht praktisch getestet.
 
 Rust (`rust/src/save.rs`) übernimmt Dateizugriff, JSON-Format und Validierung.
-Das Format hat Version **6** und einen `state`-Bereich mit `clock`, `airline`,
+Das Format hat Version **7** und einen `state`-Bereich mit `clock`, `airline`,
 `fleet`, `routes` (einschließlich Ticketpreis und optionalem Flugplan) und `finance`
-(Finanzsummen und letzte 100 Flugergebnisse; additives Feld `overhead`, bei alten
-Version-6-Ergebnissen null). Historische Ergebnisse werden nicht
+(Finanzsummen und letzte 100 Flugergebnisse) sowie `history` (Beginn, Anfangssaldo,
+vorherige Finanzsummen, verlustfreie Flugblöcke und zeitgestempelte Käufe).
+Archivzeiten, Summen und Flugdaten werden beim Laden und Speichern validiert.
+Version **6** übernimmt unverändert ihre Finanzsummen und eröffnet das neue Archiv
+am Ladezeitpunkt. Additives Feld `overhead`: bei alten
+Version-6-Ergebnissen null. Historische Ergebnisse werden nicht
 mit neuen Konfigurationswerten nachberechnet; künftige Landungen nutzen die aktuelle
 Build-Konfiguration. Version **5** behält Flugbetrieb und Kontostand und erhält
 Standardticketpreise sowie leere Finanzsummen, ohne vergangene Flüge nachträglich
@@ -261,6 +299,9 @@ Backups oder automatische Wiederherstellung. Ungültige Airline- und Flottendate
 ebenso abgelehnt wie defekte Zeitdaten, ohne den laufenden Zustand zu ersetzen.
 Das bisherige Dateilimit beträgt 1 MiB; auch Speichern prüft es, damit keine
 zu große, anschließend nicht mehr ladbare Datei einen guten Spielstand ersetzt.
+Das Limit gilt weiterhin auch mit Archiv: Sehr viele Preis-/Flugplanwechsel können
+es erreichen; gleichbleibender Flugbetrieb braucht dagegen auch für Millionen
+Flüge nur wenige Archivblöcke. Noch keine Auslagerung des Archivs in eine Datenbank.
 
 ## Tests
 
@@ -275,10 +316,12 @@ Godot --headless --path . --script res://tests/fleet_test.gd
 Godot --headless --path . --script res://tests/routes_test.gd
 Godot --headless --path . --script res://tests/operations_test.gd
 Godot --headless --path . --script res://tests/economy_test.gd
+Godot --headless --path . --script res://tests/finances_test.gd
 Godot --headless --path . --script res://tests/map_test.gd
 powershell -ExecutionPolicy Bypass -File tests/run_save_restart_test.ps1
 powershell -ExecutionPolicy Bypass -File tests/run_flight_restart_test.ps1
 powershell -ExecutionPolicy Bypass -File tests/run_economy_restart_test.ps1
+powershell -ExecutionPolicy Bypass -File tests/run_finances_restart_test.ps1
 ```
 
 `Godot` durch den eigenen Executable-Pfad ersetzen. Der Verbindungstest lädt die
@@ -302,6 +345,18 @@ negative Kontostände, ungültige Preise, Finanzüberläufe ohne Teilbuchungen,
 gleichzeitige Routen, 16× mit kleinen/großen Schritten und eine Million Landungen.
 Zusätzlich: Finanzmigration aus Version 5 ohne Nachberechnung, begrenzte Historie,
 Routenlöschung/Neugründung sowie Speichern/Laden und Fortsetzung in getrennten Prozessen.
+Der neue Finanzarchivtest prüft zusätzlich zwei Millionen echte Landungen auf zwei
+Routen, profitable und verlustbringende Ergebnisse, nur zwei Archivblöcke,
+Diagramm-/Kontenabgleich, 50-Zeilen-Seiten bis zum ältesten Flug, unveränderte
+Tabellen ohne neue Buchungen und Layouts bis 680×520. Der separate Neustarttest
+lädt dieses Archiv in einem neuen Godot-Prozess und setzt es ohne Doppelbuchung
+fort. Rust prüft außerdem Preis-/Auslastungswechsel, identische Archive bei
+kleinen/großen 16×-Schritten, Migration aus Version 6 und ungültige Archivdaten.
+Verifiziert: 44 Rust-Tests, Clippy ohne Warnungen, zehn Godot-Testskripte, alle vier
+Prozess-Neustarttests sowie `START.bat --headless --quit-after 10` erfolgreich.
+Reale Grafikprüfung bei 1440×1000, 1100×720 und 680×520 erfolgreich. Gemessen im
+Debug-Build auf diesem Rechner: 100 Abfragen neuester/ältester Flugseiten aus einer
+Million Flüge ca. 59–72 ms insgesamt (kein Benchmark der Weltkarte).
 Optional `-Godot "C:\Pfad\Godot.exe"` angeben. Auf macOS kann dasselbe GDScript
 in separaten Prozessen mit `--save-test-mode=write-running` / `read-running` /
 `write-paused` / `read-paused` und `--save-test-path=/absoluter/testpfad.json`

@@ -3,6 +3,7 @@ mod airports;
 mod clock;
 mod economy;
 mod game;
+mod history;
 mod map;
 mod operations;
 mod routes;
@@ -37,6 +38,91 @@ impl IRefCounted for SimulationClock {
 
 #[godot_api]
 impl SimulationClock {
+    #[func]
+    fn get_finance_history_info(&self) -> VarDictionary {
+        self.game
+            .history
+            .as_ref()
+            .map(|h| {
+                vdict! {
+                    "since" => operations::display_time(h.since).as_str(),
+                    "batch_count" => h.batches.len() as i64
+                }
+            })
+            .unwrap_or_default()
+    }
+
+    #[func]
+    fn get_route_finances(&self) -> Array<VarDictionary> {
+        let Some(h) = &self.game.history else {
+            return Array::new();
+        };
+        let mut rows = std::collections::BTreeMap::new();
+        for r in &self.game.routes {
+            rows.insert(
+                r.id,
+                (
+                    r.origin_icao.as_str(),
+                    r.destination_icao.as_str(),
+                    true,
+                    economy::Totals::default(),
+                ),
+            );
+        }
+        for b in &h.batches {
+            let row = rows.entry(b.route_id).or_insert((
+                b.origin.as_str(),
+                b.destination.as_str(),
+                false,
+                economy::Totals::default(),
+            ));
+            row.3.add(&b.totals, b.count).expect("validated totals");
+        }
+        rows.into_iter()
+            .map(|(id, (a, b, active, t))| {
+                vdict! {
+                    "route_id" => id, "origin" => a, "destination" => b, "active" => active,
+                    "flights" => t.flights, "revenue_eur" => t.revenue, "costs_eur" => t.costs(),
+                    "profit_eur" => t.profit(), "load_percent" => t.load_percent()
+                }
+            })
+            .collect()
+    }
+
+    #[func]
+    fn get_route_flight_page(&self, route_id: u32, offset: i64) -> Array<VarDictionary> {
+        let Some(h) = &self.game.history else {
+            return Array::new();
+        };
+        h.page(route_id, offset.max(0) as u64, 50)
+            .iter()
+            .map(flight_dictionary)
+            .collect()
+    }
+
+    #[func]
+    fn get_finance_series(&self, route_id: u32) -> Array<VarDictionary> {
+        let Some(h) = &self.game.history else {
+            return Array::new();
+        };
+        let now = self.game.clock.elapsed().as_secs();
+        let span = now - h.since;
+        let steps = span.clamp(1, 63);
+        let mut previous = economy::Totals::default();
+        (0..=steps).map(|i| {
+            let time = h.since + (u128::from(span) * u128::from(i) / u128::from(steps)) as u64;
+            let t = h.totals(route_id, time);
+            let seats = t.seats - previous.seats;
+            let load = if seats == 0 { -1.0 } else { (t.passengers - previous.passengers) as f64 * 100.0 / seats as f64 };
+            let row = vdict! { "seconds" => time as i64, "time" => operations::display_time(time).as_str(),
+                "balance" => h.balance(time), "revenue" => t.revenue - previous.revenue,
+                "costs" => t.costs() - previous.costs(), "profit" => t.profit() - previous.profit(),
+                "load" => load };
+            previous = t;
+            row
+        }).collect()
+    }
+
     #[func]
     fn get_map_airports(&self) -> Array<VarDictionary> {
         airports::catalog()
@@ -129,14 +215,13 @@ impl SimulationClock {
 
     #[func]
     fn get_flight_results(&self) -> Array<VarDictionary> {
-        self.game.finance.recent.iter().rev().map(|f| {
-            let t = &f.totals;
-            vdict! { "route_id" => f.route_id, "landing" => operations::display_time(f.landing).as_str(),
-                "origin" => f.origin.as_str(), "destination" => f.destination.as_str(), "ticket_eur" => f.ticket_eur,
-                "passengers" => t.passengers, "seats" => t.seats, "load_percent" => t.load_percent(),
-                "revenue_eur" => t.revenue, "fuel_eur" => t.fuel, "airport_eur" => t.airport,
-                "crew_eur" => t.crew, "overhead_eur" => t.overhead, "costs_eur" => t.costs(), "profit_eur" => t.profit() }
-        }).collect()
+        self.game
+            .finance
+            .recent
+            .iter()
+            .rev()
+            .map(flight_dictionary)
+            .collect()
     }
 
     #[func]
@@ -475,4 +560,13 @@ impl SimulationClock {
     fn get_display_time(&self) -> GString {
         self.game.clock.display_time().as_str().into()
     }
+}
+
+fn flight_dictionary(f: &economy::FlightResult) -> VarDictionary {
+    let t = &f.totals;
+    vdict! { "route_id" => f.route_id, "landing" => operations::display_time(f.landing).as_str(),
+    "origin" => f.origin.as_str(), "destination" => f.destination.as_str(), "ticket_eur" => f.ticket_eur,
+    "passengers" => t.passengers, "seats" => t.seats, "load_percent" => t.load_percent(),
+    "revenue_eur" => t.revenue, "fuel_eur" => t.fuel, "airport_eur" => t.airport,
+    "crew_eur" => t.crew, "overhead_eur" => t.overhead, "costs_eur" => t.costs(), "profit_eur" => t.profit() }
 }

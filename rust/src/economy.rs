@@ -65,6 +65,8 @@ mod tests {
         assert!(g.set_ticket_price(1, 20).is_err());
         let flight = operations::timings(&g.routes[0], "atr72_600").unwrap().0;
         g.airline.as_mut().unwrap().capital_eur = 0;
+        // Test-only depletion before the first landing; keep its ledger anchor consistent.
+        g.history.as_mut().unwrap().opening_balance = 3_000_000;
         g.advance((60 + flight - 1) as f64);
         assert_eq!(g.finance.totals.flights, 0);
         assert_eq!(g.airline.as_ref().unwrap().capital_eur, 0);
@@ -289,9 +291,18 @@ mod tests {
                         assert!(t.profit() > 0);
                         assert!(t.profit() * 100 / t.revenue < 30);
                     }
-                    println!("{origin}-{destination} {} {km:.0}km ticket={price} pax={}/{} fuel={} airport={} crew={} overhead={} cost={} profit={}",
-                        model.id, t.passengers, t.seats, t.fuel, t.airport, t.crew,
-                        t.overhead, t.costs(), t.profit());
+                    println!(
+                        "{origin}-{destination} {} {km:.0}km ticket={price} pax={}/{} fuel={} airport={} crew={} overhead={} cost={} profit={}",
+                        model.id,
+                        t.passengers,
+                        t.seats,
+                        t.fuel,
+                        t.airport,
+                        t.crew,
+                        t.overhead,
+                        t.costs(),
+                        t.profit()
+                    );
                 }
             }
         }
@@ -312,6 +323,8 @@ mod tests {
         crate::save::save(&path, &g).unwrap();
         let mut json: serde_json::Value =
             serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        json["version"] = 6.into();
+        json["state"].as_object_mut().unwrap().remove("history");
         json["state"]["finance"]["totals"]
             .as_object_mut()
             .unwrap()
@@ -435,7 +448,9 @@ impl Totals {
     pub fn add(&mut self, other: &Self, count: u64) -> Option<()> {
         let count = i64::try_from(count).ok()?;
         macro_rules! add { ($($f:ident),*) => { $(self.$f = self.$f.checked_add(other.$f.checked_mul(count)?)?;)* }; }
-        add!(flights, passengers, seats, revenue, fuel, airport, crew, overhead);
+        add!(
+            flights, passengers, seats, revenue, fuel, airport, crew, overhead
+        );
         self.fuel
             .checked_add(self.airport)?
             .checked_add(self.crew)?

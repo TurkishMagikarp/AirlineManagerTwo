@@ -185,6 +185,7 @@ impl Game {
         let mut updates = Vec::new();
         let mut finance = self.finance.clone();
         let mut delta = 0i64;
+        let mut archive = Vec::new();
         for (i, route) in self
             .routes
             .iter()
@@ -220,6 +221,22 @@ impl Game {
                 };
                 delta = change;
                 let flight = timings(route, &self.fleet[p].model_id).unwrap().0;
+                let index = plan.completed_flights;
+                let (a, b) = if index % 2 == 0 {
+                    (&route.origin_icao, &route.destination_icao)
+                } else {
+                    (&route.destination_icao, &route.origin_icao)
+                };
+                archive.push(crate::history::Batch {
+                    route_id: route.id,
+                    first: plan.first_departure + index * plan.interval_seconds + flight,
+                    interval: plan.interval_seconds,
+                    count,
+                    origin: a.clone(),
+                    destination: b.clone(),
+                    ticket_eur: route.ticket_eur,
+                    totals: totals.clone(),
+                });
                 for index in plan.completed_flights.max(
                     state
                         .completed
@@ -258,6 +275,11 @@ impl Game {
             .saturating_sub(crate::economy::HISTORY_LIMIT);
         finance.recent.drain(..excess);
         self.finance = finance;
+        if let Some(h) = &mut self.history {
+            for batch in archive {
+                h.record(batch);
+            }
+        }
         if let Some(balance) = balance {
             self.airline.as_mut().unwrap().capital_eur = balance;
         }

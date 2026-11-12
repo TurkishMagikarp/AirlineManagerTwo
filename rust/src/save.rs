@@ -8,7 +8,7 @@ use std::io::{Read, Write};
 use std::path::Path;
 use std::time::Duration;
 
-const VERSION: u32 = 6;
+const VERSION: u32 = 7;
 const MAX_BYTES: u64 = 1024 * 1024;
 
 #[derive(Serialize, Deserialize)]
@@ -25,6 +25,7 @@ struct GameState {
     fleet: Option<SavedFleet>,
     routes: Option<SavedRoutes>,
     finance: Option<crate::economy::Finance>,
+    history: Option<crate::history::History>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -55,10 +56,12 @@ pub fn save(path: &Path, game: &Game) -> Result<(), String> {
     game.validate_routes()?;
     game.validate_operations()?;
     game.validate_finance()?;
+    game.validate_history()?;
     let clock = &game.clock;
     let data = SaveGame {
         version: VERSION,
         state: GameState {
+            history: game.history.clone(),
             finance: Some(game.finance.clone()),
             airline: game.airline.clone(),
             routes: Some(SavedRoutes {
@@ -162,14 +165,27 @@ pub fn load(path: &Path) -> Result<Game, String> {
         clock.speed,
     )
     .ok_or_else(|| "Ungültige Geschwindigkeit im Spielstand.".to_string())?;
+    let finance = if data.version >= 6 {
+        data.state
+            .finance
+            .ok_or("Finanzdaten fehlen im Spielstand.")?
+    } else {
+        crate::economy::Finance::default()
+    };
     let game = Game {
-        finance: if data.version >= 6 {
-            data.state
-                .finance
-                .ok_or("Finanzdaten fehlen im Spielstand.")?
+        history: if data.version >= 7 {
+            if data.state.airline.is_some() && data.state.history.is_none() {
+                return Err("Finanzhistorie fehlt.".into());
+            }
+            data.state.history
         } else {
-            crate::economy::Finance::default()
+            data.state.airline.as_ref().map(|a| {
+                let mut h = crate::history::History::new(clock.elapsed().as_secs(), a.capital_eur);
+                h.prior_totals = finance.totals.clone();
+                h
+            })
         },
+        finance,
         clock,
         airline: data.state.airline,
         fleet: fleet.aircraft,
@@ -184,6 +200,7 @@ pub fn load(path: &Path) -> Result<Game, String> {
     }
     game.validate_operations()?;
     game.validate_finance()?;
+    game.validate_history()?;
     Ok(game)
 }
 
@@ -266,6 +283,7 @@ mod tests {
                 original.found("Neustart Air", "TR", "LTFM").unwrap();
                 // Loading must retain saved capital, never reapply today's config.
                 original.airline.as_mut().unwrap().capital_eur = 1_234_567;
+                original.history.as_mut().unwrap().opening_balance = 1_234_567;
                 original.clock =
                     Clock::from_state(Duration::new(987654, 123456789), running, speed).unwrap();
                 save(&path, &original).unwrap();
@@ -362,6 +380,7 @@ mod tests {
         game.found("Fleet Save Air", "TR", "LTFJ").unwrap();
         let price = crate::aircraft::model("atr72_600").unwrap().price_eur;
         game.airline.as_mut().unwrap().capital_eur = price * 3;
+        game.history.as_mut().unwrap().opening_balance = price * 3;
         game.buy_aircraft("atr72_600").unwrap();
         game.buy_aircraft("atr72_600").unwrap();
         // A historical purchase price need not equal the current catalog price.
@@ -402,6 +421,7 @@ mod tests {
         game.found("Fleet Air", "DE", "EDDF").unwrap();
         let price = crate::aircraft::model("atr72_600").unwrap().price_eur;
         game.airline.as_mut().unwrap().capital_eur = price * 2;
+        game.history.as_mut().unwrap().opening_balance = price * 2;
         game.buy_aircraft("atr72_600").unwrap();
         game.buy_aircraft("atr72_600").unwrap();
         save(&path, &game).unwrap();
@@ -443,6 +463,7 @@ mod tests {
         let previous = fs::read(&path).unwrap();
         game.airline.as_mut().unwrap().capital_eur =
             crate::aircraft::model("atr72_600").unwrap().price_eur * 10_000;
+        game.history.as_mut().unwrap().opening_balance = game.airline.as_ref().unwrap().capital_eur;
         for _ in 0..10_000 {
             game.buy_aircraft("atr72_600").unwrap();
         }

@@ -67,6 +67,7 @@ func _run() -> void:
 			quit(0)
 			return
 	var operation: Dictionary = main.simulation.get_operations()[0]
+	main._show_page(2)
 	main._process(0.0)
 	if not _check("Unterwegs" in main.routes_panel.operations_label.text and "Nächster Abflug" in main.routes_panel.operations_label.text, "Current flight and next departure displayed"):
 		return

@@ -14,6 +14,7 @@ pub struct Game {
     pub routes: Vec<crate::routes::Route>,
     pub next_route_id: u32,
     pub finance: crate::economy::Finance,
+    pub history: Option<crate::history::History>,
 }
 
 impl Default for Game {
@@ -26,6 +27,7 @@ impl Default for Game {
             routes: Vec::new(),
             next_route_id: 1,
             finance: crate::economy::Finance::default(),
+            history: None,
         }
     }
 }
@@ -96,6 +98,7 @@ impl Game {
         };
         airline.validate()?;
         *self = Self {
+            history: Some(crate::history::History::new(0, airline.capital_eur)),
             airline: Some(airline),
             ..Self::default()
         };
@@ -127,6 +130,12 @@ impl Game {
             purchase_price_eur: model.price_eur,
         };
         self.fleet.push(plane);
+        if let Some(h) = &mut self.history {
+            h.purchases.push(crate::history::Purchase {
+                time: self.clock.elapsed().as_secs(),
+                amount: model.price_eur,
+            });
+        }
         airline.capital_eur -= model.price_eur;
         self.next_aircraft_id = next_id;
         Ok(())
