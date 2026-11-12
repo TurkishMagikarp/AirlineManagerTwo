@@ -53,15 +53,15 @@ func _ready() -> void:
 	empty_label = _label("Noch keine Routen erstellt.")
 	add_child(empty_label)
 	route_tree = Tree.new()
-	route_tree.columns = 4
+	route_tree.columns = 6
 	route_tree.hide_root = true
 	route_tree.select_mode = Tree.SELECT_ROW
 	route_tree.column_titles_visible = true
 	route_tree.custom_minimum_size.y = 180
-	for i in range(4):
-		route_tree.set_column_title(i, ["Route", "Strecke", "Entfernung", "Flugzeug"][i])
+	for i in range(6):
+		route_tree.set_column_title(i, ["Route", "Strecke", "Entfernung", "Flugzeug", "Nachfrage/Tag →", "Auslastung"][i])
 		route_tree.set_column_expand(i, i == 1 or i == 3)
-		route_tree.set_column_custom_minimum_width(i, [65, 140, 110, 170][i])
+		route_tree.set_column_custom_minimum_width(i, [65, 140, 110, 170, 125, 100][i])
 	route_tree.item_selected.connect(_selection_changed)
 	add_child(route_tree)
 	assignment = _select("Ausgewählte Route: Flugzeugzuweisung")
@@ -225,7 +225,7 @@ func refresh() -> void:
 		for plane in fleet:
 			if plane["id"] == route["aircraft_id"]:
 				row.set_text(3, "%s · %s" % [plane["identifier"], plane["model_name"]])
-		for i in range(4):
+		for i in range(6):
 			row.set_tooltip_text(i, row.get_text(i))
 		if route["id"] == selected_route:
 			row.select(0)
@@ -235,6 +235,20 @@ func refresh() -> void:
 
 
 func refresh_operations() -> void:
+	# Refresh live metrics without rebuilding selection or resetting ticket inputs.
+	var metrics: Dictionary = {}
+	for route in simulation.get_routes():
+		metrics[route["id"]] = route
+	var tree_root := route_tree.get_root()
+	if tree_root != null:
+		for row in tree_root.get_children():
+			var route: Dictionary = metrics.get(row.get_metadata(0)["id"], {})
+			if route.is_empty():
+				continue
+			row.set_text(4, "%d Pax" % route["daily_demand"])
+			row.set_tooltip_text(4, "Gesamter Streckenmarkt pro Tag und Richtung bei diesem Preis, NICHT pro Flug oder Route.\nGeschäft: ca. %d · Urlaub/Privat: ca. %d\nGeteilter Anteil pro Abflug vor Sitzlimit: %d Pax%s" % [route["daily_business"], route["daily_leisure"], route["estimated_passengers"], "" if route["has_plan"] else " (ohne eigenen Flugplan)"])
+			row.set_text(5, "%.1f %%" % route["actual_load_percent"] if route["actual_flights"] > 0 else "Keine Flüge")
+			row.set_tooltip_text(5, "Tatsächlich beförderte Passagiere / angebotene Sitze aller archivierten Landungen dieser Route. Bei alten Spielständen ab Archivbeginn.")
 	var lines: PackedStringArray = ["Flugbetrieb · nächste Abflüge (sortiert)"]
 	for operation in simulation.get_operations():
 		lines.append("%s · Route #%d · Flug %d min · Boden %d min\n%s\nNächster Abflug: %s" % [operation["identifier"], operation["route_id"], ceili(operation["flight_seconds"] / 60.0), operation["ground_seconds"] / 60, operation["status_text"], operation["next_departure"]])

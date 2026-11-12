@@ -15,6 +15,9 @@ pub struct Airport {
     pub country_code: String,
     pub latitude: f64,
     pub longitude: f64,
+    /// Provisional catchment/importance index, not observed route traffic.
+    pub market_size: f64,
+    pub business_percent: u32,
 }
 
 #[derive(Deserialize)]
@@ -56,6 +59,10 @@ mod tests {
             assert!(countries.contains(&airport.country_code));
             assert!(airport.latitude.is_finite() && airport.latitude.abs() <= 90.0);
             assert!(airport.longitude.is_finite() && airport.longitude.abs() <= 180.0);
+            assert!(
+                airport.market_size.is_finite() && (0.01..=10.0).contains(&airport.market_size)
+            );
+            assert!(airport.business_percent <= 100);
         }
         assert!(airports.contains(&"EDDF".to_string()));
         assert!(airports.contains(&"LTFM".to_string()));

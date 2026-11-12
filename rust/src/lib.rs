@@ -1,6 +1,7 @@
 mod aircraft;
 mod airports;
 mod clock;
+mod demand;
 mod economy;
 mod game;
 mod history;
@@ -355,12 +356,27 @@ impl SimulationClock {
 
     #[func]
     fn get_routes(&self) -> Array<VarDictionary> {
-        self.game.routes.iter().map(|r| vdict! {
-            "id" => r.id, "origin_icao" => r.origin_icao.as_str(),
-            "destination_icao" => r.destination_icao.as_str(),
-            "distance_km" => routes::distance_km(&r.origin_icao, &r.destination_icao).unwrap_or(0.0),
-            "aircraft_id" => r.aircraft_id.unwrap_or(0), "has_plan" => r.plan.is_some(), "ticket_eur" => r.ticket_eur
-        }).collect()
+        self.game
+            .routes
+            .iter()
+            .map(|r| {
+                let market = demand::market(r, r.ticket_eur).expect("validated route");
+                let actual = self.game.history.as_ref()
+                    .map(|h| h.totals(r.id, self.game.clock.elapsed().as_secs()))
+                    .unwrap_or_default();
+                vdict! {
+                    "id" => r.id, "origin_icao" => r.origin_icao.as_str(),
+                    "destination_icao" => r.destination_icao.as_str(),
+                    "distance_km" => routes::distance_km(&r.origin_icao, &r.destination_icao).unwrap_or(0.0),
+                    "aircraft_id" => r.aircraft_id.unwrap_or(0), "has_plan" => r.plan.is_some(), "ticket_eur" => r.ticket_eur,
+                    "daily_demand" => market.total().floor() as i64,
+                    "daily_business" => market.business.floor() as i64,
+                    "daily_leisure" => market.leisure.floor() as i64,
+                    "estimated_passengers" => demand::passengers(r, &self.game.routes).unwrap_or(0),
+                    "actual_flights" => actual.flights, "actual_load_percent" => actual.load_percent()
+                }
+            })
+            .collect()
     }
 
     #[func]

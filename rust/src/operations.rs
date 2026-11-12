@@ -206,7 +206,9 @@ impl Game {
             let plan = route.plan.as_ref().unwrap();
             let count = state.completed - plan.completed_flights;
             if count > 0 {
-                let Ok(totals) = crate::economy::quote(route, &self.fleet[p].model_id) else {
+                let Ok(totals) =
+                    crate::economy::quote_shared(route, &self.fleet[p].model_id, &self.routes)
+                else {
                     return false;
                 };
                 if finance.totals.add(&totals, count).is_none() {

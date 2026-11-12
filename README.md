@@ -68,7 +68,7 @@ Wirtschafts- oder Länderregeln. Datei ändern, Spiel/Editor schließen und übe
 Airlines behalten ihr gespeichertes Guthaben. Flugzeugkäufe werden davon abgezogen;
 Flüge verbuchen Ticketeinnahmen und Betriebskosten bei Landung.
 
-Sechs echte Flughäfen in Deutschland, Türkei und USA stehen zur Verfügung.
+Acht echte Flughäfen in Deutschland, Türkei und USA stehen zur Verfügung.
 Der [Katalog](data/README.md) liegt getrennt in `data/airports.json` und verwendet
 stabile ICAO-/Ländercodes als Grundlage für eine spätere weltweite Datenquelle.
 
@@ -102,7 +102,7 @@ vorläufige Vereinfachungen, keine endgültigen Wirtschaftsregeln.
 
 ## Routenplanung
 
-Im **Routen**-Tab Start und Ziel aus den sechs vorhandenen Flughäfen sowie ein
+Im **Routen**-Tab Start und Ziel aus den acht vorhandenen Flughäfen sowie ein
 freies eigenes Flugzeug wählen. Die Vorschau zeigt die Luftlinienentfernung und
 die Reichweitenprüfung aus Rust. Gleiche oder unbekannte Flughäfen, fremde bzw.
 nicht vorhandene Flugzeuge und Strecken oberhalb der Modellreichweite werden
@@ -166,13 +166,18 @@ Alle Regeln, Rundungen und Geldbewegungen liegen in `rust/src/economy.rs` und
 Vorläufige, leicht anpassbare Werte: `config/economy.json`; nach Änderungen neu
 bauen. Dieselbe Ausgangslage **mit derselben Konfiguration** liefert dasselbe Ergebnis.
 
-Für die auf ganze Kilometer gerundete Streckenlänge `km`:
+Nachfrage: Ein sitzplatzunabhängiger Tagesmarkt je Flughafenpaar und Richtung
+berücksichtigt Größe/Bedeutung beider Flughäfen, Entfernung und Geschäfts-/Urlaubsreisen.
+Alle aktiven Pendelflugpläne derselben Verbindung teilen ihn nach ihrer Frequenz,
+auch bei umgekehrter Routenrichtung. Hohe Preise schrecken beide Gruppen ab,
+Urlauber früher. Gleichmäßiger Tagesdurchschnitt, kein hartes Kalendertageskontingent.
+Die Routenliste zeigt geschätzte Nachfrage/Tag/Richtung und tatsächliche archivierte
+Auslastung. [Formeln, Ausgangsdaten und Grenzen](docs/demand.md).
 
-- Basisnachfrage: Minimum aus `140 + floor(3 × km / 1000)` und 83 % der Sitze,
-  unter 300 km proportional reduziert.
+Kosten und Preise:
+
 - Referenzpreis: `60 + floor(4 × km / 100)` EUR.
-- Nachfrage: `floor(Basis × max(0, 2 × Referenzpreis − Ticketpreis) / Referenzpreis)`.
-- Verkaufte Tickets: Minimum aus Nachfrage und Sitzplätzen. Ab dem doppelten
+- Verkaufte Tickets: Minimum aus geteiltem Marktanteil und Sitzplätzen. Ab dem doppelten
   Referenzpreis fliegt das Flugzeug leer, bei 0 EUR sind Tickets kostenlos.
 - Einnahmen: Passagiere × Ticketpreis.
 - Treibstoff: Reisezeitverbrauch plus fester Start-/Landeanteil, **0,80 EUR/kg**.
@@ -188,11 +193,8 @@ Für die auf ganze Kilometer gerundete Streckenlänge `km`:
 | 737-800 | 2.600 | 650 |
 | ATR 72-600 | 750 | 350 |
 
-Beispiel EDDF–EDDM mit ATR bei 71 EUR: 58 Passagiere, 80,6 % Auslastung,
-4.118 EUR Einnahmen, 3.649 EUR Kosten, 469 EUR Ergebnis. Bei 134 EUR bleiben
-nur 6 Passagiere und 1.545 EUR Verlust. [Referenzen, Annahmen und Testmatrix](docs/economy.md).
-Die Nachfrage gilt pro Flug, unabhängig von Häufigkeit, Konkurrenz und anderen Routen;
-sie ist noch keine tägliche Marktnachfrage. Beide Richtungen haben dieselbe Nachfrage.
+Kostenreferenzen und Testmatrix: [Wirtschaft](docs/economy.md).
+Die Stellwerte der Nachfrage stehen in `config/demand.json` und `data/airports.json`.
 
 Bei jeder **Landung** werden Einnahmen und sämtliche Kosten genau einmal verbucht,
 auch für leere Flüge. Unterwegs noch keine Abbuchung, keine Treibstofflagerhaltung.
@@ -316,6 +318,8 @@ Godot --headless --path . --script res://tests/fleet_test.gd
 Godot --headless --path . --script res://tests/routes_test.gd
 Godot --headless --path . --script res://tests/operations_test.gd
 Godot --headless --path . --script res://tests/economy_test.gd
+Godot --headless --path . --script res://tests/demand_test.gd
+Godot --headless --path . --script res://tests/demand_test.gd -- --restore-demand
 Godot --headless --path . --script res://tests/finances_test.gd
 Godot --headless --path . --script res://tests/map_test.gd
 powershell -ExecutionPolicy Bypass -File tests/run_save_restart_test.ps1
@@ -352,7 +356,8 @@ Tabellen ohne neue Buchungen und Layouts bis 680×520. Der separate Neustarttest
 lädt dieses Archiv in einem neuen Godot-Prozess und setzt es ohne Doppelbuchung
 fort. Rust prüft außerdem Preis-/Auslastungswechsel, identische Archive bei
 kleinen/großen 16×-Schritten, Migration aus Version 6 und ungültige Archivdaten.
-Verifiziert: 44 Rust-Tests, Clippy ohne Warnungen, zehn Godot-Testskripte, alle vier
+Verifiziert: 50 Rust-Tests, Clippy ohne Warnungen, Nachfrage-UI samt separatem
+Ladeprozess, bestehende Godot-Tests und alle vier
 Prozess-Neustarttests sowie `START.bat --headless --quit-after 10` erfolgreich.
 Reale Grafikprüfung bei 1440×1000, 1100×720 und 680×520 erfolgreich. Gemessen im
 Debug-Build auf diesem Rechner: 100 Abfragen neuester/ältester Flugseiten aus einer

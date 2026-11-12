@@ -1,9 +1,5 @@
 {
   "default_ticket_eur": 100,
-  "base_demand": 140,
-  "demand_per_1000_km": 3,
-  "reference_load_percent": 83,
-  "demand_full_distance_km": 300,
   "reference_base_eur": 60,
   "reference_eur_per_100_km": 4,
   "fuel_cents_per_kg": 80,

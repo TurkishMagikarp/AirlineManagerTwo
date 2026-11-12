@@ -2,8 +2,9 @@
 
 ## Flughäfen
 
-`airports.json` enthält reale Identitätsdaten und geografische Koordinaten, keine erfundenen
-Nachfrage-, Kapazitäts-, Gebühren- oder Wirtschaftswerte. Die kleine Auswahl ist
+`airports.json` enthält reale Identitätsdaten und geografische Koordinaten sowie
+ausdrücklich geschätzte Nachfrageparameter `market_size` und `business_percent`
+([Annahmen](../docs/demand.md)), keine gemessenen Streckenpassagierzahlen. Die kleine Auswahl ist
 keine weltweite Abdeckung und noch keine vollständige geografische Datenbasis.
 
 - Länder werden über ISO-3166-1-Alpha-2-Codes referenziert.
@@ -13,7 +14,7 @@ keine weltweite Abdeckung und noch keine vollständige geografische Datenbasis.
 - `latitude` / `longitude`: geografische Breite/Länge in Dezimalgrad (WGS84),
   gerundete Flughafen-Referenzpositionen, nicht einzelne Startbahnen oder Gates.
   Referenz: [OurAirports Flughafen-Datensätze](https://ourairports.com/data/)
-  (Public Domain), Codes EDDF, EDDM, LTFM, LTFJ, KJFK und KLAX.
+  (Public Domain), Codes EDDF, EDDM, LTFM, LTFJ, KJFK, KLAX, EDLP und EDFH.
   Rust leitet daraus die Großkreisentfernung ab; Spielstände speichern nur Codes.
 - Der Katalog wird einmal in Rust eingelesen. Später kann der Loader eine größere,
   lizenzierte Datenquelle verwenden; die Referenzen im Spielstand bleiben stabil.

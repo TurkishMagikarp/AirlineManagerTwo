@@ -7,10 +7,6 @@ pub const HISTORY_LIMIT: usize = 100;
 #[derive(Deserialize)]
 pub struct Config {
     pub default_ticket_eur: i64,
-    base_demand: i64,
-    demand_per_1000_km: i64,
-    reference_load_percent: i64,
-    demand_full_distance_km: i64,
     reference_base_eur: i64,
     reference_eur_per_100_km: i64,
     fuel_cents_per_kg: i64,
@@ -41,7 +37,6 @@ mod tests {
         assert!(full.profit() < 0);
         g.routes[0].ticket_eur = 100;
         let middle = quote(&g.routes[0], "atr72_600").unwrap();
-        assert_eq!(middle.passengers, 34);
         assert!(middle.passengers > 0 && middle.passengers < middle.seats);
         assert_eq!(middle.revenue, middle.passengers * 100);
         assert!(middle.profit() > 0);
@@ -244,6 +239,14 @@ mod tests {
                         ticket_eur: price,
                         plan: None,
                     };
+                    let mut route = route;
+                    let (flight, ground) = operations::timings(&route, &model.id).unwrap();
+                    let interval = (flight + ground).div_ceil(60) * 60;
+                    route.plan = Some(operations::FlightPlan {
+                        first_departure: 60,
+                        interval_seconds: interval,
+                        completed_flights: 0,
+                    });
                     let t = quote(&route, &model.id).unwrap();
                     assert!(t.passengers <= previous && t.passengers <= t.seats);
                     previous = t.passengers;
@@ -287,10 +290,8 @@ mod tests {
                     if origin == "LTFM" {
                         assert!(t.profit() < 0);
                     }
-                    if price == reference && origin != "LTFM" {
-                        assert!(t.profit() > 0);
-                        assert!(t.profit() * 100 / t.revenue < 30);
-                    }
+                    // Daily market and frequency, not aircraft capacity, determine
+                    // passengers. A reference-price flight need not be profitable.
                     println!(
                         "{origin}-{destination} {} {km:.0}km ticket={price} pax={}/{} fuel={} airport={} crew={} overhead={} cost={} profit={}",
                         model.id,
@@ -311,7 +312,7 @@ mod tests {
         g.routes[0].ticket_eur = 140;
         let overpriced = quote(&g.routes[0], "atr72_600").unwrap();
         assert!(viable.profit() > 0 && overpriced.profit() < 0);
-        assert!(overpriced.load_percent() < 10.0 && overpriced.passengers > 0);
+        assert!(overpriced.load_percent() < viable.load_percent() && overpriced.passengers > 0);
     }
 
     #[test]
@@ -369,20 +370,15 @@ static CONFIG: LazyLock<Config> = LazyLock::new(|| {
         serde_json::from_str(include_str!("../../config/economy.json")).expect("economy config");
     assert!((0..=100_000).contains(&c.default_ticket_eur));
     for n in [
-        c.base_demand,
-        c.demand_per_1000_km,
         c.reference_base_eur,
         c.reference_eur_per_100_km,
         c.fuel_cents_per_kg,
         c.crew_extra_minutes,
-        c.demand_full_distance_km,
         c.airport_eur_per_passenger,
     ] {
         assert!((0..=100_000).contains(&n));
     }
     assert!(c.reference_base_eur > 0);
-    assert!((1..=100).contains(&c.reference_load_percent));
-    assert!(c.demand_full_distance_km > 0);
     for m in aircraft::models().expect("models") {
         let r = &c.models[&m.id];
         for n in [
@@ -403,19 +399,11 @@ pub fn default_ticket() -> i64 {
 }
 
 pub fn rules_text() -> String {
-    let c = &*CONFIG;
-    format!(
-        "Basisnachfrage: min({} + {} × km / 1000, {} % der Sitze); unter {} km proportional reduziert.\nReferenzpreis = {} + {} × km / 100 EUR. Nachfrage = Basis × max(0, 2 − Preis / Referenzpreis), begrenzt auf Sitze.\nStrecke auf ganze km gerundet; Zwischenwerte und Passagiere abgerundet.\nKosten: Treibstoff ({} Cent/kg, inklusive Start-/Landeanteil), Flughäfen (Modellpauschale + {} EUR/Passagier insgesamt), Personal (Flugzeit + {} Minuten) und Wartungs-/Verwaltungspauschale.\nAbrechnung bei Landung, auch leer. Annahmen: docs/economy.md; Werte: config/economy.json.",
-        c.base_demand,
-        c.demand_per_1000_km,
-        c.reference_load_percent,
-        c.demand_full_distance_km,
-        c.reference_base_eur,
-        c.reference_eur_per_100_km,
-        c.fuel_cents_per_kg,
-        c.airport_eur_per_passenger,
-        c.crew_extra_minutes
-    )
+    "Tagesmarkt je Richtung: Flughafengröße, Bedeutung und Entfernung. Geschäftsreisende sind weniger preissensibel als Urlaubsreisende. Alle aktiven Pendelflugpläne derselben Flughafenverbindung teilen die Nachfrage nach Frequenz, auch bei umgekehrter Route. Gleichmäßiger Tagesdurchschnitt, kein Tageskontingent oder Rückstau. Ganze Passagiere abgerundet und auf Sitze begrenzt. Abrechnung und Kosten bei Landung, auch leer. Details: docs/demand.md; Werte: config/demand.json und config/economy.json.".into()
+}
+
+pub fn reference_price(km: f64) -> f64 {
+    (CONFIG.reference_base_eur + km.round() as i64 * CONFIG.reference_eur_per_100_km / 100) as f64
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -448,9 +436,7 @@ impl Totals {
     pub fn add(&mut self, other: &Self, count: u64) -> Option<()> {
         let count = i64::try_from(count).ok()?;
         macro_rules! add { ($($f:ident),*) => { $(self.$f = self.$f.checked_add(other.$f.checked_mul(count)?)?;)* }; }
-        add!(
-            flights, passengers, seats, revenue, fuel, airport, crew, overhead
-        );
+        add!(flights, passengers, seats, revenue, fuel, airport, crew, overhead);
         self.fuel
             .checked_add(self.airport)?
             .checked_add(self.crew)?
@@ -473,17 +459,15 @@ pub struct Finance {
     pub recent: Vec<FlightResult>,
 }
 
+#[cfg(test)]
 pub fn quote(route: &Route, model_id: &str) -> Result<Totals, String> {
+    quote_shared(route, model_id, std::slice::from_ref(route))
+}
+
+pub fn quote_shared(route: &Route, model_id: &str, routes: &[Route]) -> Result<Totals, String> {
     let c = &*CONFIG;
     let model = aircraft::model(model_id)?;
-    let km =
-        crate::routes::distance_km(&route.origin_icao, &route.destination_icao)?.round() as i64;
-    let reference = c.reference_base_eur + km * c.reference_eur_per_100_km / 100;
-    let market = c.base_demand + km * c.demand_per_1000_km / 1000;
-    let base = market.min(i64::from(model.seats) * c.reference_load_percent / 100)
-        * km.min(c.demand_full_distance_km)
-        / c.demand_full_distance_km;
-    let demand = base * (2 * reference - route.ticket_eur).max(0) / reference;
+    let demand = crate::demand::passengers(route, routes)?;
     let passengers = demand.min(i64::from(model.seats));
     let seconds = operations::timings(route, model_id)?.0 as i64;
     let rates = &c.models[model_id];

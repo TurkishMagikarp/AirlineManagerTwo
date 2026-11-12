@@ -1,0 +1,7 @@
+{
+  "daily_market": 1700.0,
+  "full_distance_km": 300.0,
+  "distance_decay_km": 2500.0,
+  "business_price_limit": 2.0,
+  "leisure_price_limit": 1.5
+}

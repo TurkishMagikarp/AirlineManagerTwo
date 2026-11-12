@@ -26,7 +26,9 @@ func _run() -> void:
 	_choose(panel.destination, 0)
 	if not _check(panel.create_button.disabled and "verschieden" in panel.preview.text, "Same airport rejected in preview"):
 		return
-	_choose(panel.destination, 2)
+	for i in range(panel.destination.item_count):
+		if panel.destination.get_item_metadata(i) == "LTFM":
+			_choose(panel.destination, i)
 	if not _check(panel.create_button.disabled and "Reichweite überschritten" in panel.preview.text, "Long route rejected in preview"):
 		return
 	_choose(panel.destination, 1)

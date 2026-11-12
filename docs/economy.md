@@ -1,7 +1,8 @@
 # Wirtschaft: Referenzen, Annahmen und Kalibrierung
 
-Stand: 12.11.2026. Bewusst einfacher, deterministischer **Einzelflug** in ganzen
-EUR. Alle Stellwerte stehen in `config/economy.json` (anschließend neu bauen).
+Stand: 12.11.2026. Bewusst einfache, deterministische Flugabrechnung in ganzen
+EUR. Nachfrage jetzt als [geteilter Tagesmarkt](demand.md), Stellwerte in
+`config/demand.json`, `data/airports.json` und `config/economy.json` (neu bauen).
 Keine Livepreise und keine Behauptung, reale Flugpreise vorhersagen zu können.
 
 ## Belastbare Anhaltspunkte
@@ -36,17 +37,10 @@ Das Spielergebnis ist weiterhin kein vollständiger Unternehmens-Nettogewinn.
   Gemeint ist der vereinnahmte Einwegpreis, **nicht** Endkundenpreis plus nochmals
   dieselben Gebühren. Keine länderspezifische Steuer-/Mehrwertsteuerberechnung.
   Gespeicherte und neue Standardtickets bleiben bei 100 EUR.
-- Marktgröße `140 + floor(3 × km / 1000)` statt `140 + floor(20 × km / 1000)`.
-  Basis bei Referenzpreis maximal `floor(Sitze × 83 / 100)`; damit hat eine ATR
-  nicht bei fast jedem vernünftigen Preis automatisch volle Sitze.
-  Unter 300 km wird diese Basis mit `km / 300` reduziert. Das verhindert
-  besonders lukrative 63-km-Flüge zwischen zwei Flughäfen derselben Stadt.
-  Auch das ist nur ein Entfernungsproxy, keine erhobene Streckennachfrage.
-- Preisreaktion bleibt einfach: `floor(Basis × max(0, 2 × Referenz − Preis) / Referenz)`.
-  Bei 150 % des Referenzpreises ungefähr halbe Basisnachfrage, bei 190 % ungefähr
-  ein Zehntel, ab 200 % null. Sitzplätze sind die harte Obergrenze; kostenlose
-  Tickets erzeugen keinen Erlös. Es gibt bewusst keinen Rest wohlhabender Käufer
-  bei beliebig hohen Preisen. Keine neue Preis-/Konkurrenzsimulation.
+- Die frühere sitzabhängige Einzelflugnachfrage wurde ersetzt: Flughafenpaar,
+  Größe/Bedeutung, Entfernung und Geschäfts-/Urlaubssegmente bestimmen jetzt den
+  Tagesmarkt. Aktive Flugpläne teilen ihn über ihre Frequenzen. Formeln und
+  ausdrückliche Vereinfachungen stehen in [Nachfrage](demand.md).
 - Treibstoff: unveränderte Stundenverbräuche, aber zusätzlich 550 kg (Jets) bzw.
   120 kg (ATR) je Flug für Start/Steigflug/Rollen als **Mehrverbrauch gegenüber
   der reinen Reisezeitformel**. Keine mitberechnete, unverbrauchte Reserve.
@@ -62,25 +56,18 @@ Das Spielergebnis ist weiterhin kein vollständiger Unternehmens-Nettogewinn.
   sind kalibrierte Schätzungen, keine veröffentlichten Vertragspreise. Kaufpreis
   bleibt separat: keine doppelte Abschreibung oder Leasingrate in der Pauschale.
 
-km wird zuerst auf ganze km gerundet; Nachfrage-Zwischenwerte werden abgerundet.
+Der Referenzpreis verwendet auf ganze km gerundete Entfernung; die neue
+Marktberechnung verwendet ungerundete Entfernung und rundet erst Passagiere ab.
 Stundenkosten werden erst pro Kostenkategorie auf ganze EUR aufgerundet; Fuel
 wird aus Stunden- und Zyklusmenge gemeinsam berechnet und einmal aufgerundet.
 Die bisherige Flugzeit `ceil(Luftlinie / Reisegeschwindigkeit × 3600)` bleibt
 unverändert. Kostenaufschläge ändern **keine** Abflug-/Landetermine.
 
-## Reproduzierbare Beispiele aus dem Rust-Test
+## Reproduzierbare Matrix aus dem Rust-Test
 
-| Strecke | Modell | Ticket EUR | Passagiere | Auslastung | Erlös EUR | Kosten EUR | Ergebnis EUR |
-| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| FRA–MUC | ATR 72 | 71 | 58/72 | 80,6 % | 4.118 | 3.649 | +469 |
-| FRA–MUC | ATR 72 | 134 | 6/72 | 8,3 % | 804 | 2.349 | −1.545 |
-| FRA–MUC | ATR 72 | 142 | 0/72 | 0 % | 0 | 2.199 | −2.199 |
-| FRA–MUC | A320 | 71 | 139/180 | 77,2 % | 9.869 | 8.163 | +1.706 |
-| FRA–IST | A320 | 133 | 145/180 | 80,6 % | 19.285 | 17.672 | +1.613 |
-| FRA–IST | A320 | 199 | 73/180 | 40,6 % | 14.527 | 15.872 | −1.345 |
-| JFK–LAX | 737-800 | 218 | 151/189 | 79,9 % | 32.918 | 30.914 | +2.004 |
-| JFK–LAX | 737-800 | 327 | 75/189 | 39,7 % | 24.525 | 29.014 | −4.489 |
-| IST–SAW | ATR 72 | 62 | 12/72 | 16,7 % | 744 | 1.688 | −944 |
+Passagierzahlen hängen jetzt auch vom Flugplan und parallelen Routen ab; die
+alten Einzelflug-Beispielzahlen gelten nicht mehr. Die Matrix gibt aktuelle
+Ergebnisse mit dem jeweils kürzesten zulässigen Abflugabstand aus:
 
 `cargo test --locked --manifest-path rust/Cargo.toml calibrated_route_matrix -- --nocapture`
 prüft vier Strecken, alle Modelle innerhalb ihrer Reichweite, jeweils sieben
@@ -100,8 +87,8 @@ Guthaben werden **nicht** neu berechnet. Erst künftige Landungen verwenden neue
 Werte, auch bei einem bereits laufenden Flug. Bestehende Flugpläne und deren
 Zeitgrenzen bleiben gültig. Persönliche Spielstände werden von Tests nicht benutzt.
 
-Weiterhin keine tägliche Marktnachfrage, Konkurrenz, Frequenzsättigung,
-Saisonalität, Wetter, Insolvenz oder Kosten für geparkte Flugzeuge. Beide
-Richtungen sind symmetrisch; parallele Routen teilen keinen Nachfragepool.
-83 % ist eine Referenz-Obergrenze der Basis, keine garantierte Auslastung.
-Sehr billige Tickets können volle, aber verlustreiche Flüge ergeben.
+Weiterhin keine Konkurrenz, Saisonalität, Wetter, Insolvenz oder Kosten für
+geparkte Flugzeuge. Beide Richtungen sind symmetrisch; parallele Routen teilen
+jetzt den Tagesmarkt. Sehr billige Tickets können volle, aber verlustreiche Flüge
+ergeben. Noch keine harte Quote je Kalendertag und keine Umverteilung unverkaufter
+Marktanteile; weitere Grenzen: [Nachfrage](demand.md).
