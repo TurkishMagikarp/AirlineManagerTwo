@@ -1,0 +1,14 @@
+[configuration]
+
+entry_symbol = "gdext_rust_init"
+compatibility_minimum = "4.6"
+reloadable = false
+
+[libraries]
+
+windows.debug.x86_64 = "res://rust/target/debug/airline_sim.dll"
+windows.release.x86_64 = "res://rust/target/release/airline_sim.dll"
+macos.debug = "res://rust/target/debug/libairline_sim.dylib"
+macos.release = "res://rust/target/release/libairline_sim.dylib"
+linux.debug.x86_64 = "res://rust/target/debug/libairline_sim.so"
+linux.release.x86_64 = "res://rust/target/release/libairline_sim.so"

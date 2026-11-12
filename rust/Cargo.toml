@@ -1,0 +1,10 @@
+[package]
+name = "airline_sim"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+godot = { version = "=0.5.5", default-features = false, features = ["api-4-6"] }

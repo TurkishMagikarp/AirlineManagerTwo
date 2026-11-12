@@ -3,8 +3,8 @@ extends Control
 
 const PAGES: Array[Dictionary] = [
 	{"title": "Übersicht", "heading": "Ein klarer Anfang.",
-	"body": "Diese native Oberfläche ist die Grundlage für Airline Manager.\nDie Navigation funktioniert bereits; eine Spielwelt ist noch nicht verbunden.",
-	"detail": "UI-Basis ohne Simulation\n\nKeine Finanzzahlen, Flugbewegungen oder Unternehmensdaten werden erzeugt. Spätere Spielzustände liefert ausschließlich die Rust-Simulation."},
+	"body": "Die Spielzeit kommt direkt aus dem Rust-Simulationskern.\nStart, Pause und Zeitraffer sind unten verfügbar.",
+	"detail": "Die Verbindung zur Simulation steht.\n\nNoch keine Finanzzahlen, Flugbewegungen oder Unternehmensdaten. Spielregeln und Berechnungen bleiben ausschließlich in Rust."},
 	{"title": "Flotte", "heading": "Flotte noch nicht verfügbar",
 	"body": "Es liegt kein Flottenzustand aus einer Simulation vor.",
 	"detail": "Hier werden später Flugzeuge und ihr Betriebszustand dargestellt.\n\nDiese Ansicht zeigt bewusst keine Beispiel-Flugzeuge und bietet noch keinen Kauf oder Leasing an."},
@@ -19,6 +19,12 @@ var heading: Label
 var description: Label
 var detail: Label
 var current_page: int = 0
+var simulation := SimulationClock.new()
+var time_label: Label
+var state_label: Label
+var start_button: Button
+var pause_button: Button
+var speed_buttons: Array[Button] = []
 
 
 func _ready() -> void:
@@ -33,7 +39,7 @@ func _ready() -> void:
 	column.add_theme_constant_override("separation", 22)
 	margin.add_child(column)
 	column.add_child(_label("AIRLINE MANAGER", 22))
-	column.add_child(_label("OFFLINE  /  UI-BASIS · KEINE SIMULATION", 14, Color("a8c7d5")))
+	column.add_child(_label("OFFLINE  /  RUST-SIMULATION · SPIELZEIT", 14, Color("a8c7d5")))
 	var nav := HBoxContainer.new()
 	nav.add_theme_constant_override("separation", 12)
 	column.add_child(nav)
@@ -60,9 +66,64 @@ func _ready() -> void:
 	for label in [page_title, heading, description, detail]:
 		label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		content.add_child(label)
+	_add_time_controls(column)
 	column.add_child(_label("Navigation: Tab / Umschalt+Tab · Öffnen: Enter / Leertaste", 14, Color("b0becf")))
 	_show_page(0)
 	navigation[0].grab_focus()
+
+
+func _add_time_controls(column: VBoxContainer) -> void:
+	time_label = _label("", 24, Color("90d6dc"))
+	column.add_child(time_label)
+	state_label = _label("", 16)
+	column.add_child(state_label)
+	var controls := HBoxContainer.new()
+	controls.add_theme_constant_override("separation", 8)
+	column.add_child(controls)
+	start_button = Button.new()
+	start_button.text = "Start"
+	start_button.pressed.connect(func():
+		simulation.start()
+		_refresh_time()
+	)
+	controls.add_child(start_button)
+	pause_button = Button.new()
+	pause_button.text = "Pause"
+	pause_button.pressed.connect(func():
+		simulation.pause()
+		_refresh_time()
+	)
+	controls.add_child(pause_button)
+	for speed in [1, 4, 16]:
+		var button := Button.new()
+		button.text = "%d×" % speed
+		button.toggle_mode = true
+		button.pressed.connect(_set_speed.bind(speed))
+		controls.add_child(button)
+		speed_buttons.append(button)
+	_refresh_time()
+
+
+func _set_speed(speed: int) -> void:
+	if not simulation.set_speed(speed):
+		push_error("Rust hat die Zeitgeschwindigkeit abgelehnt.")
+	_refresh_time()
+
+
+func _process(delta: float) -> void:
+	if not simulation.advance(delta):
+		simulation.pause()
+		push_error("Rust konnte die Spielzeit nicht fortschreiben; Simulation pausiert.")
+	_refresh_time()
+
+
+func _refresh_time() -> void:
+	time_label.text = simulation.get_display_time()
+	state_label.text = "%s · %d×" % ["Läuft" if simulation.is_running() else "Pausiert", simulation.get_speed()]
+	start_button.disabled = simulation.is_running()
+	pause_button.disabled = not simulation.is_running()
+	for button in speed_buttons:
+		button.set_pressed_no_signal(button.text == "%d×" % simulation.get_speed())
 
 
 func _show_page(index: int) -> void:
