@@ -12,6 +12,8 @@ func _run() -> void:
 	root.add_child(main)
 	await process_frame
 	main.set_process(false)
+	main.name_input.text = "Simulation Air"
+	main.found_button.pressed.emit()
 	var clock = main.simulation
 	if not _check(clock.get_elapsed_seconds() == 0.0 and not clock.is_running(), "Initial state is paused at zero"):
 		return
@@ -84,6 +86,7 @@ func _run() -> void:
 
 
 func _click(button: Button) -> void:
+	await process_frame
 	for pressed in [true, false]:
 		var event := InputEventMouseButton.new()
 		event.button_index = MOUSE_BUTTON_LEFT

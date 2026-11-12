@@ -10,6 +10,8 @@ func _run() -> void:
 	var scene: PackedScene = load("res://scenes/main.tscn")
 	var main = scene.instantiate()
 	root.add_child(main)
+	main.name_input.text = "Navigation Air"
+	main.found_button.pressed.emit()
 	await process_frame
 	if not _check(main.navigation.size() == 3, "Three navigation buttons"):
 		return

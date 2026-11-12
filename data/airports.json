@@ -1,0 +1,15 @@
+{
+  "countries": [
+    {"code": "DE", "name": "Deutschland"},
+    {"code": "TR", "name": "Türkei"},
+    {"code": "US", "name": "USA"}
+  ],
+  "airports": [
+    {"icao": "EDDF", "iata": "FRA", "name": "Frankfurt Airport", "country_code": "DE"},
+    {"icao": "EDDM", "iata": "MUC", "name": "Munich Airport", "country_code": "DE"},
+    {"icao": "LTFM", "iata": "IST", "name": "Istanbul Airport", "country_code": "TR"},
+    {"icao": "LTFJ", "iata": "SAW", "name": "Istanbul Sabiha Gökçen International Airport", "country_code": "TR"},
+    {"icao": "KJFK", "iata": "JFK", "name": "John F. Kennedy International Airport", "country_code": "US"},
+    {"icao": "KLAX", "iata": "LAX", "name": "Los Angeles International Airport", "country_code": "US"}
+  ]
+}

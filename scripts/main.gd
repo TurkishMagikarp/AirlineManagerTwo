@@ -30,12 +30,24 @@ var load_button: Button
 var save_status: Label
 # Platform path only; file format, validation and all state remain in Rust.
 var save_path := ProjectSettings.globalize_path("user://savegame.json")
+var overview: MarginContainer
+var founding: MarginContainer
+var name_input: LineEdit
+var country_select: OptionButton
+var airport_select: OptionButton
+var found_button: Button
+var founding_load_button: Button
+var cancel_founding_button: Button
+var founding_status: Label
+var founding_capital: Label
+var new_game_button: Button
 
 
 func _ready() -> void:
 	get_window().min_size = Vector2i(680, 520)
 	theme = _make_theme()
 	var margin := MarginContainer.new()
+	overview = margin
 	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	for side in ["left", "top", "right", "bottom"]:
 		margin.add_theme_constant_override("margin_" + side, 28)
@@ -56,6 +68,10 @@ func _ready() -> void:
 		button.pressed.connect(_show_page.bind(index))
 		nav.add_child(button)
 		navigation.append(button)
+	new_game_button = Button.new()
+	new_game_button.text = "Neues Spiel"
+	new_game_button.pressed.connect(_open_founding)
+	nav.add_child(new_game_button)
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -73,8 +89,8 @@ func _ready() -> void:
 		content.add_child(label)
 	_add_time_controls(column)
 	column.add_child(_label("Navigation: Tab / Umschalt+Tab · Öffnen: Enter / Leertaste", 14, Color("b0becf")))
-	_show_page(0)
-	navigation[0].grab_focus()
+	_build_founding()
+	_sync_view()
 
 
 func _add_time_controls(column: VBoxContainer) -> void:
@@ -130,7 +146,12 @@ func _save_game() -> void:
 func _load_game() -> void:
 	var error: String = simulation.load_game(save_path)
 	save_status.text = "Spielstand geladen." if error.is_empty() else error
+	founding_status.text = save_status.text
 	save_status.tooltip_text = save_path
+	if error.is_empty():
+		_sync_view()
+		if not simulation.has_airline():
+			founding_status.text = "Alter Zeit-Spielstand geladen. Noch keine Airline vorhanden; Gründen beginnt ein neues Spiel."
 	_refresh_time()
 
 
@@ -141,6 +162,8 @@ func _set_speed(speed: int) -> void:
 
 
 func _process(delta: float) -> void:
+	if founding.visible:
+		return
 	if not simulation.advance(delta):
 		simulation.pause()
 		push_error("Rust konnte die Spielzeit nicht fortschreiben; Simulation pausiert.")
@@ -165,8 +188,126 @@ func _show_page(index: int) -> void:
 	heading.text = page["heading"]
 	description.text = page["body"]
 	detail.text = page["detail"]
+	if index == 0 and simulation.has_airline():
+		var airline: Dictionary = simulation.get_airline_info()
+		heading.text = airline["name"]
+		description.text = "Heimatland: %s\nHeimatflughafen: %s (%s)\nStartkapital: %d EUR" % [airline["country_name"], airline["airport_name"], airline["airport_icao"], airline["capital_eur"]]
+		detail.text = "Deine Fluggesellschaft ist gegründet.\n\nDas Startkapital ist ein konfigurierbarer Testwert, keine endgültige Wirtschaftsregel. Noch keine Flugzeuge, Routen oder laufenden Einnahmen und Ausgaben."
 	for button_index in range(navigation.size()):
 		navigation[button_index].set_pressed_no_signal(button_index == index)
+
+
+func _build_founding() -> void:
+	founding = MarginContainer.new()
+	founding.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	for side in ["left", "top", "right", "bottom"]:
+		founding.add_theme_constant_override("margin_" + side, 28)
+	add_child(founding)
+	var column := VBoxContainer.new()
+	column.add_theme_constant_override("separation", 12)
+	founding.add_child(column)
+	column.add_child(_label("AIRLINE MANAGER", 22))
+	column.add_child(_label("DEINE EIGENE FLUGGESELLSCHAFT", 14, Color("90d6dc")))
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.follow_focus = true
+	column.add_child(scroll)
+	var form := VBoxContainer.new()
+	form.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	form.add_theme_constant_override("separation", 10)
+	scroll.add_child(form)
+	form.add_child(_label("Ein neuer Anfang.", 28))
+	form.add_child(_label("Name deiner Airline", 16))
+	name_input = LineEdit.new()
+	name_input.placeholder_text = "Airline-Name (1–80 Zeichen)"
+	name_input.max_length = 80
+	name_input.custom_minimum_size.y = 40
+	form.add_child(name_input)
+	form.add_child(_label("Heimatland", 16))
+	country_select = OptionButton.new()
+	country_select.custom_minimum_size.y = 40
+	for country in simulation.get_countries():
+		country_select.add_item(country["name"])
+		country_select.set_item_metadata(country_select.item_count - 1, country["code"])
+	country_select.item_selected.connect(_country_changed)
+	form.add_child(country_select)
+	form.add_child(_label("Heimatflughafen", 16))
+	airport_select = OptionButton.new()
+	airport_select.custom_minimum_size.y = 40
+	airport_select.fit_to_longest_item = false
+	airport_select.clip_text = true
+	airport_select.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	form.add_child(airport_select)
+	founding_capital = _label("Startkapital: %s · vorläufig konfiguriert" % simulation.get_starting_capital(), 16, Color("90d6dc"))
+	founding_capital.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	form.add_child(founding_capital)
+	var actions := HBoxContainer.new()
+	actions.add_theme_constant_override("separation", 12)
+	column.add_child(actions)
+	found_button = Button.new()
+	found_button.text = "Airline gründen"
+	found_button.pressed.connect(_found_airline)
+	actions.add_child(found_button)
+	founding_load_button = Button.new()
+	founding_load_button.text = "Spielstand laden"
+	founding_load_button.pressed.connect(_load_game)
+	actions.add_child(founding_load_button)
+	cancel_founding_button = Button.new()
+	cancel_founding_button.text = "Abbrechen"
+	cancel_founding_button.pressed.connect(_sync_view)
+	actions.add_child(cancel_founding_button)
+	founding_status = _label("Gründen startet pausiert bei Tag 1. Erst Speichern ersetzt den lokalen Spielstand.", 14, Color("b0becf"))
+	founding_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	column.add_child(founding_status)
+	_country_changed(0)
+
+
+func _country_changed(index: int) -> void:
+	airport_select.clear()
+	if index < 0 or index >= country_select.item_count:
+		found_button.disabled = true
+		return
+	var country_code: String = country_select.get_item_metadata(index)
+	for airport in simulation.get_airports(country_code):
+		airport_select.add_item("%s · %s (%s)" % [airport["iata"], airport["name"], airport["icao"]])
+		airport_select.set_item_metadata(airport_select.item_count - 1, airport["icao"])
+	found_button.disabled = airport_select.item_count == 0
+	if airport_select.item_count > 0:
+		airport_select.select(0)
+
+
+func _found_airline() -> void:
+	if country_select.selected < 0 or airport_select.selected < 0:
+		founding_status.text = "Bitte Heimatland und Heimatflughafen auswählen."
+		return
+	var error: String = simulation.found_airline(name_input.text, country_select.get_selected_metadata(), airport_select.get_selected_metadata())
+	if not error.is_empty():
+		founding_status.text = error
+		return
+	save_status.text = "Airline gegründet · bitte Spielstand speichern."
+	_sync_view()
+
+
+func _sync_view() -> void:
+	overview.visible = simulation.has_airline()
+	founding.visible = not simulation.has_airline()
+	cancel_founding_button.visible = simulation.has_airline()
+	_refresh_time()
+	_show_page(0)
+	if overview.visible:
+		navigation[0].grab_focus()
+	else:
+		name_input.grab_focus()
+
+
+func _open_founding() -> void:
+	overview.hide()
+	founding.show()
+	cancel_founding_button.show()
+	name_input.clear()
+	founding_status.text = "Neues Spiel: Gründen ersetzt den laufenden Zustand. Ungespeicherter Fortschritt geht verloren. Abbrechen kehrt zurück."
+	name_input.grab_focus()
 
 
 func _label(text: String, size: int, color: Color = Color("f0f4fa")) -> Label:
@@ -196,4 +337,15 @@ func _make_theme() -> Theme:
 		result.set_stylebox(state, "Button", style)
 	for state in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]:
 		result.set_color(state, "Button", Color("f0f4fa"))
+	for state in ["normal", "focus", "read_only"]:
+		var field_style := StyleBoxFlat.new()
+		field_style.bg_color = Color("18283b")
+		field_style.set_corner_radius_all(8)
+		field_style.set_content_margin_all(12)
+		if state == "focus":
+			field_style.border_color = Color("b5f3f4")
+			field_style.set_border_width_all(2)
+		result.set_stylebox(state, "LineEdit", field_style)
+	result.set_color("font_color", "LineEdit", Color("f0f4fa"))
+	result.set_color("font_placeholder_color", "LineEdit", Color("b0becf"))
 	return result

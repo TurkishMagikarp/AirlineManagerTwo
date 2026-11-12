@@ -29,6 +29,11 @@ func _run() -> void:
 	if not _check(clock.get_elapsed_seconds() == 0.0 and not clock.is_running() and clock.get_speed() == 1, "Fresh process begins with a fresh clock"):
 		return
 	if mode.begins_with("write-"):
+		main.name_input.text = "Neustart 日本 Air"
+		main.country_select.select(1)
+		main.country_select.item_selected.emit(1)
+		main.airport_select.select(1)
+		await _click(main.found_button)
 		await _click(main.start_button)
 		await _click(main.speed_buttons[2 if running else 1])
 		clock.advance(86400.125 / speed)
@@ -38,10 +43,15 @@ func _run() -> void:
 		if not _check(main.save_status.text == "Spielstand gespeichert.", "Save button writes via Rust"):
 			return
 	else:
-		await _click(main.load_button)
+		await _click(main.founding_load_button)
 		if not _check(main.save_status.text == "Spielstand geladen.", "Load button restores via Rust after restart"):
 			return
 	if not _check(clock.get_elapsed_seconds() == 86400.125 and clock.is_running() == running and clock.get_speed() == speed, "Exact saved time, running flag and speed"):
+		return
+	var airline: Dictionary = clock.get_airline_info()
+	if not _check(airline.get("name") == "Neustart 日本 Air" and airline.get("country_code") == "TR" and airline.get("airport_icao") == "LTFJ" and airline.get("capital_eur", -1) >= 0, "Airline survives complete process restart"):
+		return
+	if not _check(main.overview.visible and not main.founding.visible and main.heading.text == airline["name"] and "LTFJ" in main.description.text and str(airline["capital_eur"]) in main.description.text, "Overview shows founded or loaded airline"):
 		return
 	if mode.begins_with("read-"):
 		if not _check(main.time_label.text == "Tag 2 · 00:00:00" and main.start_button.disabled == running, "Loaded UI matches Rust"):
@@ -62,6 +72,14 @@ func _run() -> void:
 			await _click(main.load_button)
 			if not _check(main.save_status.text != "Spielstand geladen." and clock.get_elapsed_seconds() == expected and clock.is_running() == running and clock.get_speed() == speed, "Corrupt load preserves live state"):
 				return
+		var invalid_company: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(path))
+		invalid_company["state"]["airline"]["country_code"] = "DE"
+		var invalid_file := FileAccess.open(main.save_path, FileAccess.WRITE)
+		invalid_file.store_string(JSON.stringify(invalid_company))
+		invalid_file.close()
+		await _click(main.load_button)
+		if not _check(main.save_status.text != "Spielstand geladen." and clock.get_airline_info() == airline and clock.get_elapsed_seconds() == expected and clock.get_speed() == speed and clock.is_running() == running, "Invalid airline data cannot replace company or clock"):
+			return
 		main.save_path = path + ".missing"
 		await _click(main.load_button)
 		if not _check(main.save_status.text != "Spielstand geladen." and clock.get_elapsed_seconds() == expected, "Missing save is safe"):
@@ -83,6 +101,7 @@ func _run() -> void:
 
 
 func _click(button: Button) -> void:
+	await process_frame
 	for pressed in [true, false]:
 		var event := InputEventMouseButton.new()
 		event.button_index = MOUSE_BUTTON_LEFT
