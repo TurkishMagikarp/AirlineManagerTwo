@@ -3,6 +3,7 @@ target/
 build/
 dist/
 logs/
+docs/screenshots/
 *.log
 .DS_Store
 Thumbs.db
