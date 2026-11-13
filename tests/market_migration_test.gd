@@ -48,6 +48,16 @@ func _run() -> void:
 			return
 		if not _check(sim.save_game(path).is_empty() and JSON.parse_string(FileAccess.get_file_as_string(path))["version"] == 16, "Migrated save uses current version"):
 			return
+	# Exercise a changed global price, beyond the zero-delta initial display.
+	sim.start()
+	sim.advance(31.0 * 86400.0)
+	sim.pause()
+	main._sync_view()
+	main._show_page(4)
+	var summary: Dictionary = sim.get_financial_summary()
+	var note: Label = main.finances_panel.note
+	if not _check(summary["fuel_month_delta_cents"] != 0 and ("Treibstoff weltweit: %.2f EUR/kg" % (summary["fuel_cents_per_kg"] / 100.0)) in note.text and ("%d Cent/kg gegenüber vor 30 Tagen" % summary["fuel_month_delta_cents"]) in note.text, "Changed fuel price and nonzero monthly delta reach Finances"):
+		return
 	main.queue_free()
 	await process_frame
 	print("PASS: v14 route groups, v15 fuel migration, current saves and route UI (fresh-process restore=%s)" % restore)
