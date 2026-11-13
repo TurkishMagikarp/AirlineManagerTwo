@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(./rust/target/**)",
+      "Read(./.godot/**)",
+      "Read(./docs/screenshots/**)",
+      "Read(./data/world_land.geojson)",
+      "Read(./rust/Cargo.lock)",
+      "Read(./**/*.uid)"
+    ]
+  }
+}
