@@ -11,6 +11,7 @@ func _run() -> void:
 	main.simulation.found_airline("Map benchmark", "DE", "EDDF")
 	main.simulation.buy_aircraft("atr72_600")
 	main.simulation.create_route("EDDF", "EDDM", 1)
+	main.simulation.hire_missing_staff()
 	main.simulation.schedule_route(1, 1, 120)
 	main.simulation.start()
 	main.simulation.advance(600)

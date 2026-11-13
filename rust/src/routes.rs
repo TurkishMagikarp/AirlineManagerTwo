@@ -164,7 +164,9 @@ mod tests {
         let mut g = Game::default();
         g.found("Route Air", "DE", "EDDF").unwrap();
         g.buy_aircraft("atr72_600").unwrap();
+        g.staff_up();
         g.buy_aircraft("atr72_600").unwrap();
+        g.staff_up();
         g
     }
 
@@ -201,6 +203,7 @@ mod tests {
         let mut g = game();
         g.airline.as_mut().unwrap().capital_eur = 8_000_000;
         g.buy_aircraft("a320_200").unwrap();
+        g.staff_up();
         g.create_route("KJFK", "KLAX", 3).unwrap();
         let before = g.routes.clone();
         assert!(

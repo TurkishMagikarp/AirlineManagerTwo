@@ -13,6 +13,9 @@ mod operations;
 mod quality;
 mod routes;
 mod save;
+mod staff;
+#[cfg(test)]
+mod staff_tests;
 
 use game::Game;
 use godot::prelude::*;
@@ -126,16 +129,26 @@ impl SimulationClock {
         let span = now - h.since;
         let steps = span.clamp(1, 63);
         let mut previous = economy::Totals::default();
+        let mut previous_costs = 0i128;
         (0..=steps).map(|i| {
             let time = h.since + (u128::from(span) * u128::from(i) / u128::from(steps)) as u64;
             let t = h.totals(route_id, time);
             let seats = t.seats - previous.seats;
             let load = if seats == 0 { -1.0 } else { (t.passengers - previous.passengers) as f64 * 100.0 / seats as f64 };
+            // Central expenses belong only to the company series, never to
+            // every route (which would duplicate them again).
+            let costs = i128::from(t.costs()) + if route_id == 0 {
+                h.maintenance_through(time) + h.payroll_through(time)
+            } else { 0 };
+            let period_costs = costs - previous_costs;
+            let period_profit = i128::from(t.revenue - previous.revenue) - period_costs;
             let row = vdict! { "seconds" => time as i64, "time" => operations::display_time(time).as_str(),
                 "balance" => h.balance(time), "revenue" => t.revenue - previous.revenue,
-                "costs" => t.costs() - previous.costs(), "profit" => t.profit() - previous.profit(),
+                "costs" => period_costs.min(i128::from(i64::MAX)) as i64,
+                "profit" => period_profit.clamp(i128::from(i64::MIN), i128::from(i64::MAX)) as i64,
                 "load" => load };
             previous = t;
+            previous_costs = costs;
             row
         }).collect()
     }
@@ -225,10 +238,19 @@ impl SimulationClock {
             .as_ref()
             .map(|h| h.maintenance_through(u64::MAX).min(i128::from(i64::MAX)) as i64)
             .unwrap_or(0);
+        let payroll = self
+            .game
+            .history
+            .as_ref()
+            .map(|h| h.payroll_through(u64::MAX).min(i128::from(i64::MAX)) as i64)
+            .unwrap_or(0);
+        let costs = i128::from(t.costs()) + i128::from(maintenance) + i128::from(payroll);
+        let profit = i128::from(t.revenue) - costs;
         vdict! { "flights" => t.flights, "passengers" => t.passengers, "revenue_eur" => t.revenue,
-        "maintenance_eur" => maintenance,
+        "maintenance_eur" => maintenance, "payroll_eur" => payroll,
         "fuel_eur" => t.fuel, "airport_eur" => t.airport, "crew_eur" => t.crew, "overhead_eur" => t.overhead,
-        "costs_eur" => t.costs(), "profit_eur" => t.profit(), "purchases_eur" => purchases,
+        "costs_eur" => costs.min(i128::from(i64::MAX)) as i64,
+        "profit_eur" => profit.clamp(i128::from(i64::MIN), i128::from(i64::MAX)) as i64, "purchases_eur" => purchases,
         "load_percent" => t.load_percent() }
     }
 
@@ -565,7 +587,8 @@ impl SimulationClock {
                     "estimated_passengers" => if r.plan.is_some() { demand::passengers(r, &supply).unwrap_or(0) } else { 0 },
                     "actual_flights" => actual.flights, "actual_load_percent" => actual.load_percent(),
                     "maintenance_status" => self.route_maintenance_status(r).as_str(),
-                    "can_schedule" => r.plan.is_none() && r.aircraft_id.is_some() && self.route_maintenance_status(r).is_empty()
+                    "staff_status" => self.route_staff_status(r).as_str(),
+                    "can_schedule" => r.plan.is_none() && r.aircraft_id.is_some() && self.route_maintenance_status(r).is_empty() && self.route_staff_status(r).is_empty()
                 })
             })
             .collect()
@@ -644,6 +667,182 @@ impl SimulationClock {
     fn cancel_maintenance(&mut self, aircraft_id: u32) -> GString {
         self.game
             .cancel_maintenance(aircraft_id)
+            .err()
+            .unwrap_or_default()
+            .as_str()
+            .into()
+    }
+
+    /// Every employee with role, salary and derived employment status.
+    #[func]
+    fn get_staff(&self) -> Array<VarDictionary> {
+        let now = self.game.clock.elapsed().as_secs();
+        let activity = self.game.staff_activity();
+        self.game
+            .staff
+            .employees
+            .iter()
+            .zip(activity)
+            .map(|(e, a)| {
+                vdict! {
+                    "id" => e.id, "name" => e.name.as_str(),
+                    "role" => e.role.key(), "role_name" => e.role.label(),
+                    "salary_eur" => e.salary_eur,
+                    "status" => match a { staff::Activity::Available => "available", staff::Activity::Flying => "flying", staff::Activity::Hangar => "hangar" },
+                    "status_text" => a.label(),
+                    "can_dismiss" => a == staff::Activity::Available,
+                    "hired" => operations::display_time(e.hired_at).as_str(),
+                    "days_employed" => (now.saturating_sub(e.hired_at) / 86_400) as i64
+                }
+            })
+            .collect()
+    }
+
+    /// Per-role headcount, shortages and what blocks each aircraft.
+    #[func]
+    fn get_staff_overview(&self) -> VarDictionary {
+        let g = &self.game;
+        let (idle_pilots, idle_cabin) = self.idle_crew_demand();
+        let waiting_techs: u32 = g
+            .fleet
+            .iter()
+            .filter(|p| {
+                p.status == aircraft::AircraftStatus::Maintenance
+                    && p.maintenance.as_ref().is_some_and(|v| !v.staffed)
+            })
+            .filter_map(|p| staff::needs(&p.model_id).ok())
+            .map(|n| n.technicians)
+            .sum();
+        let mut roles = Array::<VarDictionary>::new();
+        let mut total_missing = 0i64;
+        for role in staff::Role::ALL {
+            let employed = g.staff_count(role);
+            let available = g.available_staff(role);
+            let missing = match role {
+                staff::Role::Pilot => idle_pilots.saturating_sub(available),
+                staff::Role::CabinCrew => idle_cabin.saturating_sub(available),
+                staff::Role::Technician => g
+                    .technician_target()
+                    .saturating_sub(employed)
+                    .max(waiting_techs.saturating_sub(available)),
+            };
+            total_missing += i64::from(missing);
+            roles.push(&vdict! {
+                "role" => role.key(), "name" => role.plural(), "singular" => role.label(),
+                "employed" => i64::from(employed), "busy" => i64::from(g.busy_staff(role)),
+                "available" => i64::from(available), "missing" => i64::from(missing),
+                "salary_eur" => staff::salary(role).unwrap_or(0),
+                "monthly_cost_eur" => g.staff.employees.iter().filter(|e| e.role == role).map(|e| e.salary_eur).sum::<i64>()
+            });
+        }
+        let next_pay = g
+            .next_payroll_event()
+            .map(operations::display_time)
+            .unwrap_or_else(|| "—".to_string());
+        let mut aircraft_rows = Array::<VarDictionary>::new();
+        for p in &g.fleet {
+            let Ok(n) = staff::needs(&p.model_id) else {
+                continue;
+            };
+            let reserved = g.planned_route(p.id).is_some()
+                || p.maintenance.as_ref().is_some_and(|v| v.resume.is_some());
+            let (state, problem) = match &p.maintenance {
+                Some(v) if p.status == aircraft::AircraftStatus::Maintenance && !v.staffed => (
+                    "waiting_technicians",
+                    format!(
+                        "Wartung wartet auf {} Techniker (frei: {})",
+                        n.technicians,
+                        g.available_staff(staff::Role::Technician)
+                    ),
+                ),
+                Some(_) if p.status == aircraft::AircraftStatus::Maintenance => {
+                    ("hangar", String::new())
+                }
+                _ if reserved => ("crewed", String::new()),
+                _ => match g.require_crew(&p.model_id) {
+                    Ok(()) => ("ready", String::new()),
+                    Err(e) => ("short", e),
+                },
+            };
+            aircraft_rows.push(&vdict! {
+                "id" => p.id, "identifier" => p.identifier().as_str(),
+                "model_name" => aircraft::model(&p.model_id).map(|m| m.name.as_str()).unwrap_or(""),
+                "pilots" => i64::from(n.pilots), "cabin_crew" => i64::from(n.cabin_crew),
+                "technicians" => i64::from(n.technicians),
+                "state" => state, "problem" => problem.as_str()
+            });
+        }
+        let mut overview = vdict! {
+            "employees" => g.staff.employees.len() as i64,
+            "monthly_payroll_eur" => g.monthly_payroll(),
+            "next_payroll" => next_pay.as_str(),
+            "missing_total" => total_missing,
+            "payroll_paid_eur" => g.history.as_ref().map(|h| h.payroll_through(u64::MAX).min(i128::from(i64::MAX)) as i64).unwrap_or(0),
+            "max_batch" => i64::from(staff::max_hire_batch())
+        };
+        overview.set("roles", &roles);
+        overview.set("aircraft", &aircraft_rows);
+        overview
+    }
+
+    /// Empty string means success.
+    #[func]
+    fn hire_staff(&mut self, role: GString, count: i64) -> GString {
+        let result = staff::Role::parse(&role.to_string()).and_then(|role| {
+            u32::try_from(count)
+                .map_err(|_| "Ungültige Anzahl.".to_string())
+                .and_then(|n| self.game.hire_staff(role, n))
+        });
+        result.err().unwrap_or_default().as_str().into()
+    }
+
+    /// Hire exactly the staff missing for aircraft that cannot fly yet.
+    #[func]
+    fn hire_missing_staff(&mut self) -> GString {
+        let g = &self.game;
+        let (pilots, cabin) = self.idle_crew_demand();
+        let techs = g
+            .technician_target()
+            .saturating_sub(g.staff_count(staff::Role::Technician))
+            .max(
+                g.fleet
+                    .iter()
+                    .filter(|p| {
+                        p.status == aircraft::AircraftStatus::Maintenance
+                            && p.maintenance.as_ref().is_some_and(|v| !v.staffed)
+                    })
+                    .filter_map(|p| staff::needs(&p.model_id).ok())
+                    .map(|n| n.technicians)
+                    .sum::<u32>()
+                    .saturating_sub(g.available_staff(staff::Role::Technician)),
+            );
+        let hires = [
+            (
+                staff::Role::Pilot,
+                pilots.saturating_sub(g.available_staff(staff::Role::Pilot)),
+            ),
+            (
+                staff::Role::CabinCrew,
+                cabin.saturating_sub(g.available_staff(staff::Role::CabinCrew)),
+            ),
+            (staff::Role::Technician, techs),
+        ];
+        if hires.iter().all(|h| h.1 == 0) {
+            return "Es fehlt kein Personal.".into();
+        }
+        self.game
+            .hire_batch(&hires, true)
+            .err()
+            .unwrap_or_default()
+            .as_str()
+            .into()
+    }
+
+    /// Empty string means success. Only available (not assigned) staff.
+    #[func]
+    fn dismiss_staff(&mut self, employee_id: u32) -> GString {
+        self.game
+            .dismiss_staff(employee_id)
             .err()
             .unwrap_or_default()
             .as_str()
@@ -809,6 +1008,9 @@ impl SimulationClock {
             return String::new();
         };
         match &plane.maintenance {
+            Some(v) if plane.status == aircraft::AircraftStatus::Maintenance && !v.staffed => {
+                "In Wartung · wartet auf Techniker (Personal-Tab)".to_string()
+            }
             Some(v) if plane.status == aircraft::AircraftStatus::Maintenance => format!(
                 "{} bis {}{}",
                 if v.unscheduled {
@@ -836,6 +1038,42 @@ impl SimulationClock {
         }
     }
 
+    /// Crew needed by parked aircraft without a flight plan.
+    fn idle_crew_demand(&self) -> (u32, u32) {
+        let g = &self.game;
+        let (mut pilots, mut cabin) = (0, 0);
+        for p in g.fleet.iter().filter(|p| {
+            p.status == aircraft::AircraftStatus::Parked
+                && g.planned_route(p.id).is_none()
+                && p.maintenance.is_none()
+        }) {
+            if let Ok(n) = staff::needs(&p.model_id) {
+                pilots += n.pilots;
+                cabin += n.cabin_crew;
+            }
+        }
+        (pilots, cabin)
+    }
+
+    /// Missing crew that keeps the route's aircraft from flying; empty if none.
+    fn route_staff_status(&self, route: &routes::Route) -> String {
+        let Some(plane) = self
+            .game
+            .fleet
+            .iter()
+            .find(|p| Some(p.id) == route.aircraft_id)
+        else {
+            return String::new();
+        };
+        if route.plan.is_some() || plane.maintenance.is_some() {
+            return String::new();
+        }
+        self.game
+            .require_crew(&plane.model_id)
+            .err()
+            .unwrap_or_default()
+    }
+
     fn maintenance_info(&self, p: usize, plane: &aircraft::Aircraft) -> VarDictionary {
         let Ok(r) = maintenance::rules(&plane.model_id) else {
             return VarDictionary::new();
@@ -859,6 +1097,7 @@ impl SimulationClock {
             "interval_cycles" => r.interval_cycles as i64,
             "maintenance_due" => w.is_due(r),
             "maintenance_state" => state,
+            "maintenance_waiting_staff" => visit.is_some_and(|v| !v.staffed) && plane.status == aircraft::AircraftStatus::Maintenance,
             "maintenance_unscheduled" => visit.is_some_and(|v| v.unscheduled),
             "maintenance_start" => shown.as_ref().map(|v| operations::display_time(v.start)).unwrap_or_default().as_str(),
             "maintenance_end" => shown.as_ref().map(|v| operations::display_time(v.end)).unwrap_or_default().as_str(),

@@ -16,7 +16,9 @@ func _run() -> void:
 		for id in [1, 2]:
 			sim.buy_aircraft("atr72_600")
 			sim.create_route("EDDF", "EDDM", id)
+		sim.hire_missing_staff()
 		sim.schedule_route(1, 1, 120)
+		sim.hire_missing_staff()
 		sim.schedule_route(2, 30, 120)
 		sim.start()
 		sim.advance(60.0)

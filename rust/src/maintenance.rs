@@ -11,6 +11,7 @@ use crate::{
     game::Game,
     history::Purchase,
     operations::{self, FlightPlan},
+    staff::{self, Role},
 };
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, sync::LazyLock};
@@ -179,10 +180,18 @@ pub struct Visit {
     pub unscheduled: bool,
     #[serde(default)]
     pub resume: Option<Resume>,
+    /// Additive (version 11): technicians are assigned. Until then the aircraft
+    /// is grounded in the hangar and `end` is only a placeholder.
+    #[serde(default = "staffed_default")]
+    pub staffed: bool,
+}
+
+fn staffed_default() -> bool {
+    true
 }
 
 impl Game {
-    fn planned_route(&self, aircraft_id: u32) -> Option<usize> {
+    pub(crate) fn planned_route(&self, aircraft_id: u32) -> Option<usize> {
         self.routes
             .iter()
             .position(|r| r.aircraft_id == Some(aircraft_id) && r.plan.is_some())
@@ -214,7 +223,10 @@ impl Game {
     pub fn next_maintenance_event(&self) -> Option<u64> {
         (0..self.fleet.len())
             .filter_map(|p| match &self.fleet[p].maintenance {
-                Some(v) if self.fleet[p].status == AircraftStatus::Maintenance => Some(v.end),
+                // Waiting for technicians: ended by a hire or another visit, not by time.
+                Some(v) if self.fleet[p].status == AircraftStatus::Maintenance => {
+                    v.staffed.then_some(v.end)
+                }
                 Some(v) => Some(v.start),
                 None => self.due_landing(p),
             })
@@ -264,6 +276,7 @@ impl Game {
             cost_eur: cost(&wear, r, false)?,
             unscheduled: false,
             resume: None,
+            staffed: true,
         };
         if airline.capital_eur < visit.cost_eur {
             return Err(format!(
@@ -345,6 +358,9 @@ impl Game {
                 amount: visit.cost_eur,
             });
         }
+        // Without enough free technicians the aircraft waits grounded in the hangar.
+        visit.staffed =
+            self.available_staff(Role::Technician) >= staff::needs(&plane.model_id)?.technicians;
         self.airline.as_mut().unwrap().capital_eur = balance;
         self.fleet[p].status = AircraftStatus::Maintenance;
         self.fleet[p].maintenance = Some(visit);
@@ -406,7 +422,7 @@ impl Game {
             let plane = &self.fleet[p];
             match &plane.maintenance {
                 Some(v) if plane.status == AircraftStatus::Maintenance => {
-                    if v.end <= now {
+                    if v.staffed && v.end <= now {
                         self.finish_visit(p)?;
                     }
                 }
@@ -428,13 +444,15 @@ impl Game {
                             cost_eur: cost(&plane.wear, r, true)?,
                             unscheduled: true,
                             resume: None,
+                            staffed: true,
                         });
                         self.begin_visit(p)?;
                     }
                 }
             }
         }
-        Ok(())
+        // Technicians freed by finished checks serve waiting aircraft.
+        self.assign_waiting_technicians()
     }
 
     pub fn validate_maintenance(&self) -> Result<(), String> {
@@ -451,11 +469,11 @@ impl Game {
                 None if plane.status == AircraftStatus::Maintenance => return Err(invalid()),
                 None => {}
                 Some(v) => {
-                    if v.end <= v.start || v.cost_eur < 0 {
+                    if (v.staffed && v.end <= v.start) || v.cost_eur < 0 {
                         return Err(invalid());
                     }
                     if plane.status == AircraftStatus::Maintenance {
-                        if v.start > now || v.end <= now || planned.is_some() {
+                        if v.start > now || (v.staffed && v.end <= now) || planned.is_some() {
                             return Err(invalid());
                         }
                         // The route may since have been deleted, but never be from the future.
@@ -493,6 +511,7 @@ mod tests {
         g.found("Hangar Air", "DE", "EDDF").unwrap();
         g.competitors.clear();
         g.buy_aircraft("atr72_600").unwrap();
+        g.staff_up();
         g.create_route("EDDF", "EDDM", 1).unwrap();
         g.schedule(1, 1, 120).unwrap();
         g.clock.set_running(true);

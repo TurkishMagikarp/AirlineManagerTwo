@@ -120,6 +120,7 @@ mod tests {
         g.competitors.clear(); // Isolated market fixture; multi-company coverage is in competition.rs.
         for id in 1..=count {
             g.buy_aircraft("atr72_600").unwrap();
+            g.staff_up();
             g.create_route("EDDF", "EDDM", id).unwrap();
             g.set_ticket_price(id, 100).unwrap();
             g.schedule(id, 1, interval).unwrap();
@@ -184,6 +185,7 @@ mod tests {
                 let mut g = Game::default();
                 g.found("Size Matrix", "DE", a).unwrap();
                 g.buy_aircraft("atr72_600").unwrap();
+                g.staff_up();
                 g.create_route(a, b, 1).unwrap();
                 g.set_ticket_price(1, price).unwrap();
                 g.schedule(1, 1, 120).unwrap();

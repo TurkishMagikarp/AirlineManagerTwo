@@ -181,6 +181,7 @@ impl Game {
                     .into(),
             );
         }
+        self.require_crew(&plane.model_id)?;
         let (flight, ground) = timings(route, &plane.model_id)?;
         let interval = u64::from(interval_minutes) * 60;
         if delay_minutes == 0 || interval < flight + ground {
@@ -441,6 +442,7 @@ mod tests {
         g.found("Flight Air", "DE", "EDDF").unwrap();
         g.competitors.clear();
         g.buy_aircraft("atr72_600").unwrap();
+        g.staff_up();
         g.create_route("EDDF", "EDDM", 1).unwrap();
         g.schedule(1, 1, 120).unwrap();
         g
@@ -450,6 +452,7 @@ mod tests {
     fn departure_snapshot_survives_supply_changes_and_restart_until_settlement() {
         let mut g = game();
         g.buy_aircraft("atr72_600").unwrap();
+        g.staff_up();
         g.create_route("EDDF", "EDDM", 2).unwrap();
         g.schedule(2, 30, 120).unwrap(); // still parked when flight 1 starts
         g.clock.set_running(true);
@@ -519,6 +522,7 @@ mod tests {
     fn parallel_opposite_services_are_order_independent_with_mixed_steps() {
         let mut large = game();
         large.buy_aircraft("atr72_600").unwrap();
+        large.staff_up();
         large.fleet[1].location_icao = "EDDM".into();
         large.create_route("EDDM", "EDDF", 2).unwrap();
         large.schedule(2, 1, 80).unwrap();
@@ -616,6 +620,7 @@ mod tests {
     fn simultaneous_services_and_minimum_interval_keep_exact_boundaries() {
         let mut g = game();
         g.buy_aircraft("atr72_600").unwrap();
+        g.staff_up();
         g.create_route("EDDF", "EDDM", 2).unwrap();
         g.stop_schedule(1).unwrap();
         let (flight, ground) = timings(&g.routes[0], "atr72_600").unwrap();

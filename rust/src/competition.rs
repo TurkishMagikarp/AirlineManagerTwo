@@ -29,6 +29,24 @@ fn maintenance_per_flight(route: &Route, model: &str) -> Result<i64, String> {
     crate::maintenance::cost_per_flight(model, flight)
 }
 
+/// Weekly salaries of the crew a service of `model` ties up, plus the technicians
+/// still missing for the fleet: part of every AI expansion estimate.
+fn staffing_per_week(game: &Game, model: &str) -> Result<i64, String> {
+    use crate::staff::{self, Role};
+    let n = staff::needs(model)?;
+    let (pilots, cabin) = (i64::from(n.pilots), i64::from(n.cabin_crew));
+    let techs = i64::from(
+        game.technician_target()
+            .max(n.technicians)
+            .saturating_sub(game.staff_count(Role::Technician)),
+    );
+    let period = staff::period_seconds()? as i64;
+    let monthly = pilots * staff::salary(Role::Pilot)?
+        + cabin * staff::salary(Role::CabinCrew)?
+        + techs * staff::salary(Role::Technician)?;
+    Ok(monthly * REVIEW as i64 / period)
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Competitor {
     pub game: Box<Game>,
@@ -72,6 +90,7 @@ pub fn initial_competitors_at(now: Duration) -> Result<Vec<Competitor>, String> 
             ..Game::default()
         };
         g.buy_aircraft(model)?;
+        g.equip_staff_for(model)?;
         g.create_route(origin, destination, 1)?;
         g.set_ticket_price(1, price)?;
         g.schedule(1, 1, AI_INTERVAL_MINUTES)?;
@@ -129,6 +148,7 @@ impl Game {
             g.validate_routes()?;
             g.validate_operations()?;
             g.validate_maintenance()?;
+            g.validate_staff()?;
             g.validate_finance()?;
             g.validate_history()?;
             let mut reviewed = std::collections::HashSet::new();
@@ -168,6 +188,9 @@ impl Game {
         if self.competitors.is_empty()
             && self
                 .next_maintenance_event()
+                .is_none_or(|t| Duration::from_secs(t) > target.elapsed())
+            && self
+                .next_payroll_event()
                 .is_none_or(|t| Duration::from_secs(t) > target.elapsed())
         {
             return self.advance_company_to(target, &self.routes.clone());
@@ -210,16 +233,15 @@ impl Game {
                 .min()
                 .unwrap_or(u64::MAX);
             // Maintenance starts, ends and forced groundings of every company.
-            let maintenance = std::iter::once(staged.next_maintenance_event())
-                .chain(
-                    staged
-                        .competitors
-                        .iter()
-                        .map(|c| c.game.next_maintenance_event()),
-                )
-                .flatten()
-                .min()
-                .unwrap_or(u64::MAX);
+            let maintenance =
+                std::iter::once(staged.next_maintenance_event())
+                    .chain(std::iter::once(staged.next_payroll_event()))
+                    .chain(staged.competitors.iter().flat_map(|c| {
+                        [c.game.next_maintenance_event(), c.game.next_payroll_event()]
+                    }))
+                    .flatten()
+                    .min()
+                    .unwrap_or(u64::MAX);
             // A loss review can occur in flight every week at the same phase.
             // Stop at the next ground-time end, not at an arbitrary later review.
             let closures: Vec<_> = staged
@@ -286,10 +308,11 @@ impl Game {
                 }
             }
             if staged.apply_maintenance().is_err()
+                || staged.apply_payroll().is_err()
                 || staged
                     .competitors
                     .iter_mut()
-                    .any(|c| c.game.apply_maintenance().is_err())
+                    .any(|c| c.game.apply_maintenance().is_err() || c.game.apply_payroll().is_err())
             {
                 return false;
             }
@@ -471,6 +494,10 @@ impl Competitor {
             return false;
         };
         self.plan_maintenance(next);
+        // Staff without a service is let go; the hangar crew stays.
+        if self.game.dismiss_surplus().is_err() {
+            return false;
+        }
         self.next_review = next;
         true
     }
@@ -569,7 +596,8 @@ impl Competitor {
                     let mut market = offers.clone();
                     market.push(r.clone());
                     let t = crate::economy::quote_shared(&r, model, &market)?;
-                    let week = (t.profit() - maintenance) * (REVIEW / (interval * 60)) as i64;
+                    let week = (t.profit() - maintenance) * (REVIEW / (interval * 60)) as i64
+                        - staffing_per_week(g, model)?;
                     // Reserve also covers four weeks of gross operating costs.
                     let buffer = ((committed_weekly_costs
                         + (t.costs() + maintenance) * (REVIEW / (interval * 60)) as i64)
@@ -591,6 +619,11 @@ impl Competitor {
                 "Expansion geprüft · Budget/Reserve oder Markt nicht rentabel".into();
             return Ok(());
         };
+        // Hire first (atomic): without cash for the crew the expansion is dropped.
+        if let Err(error) = self.game.equip_staff_for(&model) {
+            self.last_action = format!("Expansion abgebrochen · {error}");
+            return Ok(());
+        }
         let plane = match plane {
             Some(id) => id,
             None => {
@@ -667,6 +700,10 @@ impl Competitor {
             return true;
         };
         let id = r.id;
+        if let Err(error) = self.game.equip_staff_for(&model) {
+            self.last_action = format!("Wiedereinstieg abgebrochen · {error}");
+            return true;
+        }
         let route = &mut self.game.routes[i];
         route.origin_icao = candidate.origin_icao;
         route.destination_icao = candidate.destination_icao;
@@ -690,6 +727,7 @@ mod tests {
         let mut g = Game::default();
         g.found("Player", "DE", "EDDF").unwrap();
         g.buy_aircraft("atr72_600").unwrap();
+        g.staff_up();
         g.create_route("EDDF", "EDDM", 1).unwrap();
         g.set_ticket_price(1, 90).unwrap();
         g.schedule(1, 1, 360).unwrap();
@@ -932,6 +970,7 @@ mod tests {
         let mut g = game();
         let c = &mut g.competitors[0];
         c.game.buy_aircraft("atr72_600").unwrap();
+        c.game.staff_up();
         c.game.create_route("EDDF", "EDDM", 2).unwrap();
         c.game.schedule(2, 1, 360).unwrap();
         c.game.routes[0].ticket_eur = 100_000;
@@ -1099,6 +1138,7 @@ mod tests {
             g.airline.as_mut().unwrap().capital_eur += 200_000_000;
             g.history.as_mut().unwrap().opening_balance += 200_000_000;
             g.buy_aircraft("a320_200").unwrap();
+            g.staff_up();
             let id = g.fleet.last().unwrap().id;
             g.create_route("EDDF", "EDDM", id).unwrap();
             let route = g.routes.last().unwrap().id;

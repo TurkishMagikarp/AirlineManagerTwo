@@ -10,7 +10,6 @@ pub struct Config {
     reference_base_eur: i64,
     reference_eur_per_100_km: i64,
     fuel_cents_per_kg: i64,
-    crew_extra_minutes: i64,
     airport_eur_per_passenger: i64,
     models: HashMap<String, Rates>,
 }
@@ -19,7 +18,6 @@ pub struct Config {
 struct Rates {
     fuel_kg_per_hour: i64,
     fuel_cycle_kg: i64,
-    crew_eur_per_hour: i64,
     airport_base_eur: i64,
     overhead_eur_per_hour: i64,
     overhead_cycle_eur: i64,
@@ -32,7 +30,6 @@ static CONFIG: LazyLock<Config> = LazyLock::new(|| {
         c.reference_base_eur,
         c.reference_eur_per_100_km,
         c.fuel_cents_per_kg,
-        c.crew_extra_minutes,
         c.airport_eur_per_passenger,
     ] {
         assert!((0..=100_000).contains(&n));
@@ -43,7 +40,6 @@ static CONFIG: LazyLock<Config> = LazyLock::new(|| {
         for n in [
             r.fuel_kg_per_hour,
             r.fuel_cycle_kg,
-            r.crew_eur_per_hour,
             r.airport_base_eur,
             r.overhead_eur_per_hour,
             r.overhead_cycle_eur,
@@ -142,7 +138,9 @@ pub fn quote_shared(route: &Route, model_id: &str, routes: &[Route]) -> Result<T
             + 359999)
             / 360000,
         airport: rates.airport_base_eur + c.airport_eur_per_passenger * passengers,
-        crew: ((seconds + c.crew_extra_minutes * 60) * rates.crew_eur_per_hour + 3599) / 3600,
+        // Personnel is paid through payroll. Keep Totals::crew for immutable
+        // historical results and departure snapshots from existing saves.
+        crew: 0,
         overhead: rates.overhead_cycle_eur + (seconds * rates.overhead_eur_per_hour + 3599) / 3600,
     })
 }
@@ -224,6 +222,7 @@ mod tests {
         g.found("Economy Air", "DE", "EDDF").unwrap();
         g.competitors.clear();
         g.buy_aircraft("atr72_600").unwrap();
+        g.staff_up();
         g.create_route("EDDF", "EDDM", 1).unwrap();
         g.set_ticket_price(1, price).unwrap();
         g.schedule(1, 1, 120).unwrap();
@@ -245,14 +244,15 @@ mod tests {
         g.routes[0].ticket_eur = 100000;
         let empty = quote(&g.routes[0], "atr72_600").unwrap();
         assert_eq!(empty.passengers, 0);
-        assert!(empty.fuel > 0 && empty.airport > 0 && empty.crew > 0);
+        assert!(empty.fuel > 0 && empty.airport > 0);
+        assert_eq!(empty.crew, 0);
         assert_eq!(empty.fuel, middle.fuel);
         assert_eq!(empty.crew, middle.crew);
         assert!(empty.airport < middle.airport);
         let short = quote(&g.routes[0], "a320_200").unwrap();
         g.routes[0].destination_icao = "LTFM".into();
         let long = quote(&g.routes[0], "a320_200").unwrap();
-        assert!(long.fuel > short.fuel && long.crew > short.crew);
+        assert!(long.fuel > short.fuel && long.overhead > short.overhead);
         g.routes[0].ticket_eur = 150;
         assert!(quote(&g.routes[0], "a320_200").unwrap().passengers > middle.passengers);
     }
@@ -298,6 +298,7 @@ mod tests {
         let mut small = game(150);
         for g in [&mut large, &mut small] {
             g.buy_aircraft("atr72_600").unwrap();
+            g.staff_up();
             g.create_route("EDDF", "EDDM", 2).unwrap();
             g.set_ticket_price(2, 100000).unwrap();
             g.schedule(2, 1, 120).unwrap();
@@ -464,6 +465,7 @@ mod tests {
                     g.found("Calibration Air", country, origin).unwrap();
                     g.competitors.clear();
                     g.buy_aircraft(&model.id).unwrap();
+                    g.staff_up();
                     g.create_route(origin, destination, 1).unwrap();
                     g.set_ticket_price(1, price).unwrap();
                     let (flight, ground) = operations::timings(&g.routes[0], &model.id).unwrap();
@@ -479,7 +481,8 @@ mod tests {
                         balance + t.profit()
                     );
                     g.validate_finance().unwrap();
-                    assert!(t.fuel > 0 && t.airport > 0 && t.crew > 0 && t.overhead > 0);
+                    assert!(t.fuel > 0 && t.airport > 0 && t.overhead > 0);
+                    assert_eq!(t.crew, 0);
                     if price == 0 || price >= 2 * reference {
                         assert!(t.profit() < 0);
                     }

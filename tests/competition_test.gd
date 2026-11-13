@@ -29,6 +29,7 @@ func _run() -> void:
 		sim.buy_aircraft("atr72_600")
 		sim.create_route("EDDF", "EDDM", 1)
 		sim.set_ticket_price(1, 90)
+		sim.hire_missing_staff()
 		sim.schedule_route(1, 1, 120)
 		var equal: Array = sim.get_route_competition(1)
 		if not _check(equal.size() == 2 and equal[1]["airline"] == "Regional Wings" and equal[1]["active"], "Real rival offer on player's route"):
@@ -86,6 +87,7 @@ func _run() -> void:
 	expansion.buy_aircraft("atr72_600")
 	expansion.create_route("EDDF", "EDDM", 1)
 	expansion.set_ticket_price(1, 90)
+	expansion.hire_missing_staff()
 	expansion.schedule_route(1, 1, 360)
 	expansion.start()
 	if not _check(expansion.advance(52.0 * 7.0 * 86400.0), "One-year expansion through real DLL"):

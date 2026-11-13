@@ -6,7 +6,16 @@
       "Read(./docs/screenshots/**)",
       "Read(./data/world_land.geojson)",
       "Read(./rust/Cargo.lock)",
-      "Read(./**/*.uid)"
+      "Read(./**/*.uid)",
+      "Read(./docs/verification-log.md)",
+      "Read(./tests/**/*.log)",
+      "Grep",
+      "Bash(grep:*)",
+      "Bash(rg:*)",
+      "Bash(egrep:*)",
+      "Bash(findstr:*)",
+      "PowerShell(Select-String:*)",
+      "Bash(find:*)"
     ]
   }
 }

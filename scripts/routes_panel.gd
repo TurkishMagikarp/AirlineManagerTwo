@@ -262,6 +262,8 @@ func refresh_operations() -> void:
 			row.set_tooltip_text(5, "Tatsächlich beförderte Passagiere / angebotene Sitze aller archivierten Landungen dieser Route. Bei alten Spielständen ab Archivbeginn.")
 			if not String(route["maintenance_status"]).is_empty():
 				row.set_tooltip_text(3, row.get_text(3) + "\n" + route["maintenance_status"])
+			elif not String(route["staff_status"]).is_empty():
+				row.set_tooltip_text(3, row.get_text(3) + "\n" + route["staff_status"])
 	_update_schedule_controls(metrics.get(_route().get("id", 0), {}))
 	var lines: PackedStringArray = ["Flugbetrieb · nächste Abflüge (sortiert)"]
 	for operation in simulation.get_operations():
@@ -321,11 +323,15 @@ func _update_schedule_controls(route: Dictionary) -> void:
 	if schedule_button == null:
 		return
 	var hangar: String = route.get("maintenance_status", "")
+	var crew: String = route.get("staff_status", "")
 	schedule_button.disabled = route.is_empty() or not route.get("can_schedule", false)
-	schedule_button.text = "Flugplan gesperrt · Wartung" if not hangar.is_empty() and not route.get("has_plan", false) else "Flugplan aktivieren"
+	schedule_button.text = "Flugplan gesperrt · Wartung" if not hangar.is_empty() and not route.get("has_plan", false) else "Flugplan gesperrt · Besatzung fehlt" if not crew.is_empty() else "Flugplan aktivieren"
 	stop_button.disabled = route.is_empty() or not route.get("has_plan", false)
-	maintenance_label.text = hangar
-	maintenance_label.visible = not hangar.is_empty()
+	var notice := hangar
+	if not crew.is_empty():
+		notice = crew if notice.is_empty() else notice + "\n" + crew
+	maintenance_label.text = notice
+	maintenance_label.visible = not notice.is_empty()
 
 
 func _refresh_competition() -> void:

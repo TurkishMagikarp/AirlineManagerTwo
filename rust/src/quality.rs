@@ -7,6 +7,7 @@ fn scenario(price: Option<i64>) -> Game {
     g.found("Audit", "DE", "EDDF").unwrap();
     if let Some(price) = price {
         g.buy_aircraft("atr72_600").unwrap();
+        g.staff_up();
         g.create_route("EDDF", "EDDM", 1).unwrap();
         g.set_ticket_price(1, price).unwrap();
         g.schedule(1, 1, 120).unwrap();

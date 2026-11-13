@@ -48,8 +48,11 @@ Das Spielergebnis ist weiterhin kein vollständiger Unternehmens-Nettogewinn.
 - Flughäfen einschließlich vereinfachter Abfertigung beider Endpunkte zusammen:
   Jets 1.400, ATR 600 EUR je Einzelflug plus 25 EUR je Passagier; bisher einheitlich
   400 + 12 EUR. Keine nochmalige Verdoppelung für beide Endpunkte.
-- Personal: weiterhin 650/650/350 EUR/h, nun Reisezeit plus 30 Minuten
-  Vor-/Nachbereitung statt ausschließlich Reisezeit.
+- Personal: ausschließlich die Mitarbeitergehälter nach `config/staff.json`
+  (siehe [Personal](staff.md)). Keine zusätzliche Crewpauschale je neuem Flug.
+  Historische Crewkosten und bereits gespeicherte Abflugangebote bleiben erhalten.
+  Unternehmenssummen und -diagramme enthalten gebuchte Gehälter und Wartungschecks;
+  Routenberichte bleiben Flugdeckungsbeiträge ohne diese zentralen Ausgaben.
 - Neu nur **eine Kostenpauschale**, kein neues System: Wartung/Verwaltung
   Jets `700 + ceil(2.400 × Flugstunden)`, ATR `300 + ceil(800 × Flugstunden)` EUR.
   Schließt vereinfacht Wartungsrücklage, Navigation, Betrieb/Verwaltung ein;

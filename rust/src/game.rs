@@ -18,6 +18,8 @@ pub struct Game {
     pub history: Option<crate::history::History>,
     #[serde(default)]
     pub competitors: Vec<crate::competition::Competitor>,
+    #[serde(default)]
+    pub staff: crate::staff::Staff,
 }
 
 impl Default for Game {
@@ -32,6 +34,7 @@ impl Default for Game {
             finance: crate::economy::Finance::default(),
             history: None,
             competitors: Vec::new(),
+            staff: crate::staff::Staff::default(),
         }
     }
 }
