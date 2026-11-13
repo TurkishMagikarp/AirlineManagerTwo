@@ -327,6 +327,8 @@ impl Game {
         clock: crate::clock::Clock,
         supply: &[crate::demand::Offer],
     ) -> bool {
+        let owned_supply = self.prioritize_market(supply);
+        let supply = owned_supply.as_slice();
         let mut updates = Vec::new();
         let mut finance = None;
         let mut delta = 0i64;

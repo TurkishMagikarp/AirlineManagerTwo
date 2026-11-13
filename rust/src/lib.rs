@@ -16,6 +16,9 @@ mod game;
 mod history;
 mod maintenance;
 mod map;
+mod marketing;
+#[cfg(test)]
+mod marketing_tests;
 mod operations;
 #[cfg(test)]
 mod quality;
@@ -186,7 +189,7 @@ impl SimulationClock {
             // Central expenses belong only to the company series, never to
             // every route (which would duplicate them again).
             let costs = i128::from(t.costs()) + if route_id == 0 {
-                h.maintenance_through(time) + h.payroll_through(time) + h.interest_through(time) + h.rent_through(time) + h.tax_through(time)
+                h.maintenance_through(time) + h.payroll_through(time) + h.interest_through(time) + h.rent_through(time) + h.tax_through(time) + h.marketing_through(time)
             } else { 0 };
             let tax = if route_id == 0 { h.tax_through(time) } else { 0 };
             let period_costs = costs - previous_costs;
@@ -275,6 +278,34 @@ impl SimulationClock {
     }
 
     #[func]
+    fn set_marketing_budget(&mut self, budget: i64) -> GString {
+        self.game
+            .set_marketing_budget(budget)
+            .err()
+            .unwrap_or_default()
+            .as_str()
+            .into()
+    }
+
+    #[func]
+    fn get_marketing(&self) -> VarDictionary {
+        let m = &self.game.marketing;
+        vdict! { "budget_eur" => m.budget_eur, "awareness" => m.awareness as f64 / marketing::SCALE as f64,
+        "trend" => m.trend as f64 / marketing::SCALE as f64,
+        "max_budget_eur" => marketing::RULES.max_budget_eur, "month_days" => marketing::RULES.month_days as i64,
+        "insolvent" => self.game.insolvent() }
+    }
+
+    #[func]
+    fn get_marketing_history(&self) -> Array<VarDictionary> {
+        self.game.history.as_ref().map_or_else(Array::new, |h| {
+            h.marketing_costs.iter().rev().take(100).map(|p| {
+            vdict! { "time" => operations::display_time(p.time).as_str(), "amount_eur" => p.amount }
+        }).collect()
+        })
+    }
+
+    #[func]
     fn get_financial_summary(&self) -> VarDictionary {
         let t = &self.game.finance.totals;
         let purchases = self.game.history.as_ref().map_or(0, |h| {
@@ -317,7 +348,13 @@ impl SimulationClock {
             .as_ref()
             .map_or(0, |h| h.tax_through(u64::MAX));
         let last_tax = self.game.history.as_ref().and_then(|h| h.taxes.last());
-        let costs = tax
+        let marketing = self
+            .game
+            .history
+            .as_ref()
+            .map_or(0, |h| h.marketing_through(u64::MAX));
+        let costs = marketing
+            + tax
             + i128::from(t.costs())
             + i128::from(maintenance)
             + i128::from(payroll)
@@ -327,6 +364,7 @@ impl SimulationClock {
         vdict! { "fuel_cents_per_kg" => self.game.fuel_market.price_at(self.game.clock.elapsed().as_secs()),
         "fuel_month_delta_cents" => self.game.fuel_market.price_at(self.game.clock.elapsed().as_secs()) - self.game.fuel_market.price_at(self.game.clock.elapsed().as_secs().saturating_sub(30 * 86400)),
         "flights" => t.flights, "passengers" => t.passengers, "revenue_eur" => t.revenue,
+        "marketing_eur" => marketing.min(i128::from(i64::MAX)) as i64,
         "tax_eur" => tax.min(i128::from(i64::MAX)) as i64,
         "tax_year_eur" => last_tax.map_or(0, |a| a.amount),
         "tax_year" => last_tax.map_or(0, |a| a.time / demand::YEAR_SECONDS) as i64,
@@ -706,10 +744,11 @@ impl SimulationClock {
                     .as_ref()
                     .map(|p| 43200.0 / p.interval_seconds as f64)
                     .unwrap_or(0.0);
+                let company_supply = company.prioritize_market(&supply);
                 let passengers = demand::estimate_at(
                     r,
                     model.seats,
-                    &supply,
+                    &company_supply,
                     self.game.clock.elapsed().as_secs(),
                 )
                 .map(|e| e.per_departure)

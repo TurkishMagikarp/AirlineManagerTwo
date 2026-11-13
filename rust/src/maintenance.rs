@@ -884,6 +884,7 @@ mod tests {
         assert_eq!(loaded.fuel_market.started_at, 100);
         g.fuel_market = loaded.fuel_market.clone();
         g.migrate_tax().unwrap();
+        g.marketing.settled_at = 100;
         assert!(loaded.advance(86400.0));
         assert!(g.advance(86400.0));
         assert_eq!(state(&loaded), state(&g));

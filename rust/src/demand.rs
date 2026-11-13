@@ -109,6 +109,8 @@ pub struct Offer {
     pub seats: u32,
     pub business_seats: u32,
     premium: bool,
+    pub awareness: i64,
+    pub owner: String,
 }
 impl Offer {
     pub fn new(route: &Route, seats: u32) -> Self {
@@ -117,6 +119,8 @@ impl Offer {
             seats,
             business_seats: 0,
             premium: false,
+            awareness: 0,
+            owner: String::new(),
         }
     }
 }
@@ -235,6 +239,7 @@ fn estimate_with_season(
             .then(a.seats.cmp(&b.seats))
             .then(a.premium.cmp(&b.premium))
             .then(a.route.service_level.cmp(&b.route.service_level))
+            .then(a.awareness.cmp(&b.awareness))
     });
     let own_indices: Vec<_> = matching
         .iter()
@@ -275,7 +280,10 @@ fn estimate_with_season(
             if w > 0.0 && !o.premium {
                 frequency_sum[i] += f;
             }
-            weights[j][i] = o.route.service_level.rate().attractiveness * f * w
+            weights[j][i] = crate::marketing::attractiveness(o.awareness)
+                * o.route.service_level.rate().attractiveness
+                * f
+                * w
                 / (1.0 - w).max(1e-9)
                 * if o.premium {
                     crate::cabins::RULES.business_preference

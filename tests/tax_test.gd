@@ -18,7 +18,7 @@ func _run() -> void:
 			path = arg.trim_prefix("--tax-save=")
 		if arg.begins_with("--capture-dir="):
 			capture_dir = arg.trim_prefix("--capture-dir=")
-	if not _check(mode in ["ui", "write-v18", "read-v18", "write-v19", "read-v19"], "Explicit tax test mode"):
+	if not _check(mode in ["ui", "write-v18", "read-v18", "write-v20", "read-v20"], "Explicit tax test mode"):
 		return
 	probe_path = path + ".probe"
 	root.gui_embed_subwindows = true
@@ -57,7 +57,7 @@ func _run() -> void:
 			return
 		if legacy:
 			# No JSON reserialization: preserve Rust u64/nanosecond values exactly.
-			var contents := FileAccess.get_file_as_string(path).replace('"version":19', '"version":18')
+			var contents := FileAccess.get_file_as_string(path).replace('"version":20', '"version":18')
 			contents = RegEx.create_from_string('"tax":\\{[^}]*\\},|,"tax":\\{[^}]*\\}').sub(contents, "", true)
 			contents = contents.replace('"taxes":[],', '').replace(',"taxes":[]', '')
 			if not _check(JSON.parse_string(contents)["version"] == 18 and not '"tax"' in contents and not '"taxes"' in contents, "True v18 fixture without tax state, including AI"):
@@ -92,7 +92,7 @@ func _run() -> void:
 		var expected: Dictionary = FileAccess.open(path + ".expected", FileAccess.READ).get_var()
 		if not _check(_snapshot() == expected, "Fresh-process continuation equals uninterrupted reference, including AI"):
 			return
-		if not _check(sim.save_game(path).is_empty() and JSON.parse_string(FileAccess.get_file_as_string(path))["version"] == 19, "Resave as v19"):
+		if not _check(sim.save_game(path).is_empty() and JSON.parse_string(FileAccess.get_file_as_string(path))["version"] == 20, "Resave as v20"):
 			return
 	elif not await _layouts("profit"):
 		return

@@ -68,6 +68,12 @@ fn ten_year_scenarios_reconcile_and_survive_annual_restart() {
                     (fast.clock.elapsed().as_secs() / crate::demand::YEAR_SECONDS) as usize
                 );
                 c.game.validate_tax().unwrap();
+                let marketing = h.marketing_through(u64::MAX);
+                assert!(
+                    marketing > 0 && marketing * 10 <= i128::from(c.game.finance.totals.revenue),
+                    "marketing overwhelms AI revenue"
+                );
+                c.game.validate_marketing().unwrap();
                 let t = &c.game.finance.totals;
                 assert!(
                     t.service >= 0 && i128::from(t.service) * 5 <= i128::from(t.revenue),
@@ -87,11 +93,13 @@ fn ten_year_scenarios_reconcile_and_survive_annual_restart() {
                 for c in &fast.competitors {
                     let g = &c.game;
                     println!(
-                        "AUDIT price={price:?} year={year} airline={} cash={} profit={} service={} tax={} fleet={} routes={} batches={} save_bytes={bytes}",
+                        "AUDIT price={price:?} year={year} airline={} cash={} profit={} service={} marketing={} awareness={} tax={} fleet={} routes={} batches={} save_bytes={bytes}",
                         g.airline.as_ref().unwrap().name,
                         g.airline.as_ref().unwrap().capital_eur,
                         g.finance.totals.profit(),
                         g.finance.totals.service,
+                        g.history.as_ref().unwrap().marketing_through(u64::MAX),
+                        g.marketing.awareness,
                         g.history.as_ref().unwrap().tax_through(u64::MAX),
                         g.fleet.len(),
                         g.routes.len(),

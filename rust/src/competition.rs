@@ -104,6 +104,7 @@ pub fn initial_competitors_at(now: Duration) -> Result<Vec<Competitor>, String> 
             ..Game::default()
         };
         g.tax.since = now.as_secs();
+        g.marketing.settled_at = now.as_secs();
         g.buy_aircraft(model)?;
         g.equip_staff_for(model)?;
         g.create_route(origin, destination, 1)?;
@@ -133,7 +134,10 @@ impl Game {
             .flat_map(|g| {
                 g.routes.iter().filter_map(|r| {
                     let plane = g.fleet.iter().find(|p| Some(p.id) == r.aircraft_id)?;
-                    crate::cabins::offer(r, plane).ok()
+                    let mut offer = crate::cabins::offer(r, plane).ok()?;
+                    offer.awareness = g.marketing.awareness;
+                    offer.owner = g.airline.as_ref()?.name.clone();
+                    Some(offer)
                 })
             })
             .collect()
@@ -212,6 +216,9 @@ impl Game {
         }
         if self.competitors.is_empty()
             && self
+                .next_marketing_event()
+                .is_none_or(|t| Duration::from_secs(t) > target.elapsed())
+            && self
                 .next_tax_event()
                 .is_none_or(|t| Duration::from_secs(t) > target.elapsed())
             && self
@@ -276,6 +283,7 @@ impl Game {
                 .chain(std::iter::once(staged.next_payroll_event()))
                 .chain(std::iter::once(staged.next_financing_event()))
                 .chain(std::iter::once(staged.next_tax_event()))
+                .chain(std::iter::once(staged.next_marketing_event()))
                 .chain(staged.competitors.iter().flat_map(|c| {
                     [
                         c.game.next_maintenance_event(),
@@ -283,6 +291,7 @@ impl Game {
                         c.game.next_payroll_event(),
                         c.game.next_financing_event(),
                         c.game.next_tax_event(),
+                        c.game.next_marketing_event(),
                     ]
                 }))
                 .flatten()
@@ -360,11 +369,13 @@ impl Game {
             if staged.apply_rotation_removals().is_err()
                 || staged.apply_maintenance().is_err()
                 || staged.apply_payroll().is_err()
+                || staged.apply_marketing().is_err()
                 || staged.apply_financing().is_err()
                 || staged.competitors.iter_mut().any(|c| {
                     c.game.apply_rotation_removals().is_err()
                         || c.game.apply_maintenance().is_err()
                         || c.game.apply_payroll().is_err()
+                        || c.game.apply_marketing().is_err()
                         || c.game.apply_financing().is_err()
                 })
             {
@@ -418,6 +429,11 @@ impl Competitor {
     }
 
     fn review(&mut self, supply: &[crate::demand::Offer]) -> bool {
+        let owned_supply = self.game.prioritize_market(supply);
+        let supply = owned_supply.as_slice();
+        if self.game.review_marketing().is_err() {
+            return false;
+        }
         if self.game.can_reschedule() && self.game.reschedule_loan().is_err() {
             return false;
         }
