@@ -116,15 +116,25 @@ pub struct Finance {
     pub recent: Vec<FlightResult>,
 }
 
-#[cfg(test)]
 pub fn quote(route: &Route, model_id: &str) -> Result<Totals, String> {
-    quote_shared(route, model_id, std::slice::from_ref(route))
+    quote_shared(
+        route,
+        model_id,
+        &[crate::demand::Offer::new(
+            route,
+            aircraft::model(model_id)?.seats,
+        )],
+    )
 }
 
-pub fn quote_shared(route: &Route, model_id: &str, routes: &[Route]) -> Result<Totals, String> {
+pub fn quote_shared(
+    route: &Route,
+    model_id: &str,
+    routes: &[crate::demand::Offer],
+) -> Result<Totals, String> {
     let c = &*CONFIG;
     let model = aircraft::model(model_id)?;
-    let demand = crate::demand::passengers(route, routes)?;
+    let demand = crate::demand::estimate(route, model.seats, routes)?.per_departure;
     let passengers = demand.min(i64::from(model.seats));
     let seconds = operations::timings(route, model_id)?.0 as i64;
     let rates = &c.models[model_id];

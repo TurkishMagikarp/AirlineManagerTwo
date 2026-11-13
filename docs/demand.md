@@ -58,18 +58,30 @@ Angebotsliste**, ohne Eigentümerbonus. Pro Segment (Geschäft/Privat) gilt:
 - `F`: Summe der Frequenzen aller für dieses Segment bezahlbaren Angebote (`w > 0`).
 - Anteil pro Abflug: `min(B × w, B × a / (max(1, F) + Summe(Frequenz × a)))`.
 
-Die beiden Segmente werden addiert und auf ganze Passagiere abgerundet. Danach
-begrenzen die Sitze die Beförderung. Der Term `max(1,F)` ist die vereinfachte
-Alternative „nicht fliegen“. Bei gleichen Preisen entspricht die Formel weiterhin
+Dieser anfängliche Anteil wird mit der Frequenz zur Tagesrate umgerechnet.
+Die gemeinsame Sitzkapazität eines Angebots ist Frequenz × Sitze (aus der
+jeweiligen Flotte). Überschreiten Geschäft + Privat diese Kapazität, werden beide
+Anteile proportional gekürzt. Der Überhang wird getrennt je Segment unter den
+übrigen Angeboten mit freien Sitzen im Verhältnis Frequenz × Attraktivität
+verteilt. Bei erneutem Sitzmangel wird wiederholt, bis kein aufnehmendes Angebot
+mehr übrig ist. Beide Segmente teilen sich dieselben Sitze; `w = 0` erhält niemals
+Überhang. Pro Angebot bleibt auch die kaufbereite Tagesmenge begrenzt:
+`B × w × min(1, Frequenz)`. Seltene Flüge sammeln keine Nachfrage an.
+Erst danach werden die beiden Segmente pro Abflug addiert und auf ganze
+Passagiere abgerundet; Rundungsreste werden nicht weiterverteilt.
+Der Term `max(1,F)` ist die vereinfachte Alternative „nicht fliegen“. Vor der Sitzumverteilung entspricht die Formel bei gleichen Preisen weiterhin
 der preisabhängigen Nachfrage geteilt durch die Gesamtfrequenz (bei seltenen
 Flügen maximal ein Tagesmarkt). Günstigere Konkurrenz verringert den Anteil
 teurerer Angebote. Die Tagesbeförderung aller Airlines zusammen überschreitet
 niemals `B`; Preiswettbewerb erzeugt keinen separaten Markt je Airline.
 
 Zusätzliche Kapazität kann zuvor abgewiesene Passagiere aufnehmen, aber keinen
-neuen Markt erzeugen. Sitzbedingt nicht verkaufte Anteile werden noch **nicht
-umverteilt**. Auch ein aktiver Plan mit zukünftigem Erstabflug zählt bereits zum
-angebotenen Dauerfahrplan; ungeplante Routen zählen nicht.
+neuen Markt erzeugen. Umverteilt wird ausschließlich Sitzüberhang; die Alternative
+„nicht fliegen“ wird dadurch nicht zusätzlich zu Nachfrage. Sind alle bezahlbaren
+Angebote voll, verfällt der Rest. Die Sortierung nach Preis, Frequenz und Sitzen
+macht auch die Gleitkommasummen unabhängig von der Reihenfolge der Airlines.
+Gleiche wirtschaftliche Angebote erhalten gleiche Anteile. Auch ein aktiver Plan
+mit zukünftigem Erstabflug zählt bereits zum angebotenen Dauerfahrplan; ungeplante Routen zählen nicht.
 
 **Beim Abflug** werden Richtung, Landetermin, Ticketpreis, Passagierzahl, Sitze,
 Ticketeinnahmen und Betriebskosten als unveränderliches Flugergebnis gespeichert.
@@ -92,15 +104,25 @@ Konstante Fahrpläne können weiterhin millionenfach gebündelt abgerechnet werd
 
 ## Anzeige, Spielstände und Tests
 
-Die Routenübersicht zeigt die **preisabhängige Nachfrage ohne Preiswettbewerb**,
-nicht zusätzlich verfügbare Passagiere für jede Routen-ID. Tooltip: Segmente und
-geteilter Anteil vor Sitzlimit. Tatsächliche Auslastung = archivierte Passagiere /
-archivierte angebotene Sitze, sitzgewichtet über alle Landungen dieser Route.
-Ohne Archivflüge steht „Keine Flüge“. Der Wettbewerbsbereich zeigt Basismarkt und
-alle passenden Spieler-/KI-Angebote mit kapazitätsbegrenzten Schätzungen pro Tag
-und Richtung. Prozentwerte sind Anteile der geschätzt beförderten Passagiere.
+Die Routenübersicht zeigt je Route **Basismarkt / erwartete eigene Passagiere /
+wegen Sitzmangel abgewiesen**, jeweils pro Tag und Richtung. Rust liefert alle
+Werte; Godot formatiert sie nur. Erwartete Beförderung berücksichtigt Umverteilung,
+Sitzgrenze und Abrundung pro Abflug. Abgewiesen ist der positive Unterschied
+zwischen anfänglichem eigenen Tagesanteil und zugeteilter Beförderung vor
+Rundung. Diese Reisenden können bei der Konkurrenz unterkommen; die Zahl ist
+kein zusätzlicher Markt und nicht der unerfüllte Rest aller Airlines. Ohne Plan
+sind Beförderung und Sitzmangel null. Tageswerte werden zur Anzeige abgerundet.
+Tatsächliche Auslastung = archivierte Passagiere / archivierte angebotene Sitze,
+sitzgewichtet über alle Landungen dieser Route. Ohne Archivflüge steht „Keine
+Flüge“. Der Wettbewerbsbereich zeigt alle passenden Spieler-/KI-Angebote mit
+denselben kapazitätsbegrenzten Schätzungen pro Tag und Richtung.
 
-Speicherformat **Version 9** speichert auch KI-Unternehmen und Entscheidungszeiten;
+Angebotskapazitäten sind abgeleitete, temporäre Daten. Die Umverteilung fügt
+keinen Speicherzustand hinzu und braucht keinen Versionssprung oder neue
+Migration. Bestehende Abflugergebnisse bleiben unverändert.
+
+Seit Speicherformat **Version 9** werden auch KI-Unternehmen und
+Entscheidungszeiten gespeichert;
 seit Version 8 steht das Abflugergebnis im laufenden Flugplan.
 Laden berechnet es nicht neu. Fehlende/widersprüchliche Ergebnisse in neuen
 Spielständen werden abgelehnt. Versionen **1–7** bleiben ladbar: Für einen bereits
@@ -117,3 +139,31 @@ Speichern/Laden und unveränderte historische Ergebnisse.
 
 Noch nicht enthalten: saisonale/werktägliche Spitzen, Stadtmärkte über mehrere
 Flughäfen, Umsteiger, Buchungsvorlauf und echte Quoten pro Kalendertag.
+
+
+## Zehnjahresvergleich der KI (Sitzumverteilung)
+
+Audit `quality::ten_year_scenarios_reconcile_and_survive_annual_restart`,
+Basis `aa50c46` gegenüber Sitzumverteilung. Kumuliertes Betriebsergebnis nach zehn
+Jahren in Mio. EUR, jeweils Regional Wings / Continental Sky:
+
+| Spielertarif | Vorher | Nachher |
+| --- | ---: | ---: |
+| kein Spielerangebot | 175,52 / 263,13 | 175,59 / 263,61 |
+| 0 EUR | 5,72 / 13,32 | 11,98 / 13,24 |
+| 90 EUR | 143,57 / 232,67 | 143,57 / 232,70 |
+| 100.000 EUR | 17,78 / 19,64 | 17,85 / 19,68 |
+
+In beiden Läufen keine KI-Insolvenz; beide Airlines überleben alle jährlichen
+Prüfungen ohne offene Restrukturierungsfrist. Meist bleiben die Änderungen unter
+0,5 %. Beim kostenlosen Spielerangebot profitiert Regional Wings deutlich von
+aufnehmbarer Überlaufnachfrage (+109 % Betriebsergebnis); Continental Sky endet
+mit zwei statt drei Flugzeugen und zwei statt drei Routen bei rund 0,6 % weniger
+Betriebsergebnis. Das sind deterministische Szenarien, keine allgemeine
+Balancegarantie. Jährliches Speichern/Laden und tägliche gegenüber jährlichen
+Zeitschritten stimmen weiterhin exakt überein.
+
+Auf dem Linux-Server bestanden Rust Build, alle 126 Tests und Clippy. Godot,
+START.bat, GUI/Screenshots und Windows-Prozessneustarts konnten dort nicht geprüft
+werden. Der angepasste Godot-Anzeigetest wurde nicht ausgeführt; das tatsächliche
+Layout benötigt eine Godot-Prüfung.

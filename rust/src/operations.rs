@@ -34,7 +34,7 @@ pub fn departure_quote(
     route: &Route,
     model: &str,
     index: u64,
-    routes: &[Route],
+    routes: &[crate::demand::Offer],
 ) -> Result<crate::economy::FlightResult, String> {
     let plan = route.plan.as_ref().ok_or("Kein Flugplan.")?;
     let mut directed = route.clone();
@@ -230,7 +230,7 @@ impl Game {
     pub(crate) fn advance_company_to(
         &mut self,
         clock: crate::clock::Clock,
-        supply: &[Route],
+        supply: &[crate::demand::Offer],
     ) -> bool {
         let mut updates = Vec::new();
         let mut finance = None;
@@ -465,7 +465,7 @@ mod tests {
         assert_eq!(g.finance.totals.flights, 0);
         g.stop_schedule(2).unwrap();
         assert!(
-            crate::economy::quote_shared(&g.routes[0], "atr72_600", &g.routes)
+            crate::economy::quote_shared(&g.routes[0], "atr72_600", &g.market_routes())
                 .unwrap()
                 .passengers
                 > frozen.totals.passengers

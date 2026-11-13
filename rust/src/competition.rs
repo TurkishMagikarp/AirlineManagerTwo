@@ -112,11 +112,16 @@ pub fn initial_competitors_at(now: Duration) -> Result<Vec<Competitor>, String> 
 }
 
 impl Game {
-    pub fn market_routes(&self) -> Vec<Route> {
-        self.routes
-            .iter()
-            .chain(self.competitors.iter().flat_map(|c| c.game.routes.iter()))
-            .cloned()
+    pub fn market_routes(&self) -> Vec<crate::demand::Offer> {
+        std::iter::once(self)
+            .chain(self.competitors.iter().map(|c| &*c.game))
+            .flat_map(|g| {
+                g.routes.iter().filter_map(|r| {
+                    let plane = g.fleet.iter().find(|p| Some(p.id) == r.aircraft_id)?;
+                    let model = crate::aircraft::model(&plane.model_id).ok()?;
+                    Some(crate::demand::Offer::new(r, model.seats))
+                })
+            })
             .collect()
     }
 
@@ -200,7 +205,7 @@ impl Game {
                 .next_payroll_event()
                 .is_none_or(|t| Duration::from_secs(t) > target.elapsed())
         {
-            return self.advance_company_to(target, &self.routes.clone());
+            return self.advance_company_to(target, &self.market_routes());
         }
         // Transactional across all companies: no partial time or cash updates.
         let mut staged = self.clone();
@@ -376,7 +381,7 @@ impl Competitor {
         Ok(())
     }
 
-    fn review(&mut self, supply: &[Route]) -> bool {
+    fn review(&mut self, supply: &[crate::demand::Offer]) -> bool {
         if self.game.can_reschedule() && self.game.reschedule_loan().is_err() {
             return false;
         }
@@ -466,7 +471,7 @@ impl Competitor {
         }
         let mut other_supply = supply.to_vec();
         for r in &self.game.routes {
-            if let Some(i) = other_supply.iter().position(|o| o == r) {
+            if let Some(i) = other_supply.iter().position(|o| &o.route == r) {
                 other_supply.remove(i);
             }
         }
@@ -568,10 +573,13 @@ impl Competitor {
                 candidate.ticket_eur = price;
                 let mut offers = supply.to_vec();
                 // Replace precisely this offer, not an extra fictional service.
-                if let Some(index) = offers.iter().position(|o| o == r) {
+                if let Some(index) = offers.iter().position(|o| &o.route == r) {
                     offers.remove(index);
                 }
-                offers.push(candidate.clone());
+                offers.push(crate::demand::Offer::new(
+                    &candidate,
+                    crate::aircraft::model(&plane.model_id).unwrap().seats,
+                ));
                 let Ok(t) = crate::economy::quote_shared(&candidate, &plane.model_id, &offers)
                 else {
                     return false;
@@ -632,7 +640,7 @@ impl Competitor {
     }
 
     /// Bounded catalog search, no flight loop or separate economic model.
-    fn expand(&mut self, supply: &[Route]) -> Result<(), String> {
+    fn expand(&mut self, supply: &[crate::demand::Offer]) -> Result<(), String> {
         if self.game.distressed() || self.game.financing.debt > 0 {
             return Ok(());
         }
@@ -640,7 +648,7 @@ impl Competitor {
         let airline = g.airline.as_ref().ok_or("KI-Airline fehlt")?;
         // Caller removed precisely our pre-review offers, including closed routes.
         let mut offers = supply.to_vec();
-        offers.extend(g.routes.iter().cloned());
+        offers.extend(g.market_routes());
         let mut committed_weekly_costs = g.monthly_payroll() * 7 / 30;
         committed_weekly_costs += g
             .fleet
@@ -749,7 +757,7 @@ impl Competitor {
                     r.ticket_eur = (crate::economy::reference_price(km) * f64::from(step) / 10.0)
                         .round() as i64;
                     let mut market = offers.clone();
-                    market.push(r.clone());
+                    market.push(crate::demand::Offer::new(&r, m.seats));
                     let t = crate::economy::quote_shared(&r, model, &market)?;
                     let week = (t.profit() - maintenance) * (REVIEW / (interval * 60)) as i64
                         - staffing_per_week(g, model)?
@@ -815,7 +823,7 @@ impl Competitor {
     /// A stopped service waits RETRY_AFTER reviews, then restarts at the most
     /// profitable fare in the current shared market, or waits another period.
     /// Returns false only on an internal error.
-    fn retry(&mut self, i: usize, supply: &[Route]) -> bool {
+    fn retry(&mut self, i: usize, supply: &[crate::demand::Offer]) -> bool {
         self.idle_reviews = (self.idle_reviews + 1).min(RETRY_AFTER);
         if self.idle_reviews < RETRY_AFTER {
             return true;
@@ -850,7 +858,10 @@ impl Competitor {
             let price = ((reference * f64::from(step) / 10.0).round() as i64).clamp(0, 100_000);
             candidate.ticket_eur = price;
             let mut offers = supply.to_vec();
-            offers.push(candidate.clone());
+            offers.push(crate::demand::Offer::new(
+                &candidate,
+                crate::aircraft::model(&model).unwrap().seats,
+            ));
             let Ok(t) = crate::economy::quote_shared(&candidate, &model, &offers) else {
                 return false;
             };
@@ -1086,18 +1097,34 @@ mod tests {
         let before = c.game.airline.as_ref().unwrap().capital_eur;
         let mut rival = game().routes[0].clone();
         rival.ticket_eur = 90;
-        c.expand(&[rival.clone()]).unwrap();
+        c.expand(&[crate::demand::Offer::new(&rival, 72)]).unwrap();
         assert_eq!(c.game.fleet.len(), 1);
         assert_eq!(c.game.airline.as_ref().unwrap().capital_eur, before);
         assert_eq!(c.game.routes.len(), 1);
         let r = &c.game.routes[0];
         assert_eq!(r.origin_icao, c.game.fleet[0].location_icao);
-        let isolated = crate::demand::passengers(r, std::slice::from_ref(r)).unwrap();
-        let shared = crate::demand::passengers(r, &[r.clone(), rival.clone()]).unwrap();
+        let isolated =
+            crate::demand::passengers(r, &[crate::demand::Offer::new(r, 10_000)]).unwrap();
+        let shared = crate::demand::passengers(
+            r,
+            &[
+                crate::demand::Offer::new(r, 10_000),
+                crate::demand::Offer::new(&rival, 10_000),
+            ],
+        )
+        .unwrap();
         assert!(shared < isolated);
         let base = crate::demand::market(r, 0).unwrap().total();
-        let combined =
-            (shared + crate::demand::passengers(&rival, &[r.clone(), rival.clone()]).unwrap()) * 2;
+        let combined = (shared
+            + crate::demand::passengers(
+                &rival,
+                &[
+                    crate::demand::Offer::new(r, 10_000),
+                    crate::demand::Offer::new(&rival, 10_000),
+                ],
+            )
+            .unwrap())
+            * 2;
         assert!(combined as f64 <= base);
     }
 
@@ -1267,7 +1294,12 @@ mod tests {
     fn common_market_price_frequency_capacity_and_separate_ledgers() {
         let mut g = game();
         let route = &g.routes[0];
-        let supply = g.market_routes();
+        // Isolate fare/frequency choice with ample seats. Actual departures below
+        // still use the real fleet capacity, including spill redistribution.
+        let mut supply = g.market_routes();
+        for o in &mut supply {
+            o.seats = 10_000;
+        }
         let own = crate::demand::passengers(route, &supply).unwrap();
         let rival = &g.competitors[0].game.routes[0];
         assert_eq!(own, crate::demand::passengers(rival, &supply).unwrap());
@@ -1275,7 +1307,10 @@ mod tests {
         assert!((own * 4) as f64 <= base); // two airlines × two departures/direction
         let mut cheap = route.clone();
         cheap.ticket_eur = 50;
-        let offers = vec![cheap.clone(), rival.clone()];
+        let offers = vec![
+            crate::demand::Offer::new(&cheap, 10_000),
+            crate::demand::Offer::new(&rival, 10_000),
+        ];
         let cheap_pax = crate::demand::passengers(&cheap, &offers).unwrap();
         let rival_pax = crate::demand::passengers(rival, &offers).unwrap();
         assert!(cheap_pax > own && rival_pax < own);
@@ -1283,7 +1318,10 @@ mod tests {
         assert!(((cheap_pax + rival_pax) * 2) as f64 <= cheap_market);
         let mut frequent = route.clone();
         frequent.plan.as_mut().unwrap().interval_seconds /= 2;
-        let offers = vec![frequent.clone(), rival.clone()];
+        let offers = vec![
+            crate::demand::Offer::new(&frequent, 10_000),
+            crate::demand::Offer::new(&rival, 10_000),
+        ];
         let f = crate::demand::passengers(&frequent, &offers).unwrap();
         let r = crate::demand::passengers(rival, &offers).unwrap();
         assert!(f * 4 > r * 2); // frequency changes daily share, not market size
@@ -1319,13 +1357,16 @@ mod tests {
                     b.ticket_eur = q;
                     b.plan.as_mut().unwrap().interval_seconds = interval;
                     std::mem::swap(&mut b.origin_icao, &mut b.destination_icao);
-                    let offers = vec![a.clone(), b.clone()];
+                    let offers = vec![
+                        crate::demand::Offer::new(&a, 72),
+                        crate::demand::Offer::new(&b, 72),
+                    ];
                     let daily: f64 = offers
                         .iter()
                         .map(|r| {
                             let frequency =
-                                43200.0 / r.plan.as_ref().unwrap().interval_seconds as f64;
-                            crate::demand::passengers(r, &offers).unwrap() as f64 * frequency
+                                43200.0 / r.route.plan.as_ref().unwrap().interval_seconds as f64;
+                            crate::demand::passengers(&r.route, &offers).unwrap() as f64 * frequency
                         })
                         .sum();
                     assert!(

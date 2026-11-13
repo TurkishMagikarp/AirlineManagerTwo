@@ -270,7 +270,7 @@ pub fn load(path: &Path) -> Result<Game, String> {
                         route,
                         &plane.model_id,
                         state.completed,
-                        &game.routes,
+                        &game.market_routes(),
                     )?)
                 } else {
                     None

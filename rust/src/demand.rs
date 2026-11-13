@@ -61,47 +61,183 @@ pub fn market(route: &Route, price: i64) -> Result<Market, String> {
     })
 }
 
-/// Each shuttle offers 43200 / interval departures/day/direction. Segment-specific
-/// willingness weights competing offers. Rare flights cannot bank days of demand.
-pub fn passengers(route: &Route, routes: &[Route]) -> Result<i64, String> {
-    let matching: Vec<_> = routes
+/// Ephemeral supply snapshot: capacity is derived from the owning fleet, never saved.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Offer {
+    pub route: Route,
+    pub seats: u32,
+}
+impl Offer {
+    pub fn new(route: &Route, seats: u32) -> Self {
+        Self {
+            route: route.clone(),
+            seats,
+        }
+    }
+}
+
+#[derive(Default)]
+pub struct Estimate {
+    pub daily_passengers: f64,
+    pub daily_spill: f64,
+    pub per_departure: i64,
+}
+
+fn frequency(route: &Route) -> f64 {
+    route
+        .plan
+        .as_ref()
+        .map_or(1.0, |p| 43200.0 / p.interval_seconds as f64)
+}
+
+fn same_offer(a: &Route, b: &Route) -> bool {
+    same_market(a, b)
+        && a.id == b.id
+        && a.aircraft_id == b.aircraft_id
+        && a.ticket_eur == b.ticket_eur
+        && a.plan.as_ref().map(|p| p.interval_seconds)
+            == b.plan.as_ref().map(|p| p.interval_seconds)
+}
+
+/// Daily rates per direction. Redistribute only seat spill, preserving the outside
+/// option and each segment's willingness ceiling. No booking state or randomness.
+pub fn estimate(route: &Route, seats: u32, routes: &[Offer]) -> Result<Estimate, String> {
+    let mut matching: Vec<_> = routes
         .iter()
-        .filter(|r| r.plan.is_some() && same_market(route, r))
+        .filter(|o| o.route.plan.is_some() && same_market(route, &o.route))
+        .cloned()
         .collect();
+    let own = Offer::new(route, seats);
+    if !matching
+        .iter()
+        .any(|o| o.seats == seats && same_offer(route, &o.route))
+    {
+        if let Some(o) = matching.iter_mut().find(|o| same_offer(route, &o.route)) {
+            o.seats = seats;
+        } else {
+            matching.push(own);
+        }
+    }
+    // Economic keys give a canonical floating-point reduction order even when
+    // owner order, route IDs or direction differ. Equal keys are interchangeable.
+    matching.sort_by(|a, b| {
+        a.route
+            .ticket_eur
+            .cmp(&b.route.ticket_eur)
+            .then_with(|| frequency(&a.route).total_cmp(&frequency(&b.route)))
+            .then(a.seats.cmp(&b.seats))
+    });
+    let own_index = matching
+        .iter()
+        .position(|o| o.seats == seats && same_offer(route, &o.route))
+        .unwrap();
     let base = market(route, 0)?;
-    let own = market(route, route.ticket_eur)?;
-    let mut weights = [0.0f64; 2];
-    let mut frequency_sum = [0.0; 2];
-    for r in matching {
-        let m = market(r, r.ticket_eur)?;
-        let frequency = 43200.0 / r.plan.as_ref().unwrap().interval_seconds as f64;
+    let mut weights = vec![[0.0; 2]; matching.len()];
+    let mut limits = weights.clone();
+    let mut frequency_sum = [0.0_f64; 2];
+    let mut weight_sum = [0.0_f64; 2];
+    let mut capacities = Vec::new();
+    for (j, o) in matching.iter().enumerate() {
+        let f = frequency(&o.route);
+        capacities.push(f * f64::from(o.seats));
+        let m = market(&o.route, o.route.ticket_eur)?;
         for (i, (n, b)) in [(m.business, base.business), (m.leisure, base.leisure)]
             .into_iter()
             .enumerate()
         {
-            let willingness = if b > 0.0 { n / b } else { 0.0 };
-            if willingness > 0.0 {
-                frequency_sum[i] += frequency;
+            let w = if b > 0.0 { n / b } else { 0.0 };
+            if w > 0.0 {
+                frequency_sum[i] += f;
             }
-            let attractiveness = willingness / (1.0 - willingness).max(1e-9);
-            weights[i] += frequency * attractiveness;
+            weights[j][i] = f * w / (1.0 - w).max(1e-9);
+            weight_sum[i] += weights[j][i];
+            // Rare flights cannot bank days of willing demand.
+            limits[j][i] = n * f.min(1.0);
         }
     }
-    // One shared market per segment. Price affects both willingness to travel
-    // and relative choice; unsold capacity is not a new passenger market.
-    // An outside option (not flying), scaled by total frequency, keeps the total bounded by the
-    // original market. Cheaper rivals therefore take share, not create a
-    // second market. Cap each departure at its one-day willing segment.
-    let total: f64 = [(own.business, base.business), (own.leisure, base.leisure)]
-        .into_iter()
-        .enumerate()
-        .map(|(i, (n, b))| {
-            let w = if b > 0.0 { n / b } else { 0.0 };
-            let attractiveness = w / (1.0 - w).max(1e-9);
-            (b * attractiveness / (frequency_sum[i].max(1.0) + weights[i])).min(n)
-        })
-        .sum();
-    Ok(total.floor() as i64)
+    let mut allocated = weights.clone();
+    for j in 0..matching.len() {
+        for (i, b) in [base.business, base.leisure].into_iter().enumerate() {
+            allocated[j][i] =
+                (b * weights[j][i] / (frequency_sum[i].max(1.0) + weight_sum[i])).min(limits[j][i]);
+        }
+    }
+    let requested = allocated[own_index].iter().sum::<f64>();
+    let mut spill = [0.0; 2];
+    for j in 0..matching.len() {
+        let total = allocated[j].iter().sum::<f64>();
+        let scale = if total > capacities[j] {
+            capacities[j] / total
+        } else {
+            1.0
+        };
+        for (i, excess) in spill.iter_mut().enumerate() {
+            *excess += allocated[j][i] * (1.0 - scale);
+            allocated[j][i] *= scale;
+        }
+    }
+    // Each non-final round saturates at least one seat/segment ceiling.
+    for _ in 0..matching.len() * 3 + 1 {
+        let mut sums = [0.0; 2];
+        for j in 0..matching.len() {
+            if capacities[j] - allocated[j].iter().sum::<f64>() > 1e-9 {
+                for (i, sum) in sums.iter_mut().enumerate() {
+                    if limits[j][i] - allocated[j][i] > 1e-9 {
+                        *sum += weights[j][i];
+                    }
+                }
+            }
+        }
+        let mut accepted = [0.0; 2];
+        for j in 0..matching.len() {
+            let spare = (capacities[j] - allocated[j].iter().sum::<f64>()).max(0.0);
+            if spare <= 1e-9 {
+                continue;
+            }
+            let mut add = [0.0; 2];
+            for i in 0..2 {
+                if sums[i] > 0.0 && limits[j][i] - allocated[j][i] > 1e-9 {
+                    add[i] =
+                        (spill[i] * weights[j][i] / sums[i]).min(limits[j][i] - allocated[j][i]);
+                }
+            }
+            let total = add.iter().sum::<f64>();
+            let scale = if total > spare { spare / total } else { 1.0 };
+            for i in 0..2 {
+                let n = add[i] * scale;
+                allocated[j][i] += n;
+                accepted[i] += n;
+            }
+        }
+        if accepted.iter().sum::<f64>() <= 1e-9 {
+            break;
+        }
+        for i in 0..2 {
+            spill[i] = (spill[i] - accepted[i]).max(0.0);
+        }
+    }
+    let daily = allocated[own_index].iter().sum::<f64>();
+    let per_flight = daily / frequency(route);
+    let per_departure = if (per_flight - f64::from(seats)).abs() < 1e-9 {
+        i64::from(seats)
+    } else {
+        per_flight.floor().min(f64::from(seats)) as i64
+    };
+    Ok(Estimate {
+        daily_passengers: per_departure as f64 * frequency(route),
+        daily_spill: (requested - daily).max(0.0),
+        per_departure,
+    })
+}
+
+#[cfg(test)]
+pub fn passengers(route: &Route, routes: &[Offer]) -> Result<i64, String> {
+    let seats = routes
+        .iter()
+        .find(|o| same_offer(route, &o.route))
+        .ok_or("Angebot ohne Sitzkapazität.")?
+        .seats;
+    Ok(estimate(route, seats, routes)?.per_departure)
 }
 
 pub fn same_market(a: &Route, b: &Route) -> bool {
@@ -130,15 +266,125 @@ mod tests {
     }
 
     #[test]
+    fn seat_spill_reaches_cheaper_and_pricier_offers_but_respects_limits() {
+        let g = game(2, 720);
+        for rival_price in [20, 100] {
+            let mut a = g.routes[0].clone();
+            let mut b = g.routes[1].clone();
+            a.ticket_eur = 60;
+            b.ticket_eur = rival_price;
+            let uncapped = vec![Offer::new(&a, 10_000), Offer::new(&b, 10_000)];
+            let limited = vec![Offer::new(&a, 1), Offer::new(&b, 10_000)];
+            let before = estimate(&b, 10_000, &uncapped).unwrap();
+            let after = estimate(&b, 10_000, &limited).unwrap();
+            assert!(after.daily_passengers > before.daily_passengers);
+            assert!(estimate(&a, 1, &limited).unwrap().daily_spill > 0.0);
+            assert_eq!(passengers(&a, &limited).unwrap(), 1);
+            let carried = after.daily_passengers + 1.0;
+            assert!(carried <= market(&a, 0).unwrap().total());
+            // Input order, IDs and the return direction do not affect economic shares.
+            let mut reverse = limited.clone();
+            reverse.reverse();
+            assert_eq!(
+                passengers(&b, &limited).unwrap(),
+                passengers(&b, &reverse).unwrap()
+            );
+            std::mem::swap(&mut b.origin_icao, &mut b.destination_icao);
+            assert_eq!(
+                passengers(&b, &limited).unwrap(),
+                passengers(&b, &reverse).unwrap()
+            );
+        }
+        let mut a = g.routes[0].clone();
+        let mut b = g.routes[1].clone();
+        a.ticket_eur = 0;
+        b.ticket_eur = 100_000;
+        let blocked = vec![Offer::new(&a, 1), Offer::new(&b, 10_000)];
+        assert_eq!(passengers(&b, &blocked).unwrap(), 0);
+        // Leisure spill cannot enter a business-only offer above its price limit.
+        b.ticket_eur =
+            (crate::economy::reference_price(crate::routes::distance_km("EDDF", "EDDM").unwrap())
+                * CONFIG.leisure_price_limit)
+                .ceil() as i64;
+        let business_only = vec![Offer::new(&a, 1), Offer::new(&b, 10_000)];
+        assert_eq!(market(&b, b.ticket_eur).unwrap().leisure, 0.0);
+        assert!(
+            estimate(&b, 10_000, &business_only)
+                .unwrap()
+                .daily_passengers
+                <= market(&b, b.ticket_eur).unwrap().business
+        );
+    }
+
+    #[test]
+    fn all_full_and_single_offer_are_capacity_bounded_without_inventing_demand() {
+        let g = game(2, 1440);
+        let offers: Vec<_> = g.routes.iter().map(|r| Offer::new(r, 1)).collect();
+        for o in &offers {
+            let e = estimate(&o.route, o.seats, &offers).unwrap();
+            assert_eq!(e.per_departure, 1);
+            assert!(e.daily_spill > 0.0);
+        }
+        let r = &g.routes[0];
+        let sole = [Offer::new(r, 10_000)];
+        let e = estimate(r, 10_000, &sole).unwrap();
+        assert_eq!(
+            e.per_departure,
+            market(r, r.ticket_eur).unwrap().total().floor() as i64
+        );
+        assert_eq!(e.daily_spill, 0.0);
+        assert_eq!(passengers(r, &[Offer::new(r, 1)]).unwrap(), 1);
+    }
+
+    #[test]
+    fn spilling_service_matches_pause_speeds_steps_and_restart() {
+        let mut g = game(2, 1440);
+        g.set_ticket_price(1, 0).unwrap();
+        assert!(
+            estimate(&g.routes[0], 72, &g.market_routes())
+                .unwrap()
+                .daily_spill
+                > 0.0
+        );
+        let mut fast = g.clone();
+        assert!(fast.advance(30.0 * 86400.0));
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("spill.json");
+        for speed in [1, 4, 16] {
+            let mut stepped = g.clone();
+            stepped.clock.set_running(false);
+            let paused = serde_json::to_value(&stepped).unwrap();
+            assert!(stepped.advance(86400.0));
+            assert_eq!(paused, serde_json::to_value(&stepped).unwrap());
+            stepped.clock.set_speed(speed);
+            stepped.clock.set_running(true);
+            for day in 0..30 {
+                for _ in 0..24 {
+                    assert!(stepped.advance(3600.0 / f64::from(speed)));
+                }
+                if day == 7 {
+                    crate::save::save(&path, &stepped).unwrap();
+                    stepped = crate::save::load(&path).unwrap();
+                }
+            }
+            stepped.clock.set_speed(1);
+            assert_eq!(
+                serde_json::to_value(&fast).unwrap(),
+                serde_json::to_value(&stepped).unwrap()
+            );
+        }
+    }
+
+    #[test]
     fn unrelated_market_does_not_dilute_supply() {
         let g = game(1, 120);
         let r = &g.routes[0];
         let mut other = r.clone();
         other.destination_icao = "LTFM".into();
-        let offers = vec![r.clone(), other];
+        let offers = vec![Offer::new(r, 72), Offer::new(&other, 72)];
         assert_eq!(
             passengers(r, &offers).unwrap(),
-            passengers(r, &g.routes).unwrap()
+            passengers(r, &g.market_routes()).unwrap()
         );
     }
 
@@ -164,9 +410,9 @@ mod tests {
         let free = market(r, 0).unwrap();
         let paid = market(r, reference as i64).unwrap();
         assert!(paid.business / free.business > paid.leisure / free.leisure);
-        let jet = economy::quote_shared(r, "a320_200", &g.routes).unwrap();
-        let atr = economy::quote_shared(r, "atr72_600", &g.routes).unwrap();
-        assert_eq!(jet.passengers, atr.passengers);
+        let jet = economy::quote_shared(r, "a320_200", &g.market_routes()).unwrap();
+        let atr = economy::quote_shared(r, "atr72_600", &g.market_routes()).unwrap();
+        assert!(jet.passengers >= atr.passengers);
         let mut previous = free.total();
         for price in [50, 100, 150, 200, 100_000] {
             let demand = market(r, price).unwrap().total();
@@ -231,29 +477,32 @@ mod tests {
     #[test]
     fn reversed_routes_share_market_and_unplanned_routes_do_not_dilute_it() {
         let mut g = game(2, 120);
-        let before = passengers(&g.routes[0], &g.routes).unwrap();
+        let before = passengers(&g.routes[0], &g.market_routes()).unwrap();
         let r = &mut g.routes[1];
         std::mem::swap(&mut r.origin_icao, &mut r.destination_icao);
-        assert_eq!(passengers(&g.routes[0], &g.routes).unwrap(), before);
+        assert_eq!(
+            passengers(&g.routes[0], &g.market_routes()).unwrap(),
+            before
+        );
         g.routes[1].plan = None;
-        assert!(passengers(&g.routes[0], &g.routes).unwrap() > before);
+        assert!(passengers(&g.routes[0], &g.market_routes()).unwrap() > before);
         g.routes[1].plan = Some(operations::FlightPlan {
             first_departure: 60,
             interval_seconds: 7200,
             ..Default::default()
         });
         g.routes[1].ticket_eur = 100_000;
-        assert_eq!(passengers(&g.routes[1], &g.routes).unwrap(), 0);
+        assert_eq!(passengers(&g.routes[1], &g.market_routes()).unwrap(), 0);
         // An unaffordable competitor no longer takes customers from the cheap offer.
-        assert!(passengers(&g.routes[0], &g.routes).unwrap() > before);
+        assert!(passengers(&g.routes[0], &g.market_routes()).unwrap() > before);
     }
 
     #[test]
     fn rare_flights_do_not_bank_days_of_demand() {
         let g = game(1, 10080);
         assert_eq!(
-            passengers(&g.routes[0], &g.routes).unwrap(),
-            market(&g.routes[0], 100).unwrap().total().floor() as i64
+            passengers(&g.routes[0], &g.market_routes()).unwrap(),
+            (market(&g.routes[0], 100).unwrap().total().floor() as i64).min(72)
         );
     }
 
