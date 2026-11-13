@@ -105,33 +105,33 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 ## rust/src/economy.rs
 6 pub const HISTORY_LIMIT: usize = 100;
 8 pub struct Config
-19 struct Rates
-27 static CONFIG: LazyLock<Config> = LazyLock::new(||
-56 pub fn default_ticket() -> i64
-60 pub fn rules_text() -> String
-64 pub fn reference_price(km: f64) -> f64
-69 pub struct Totals
-81 impl Totals
-82 pub fn costs(&self) -> i64
-85 pub fn profit(&self) -> i64
-88 pub fn load_percent(&self) -> f64
-95 pub fn add(&mut self, other: &Self, count: u64) -> Option<()>
-109 pub struct FlightResult
-118 pub struct Finance
-124 pub fn quote(route: &Route, model_id: &str) -> Result<Totals, String>
-128 pub fn quote_shared(route: &Route, model_id: &str, routes: &[Route]) -> Result<Totals, String>
-150 impl Game
-151 pub fn set_ticket_price(&mut self, id: u32, price: i64) -> Result<(), String>
-158 pub fn validate_finance(&self) -> Result<(), String>
-220 mod tests
-222 fn game(price: i64) -> Game
-235 fn prices_distance_capacity_and_costs_are_predictable()
-261 fn landing_debits_once_empty_flights_can_create_debt_and_prices_validate()
-297 fn frame_sizes_16x_save_load_and_history_are_identical()
-335 fn v5_migration_never_charges_past_landings_and_new_saves_reject_bad_finance()
-377 fn financial_overflow_rolls_back_clock_flights_and_balance()
-389 fn deleting_routes_preserves_results_and_new_game_resets_finances()
-411 fn calibrated_route_matrix_and_price_sensitivity()
+18 struct Rates
+25 static CONFIG: LazyLock<Config> = LazyLock::new(||
+52 pub fn default_ticket() -> i64
+56 pub fn rules_text() -> String
+60 pub fn reference_price(km: f64) -> f64
+65 pub struct Totals
+77 impl Totals
+78 pub fn costs(&self) -> i64
+81 pub fn profit(&self) -> i64
+84 pub fn load_percent(&self) -> f64
+91 pub fn add(&mut self, other: &Self, count: u64) -> Option<()>
+105 pub struct FlightResult
+114 pub struct Finance
+120 pub fn quote(route: &Route, model_id: &str) -> Result<Totals, String>
+124 pub fn quote_shared(route: &Route, model_id: &str, routes: &[Route]) -> Result<Totals, String>
+148 impl Game
+149 pub fn set_ticket_price(&mut self, id: u32, price: i64) -> Result<(), String>
+156 pub fn validate_finance(&self) -> Result<(), String>
+218 mod tests
+220 fn game(price: i64) -> Game
+233 fn prices_distance_capacity_and_costs_are_predictable()
+260 fn landing_debits_once_empty_flights_can_create_debt_and_prices_validate()
+296 fn frame_sizes_16x_save_load_and_history_are_identical()
+334 fn v5_migration_never_charges_past_landings_and_new_saves_reject_bad_finance()
+376 fn financial_overflow_rolls_back_clock_flights_and_balance()
+388 fn deleting_routes_preserves_results_and_new_game_resets_finances()
+410 fn calibrated_route_matrix_and_price_sensitivity()
 525 fn historical_v6_costs_and_active_flight_survive_rebalancing()
 
 ## rust/src/game.rs
@@ -206,56 +206,56 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 75 fn get_route_finances(&self) -> Array<VarDictionary>
 113 fn get_route_flight_page(&self, route_id: u32, offset: i64) -> Array<VarDictionary>
 124 fn get_finance_series(&self, route_id: u32) -> Array<VarDictionary>
-147 fn get_map_airports(&self) -> Array<VarDictionary>
-164 fn get_map_routes(&self) -> Array<VarDictionary>
-183 fn get_map_flights(&self) -> Array<VarDictionary>
-201 fn get_economy_rules(&self) -> GString
-206 fn set_ticket_price(&mut self, route_id: u32, price: i64) -> GString
-216 fn get_financial_summary(&self) -> VarDictionary
-245 fn get_flight_results(&self) -> Array<VarDictionary>
-256 fn schedule_route(
-271 fn stop_schedule(&mut self, route_id: u32) -> GString
-281 fn get_operations(&self) -> Array<VarDictionary>
-362 fn preview_route(
-381 fn create_route(&mut self, origin: GString, destination: GString, aircraft_id: u32) -> GString
-391 fn assign_route(&mut self, route_id: u32, aircraft_id: u32) -> GString
-401 fn delete_route(&mut self, route_id: u32) -> GString
-411 fn get_competitors(&self) -> Array<VarDictionary>
-478 fn get_route_competition(&self, route_id: u32) -> Array<VarDictionary>
-482 struct Offer<'a>
-550 fn get_routes(&self) -> Array<VarDictionary>
-585 fn get_aircraft_models(&self) -> Array<VarDictionary>
-596 fn buy_aircraft(&mut self, model_id: GString) -> GString
-604 fn get_fleet(&self) -> Array<VarDictionary>
-643 fn request_maintenance(&mut self, aircraft_id: u32) -> GString
-654 fn cancel_maintenance(&mut self, aircraft_id: u32) -> GString
-665 fn get_staff(&self) -> Array<VarDictionary>
-690 fn get_staff_overview(&self) -> VarDictionary
-777 fn hire_staff(&mut self, role: GString, count: i64) -> GString
-788 fn hire_missing_staff(&mut self) -> GString
-818 fn dismiss_staff(&mut self, employee_id: u32) -> GString
-828 fn get_countries(&self) -> Array<VarDictionary>
-844 fn get_airports(&self, country_code: GString) -> Array<VarDictionary>
-863 fn get_starting_capital(&self) -> GString
-871 fn has_airline(&self) -> bool
-876 fn found_airline(&mut self, name: GString, country: GString, airport: GString) -> GString
-888 fn get_airline_info(&self) -> VarDictionary
-915 fn save_game(&self, path: GString) -> GString
-923 fn load_game(&mut self, path: GString) -> GString
-934 fn start(&mut self)
-939 fn pause(&mut self)
-944 fn is_running(&self) -> bool
-949 fn set_speed(&mut self, multiplier: i64) -> bool
-954 fn get_speed(&self) -> i64
-959 fn advance(&mut self, real_seconds: f64) -> bool
-964 fn get_elapsed_seconds(&self) -> f64
-969 fn get_display_time(&self) -> GString
-974 impl SimulationClock
-976 fn route_maintenance_status(&self, route: &routes::Route) -> String
-1017 fn idle_crew_demand(&self) -> (u32, u32)
-1034 fn route_staff_status(&self, route: &routes::Route) -> String
-1052 fn maintenance_info(&self, p: usize, plane: &aircraft::Aircraft) -> VarDictionary
-1092 fn flight_dictionary(f: &economy::FlightResult) -> VarDictionary
+157 fn get_map_airports(&self) -> Array<VarDictionary>
+174 fn get_map_routes(&self) -> Array<VarDictionary>
+193 fn get_map_flights(&self) -> Array<VarDictionary>
+211 fn get_economy_rules(&self) -> GString
+216 fn set_ticket_price(&mut self, route_id: u32, price: i64) -> GString
+226 fn get_financial_summary(&self) -> VarDictionary
+258 fn get_flight_results(&self) -> Array<VarDictionary>
+269 fn schedule_route(
+284 fn stop_schedule(&mut self, route_id: u32) -> GString
+294 fn get_operations(&self) -> Array<VarDictionary>
+375 fn preview_route(
+394 fn create_route(&mut self, origin: GString, destination: GString, aircraft_id: u32) -> GString
+404 fn assign_route(&mut self, route_id: u32, aircraft_id: u32) -> GString
+414 fn delete_route(&mut self, route_id: u32) -> GString
+424 fn get_competitors(&self) -> Array<VarDictionary>
+491 fn get_route_competition(&self, route_id: u32) -> Array<VarDictionary>
+495 struct Offer<'a>
+563 fn get_routes(&self) -> Array<VarDictionary>
+598 fn get_aircraft_models(&self) -> Array<VarDictionary>
+609 fn buy_aircraft(&mut self, model_id: GString) -> GString
+617 fn get_fleet(&self) -> Array<VarDictionary>
+656 fn request_maintenance(&mut self, aircraft_id: u32) -> GString
+667 fn cancel_maintenance(&mut self, aircraft_id: u32) -> GString
+678 fn get_staff(&self) -> Array<VarDictionary>
+703 fn get_staff_overview(&self) -> VarDictionary
+790 fn hire_staff(&mut self, role: GString, count: i64) -> GString
+801 fn hire_missing_staff(&mut self) -> GString
+843 fn dismiss_staff(&mut self, employee_id: u32) -> GString
+853 fn get_countries(&self) -> Array<VarDictionary>
+869 fn get_airports(&self, country_code: GString) -> Array<VarDictionary>
+888 fn get_starting_capital(&self) -> GString
+896 fn has_airline(&self) -> bool
+901 fn found_airline(&mut self, name: GString, country: GString, airport: GString) -> GString
+913 fn get_airline_info(&self) -> VarDictionary
+940 fn save_game(&self, path: GString) -> GString
+948 fn load_game(&mut self, path: GString) -> GString
+959 fn start(&mut self)
+964 fn pause(&mut self)
+969 fn is_running(&self) -> bool
+974 fn set_speed(&mut self, multiplier: i64) -> bool
+979 fn get_speed(&self) -> i64
+984 fn advance(&mut self, real_seconds: f64) -> bool
+989 fn get_elapsed_seconds(&self) -> f64
+994 fn get_display_time(&self) -> GString
+999 impl SimulationClock
+1001 fn route_maintenance_status(&self, route: &routes::Route) -> String
+1042 fn idle_crew_demand(&self) -> (u32, u32)
+1059 fn route_staff_status(&self, route: &routes::Route) -> String
+1077 fn maintenance_info(&self, p: usize, plane: &aircraft::Aircraft) -> VarDictionary
+1117 fn flight_dictionary(f: &economy::FlightResult) -> VarDictionary
 
 ## rust/src/maintenance.rs
 20 const RESUME_DELAY: u64 = 60;
@@ -395,44 +395,45 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 69 struct Salaries
 76 pub struct Needs
 83 struct Config
-93 static CONFIG: LazyLock<Result<Config, String>> = LazyLock::new(||
-124 fn config() -> Result<&'static Config, String>
-128 pub fn needs(model_id: &str) -> Result<&'static Needs, String>
-135 pub fn salary(role: Role) -> Result<i64, String>
-144 pub fn period_seconds() -> Result<u64, String>
-148 pub fn max_hire_batch() -> u32
-153 pub struct Employee
-165 pub struct Staff
-175 pub enum Activity
-183 impl Activity
-184 pub fn label(self) -> &'static str
-193 impl Game
-194 pub fn staff_count(&self, role: Role) -> u32
-204 pub fn reserved_crew(&self) -> (u32, u32)
-220 pub fn busy_technicians(&self) -> u32
-232 pub fn busy_staff(&self, role: Role) -> u32
-240 pub fn available_staff(&self, role: Role) -> u32
-245 pub fn technician_target(&self) -> u32
-255 pub fn crew_shortage(&self, model_id: &str) -> Result<(u32, u32), String>
-264 pub fn require_crew(&self, model_id: &str) -> Result<(), String>
-283 pub fn staff_activity(&self) -> Vec<Activity>
-309 pub fn monthly_payroll(&self) -> i64
-316 fn employee_name(id: u32) -> Result<String, String>
-328 pub(crate) fn hire_batch(
-395 pub fn hire_staff(&mut self, role: Role, count: u32) -> Result<(), String>
-404 pub fn equip_staff_for(&mut self, model_id: &str) -> Result<(), String>
-422 fn accrued(e: &Employee, until: u64) -> Result<i64, String>
-429 fn record_payroll(&mut self, time: u64, amount: i64)
-440 pub fn dismiss_staff(&mut self, id: u32) -> Result<(), String>
-461 fn remove_employee(&mut self, i: usize) -> Result<(), String>
-478 pub fn dismiss_surplus(&mut self) -> Result<(), String>
-499 pub(crate) fn assign_waiting_technicians(&mut self) -> Result<(), String>
-526 pub fn next_payroll_event(&self) -> Option<u64>
-537 pub(crate) fn apply_payroll(&mut self) -> Result<(), String>
-566 pub(crate) fn grandfather_staff(&mut self) -> Result<(), String>
-582 pub fn validate_staff(&self) -> Result<(), String>
-623 impl Game
-625 pub fn staff_up(&mut self)
+94 static CONFIG: LazyLock<Result<Config, String>> = LazyLock::new(||
+126 fn config() -> Result<&'static Config, String>
+130 pub fn needs(model_id: &str) -> Result<&'static Needs, String>
+137 pub fn salary(role: Role) -> Result<i64, String>
+146 pub fn period_seconds() -> Result<u64, String>
+150 pub fn max_hire_batch() -> u32
+155 pub struct Employee
+167 pub struct Staff
+177 pub enum Activity
+185 impl Activity
+186 pub fn label(self) -> &'static str
+195 impl Game
+196 pub fn staff_count(&self, role: Role) -> u32
+206 pub fn reserved_crew(&self) -> (u32, u32)
+222 pub fn busy_technicians(&self) -> u32
+234 pub fn busy_staff(&self, role: Role) -> u32
+242 pub fn available_staff(&self, role: Role) -> u32
+247 pub fn technician_target(&self) -> u32
+257 pub fn crew_shortage(&self, model_id: &str) -> Result<(u32, u32), String>
+266 pub fn require_crew(&self, model_id: &str) -> Result<(), String>
+285 pub fn staff_activity(&self) -> Vec<Activity>
+311 pub fn monthly_payroll(&self) -> i64
+318 fn employee_name(id: u32) -> Result<String, String>
+331 pub(crate) fn hire_batch(
+412 pub fn hire_staff(&mut self, role: Role, count: u32) -> Result<(), String>
+421 pub fn equip_staff_for(&mut self, model_id: &str) -> Result<(), String>
+439 fn accrued(e: &Employee, until: u64) -> Result<i64, String>
+447 pub fn accrued_payroll(&self) -> Result<i64, String>
+454 fn record_payroll(&mut self, time: u64, amount: i64)
+465 pub fn dismiss_staff(&mut self, id: u32) -> Result<(), String>
+486 fn remove_employee(&mut self, i: usize) -> Result<(), String>
+510 pub fn dismiss_surplus(&mut self) -> Result<(), String>
+531 pub(crate) fn assign_waiting_technicians(&mut self) -> Result<(), String>
+558 pub fn next_payroll_event(&self) -> Option<u64>
+569 pub(crate) fn apply_payroll(&mut self) -> Result<(), String>
+598 pub(crate) fn grandfather_staff(&mut self) -> Result<(), String>
+614 pub fn validate_staff(&self) -> Result<(), String>
+655 impl Game
+657 pub fn staff_up(&mut self)
 
 ## rust/src/staff_tests.rs
 8 const DAY: f64 = 86_400.0;
@@ -450,7 +451,11 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 251 fn waiting_aircraft_take_over_technicians_freed_by_other_checks()
 274 fn suspended_plans_keep_their_crew_reserved_through_a_check()
 301 fn ai_airlines_hire_follow_the_same_rules_and_pay_salaries()
-331 fn old_saves_without_staff_are_grandfathered_with_the_minimum_crew()
+333 fn old_saves_without_staff_are_grandfathered_with_the_minimum_crew()
+376 fn repeated_hiring_reserves_existing_payroll_and_accrued_debt()
+397 fn short_employment_is_not_free_and_dismissal_settles_debt()
+416 fn fractional_payroll_carries_across_boundaries_and_restart()
+435 fn legacy_crew_costs_and_airborne_quotes_survive_without_new_duplicate_charges()
 
 ## scripts/finance_chart.gd
 1 extends Control
@@ -560,18 +565,18 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 1 extends VBoxContainer
 4 const UI = preload("res://scripts/ui/components.gd")
 5 signal changed
-23 func _ready() -> void:
-84 func _process(delta: float) -> void:
-92 func refresh(force: bool = false) -> void:
-115 func _roles(overview: Dictionary) -> void:
-130 func _aircraft(overview: Dictionary) -> void:
-159 func _staff(staff: Array) -> void:
-176 func _shortage(overview: Dictionary) -> void:
-194 func _selection_changed() -> void:
-205 func _report(error: String, success: String) -> void:
-212 func _hire() -> void:
-217 func _hire_missing() -> void:
-220 func _dismiss() -> void:
+25 func _ready() -> void:
+97 func _process(delta: float) -> void:
+105 func refresh(force: bool = false) -> void:
+128 func _roles(overview: Dictionary) -> void:
+143 func _aircraft(overview: Dictionary) -> void:
+172 func _staff(staff: Array) -> void:
+194 func _shortage(overview: Dictionary) -> void:
+212 func _selection_changed() -> void:
+223 func _report(error: String, success: String) -> void:
+231 func _hire() -> void:
+237 func _hire_missing() -> void:
+240 func _dismiss() -> void:
 
 ## scripts/ui/components.gd
 1 extends RefCounted

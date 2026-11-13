@@ -305,7 +305,7 @@ func _refresh_finance() -> void:
 	metrics["profit"].add_theme_color_override("font_color", UI.POSITIVE if finance["profit_eur"] >= 0 else UI.NEGATIVE)
 	metrics["load"].text = "%.1f %%" % finance["load_percent"]
 	metrics["flights"].text = "%d  /  %d Pax" % [finance["flights"], finance["passengers"]]
-	finance_breakdown.text = "Ticketeinnahmen     %s\nBetriebskosten          %s\n\nTreibstoff                    %s\nFlughäfen                   %s\nPersonal                      %s\nWartung / Verwaltung  %s\n\nWartungschecks           %s\nFlugzeugkäufe             %s" % [UI.money(finance["revenue_eur"]), UI.money(finance["costs_eur"]), UI.money(finance["fuel_eur"]), UI.money(finance["airport_eur"]), UI.money(finance["crew_eur"]), UI.money(finance["overhead_eur"]), UI.money(finance["maintenance_eur"]), UI.money(finance["purchases_eur"])]
+	finance_breakdown.text = "Ticketeinnahmen     %s\nBetriebskosten          %s\n\nTreibstoff                    %s\nFlughäfen                   %s\nCrewkosten (historisch) %s\nGehälter                       %s\nWartung / Verwaltung  %s\nWartungschecks           %s\n\nFlugzeugkäufe             %s" % [UI.money(finance["revenue_eur"]), UI.money(finance["costs_eur"]), UI.money(finance["fuel_eur"]), UI.money(finance["airport_eur"]), UI.money(finance["crew_eur"]), UI.money(finance["payroll_eur"]), UI.money(finance["overhead_eur"]), UI.money(finance["maintenance_eur"]), UI.money(finance["purchases_eur"])]
 	var operations: Array = simulation.get_operations()
 	operation_summary.text = "%d Flugzeuge  ·  %d Routen  ·  %d aktive Flugpläne" % [simulation.get_fleet().size(), simulation.get_routes().size(), operations.size()]
 	for operation in operations:

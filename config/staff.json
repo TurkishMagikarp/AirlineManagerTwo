@@ -1,5 +1,6 @@
 {
   "payroll_period_days": 30,
+  "salary_reserve_periods": 1,
   "max_employees": 600,
   "max_hire_batch": 50,
   "salary_eur_per_period": {

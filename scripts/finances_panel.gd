@@ -131,7 +131,7 @@ func _select_route() -> void:
 		offset = 0
 	route_id = r["route_id"]
 	flight_count = r["flights"]
-	detail.text = "Route #%d · %s–%s · %d Landungen · %s\nKostenaufschlüsselung und Ticketpreis im Flug-Tooltip." % [route_id, r["origin"], r["destination"], flight_count, "Keine Flüge" if flight_count == 0 else "Gewinn" if r["profit_eur"] >= 0 else "Verlust"]
+	detail.text = "Route #%d · %s–%s · %d Landungen · %s\nFlugkosten ohne zentrale Gehälter und Wartungschecks; diese sind im Unternehmensergebnis enthalten. Historische Crewkosten bleiben erhalten. Kostenaufschlüsselung und Ticketpreis im Flug-Tooltip." % [route_id, r["origin"], r["destination"], flight_count, "Keine Flüge" if flight_count == 0 else "Gewinn" if r["profit_eur"] >= 0 else "Verlust"]
 	load_chart.set_series(simulation.get_finance_series(route_id), "load", true)
 	_flights()
 

@@ -90,7 +90,9 @@ func _run() -> void:
 	var summary: Dictionary = sim.get_financial_summary()
 	if not _check(plane["status"] == "maintenance" and plane["location_icao"] == "EDDM" and summary["flights"] == flights + 1, "Flight in progress lands normally before maintenance"):
 		return
-	if not _check(sim.get_airline_info()["capital_eur"] == balance + (summary["profit_eur"] - profit) - cost and summary["maintenance_eur"] == cost, "Maintenance cost debited exactly once at start"):
+	# Company profit now includes the check itself; subtracting `cost` again
+	# here would repeat the old financial-report double-counting.
+	if not _check(sim.get_airline_info()["capital_eur"] == balance + (summary["profit_eur"] - profit) and summary["maintenance_eur"] == cost, "Maintenance cost debited exactly once at start and included in profit"):
 		return
 	if not _check(main.fleet_tree.get_root().get_child(0).get_text(3).begins_with("In Wartung") and "In Wartung bis" in sim.get_operations()[0]["status_text"], "Fleet and routes show the hangar state"):
 		return

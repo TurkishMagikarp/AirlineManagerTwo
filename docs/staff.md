@@ -18,9 +18,11 @@ Schichtpläne, Gewerkschaften oder Schulungen: Personal wird als Pool je Rolle g
   sind (Einstellung oder Ende einer anderen Wartung). Wartende Flugzeuge erzeugen kein Zeitereignis und
   halten die Simulation nicht auf.
 - **Entlassen:** Nur verfügbare Mitarbeiter; wer im Einsatz ist, kann nicht entlassen werden. Bei der Entlassung
-  wird das bis dahin angefallene Gehalt anteilig gezahlt.
-- **Einstellen:** Sofort, atomar, begrenzt (`max_hire_batch`, `max_employees`); das erste Monatsgehalt muss
-  als Guthaben vorhanden sein, es wird aber nicht im Voraus abgebucht.
+  wird das bis dahin angefallene Gehalt anteilig auf volle EUR aufgerundet gezahlt (keine kostenlose Kurzzeitbeschäftigung).
+- **Einstellen:** Sofort, atomar, begrenzt (`max_hire_batch`, `max_employees`); offene Gehälter plus
+  `salary_reserve_periods` Gehaltsperioden des gesamten Bestands inklusive Neueinstellungen müssen
+  als Guthaben vorhanden sein. Standard: eine Periode; konfigurierbar von 0 bis 12. Keine Vorausabbuchung.
+  Bereits geschuldete Gehälter werden auch bei negativem Guthaben beglichen; Entlassen erlässt keine Schulden.
 
 ## Gehälter
 An jeder Zahlungsgrenze (Vielfache von `payroll_period_days`, ganze Sekunden, wie Wartungs- und Prüfungs-
@@ -29,8 +31,11 @@ erhält nur den anteiligen Betrag. Die Zahlungen stehen in `history.payroll` (wi
 der Kontostand-Validierung und im Finanz-Tab („Gehälter insgesamt“) berücksichtigt. Das Ergebnis hängt
 nicht von Schrittweite, Geschwindigkeit (1×/4×/16×) oder Speichern/Laden ab.
 
-Hinweis: Die bestehenden Flugkosten enthalten weiterhin `crew_eur_per_hour` (jetzt als Flugzulage für die
-Besatzung zu lesen); die Grundgehälter kommen zusätzlich über die Gehaltsabrechnung hinzu.
+Neue Flugangebote enthalten keine separaten Crewkosten: Personalaufwand entsteht ausschließlich über
+Gehälter. Historische Crewkosten und bereits gespeicherte Abflugangebote bleiben unverändert und werden
+nicht nachberechnet. Routenberichte enthalten Flugkosten; zentrale Gehälter und Wartungschecks stehen
+im Unternehmensergebnis und in dessen Zeitreihe. Gehaltsrundung erfolgt kumulativ seit Einstellung,
+damit Zahlungsgrenzen keine Bruchteile mehrfach verwerfen.
 
 ## KI-Airlines
 Beim Start stellen sie Besatzung und Techniker ein. Vor jeder Expansion bzw. jedem Wiedereinstieg stellen sie

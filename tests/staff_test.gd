@@ -89,6 +89,20 @@ func _run() -> void:
 		return
 	if not _check(summary["payroll_eur"] == 2 * coarse.get_staff_overview()["monthly_payroll_eur"], "Two payrolls in the finances after 70 days"):
 		return
+	if not _check(summary["crew_eur"] == 0 and summary["costs_eur"] == summary["fuel_eur"] + summary["airport_eur"] + summary["overhead_eur"] + summary["maintenance_eur"] + summary["payroll_eur"], "Company costs include salaries exactly once"):
+		return
+	var chart_costs := 0
+	var chart_profit := 0
+	for point in coarse.get_finance_series(0):
+		chart_costs += point["costs"]
+		chart_profit += point["profit"]
+	if not _check(chart_costs == summary["costs_eur"] and chart_profit == summary["profit_eur"], "Company chart reconciles with payroll and maintenance"):
+		return
+	var route_costs := 0
+	for route_summary in coarse.get_route_finances():
+		route_costs += route_summary["costs_eur"]
+	if not _check(route_costs + summary["payroll_eur"] + summary["maintenance_eur"] == summary["costs_eur"], "Route reports exclude central expenses rather than duplicating them"):
+		return
 	var dismissed: String = coarse.dismiss_staff(coarse.get_staff()[-1]["id"])
 	if not _check(not dismissed.is_empty() or coarse.get_staff_overview()["employees"] > 0, "Dismissal obeys assignment"):
 		return
@@ -115,6 +129,23 @@ func _run() -> void:
 	if not _check(hangar.hire_staff("technician", 3).is_empty() and not hangar.get_fleet()[0]["maintenance_waiting_staff"], "Hiring technicians starts the check"):
 		return
 	hangar.pause()
+	# The bulk button must cover a waiting check even if the fleet already has
+	# enough technicians for one aircraft, all of whom are currently busy.
+	var parallel := _fresh("Parallel Hangars")
+	parallel.buy_aircraft("atr72_600")
+	parallel.create_route("EDDF", "EDDM", 2)
+	parallel.hire_missing_staff()
+	parallel.schedule_route(1, 1, 120)
+	parallel.schedule_route(2, 1, 120)
+	parallel.start()
+	parallel.advance(7300.0)
+	parallel.request_maintenance(1)
+	parallel.request_maintenance(2)
+	parallel.advance(8000.0)
+	if not _check(parallel.get_staff_overview()["missing_total"] == 3, "Waiting check reports three missing technicians"):
+		return
+	if not _check(parallel.hire_missing_staff().is_empty() and parallel.get_staff_overview()["missing_total"] == 0 and not parallel.get_fleet()[1]["maintenance_waiting_staff"], "Bulk hiring covers busy and waiting hangars"):
+		return
 	if not _check(hangar.save_game(path).is_empty(), "Save mid-maintenance with staff"):
 		return
 	print("PASS: staff shortages, hiring, salaries, step-size equality and technician waiting")

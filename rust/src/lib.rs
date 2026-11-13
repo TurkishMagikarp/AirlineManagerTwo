@@ -129,16 +129,26 @@ impl SimulationClock {
         let span = now - h.since;
         let steps = span.clamp(1, 63);
         let mut previous = economy::Totals::default();
+        let mut previous_costs = 0i128;
         (0..=steps).map(|i| {
             let time = h.since + (u128::from(span) * u128::from(i) / u128::from(steps)) as u64;
             let t = h.totals(route_id, time);
             let seats = t.seats - previous.seats;
             let load = if seats == 0 { -1.0 } else { (t.passengers - previous.passengers) as f64 * 100.0 / seats as f64 };
+            // Central expenses belong only to the company series, never to
+            // every route (which would duplicate them again).
+            let costs = i128::from(t.costs()) + if route_id == 0 {
+                h.maintenance_through(time) + h.payroll_through(time)
+            } else { 0 };
+            let period_costs = costs - previous_costs;
+            let period_profit = i128::from(t.revenue - previous.revenue) - period_costs;
             let row = vdict! { "seconds" => time as i64, "time" => operations::display_time(time).as_str(),
                 "balance" => h.balance(time), "revenue" => t.revenue - previous.revenue,
-                "costs" => t.costs() - previous.costs(), "profit" => t.profit() - previous.profit(),
+                "costs" => period_costs.min(i128::from(i64::MAX)) as i64,
+                "profit" => period_profit.clamp(i128::from(i64::MIN), i128::from(i64::MAX)) as i64,
                 "load" => load };
             previous = t;
+            previous_costs = costs;
             row
         }).collect()
     }
@@ -234,10 +244,13 @@ impl SimulationClock {
             .as_ref()
             .map(|h| h.payroll_through(u64::MAX).min(i128::from(i64::MAX)) as i64)
             .unwrap_or(0);
+        let costs = i128::from(t.costs()) + i128::from(maintenance) + i128::from(payroll);
+        let profit = i128::from(t.revenue) - costs;
         vdict! { "flights" => t.flights, "passengers" => t.passengers, "revenue_eur" => t.revenue,
         "maintenance_eur" => maintenance, "payroll_eur" => payroll,
         "fuel_eur" => t.fuel, "airport_eur" => t.airport, "crew_eur" => t.crew, "overhead_eur" => t.overhead,
-        "costs_eur" => t.costs(), "profit_eur" => t.profit(), "purchases_eur" => purchases,
+        "costs_eur" => costs.min(i128::from(i64::MAX)) as i64,
+        "profit_eur" => profit.clamp(i128::from(i64::MIN), i128::from(i64::MAX)) as i64, "purchases_eur" => purchases,
         "load_percent" => t.load_percent() }
     }
 
@@ -790,7 +803,19 @@ impl SimulationClock {
         let (pilots, cabin) = self.idle_crew_demand();
         let techs = g
             .technician_target()
-            .saturating_sub(g.staff_count(staff::Role::Technician));
+            .saturating_sub(g.staff_count(staff::Role::Technician))
+            .max(
+                g.fleet
+                    .iter()
+                    .filter(|p| {
+                        p.status == aircraft::AircraftStatus::Maintenance
+                            && p.maintenance.as_ref().is_some_and(|v| !v.staffed)
+                    })
+                    .filter_map(|p| staff::needs(&p.model_id).ok())
+                    .map(|n| n.technicians)
+                    .sum::<u32>()
+                    .saturating_sub(g.available_staff(staff::Role::Technician)),
+            );
         let hires = [
             (
                 staff::Role::Pilot,

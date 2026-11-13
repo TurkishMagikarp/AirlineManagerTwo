@@ -82,6 +82,7 @@ pub struct Needs {
 #[derive(Deserialize)]
 struct Config {
     payroll_period_days: u64,
+    salary_reserve_periods: u32,
     max_employees: usize,
     max_hire_batch: u32,
     salary_eur_per_period: Salaries,
@@ -96,6 +97,7 @@ static CONFIG: LazyLock<Result<Config, String>> = LazyLock::new(|| {
     let invalid = || "Personalkonfiguration enthält ungültige Werte.".to_string();
     let s = &c.salary_eur_per_period;
     if !(1..=365).contains(&c.payroll_period_days)
+        || c.salary_reserve_periods > 12
         || !(1..=100_000).contains(&c.max_employees)
         || !(1..=1000).contains(&c.max_hire_batch)
         || [s.pilot, s.cabin_crew, s.technician]
@@ -324,7 +326,8 @@ impl Game {
     }
 
     /// Atomic: nothing changes unless every role can be hired. `check_funds`
-    /// requires the first period's salaries in cash (not for save migration).
+    /// requires accrued pay plus the configured reserve for the entire resulting
+    /// workforce in cash (not for save migration). Nothing is charged upfront.
     pub(crate) fn hire_batch(
         &mut self,
         hires: &[(Role, u32)],
@@ -336,7 +339,9 @@ impl Game {
             .airline
             .as_ref()
             .ok_or("Bitte zuerst eine Airline gründen.")?;
-        let total_count: u32 = hires.iter().map(|h| h.1).sum();
+        let total_count = hires.iter().try_fold(0u32, |sum, h| {
+            sum.checked_add(h.1).ok_or("Ungültige Anzahl.")
+        })?;
         if total_count == 0 {
             return Ok(());
         }
@@ -362,9 +367,15 @@ impl Game {
                 )
                 .ok_or("Finanzüberlauf.")?;
         }
-        if check_funds && airline.capital_eur < cost {
+        let required = self
+            .monthly_payroll()
+            .checked_add(cost)
+            .and_then(|v| v.checked_mul(i64::from(c.salary_reserve_periods)))
+            .and_then(|v| v.checked_add(self.accrued_payroll().ok()?))
+            .ok_or("Finanzüberlauf.")?;
+        if check_funds && airline.capital_eur < required {
             return Err(format!(
-                "Nicht genügend Guthaben: {cost} EUR für das erste Monatsgehalt benötigt, {} EUR verfügbar.",
+                "Nicht genügend Guthaben: {required} EUR für offene Gehälter und Personalreserve benötigt, {} EUR verfügbar.",
                 airline.capital_eur
             ));
         }
@@ -388,8 +399,14 @@ impl Game {
             }
         }
         staff.next_id = id;
-        self.staff = staff;
-        self.assign_waiting_technicians()
+        let previous_staff = std::mem::replace(&mut self.staff, staff);
+        let previous_fleet = self.fleet.clone();
+        if let Err(error) = self.assign_waiting_technicians() {
+            self.staff = previous_staff;
+            self.fleet = previous_fleet;
+            return Err(error);
+        }
+        Ok(())
     }
 
     pub fn hire_staff(&mut self, role: Role, count: u32) -> Result<(), String> {
@@ -421,9 +438,17 @@ impl Game {
     /// Salary owed to `e` up to `until` since the last settlement.
     fn accrued(e: &Employee, until: u64) -> Result<i64, String> {
         let period = i128::from(period_seconds()?);
-        let seconds = i128::from(until.saturating_sub(e.paid_until));
-        i64::try_from(i128::from(e.salary_eur) * seconds / period)
-            .map_err(|_| "Finanzüberlauf.".to_string())
+        // Cumulative rounding carries fractional EUR across payroll boundaries.
+        let earned = i128::from(e.salary_eur) * i128::from(until.saturating_sub(e.hired_at));
+        let paid = i128::from(e.salary_eur) * i128::from(e.paid_until.saturating_sub(e.hired_at));
+        i64::try_from(earned / period - paid / period).map_err(|_| "Finanzüberlauf.".to_string())
+    }
+
+    pub fn accrued_payroll(&self) -> Result<i64, String> {
+        self.staff.employees.iter().try_fold(0i64, |sum, e| {
+            sum.checked_add(Self::accrued(e, self.clock.elapsed().as_secs())?)
+                .ok_or_else(|| "Finanzüberlauf.".to_string())
+        })
     }
 
     fn record_payroll(&mut self, time: u64, amount: i64) {
@@ -460,7 +485,14 @@ impl Game {
 
     fn remove_employee(&mut self, i: usize) -> Result<(), String> {
         let now = self.clock.elapsed().as_secs();
-        let pay = Self::accrued(&self.staff.employees[i], now)?;
+        let e = &self.staff.employees[i];
+        let mut pay = Self::accrued(e, now)?;
+        // Final settlement rounds up, preventing repeated short employment from
+        // providing free labor. Existing archived payments remain untouched.
+        let earned = i128::from(e.salary_eur) * i128::from(now.saturating_sub(e.hired_at));
+        if earned % i128::from(period_seconds()?) != 0 {
+            pay = pay.checked_add(1).ok_or("Finanzüberlauf.")?;
+        }
         let balance = self
             .airline
             .as_ref()
