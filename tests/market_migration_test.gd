@@ -24,10 +24,12 @@ func _run() -> void:
 			return
 		var current := FileAccess.get_file_as_string(source)
 		var fuel := RegEx.create_from_string('"fuel_market":\\{[^}]*\\},?')
+		var cabins := RegEx.create_from_string('"business_(seats|ticket_eur|passengers|revenue)":\\d+,|,"business_(seats|ticket_eur|passengers|revenue)":\\d+')
 		var assignment := RegEx.create_from_string('"aircraft_ids":\\[([0-9]+)\\]')
 		for version in [14, 15]:
 			# Text substitutions preserve Rust u64/nanosecond integer encodings.
-			var legacy := fuel.sub(current, "", true).replace('"version":16', '"version":%d' % version)
+			var legacy := fuel.sub(current, "", true).replace('"version":17', '"version":%d' % version)
+			legacy = cabins.sub(legacy, "", true)
 			if version == 14:
 				legacy = assignment.sub(legacy, '"aircraft_id":$1', true)
 				legacy = legacy.replace('"aircraft_ids":[]', '"aircraft_id":null').replace('"rotations":[],', '')
@@ -46,7 +48,7 @@ func _run() -> void:
 			return
 		if not _check(sim.get_elapsed_seconds() == 86400.0 and sim.get_financial_summary()["fuel_cents_per_kg"] == 80, "Legacy time preserved and fuel starts at base price"):
 			return
-		if not _check(sim.save_game(path).is_empty() and JSON.parse_string(FileAccess.get_file_as_string(path))["version"] == 16, "Migrated save uses current version"):
+		if not _check(sim.save_game(path).is_empty() and JSON.parse_string(FileAccess.get_file_as_string(path))["version"] == 17, "Migrated save uses current version"):
 			return
 	# Exercise a changed global price, beyond the zero-delta initial display.
 	sim.start()
