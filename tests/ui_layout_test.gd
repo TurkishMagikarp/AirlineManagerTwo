@@ -61,9 +61,11 @@ func _run() -> void:
 				if not capture_dir.is_empty():
 					await RenderingServer.frame_post_draw
 					assert(root.get_texture().get_image().save_png(capture_dir.path_join("route-controls-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
-					scroll.ensure_control_visible(main.routes_panel.results_tree)
-					for frame in range(3):
-						await process_frame
+				scroll.ensure_control_visible(main.routes_panel.results_tree)
+				for frame in range(3):
+					await process_frame
+				assert(root.get_visible_rect().encloses(main.routes_panel.results_tree.get_global_rect()))
+				if not capture_dir.is_empty():
 					await RenderingServer.frame_post_draw
 					assert(root.get_texture().get_image().save_png(capture_dir.path_join("route-results-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
 	assert(sim.get_financial_summary() == unchanged, "Navigation/layout must never change finances")

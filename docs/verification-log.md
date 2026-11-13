@@ -123,3 +123,12 @@ begonnenen Auftrags nach Speichern/Laden bei 1×/4×/16× ergibt exakt denselben
 wie ohne Auftrag, keine Abbuchung; laufende Wartung nicht stornierbar; Routen-Tab
 sperrt „Flugplan aktivieren“ während der Wartung und zeigt den Status, der nach
 Wartungsende wieder verschwindet. Spielstandversion unverändert (10), neues Feld additiv.
+
+## 2026-11-13 — Linux Godot regression verification (AIR-8)
+
+- Official Godot 4.7.2 Linux x86_64 (`ed1daf0bf`), downloaded outside the repo; debug Rust `.so` built with the temporary external Zig linker wrapper (server has no `cc`). `cargo build/test/clippy --locked --manifest-path rust/Cargo.toml` passed; 126 Rust tests, including migrations, determinism and AI economy coverage.
+- All 19 `tests/*_test.gd` scripts passed: 18 standalone scripts plus `save_restart_test.gd` through its four explicit modes. `map_benchmark.gd` excluded. Main scene `--headless --quit-after 10` passed. Layout sizes: 1440×1000, 1100×720, 680×520; staff UI also covers 800 pixels.
+- All eight restart scenarios passed as separate Linux Godot processes: competition, economy, finances, financing, flight, maintenance, staff, and save (running/paused, Unicode filename). These run the `.gd` phases from the PowerShell scripts, not PowerShell or START.bat.
+- Fixed stale fleet ownership and competition/spill assertions. Added owned/leased disposal blocking checks in flight and maintenance, the real restructuring deadline/action in Finances, and positive Routes spill/capacity checks. Made the route-results reachability assertion run without screenshot capture. No gameplay, balance, save-format or toolchain changes.
+- Screenshots unavailable: Xvfb exists, but display startup lacks `libXcursor.so.1`/Wayland libraries. Headless geometry checks do not verify appearance. Owner still needs Windows START.bat, the PowerShell restart scripts, and visual inspection of fleet trading, restructuring and spill panels.
+- First editor import completed assets but crashed during exit; one subsequent `--headless --editor --import --quit` passed. Runtime tests and startup were unaffected; no engine workaround committed.

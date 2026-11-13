@@ -93,6 +93,32 @@ func _run() -> void:
 			expected = info
 		elif not _check(info == expected, "1x/4x/16x identical financing"):
 			return
+	# Isolated old-save-style fixture: fund the historical opening consistently,
+	# then let Rust advance real distress/grace events and expose the deadline.
+	var distress_path := path + ".distress"
+	var distressed := _fresh()
+	assert(distressed.borrow_money(1000000).is_empty())
+	assert(distressed.save_game(distress_path).is_empty())
+	var text := FileAccess.get_file_as_string(distress_path)
+	var fixture: Dictionary = JSON.parse_string(text)
+	var cash: int = fixture["state"]["airline"]["capital_eur"]
+	var opening_balance: int = fixture["state"]["history"]["opening_balance"]
+	var position := text.find('"capital_eur":', text.find('"name":"Finance test"'))
+	text = text.left(position) + text.substr(position).replace('"capital_eur":%d' % cash, '"capital_eur":-1')
+	position = text.rfind('"opening_balance":')
+	text = text.left(position) + text.substr(position).replace('"opening_balance":%d' % opening_balance, '"opening_balance":%d' % (opening_balance - cash - 1))
+	var file := FileAccess.open(distress_path, FileAccess.WRITE)
+	file.store_string(text)
+	file.close()
+	assert(distressed.load_game(distress_path).is_empty())
+	distressed.start()
+	assert(distressed.advance(31.0 * DAY))
+	var resolution: Dictionary = distressed.get_financing()
+	panel.simulation = distressed
+	panel.refresh(true)
+	if not _check(resolution["deadline"] != "—" and resolution["can_reschedule"] and "Restrukturierungsfrist: " + resolution["deadline"] in panel.loan_status.text and not panel.loan_reschedule.disabled, "Finances displays the real Rust restructuring deadline and rescue action"):
+		return
+	DirAccess.remove_absolute(distress_path)
 	panel.queue_free()
 	if not keep_save:
 		DirAccess.remove_absolute(path)
