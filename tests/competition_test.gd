@@ -41,7 +41,9 @@ func _run() -> void:
 		if not _check(sim.set_ticket_price(1, 50).is_empty() and sim.get_active_flights() == frozen, "Active price change preserves departure snapshot"):
 			return
 		var cheap: Array = sim.get_route_competition(1)
-		if not _check(cheap[0]["passengers_per_day"] > equal[0]["passengers_per_day"] and cheap[1]["passengers_per_day"] < equal[1]["passengers_per_day"], "Cheap fare wins passengers from rival"):
+		if not _check(cheap[0]["passengers_per_day"] > equal[0]["passengers_per_day"] and cheap[1]["passengers_per_day"] > equal[1]["passengers_per_day"] and sim.get_routes()[0]["daily_spill"] > 0, "Cheap fare fills own seats and spills passengers to rival"):
+			return
+		if not _check(cheap[0]["passengers_per_day"] == cheap[0]["seats"] * cheap[0]["departures_per_day_per_direction"] and cheap[1]["passengers_per_day"] == cheap[1]["seats"] * cheap[1]["departures_per_day_per_direction"], "Spill respects both airlines' seat capacity"):
 			return
 		if not _check(is_equal_approx(cheap[0]["share_percent"] + cheap[1]["share_percent"], 100.0), "Passenger shares reconcile"):
 			return
@@ -60,6 +62,10 @@ func _run() -> void:
 	panel.route_tree.get_root().get_child(0).select(0)
 	panel.route_tree.item_selected.emit()
 	if not _check("Regional Wings" in panel.competition_label.text and "Competition Air" in panel.competition_label.text and "Pax/Tag" in panel.competition_label.text, "Route UI shows real competitor and estimated split"):
+		return
+	var route: Dictionary = sim.get_routes()[0]
+	var route_row: TreeItem = panel.route_tree.get_root().get_child(0)
+	if not _check(route["daily_spill"] > 0 and route_row.get_text(4) == "%d / %d / %d" % [route["base_daily_market"], route["expected_daily_passengers"], route["daily_spill"]], "Routes displays positive spill from Rust after price change and restart"):
 		return
 	var slow: RefCounted = ClassDB.instantiate("SimulationClock")
 	if not _check(slow.load_game(path).is_empty(), "Load comparison simulation"):

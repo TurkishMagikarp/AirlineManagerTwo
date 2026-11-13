@@ -43,7 +43,7 @@ func _run() -> void:
 		if not _check(plane["identifier"] == "AM-%06d" % count and plane["model_id"] == "atr72_600" and plane["location_icao"] == "EDDF" and plane["status"] == "parked" and plane["purchase_price_eur"] == price, "Individual owned aircraft is parked at home airport"):
 			return
 		var row: TreeItem = main.fleet_tree.get_root().get_child(count - 1)
-		if not _check(row.get_text(0) == plane["identifier"] and row.get_text(1) == "ATR 72-600" and row.get_text(2) == "EDDF" and row.get_text(3) == "Geparkt", "Fleet table displays all purchased aircraft"):
+		if not _check(row.get_text(0) == plane["identifier"] and row.get_text(1) == "ATR 72-600 · " + plane["ownership"] and row.get_text(2) == "EDDF" and row.get_text(3) == "Geparkt", "Fleet table displays all purchased aircraft"):
 			return
 	var fleet_before: Array = main.simulation.get_fleet()
 	var balance_before: int = main.simulation.get_airline_info()["capital_eur"]
