@@ -6,6 +6,7 @@ mod demand;
 mod economy;
 mod game;
 mod history;
+mod maintenance;
 mod map;
 mod operations;
 #[cfg(test)]
@@ -218,7 +219,14 @@ impl SimulationClock {
             .map(|p| i128::from(p.purchase_price_eur))
             .sum::<i128>()
             .min(i128::from(i64::MAX)) as i64;
+        let maintenance = self
+            .game
+            .history
+            .as_ref()
+            .map(|h| h.maintenance_through(u64::MAX).min(i128::from(i64::MAX)) as i64)
+            .unwrap_or(0);
         vdict! { "flights" => t.flights, "passengers" => t.passengers, "revenue_eur" => t.revenue,
+        "maintenance_eur" => maintenance,
         "fuel_eur" => t.fuel, "airport_eur" => t.airport, "crew_eur" => t.crew, "overhead_eur" => t.overhead,
         "costs_eur" => t.costs(), "profit_eur" => t.profit(), "purchases_eur" => purchases,
         "load_percent" => t.load_percent() }
@@ -291,11 +299,37 @@ impl SimulationClock {
                         s.location,
                         operations::display_time(s.ready)
                     ),
-                    aircraft::AircraftStatus::Parked => {
+                    aircraft::AircraftStatus::Parked | aircraft::AircraftStatus::Maintenance => {
                         format!("Geplant · bereit in {}", s.location)
                     }
                 };
-                format!("{} · {} Landungen", phase, s.completed)
+                let prior = route.plan.as_ref().map(|p| p.prior_flights).unwrap_or(0);
+                let hangar = plane
+                    .maintenance
+                    .as_ref()
+                    .map(|v| {
+                        format!(
+                            " · Wartung ab Landung bis {}",
+                            operations::display_time(v.end)
+                        )
+                    })
+                    .unwrap_or_default();
+                format!("{} · {} Landungen{}", phase, s.completed + prior, hangar)
+            } else if let Some(v) = plane
+                .maintenance
+                .as_ref()
+                .filter(|_| plane.status == aircraft::AircraftStatus::Maintenance)
+            {
+                let resume = v.resume.as_ref().is_some_and(|r| r.route_id == route.id);
+                format!(
+                    "In Wartung bis {}{}",
+                    operations::display_time(v.end),
+                    if resume {
+                        " · Flugplan wird danach fortgesetzt"
+                    } else {
+                        ""
+                    }
+                )
             } else {
                 "Kein Flugplan".into()
             };
@@ -389,12 +423,25 @@ impl SimulationClock {
                     .fleet
                     .iter()
                     .map(|p| {
+                        let condition = maintenance::rules(&p.model_id)
+                            .map(|r| p.wear.condition_permille(r) as f64 / 10.0)
+                            .unwrap_or(0.0);
+                        let hangar = match (&p.maintenance, &p.status) {
+                            (Some(v), aircraft::AircraftStatus::Maintenance) => {
+                                format!(" · in Wartung bis {}", operations::display_time(v.end))
+                            }
+                            (Some(_), _) => " · Wartung nach Landung".into(),
+                            _ => String::new(),
+                        };
                         format!(
-                            "{} · {} · {} · Kauf {} EUR",
+                            "{} · {} · {} · Kauf {} EUR · Zustand {:.0} % · {} Checks{}",
                             p.identifier(),
                             p.model_id,
                             p.location_icao,
-                            p.purchase_price_eur
+                            p.purchase_price_eur,
+                            condition,
+                            p.wear.checks,
+                            hangar
                         )
                     })
                     .collect::<Vec<_>>()
@@ -411,6 +458,7 @@ impl SimulationClock {
                 vdict! { "airline" => g.airline.as_ref().unwrap().name.as_str(),
                 "balance" => g.airline.as_ref().unwrap().capital_eur,
                 "fleet_size" => g.fleet.len() as i64, "routes" => routes.as_str(),
+                "maintenance_eur" => g.history.as_ref().map(|h| h.maintenance_through(u64::MAX).min(i128::from(i64::MAX)) as i64).unwrap_or(0),
                 "fleet" => fleet.as_str(), "purchases" => purchases.as_str(),
                 "last_action" => c.last_action.as_str() }
             })
@@ -564,13 +612,29 @@ impl SimulationClock {
                     "model_id" => plane.model_id.as_str(), "model_name" => name,
                     "location_icao" => plane.location_icao.as_str(),
                     "location_name" => location_name,
-                    "status" => match plane.status { aircraft::AircraftStatus::Parked => "parked", aircraft::AircraftStatus::InFlight => "in_flight", aircraft::AircraftStatus::Ground => "ground" },
+                    "status" => match plane.status { aircraft::AircraftStatus::Parked => "parked", aircraft::AircraftStatus::InFlight => "in_flight", aircraft::AircraftStatus::Ground => "ground", aircraft::AircraftStatus::Maintenance => "maintenance" },
                     "purchase_price_eur" => plane.purchase_price_eur,
                     "range_km" => aircraft::model(&plane.model_id).map(|m| m.range_km).unwrap_or(0),
                     "route_id" => self.game.routes.iter().find(|r| r.aircraft_id == Some(plane.id)).map(|r| r.id).unwrap_or(0)
                 }
             })
+            .zip(self.game.fleet.iter().enumerate())
+            .map(|(mut row, (p, plane))| {
+                row.extend_dictionary(&self.maintenance_info(p, plane), true);
+                row
+            })
             .collect()
+    }
+
+    /// Empty string means success. Airborne aircraft enter the hangar after landing.
+    #[func]
+    fn request_maintenance(&mut self, aircraft_id: u32) -> GString {
+        self.game
+            .request_maintenance(aircraft_id)
+            .err()
+            .unwrap_or_default()
+            .as_str()
+            .into()
     }
 
     #[func]
@@ -717,6 +781,45 @@ impl SimulationClock {
     #[func]
     fn get_display_time(&self) -> GString {
         self.game.clock.display_time().as_str().into()
+    }
+}
+
+impl SimulationClock {
+    fn maintenance_info(&self, p: usize, plane: &aircraft::Aircraft) -> VarDictionary {
+        let Ok(r) = maintenance::rules(&plane.model_id) else {
+            return VarDictionary::new();
+        };
+        let w = &plane.wear;
+        let hours = |s: u64| s as f64 / 3600.0;
+        let quote = self.game.quote_maintenance(plane.id);
+        let (state, visit) = match &plane.maintenance {
+            Some(v) if plane.status == aircraft::AircraftStatus::Maintenance => ("active", Some(v)),
+            Some(v) => ("pending", Some(v)),
+            None => ("none", None),
+        };
+        let shown = visit.cloned().or_else(|| quote.as_ref().ok().cloned());
+        let due = self.game.due_landing(p);
+        vdict! {
+            "condition_percent" => w.condition_permille(r) as f64 / 10.0,
+            "flight_hours" => hours(w.flight_seconds), "cycles" => w.cycles as i64,
+            "checks" => w.checks as i64,
+            "check_flight_hours" => hours(w.check_seconds), "check_cycles" => w.check_cycles as i64,
+            "interval_flight_hours" => r.interval_flight_hours as i64,
+            "interval_cycles" => r.interval_cycles as i64,
+            "maintenance_due" => w.is_due(r),
+            "maintenance_state" => state,
+            "maintenance_unscheduled" => visit.is_some_and(|v| v.unscheduled),
+            "maintenance_start" => shown.as_ref().map(|v| operations::display_time(v.start)).unwrap_or_default().as_str(),
+            "maintenance_end" => shown.as_ref().map(|v| operations::display_time(v.end)).unwrap_or_default().as_str(),
+            "maintenance_end_seconds" => shown.as_ref().map(|v| v.end as i64).unwrap_or(-1),
+            "maintenance_cost_eur" => shown.as_ref().map(|v| v.cost_eur).unwrap_or_else(|| maintenance::cost(w, r, false).unwrap_or(0)),
+            "maintenance_hours" => maintenance::duration(r, false).unwrap_or(0) as f64 / 3600.0,
+            "unscheduled_cost_eur" => maintenance::cost(w, r, true).unwrap_or(0),
+            "unscheduled_hours" => maintenance::duration(r, true).unwrap_or(0) as f64 / 3600.0,
+            "due_time" => due.map(operations::display_time).unwrap_or_default().as_str(),
+            "can_request_maintenance" => quote.is_ok(),
+            "maintenance_hint" => quote.err().unwrap_or_default().as_str()
+        }
     }
 }
 

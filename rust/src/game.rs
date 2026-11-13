@@ -134,6 +134,8 @@ impl Game {
             location_icao: airline.home_airport_icao.clone(),
             status: AircraftStatus::Parked,
             purchase_price_eur: model.price_eur,
+            wear: Default::default(),
+            maintenance: None,
         };
         self.fleet.push(plane);
         if let Some(h) = &mut self.history {

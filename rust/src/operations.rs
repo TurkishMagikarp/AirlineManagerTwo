@@ -6,7 +6,7 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct FlightPlan {
     pub first_departure: u64,
     pub interval_seconds: u64,
@@ -14,6 +14,20 @@ pub struct FlightPlan {
     /// Immutable departure quote. Settled exactly once, at landing.
     #[serde(default)]
     pub airborne: Option<crate::economy::FlightResult>,
+    /// Additive (version 10): a plan resumed after maintenance at the
+    /// destination starts with the return leg.
+    #[serde(default)]
+    pub reversed: bool,
+    /// Landings before the plan was suspended for maintenance (display only).
+    #[serde(default)]
+    pub prior_flights: u64,
+}
+
+impl FlightPlan {
+    /// Whether departure `index` leaves from the route's destination.
+    pub fn is_return(&self, index: u64) -> bool {
+        (index % 2 == 1) != self.reversed
+    }
 }
 
 pub fn departure_quote(
@@ -24,7 +38,7 @@ pub fn departure_quote(
 ) -> Result<crate::economy::FlightResult, String> {
     let plan = route.plan.as_ref().ok_or("Kein Flugplan.")?;
     let mut directed = route.clone();
-    if !index.is_multiple_of(2) {
+    if plan.is_return(index) {
         std::mem::swap(&mut directed.origin_icao, &mut directed.destination_icao);
     }
     let (flight, _) = timings(route, model)?;
@@ -97,7 +111,7 @@ pub fn movement(route: &Route, model: &str, now: u64) -> Result<Movement, String
     let ready = landing
         .checked_add(ground)
         .ok_or("Flugplan-Zeitüberlauf.")?;
-    let (origin, destination) = if index % 2 == 0 {
+    let (origin, destination) = if !plan.is_return(index) {
         (&route.origin_icao, &route.destination_icao)
     } else {
         (&route.destination_icao, &route.origin_icao)
@@ -152,6 +166,15 @@ impl Game {
             .iter()
             .find(|p| Some(p.id) == route.aircraft_id)
             .ok_or("Bitte ein Flugzeug zuweisen.")?;
+        if plane.maintenance.is_some() {
+            return Err("Das Flugzeug ist in Wartung oder dafür vorgemerkt.".into());
+        }
+        if plane
+            .wear
+            .is_due(crate::maintenance::rules(&plane.model_id)?)
+        {
+            return Err("Wartung erforderlich: Zustand 0 %. Bitte zuerst warten.".into());
+        }
         if plane.location_icao != route.origin_icao || plane.status != AircraftStatus::Parked {
             return Err(
                 "Das Flugzeug muss am Startflughafen geparkt sein; keine automatische Überführung."
@@ -178,8 +201,7 @@ impl Game {
         self.route_mut(id)?.plan = Some(FlightPlan {
             first_departure: first,
             interval_seconds: interval,
-            completed_flights: 0,
-            airborne: None,
+            ..FlightPlan::default()
         });
         Ok(())
     }
@@ -234,6 +256,17 @@ impl Game {
             };
             // No user actions occur inside an advance. The stationary market permits
             // batching all new departures; only the pre-existing flight may differ.
+            let wear = if count > 0 {
+                let Ok((flight, _)) = timings(route, &self.fleet[p].model_id) else {
+                    return false;
+                };
+                let Some(wear) = self.fleet[p].wear.added(count, flight) else {
+                    return false;
+                };
+                Some(wear)
+            } else {
+                None
+            };
             let mut batches = Vec::new();
             let mut index = plan.completed_flights;
             if count > 0 {
@@ -303,7 +336,7 @@ impl Game {
             } else {
                 None
             };
-            updates.push((i, p, state, airborne));
+            updates.push((i, p, state, airborne, wear));
         }
         let balance = match &self.airline {
             Some(a) => match a.capital_eur.checked_add(delta) {
@@ -331,7 +364,10 @@ impl Game {
             self.airline.as_mut().unwrap().capital_eur = balance;
         }
         self.clock = clock;
-        for (r, p, state, airborne) in updates {
+        for (r, p, state, airborne, wear) in updates {
+            if let Some(wear) = wear {
+                self.fleet[p].wear = wear;
+            }
             self.fleet[p].status = state.status;
             self.fleet[p].location_icao = state.location;
             self.routes[r].plan.as_mut().unwrap().completed_flights = state.completed;
@@ -379,7 +415,10 @@ impl Game {
                 {
                     return Err("Widersprüchlicher Flugzustand im Spielstand.".into());
                 }
-            } else if plane.status != AircraftStatus::Parked {
+            } else if !matches!(
+                plane.status,
+                AircraftStatus::Parked | AircraftStatus::Maintenance
+            ) {
                 return Err("Flugzustand ohne Flugplan.".into());
             }
         }
@@ -670,14 +709,19 @@ mod tests {
         }
         let mut g = game();
         g.clock.set_running(true);
-        g.advance(60.0 + 7200.0 * 1_000_000.0);
-        assert_eq!(
-            g.routes[0].plan.as_ref().unwrap().completed_flights,
-            1_000_000
-        );
-        assert_eq!(g.fleet[0].status, AircraftStatus::InFlight);
-        assert_eq!(g.finance.totals.flights, 1_000_000);
+        // ~228 years of 2-hour shuttles, interrupted only by mandatory checks.
+        assert!(g.advance(60.0 + 7200.0 * 1_000_000.0));
+        let landings = g.finance.totals.flights as u64;
+        assert!(landings > 900_000, "{landings}");
+        assert_eq!(g.fleet[0].wear.cycles, landings);
+        if let Some(plan) = &g.routes[0].plan {
+            assert_eq!(plan.prior_flights + plan.completed_flights, landings);
+        }
+        assert!(g.fleet[0].wear.checks > 1000);
         assert_eq!(g.finance.recent.len(), crate::economy::HISTORY_LIMIT);
+        g.validate_operations().unwrap();
+        g.validate_maintenance().unwrap();
+        g.validate_history().unwrap();
     }
 
     #[test]

@@ -56,6 +56,9 @@ pub struct History {
     pub prior_totals: Totals,
     pub batches: Vec<Batch>,
     pub purchases: Vec<Purchase>,
+    /// Additive (version 10): maintenance checks, debited at their start.
+    #[serde(default)]
+    pub maintenance: Vec<Purchase>,
 }
 impl History {
     pub fn new(since: u64, opening_balance: i64) -> Self {
@@ -65,6 +68,7 @@ impl History {
             prior_totals: Totals::default(),
             batches: Vec::new(),
             purchases: Vec::new(),
+            maintenance: Vec::new(),
         }
     }
     pub fn record(&mut self, batch: Batch) {
@@ -117,7 +121,17 @@ impl History {
             .filter(|p| p.time <= time)
             .map(|p| i128::from(p.amount))
             .sum();
-        i128::from(self.opening_balance) + i128::from(profit) - purchases
+        i128::from(self.opening_balance) + i128::from(profit)
+            - purchases
+            - self.maintenance_through(time)
+    }
+    /// Maintenance spending up to and including `time`.
+    pub fn maintenance_through(&self, time: u64) -> i128 {
+        self.maintenance
+            .iter()
+            .filter(|p| p.time <= time)
+            .map(|p| i128::from(p.amount))
+            .sum()
     }
     /// Batches of a route never overlap. Work depends on batches and page size, not flights.
     pub fn page(&self, route: u32, offset: u64, limit: usize) -> Vec<FlightResult> {
@@ -198,6 +212,10 @@ impl Game {
             .iter()
             .any(|p| p.time < h.since || p.time > now || p.amount <= 0)
             || h.purchases.windows(2).any(|p| p[0].time > p[1].time)
+            || h.maintenance
+                .iter()
+                .any(|p| p.time < h.since || p.time > now || p.amount < 0)
+            || h.maintenance.windows(2).any(|p| p[0].time > p[1].time)
             || sum.flights > self.finance.totals.flights
             || sum.revenue > self.finance.totals.revenue
             || sum.passengers > self.finance.totals.passengers
@@ -235,22 +253,31 @@ mod tests {
         let mut g = game();
         g.advance(60.0 + 7200.0 * 1_000_000.0);
         let h = g.history.as_ref().unwrap();
-        assert_eq!(h.batches.len(), 1);
+        let n = g.finance.totals.flights as u64;
+        // Uninterrupted service merges into one block; each mandatory check
+        // pauses the shuttle and starts exactly one new block.
+        let checks = g.fleet[0].wear.checks + u64::from(g.fleet[0].maintenance.is_some());
+        assert!(n > 900_000 && checks > 1000);
+        assert_eq!(
+            h.batches.len() as u64,
+            checks + u64::from(g.routes[0].plan.is_some())
+        );
+        assert_eq!(h.maintenance.len() as u64, checks);
         assert_eq!(h.totals(1, g.clock.elapsed().as_secs()), g.finance.totals);
         assert_eq!(
             h.balance(g.clock.elapsed().as_secs()),
             g.airline.as_ref().unwrap().capital_eur
         );
-        let page = h.page(1, 999_990, 50);
+        let page = h.page(1, n - 10, 50);
         assert_eq!(page.len(), 10);
         assert_eq!(page[9].origin, "EDDF");
         assert_eq!(page[8].origin, "EDDM");
-        assert!(h.page(1, 1_000_000, 50).is_empty());
+        assert!(h.page(1, n, 50).is_empty());
         assert_eq!(h.page(99, 0, 50).len(), 0);
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("million.json");
         crate::save::save(&path, &g).unwrap();
-        assert!(std::fs::metadata(&path).unwrap().len() < 100_000);
+        assert!(std::fs::metadata(&path).unwrap().len() < 1_000_000);
         let mut loaded = crate::save::load(&path).unwrap();
         assert_eq!(loaded.history, g.history);
         g.advance(7200.0);

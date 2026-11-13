@@ -238,8 +238,7 @@ mod tests {
         g.routes[1].plan = Some(operations::FlightPlan {
             first_departure: 60,
             interval_seconds: 7200,
-            completed_flights: 0,
-            airborne: None,
+            ..Default::default()
         });
         g.routes[1].ticket_eur = 100_000;
         assert_eq!(passengers(&g.routes[1], &g.routes).unwrap(), 0);

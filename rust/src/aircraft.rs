@@ -61,6 +61,8 @@ pub enum AircraftStatus {
     Parked,
     InFlight,
     Ground,
+    /// In the hangar; cannot depart until the check ends.
+    Maintenance,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -71,6 +73,11 @@ pub struct Aircraft {
     pub status: AircraftStatus,
     // Historical amount actually paid, unaffected by subsequent price changes.
     pub purchase_price_eur: i64,
+    /// Additive (version 10): older saves start without recorded wear.
+    #[serde(default)]
+    pub wear: crate::maintenance::Wear,
+    #[serde(default)]
+    pub maintenance: Option<crate::maintenance::Visit>,
 }
 
 impl Aircraft {

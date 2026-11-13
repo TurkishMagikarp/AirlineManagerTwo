@@ -8,7 +8,7 @@ use std::io::{Read, Write};
 use std::path::Path;
 use std::time::Duration;
 
-const VERSION: u32 = 9;
+const VERSION: u32 = 10;
 // Bounded input, but allow multi-year archives with frequent legitimate changes.
 const MAX_BYTES: u64 = 8 * 1024 * 1024;
 
@@ -57,6 +57,7 @@ pub fn save(path: &Path, game: &Game) -> Result<(), String> {
     game.validate_fleet()?;
     game.validate_routes()?;
     game.validate_operations()?;
+    game.validate_maintenance()?;
     game.validate_finance()?;
     game.validate_history()?;
     game.validate_competitors()?;
@@ -240,6 +241,7 @@ pub fn load(path: &Path) -> Result<Game, String> {
         }
     }
     game.validate_operations()?;
+    game.validate_maintenance()?;
     game.validate_finance()?;
     game.validate_history()?;
     game.validate_competitors()?;

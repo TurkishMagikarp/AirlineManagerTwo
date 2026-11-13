@@ -96,9 +96,61 @@ schließen und mit `START.bat` neu bauen. Historisch bezahlte Kaufpreise werden
 pro Flugzeug gespeichert und bei späteren Preisänderungen nicht neu berechnet.
 Nach Käufen weiterhin ausdrücklich **Speichern** drücken.
 
-Noch kein Verkauf, Leasing, Bestell-/Lieferprozess, Wartung oder
-separates Buchhaltungsjournal. Sofortige Verfügbarkeit und Testpreise sind
+Noch kein Verkauf, Leasing, Bestell-/Lieferprozess oder
+separates Buchhaltungsjournal (Wartung siehe unten). Sofortige Verfügbarkeit und Testpreise sind
 vorläufige Vereinfachungen, keine endgültigen Wirtschaftsregeln.
+
+## Wartung
+
+Jedes Flugzeug zählt Betriebsstunden (Flugzeit) und Zyklen (Landungen), gesamt und
+seit dem letzten Check. Abnutzung entsteht nur bei Landungen. Ein Check ist nach
+den konfigurierten Flugstunden **oder** Zyklen fällig, je nachdem was zuerst
+erreicht wird; der **Zustand** (100 % frisch, 0 % Grenze) zeigt den höheren der
+beiden Verbräuche. Bewusst einfach: keine Einzelkomponenten, keine Zufallsausfälle,
+kein Einfluss des Zustands auf Flugkosten oder Nachfrage.
+
+Im **Flotte**-Tab zeigt die Tabelle je Flugzeug **Zustand** und **Nächste Wartung**
+(verbleibende FH/Zyklen bzw. bei aktivem Flugplan die Landung, an der die Grenze
+erreicht wird). Eine Zeile auswählen: Betriebszeit, Werte seit dem letzten Check,
+geschätzte Kosten und Dauer jetzt sowie die Kosten bei Erreichen der Grenze erscheinen.
+**Wartung durchführen**:
+
+- Geparkte oder in Bodenzeit befindliche Flugzeuge gehen sofort in die Wartung.
+- Flugzeuge in der Luft beenden ihren Flug (normale Landung und Abrechnung);
+  die Wartung beginnt exakt bei der Landung.
+- Während der Wartung finden keine Abflüge statt, Flugplanaktivierung wird abgelehnt.
+  Ein unterbrochener Flugplan wird eine Minute nach Wartungsende automatisch vom
+  tatsächlichen Standort aus fortgesetzt (ggf. mit dem Rückflug); der Landungszähler
+  läuft weiter. Gelöschte oder neu zugewiesene Routen werden nicht fortgesetzt.
+- Kosten werden bei Beauftragung festgelegt und genau einmal bei Wartungsbeginn
+  abgebucht; dafür ist ausreichendes Guthaben nötig.
+- Wird die Grenze erreicht, wird das Flugzeug bei dieser Landung automatisch in eine
+  **ungeplante Wartung** geschickt: standardmäßig 150 % Kosten und 150 % Dauer.
+
+Kosten: `Grundpreis + Satz × Flugstunden seit Check + Satz × Zyklen seit Check`
+(volle EUR aufgerundet). Alle Werte stehen in `config/maintenance.json`
+(Intervalle, Dauer, Kosten je Modell, Aufschläge für ungeplante Wartung); nach
+Änderungen neu bauen. Vorläufige Werte:
+
+| Modell | Intervall | Dauer | Grundpreis | je FH | je Zyklus |
+| --- | --- | ---: | ---: | ---: | ---: |
+| A320-200 | 600 FH / 450 Zyklen | 24 h | 60.000 | 150 | 50 |
+| 737-800 | 600 FH / 450 Zyklen | 24 h | 55.000 | 150 | 50 |
+| ATR 72-600 | 500 FH / 600 Zyklen | 12 h | 20.000 | 60 | 30 |
+
+Wartungskosten erscheinen in Übersicht und Finanzen als **Wartungschecks**, getrennt
+von den Betriebskosten je Flug (die pauschale „Wartung / Verwaltung“ je Flug bleibt
+unverändert) und fließen in Kontostand und Kontoverlauf ein.
+
+KI-Airlines nutzen dieselben Regeln, Preise und Funktionen: Bei jeder Wochenprüfung
+beauftragen sie einen regulären Check für jedes Flugzeug, das sonst vor der nächsten
+Prüfung die Grenze erreichen würde. Ohne ausreichendes Guthaben folgt wie beim
+Spieler die ungeplante Wartung. Flugzeuge in Wartung bieten keine Sitze an; der
+gemeinsame Markt verteilt sich in dieser Zeit auf die übrigen Angebote.
+
+Die Logik liegt in `rust/src/maintenance.rs`. Wartungsbeginn, -ende und erzwungene
+Wartungen sind exakte Ereignisgrenzen der Rust-Uhr: Pause, 1×/4×/16×, beliebig große
+Zeitsprünge und Speichern/Laden ergeben identische Zustände ohne Schleife über jeden Flug.
 
 ## Routenplanung
 
@@ -184,7 +236,8 @@ Kosten und Preise:
 - Flughäfen/Abfertigung beider Endpunkte zusammen: **1.400 EUR (Jets) / 600 EUR
   (ATR) + 25 EUR/Passagier**.
 - Personal: (Flugzeit + 30 Minuten) × modellabhängiger Stundensatz.
-- Wartung/Verwaltung: einfache Zyklus-/Stundenpauschale, kein Wartungssystem.
+- Wartung/Verwaltung: einfache Zyklus-/Stundenpauschale je Flug; Wartungschecks
+  werden zusätzlich separat abgerechnet (siehe [Wartung](#wartung)).
   Stundenkosten je Kategorie auf volle EUR aufgerundet.
 
 | Modell | Treibstoff kg/h | Personal EUR/h |
@@ -199,8 +252,8 @@ Die Stellwerte der Nachfrage stehen in `config/demand.json` und `data/airports.j
 Bei jeder **Landung** werden Einnahmen und sämtliche Kosten genau einmal verbucht,
 auch für leere Flüge. Unterwegs noch keine Abbuchung, keine Treibstofflagerhaltung.
 Negative Kontostände sind erlaubt; Käufe benötigen weiterhin ausreichend Guthaben.
-Noch keine Kredite, Zinsen, Insolvenz, Wartungsereignisse, Steuerregeln oder
-laufenden Kosten geparkter Flugzeuge; Wartung wird nur pauschal berücksichtigt.
+Noch keine Kredite, Zinsen, Insolvenz, Steuerregeln oder laufenden Kosten
+geparkter Flugzeuge.
 
 Der Routen-Tab zeigt die **letzten 100 Landungen** einzeln mit Richtung, Zeitpunkt,
 Preis, Passagieren, Auslastung, Einnahmen, Kostenaufschlüsselung und Gewinn/Verlust.
@@ -316,7 +369,7 @@ Der aktuelle Projektname ist `Airline Manager — UI-Basis`. Der tatsächliche P
 steht auch im Tooltip der Speichermeldung. macOS ist hier nicht praktisch getestet.
 
 Rust (`rust/src/save.rs`) übernimmt Dateizugriff, JSON-Format und Validierung.
-Das Format hat Version **9** und einen `state`-Bereich mit `clock`, `airline`,
+Das Format hat Version **10** und einen `state`-Bereich mit `clock`, `airline`,
 `fleet`, `routes` (einschließlich Ticketpreis und optionalem Flugplan) und `finance`
 (Finanzsummen und letzte 100 Flugergebnisse) sowie `history` (Beginn, Anfangssaldo,
 vorherige Finanzsummen, verlustfreie Flugblöcke und zeitgestempelte Käufe).
@@ -325,6 +378,11 @@ Flotte, Routen, Konten, Abflugergebnissen, Archiv und nächster Entscheidungszei
 Archivzeiten, Summen und Flugdaten werden beim Laden und Speichern validiert.
 Additive KI-Felder speichern Strecken-Verlustprüfungen und Expansionswartezeit;
 bisherige Version-9-Spielstände bleiben durch Standardwerte lesbar.
+Version **10** ergänzt je Flugzeug `wear` (Betriebsstunden/Zyklen) und
+`maintenance` (geplante/laufende Wartung samt unterbrochenem Flugplan), je Flugplan
+`reversed`/`prior_flights` und im Archiv `maintenance` (zeitgestempelte Wartungskosten).
+Alle Felder sind additiv: Spielstände der Versionen **1–9** laden unverändert, ihre
+Flugzeuge starten mit 100 % Zustand ohne erfundene Vorgeschichte.
 Versionen **1–8** bleiben ladbar. Alte Airline-Spielstände erhalten die beiden
 KI-Unternehmen erst zum Ladezeitpunkt, ohne rückwirkende Flüge oder Änderungen
 am Spielerkonto; bereits gespeicherte Abflugergebnisse bleiben erhalten.
@@ -362,8 +420,8 @@ Das Dateilimit beträgt 8 MiB; auch Speichern prüft es, damit keine
 zu große, anschließend nicht mehr ladbare Datei einen guten Spielstand ersetzt.
 JSON wird ohne unnötige Einrückung geschrieben; vorhandene formatierte Dateien bleiben lesbar.
 Das Limit gilt weiterhin auch mit Archiv: Sehr viele Preis-/Flugplanwechsel können
-es erreichen; gleichbleibender Flugbetrieb braucht dagegen auch für Millionen
-Flüge nur wenige Archivblöcke. Noch keine Auslagerung des Archivs in eine Datenbank.
+es erreichen; gleichbleibender Flugbetrieb braucht dagegen nur einen Archivblock je
+ununterbrochenem Abschnitt zwischen Wartungen bzw. Marktänderungen. Noch keine Auslagerung des Archivs in eine Datenbank.
 
 ## Tests
 
@@ -383,11 +441,13 @@ Godot --headless --path . --script res://tests/demand_test.gd -- --restore-deman
 Godot --headless --path . --script res://tests/competition_test.gd
 Godot --headless --path . --script res://tests/finances_test.gd
 Godot --headless --path . --script res://tests/map_test.gd
+Godot --headless --path . --script res://tests/maintenance_test.gd
 powershell -ExecutionPolicy Bypass -File tests/run_save_restart_test.ps1
 powershell -ExecutionPolicy Bypass -File tests/run_flight_restart_test.ps1
 powershell -ExecutionPolicy Bypass -File tests/run_economy_restart_test.ps1
 powershell -ExecutionPolicy Bypass -File tests/run_finances_restart_test.ps1
 powershell -ExecutionPolicy Bypass -File tests/run_competition_restart_test.ps1
+powershell -ExecutionPolicy Bypass -File tests/run_maintenance_restart_test.ps1
 ```
 
 `Godot` durch den eigenen Executable-Pfad ersetzen. Der Verbindungstest lädt die
@@ -509,3 +569,21 @@ vorherige Datei. Beliebig viele Wirtschaftsänderungen sind weiterhin nicht unbe
   Kapazitätsumverteilung können ausgebuchte Billigangebote Nachfrage binden,
   die andere Airlines nicht bekommen. Eine kapazitätsbewusste zweite Verteilung
   wäre eine Wirtschaftsänderung, kein reiner technischer Fix.
+
+## Wartung verifiziert (13.11.2026)
+
+**80 Rust-Tests**, Clippy ohne Warnungen, 14 Godot-Testskripte und alle sechs
+Prozess-Neustarttests; `START.bat --headless --quit-after 10` funktioniert weiter.
+Neu geprüft: exakte Abnutzung je Landung, sofortige Wartung geparkter Flugzeuge,
+Wartungsauftrag in der Luft (Flug wird beendet und regulär abgerechnet), keine
+Abflüge während der Wartung, einmalige Abbuchung, Fortsetzung vom tatsächlichen
+Standort, erzwungene ungeplante Wartung an der Grenzlandung, fehlendes Guthaben,
+gelöschte Routen, identische Ergebnisse bei 1×/4×/16× und großen/kleinen Schritten,
+Speichern/Laden in jeder Phase (auch in getrennten Prozessen), Version-9-Migration,
+beschädigte Wartungsdaten und KI-Wartung (regulär geplant, ungeplant ohne Guthaben).
+Ein echter lokaler Version-6-Spielstand lädt, läuft weiter und wird als Version 10 gespeichert.
+
+Auswirkungen: Jede Wartungsunterbrechung beginnt einen neuen Archivblock, ebenso
+Marktänderungen durch KI-Flugzeuge in Wartung. Normale Zehnjahresstände benötigen
+jetzt ca. 92–243 KB (vorher 47–68 KB); der Extremtest mit rund zwei Millionen Flügen
+über ca. 228 Spieljahre ca. 4,9 MB (Limit 8 MiB).

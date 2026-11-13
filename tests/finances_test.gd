@@ -34,10 +34,17 @@ func _run() -> void:
 		if not _check(sim.save_game(path).is_empty(), "Save million-flight archive"):
 			return
 	var routes: Array = sim.get_route_finances()
-	if not _check(routes.size() == 2 and routes[0]["flights"] == 1_000_000 and routes[0]["profit_eur"] > 0 and routes[1]["profit_eur"] < 0, "Real profitable and loss-making routes"):
+	# ~228 years of shuttles, interrupted only by mandatory maintenance checks.
+	var count: int = routes[0]["flights"]
+	if not _check(routes.size() == 2 and count > 900_000 and routes[0]["profit_eur"] > 0 and routes[1]["profit_eur"] < 0, "Real profitable and loss-making routes"):
 		return
+	var checks := 0
+	for plane in sim.get_fleet():
+		checks += plane["checks"] + (1 if plane["maintenance_state"] != "none" else 0)
 	var info: Dictionary = sim.get_finance_history_info()
-	if not _check(info["batch_count"] >= 2 and info["batch_count"] <= 8, "Two million flights use only a few batches at real AI market changes"):
+	# Own checks pause the shuttle; competitor hangar visits change the shared
+	# market and thus the departure quotes. Both legitimately start new blocks.
+	if not _check(checks > 2000 and info["batch_count"] >= checks and info["batch_count"] < 20_000, "Archive grows only with real interruptions: %d checks, %d blocks" % [checks, info["batch_count"]]):
 		return
 	var series: Array = sim.get_finance_series(0)
 	if not _check(series.size() <= 64 and series[-1]["balance"] == sim.get_airline_info()["capital_eur"], "Bounded series reconciles to account"):
@@ -51,7 +58,7 @@ func _run() -> void:
 		return
 	var started := Time.get_ticks_usec()
 	for i in range(100):
-		sim.get_route_flight_page(1, 999_950 if i % 2 == 0 else 0)
+		sim.get_route_flight_page(1, count - 50 if i % 2 == 0 else 0)
 	print("Archive: 100 newest/oldest page queries across a million flights: %.2f ms" % ((Time.get_ticks_usec() - started) / 1000.0))
 	main._sync_view()
 	main.navigation[4].pressed.emit()
@@ -59,12 +66,12 @@ func _run() -> void:
 	panel.set_process(false)
 	panel.route_tree.get_root().get_first_child().select(0)
 	panel._select_route()
-	if not _check(panel.is_visible_in_tree() and panel.flight_count == 1_000_000 and panel.flights_tree.get_root().get_child_count() == 50, "Clicked route renders only 50 flights"):
+	if not _check(panel.is_visible_in_tree() and panel.flight_count == count and panel.flights_tree.get_root().get_child_count() == 50, "Clicked route renders only 50 flights"):
 		return
 	panel.next_button.pressed.emit()
 	if not _check(panel.offset == 50 and panel.flights_tree.get_root().get_first_child().get_text(0) == sim.get_route_flight_page(1, 50)[0]["landing"], "Older flight page from Rust"):
 		return
-	panel.offset = 999_950
+	panel.offset = count - 50
 	panel._flights()
 	if not _check(panel.next_button.disabled and panel.flights_tree.get_root().get_child_count() == 50, "Oldest recorded flights remain accessible"):
 		return
@@ -96,11 +103,12 @@ func _run() -> void:
 		return
 	sim.start()
 	sim.advance(7200.0)
-	if not _check(sim.get_route_finances()[0]["flights"] == 1_000_001, "Loaded archive continues exactly once"):
+	var continued: Array = sim.get_route_finances()
+	if not _check(continued[0]["flights"] - count in [0, 1] and continued[0]["flights"] + continued[1]["flights"] == sim.get_financial_summary()["flights"], "Loaded archive continues exactly once (or waits in the hangar)"):
 		return
 	main.queue_free()
 	await process_frame
-	print("PASS: finance tab, two million flights, compact archive, bounded charts/pages, layout, save/load and continuation")
+	print("PASS: finance tab, ~two million flights with maintenance interruptions, compact archive, bounded charts/pages, layout, save/load and continuation")
 	quit(0)
 
 func _check(condition: bool, message: String) -> bool:

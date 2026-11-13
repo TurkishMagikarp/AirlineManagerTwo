@@ -117,6 +117,7 @@ impl Game {
             g.validate_fleet()?;
             g.validate_routes()?;
             g.validate_operations()?;
+            g.validate_maintenance()?;
             g.validate_finance()?;
             g.validate_history()?;
             let mut reviewed = std::collections::HashSet::new();
@@ -153,7 +154,11 @@ impl Game {
             self.clock = target;
             return true;
         }
-        if self.competitors.is_empty() {
+        if self.competitors.is_empty()
+            && self
+                .next_maintenance_event()
+                .is_none_or(|t| Duration::from_secs(t) > target.elapsed())
+        {
             return self.advance_company_to(target, &self.routes.clone());
         }
         // Transactional across all companies: no partial time or cash updates.
@@ -192,7 +197,18 @@ impl Game {
                 .iter()
                 .map(|c| c.next_review)
                 .min()
-                .unwrap();
+                .unwrap_or(u64::MAX);
+            // Maintenance starts, ends and forced groundings of every company.
+            let maintenance = std::iter::once(staged.next_maintenance_event())
+                .chain(
+                    staged
+                        .competitors
+                        .iter()
+                        .map(|c| c.game.next_maintenance_event()),
+                )
+                .flatten()
+                .min()
+                .unwrap_or(u64::MAX);
             // A loss review can occur in flight every week at the same phase.
             // Stop at the next ground-time end, not at an arbitrary later review.
             let closures: Vec<_> = staged
@@ -229,8 +245,12 @@ impl Game {
                 .map(|c| c.3)
                 .min()
                 .unwrap_or(review)
-                .min(review);
-            let end = target.elapsed().min(Duration::from_secs(boundary));
+                .min(review)
+                .min(maintenance);
+            // An event already due (e.g. after loading) never moves the clock back.
+            let end = target
+                .elapsed()
+                .min(Duration::from_secs(boundary).max(staged.clock.elapsed()));
             let supply = staged.market_routes();
             // Exact integer/nanosecond target, not repeated floating-point conversion.
             if !staged.advance_company_to(Clock::from_state(end, true, 1).unwrap(), &supply) {
@@ -253,6 +273,14 @@ impl Game {
                         return false;
                     }
                 }
+            }
+            if staged.apply_maintenance().is_err()
+                || staged
+                    .competitors
+                    .iter_mut()
+                    .any(|c| c.game.apply_maintenance().is_err())
+            {
+                return false;
             }
             // All companies settle against the same immutable offer snapshot first.
             for i in 0..staged.competitors.len() {
@@ -314,6 +342,15 @@ impl Competitor {
         for i in 0..self.game.routes.len() {
             let r = &self.game.routes[i];
             if r.plan.is_none() {
+                // Suspended for maintenance: resumes on its own afterwards.
+                if self
+                    .game
+                    .fleet
+                    .iter()
+                    .any(|p| Some(p.id) == r.aircraft_id && p.maintenance.is_some())
+                {
+                    continue;
+                }
                 if !self.retry(i, supply) {
                     return false;
                 }
@@ -402,8 +439,24 @@ impl Competitor {
         let Some(next) = self.next_review.checked_add(REVIEW) else {
             return false;
         };
+        self.plan_maintenance(next);
         self.next_review = next;
         true
+    }
+
+    /// Same rules and prices as the player: request a regular check for every
+    /// aircraft that would otherwise reach its limit before the next review.
+    /// Without enough money the unscheduled check follows automatically.
+    fn plan_maintenance(&mut self, next_review: u64) {
+        for p in 0..self.game.fleet.len() {
+            let id = self.game.fleet[p].id;
+            if self.game.due_landing(p).is_some_and(|t| t <= next_review)
+                && self.game.request_maintenance(id).is_ok()
+            {
+                self.last_action =
+                    format!("Wartung für {} eingeplant", self.game.fleet[p].identifier());
+            }
+        }
     }
 
     /// Bounded catalog search, no flight loop or separate economic model.
@@ -429,6 +482,8 @@ impl Competitor {
             .iter()
             .filter(|p| {
                 p.status == crate::aircraft::AircraftStatus::Parked
+                    && p.maintenance.is_none()
+                    && crate::maintenance::rules(&p.model_id).is_ok_and(|r| !p.wear.is_due(r))
                     && !g.routes.iter().any(|r| r.aircraft_id == Some(p.id))
             })
             .collect();
@@ -474,8 +529,7 @@ impl Competitor {
                 r.plan = Some(crate::operations::FlightPlan {
                     first_departure: g.clock.elapsed().as_secs() + 60,
                     interval_seconds: interval * 60,
-                    completed_flights: 0,
-                    airborne: None,
+                    ..Default::default()
                 });
                 for step in 3..=15 {
                     r.ticket_eur = (crate::economy::reference_price(km) * f64::from(step) / 10.0)
@@ -557,8 +611,7 @@ impl Competitor {
         candidate.plan = Some(crate::operations::FlightPlan {
             first_departure: now.saturating_add(60),
             interval_seconds: u64::from(AI_INTERVAL_MINUTES) * 60,
-            completed_flights: 0,
-            airborne: None,
+            ..Default::default()
         });
         let mut best: Option<(i64, i64)> = None;
         for step in 3..=15 {
@@ -747,6 +800,52 @@ mod tests {
         let path = dir.path().join("expanded.json");
         crate::save::save(&path, &g).unwrap();
         assert_eq!(state(&g), state(&crate::save::load(&path).unwrap()));
+    }
+
+    #[test]
+    fn ai_airlines_pay_for_regular_checks_before_reaching_the_limit() {
+        let mut g = game();
+        g.competitors.truncate(1);
+        let mut fast = g.clone();
+        let mut forced = false;
+        for _ in 0..365 {
+            assert!(g.advance(86400.0));
+            forced |= g.competitors[0]
+                .game
+                .fleet
+                .iter()
+                .any(|p| p.maintenance.as_ref().is_some_and(|v| v.unscheduled));
+        }
+        assert!(fast.advance(365.0 * 86400.0));
+        assert_eq!(state(&g), state(&fast));
+        let c = &g.competitors[0].game;
+        assert!(!forced, "funded AI should plan checks before the limit");
+        assert!(c.fleet.iter().map(|p| p.wear.checks).sum::<u64>() >= 2);
+        let h = c.history.as_ref().unwrap();
+        assert!(!h.maintenance.is_empty());
+        let r = crate::maintenance::rules("atr72_600").unwrap();
+        assert!(h.maintenance.iter().all(|m| m.amount >= r.base_cost_eur));
+        assert_eq!(
+            h.balance(c.clock.elapsed().as_secs()),
+            c.airline.as_ref().unwrap().capital_eur
+        );
+        g.validate_competitors().unwrap();
+        // A broke AI cannot request a check; the forced one follows at landing.
+        let c = &mut g.competitors[0];
+        let shift = c.game.airline.as_ref().unwrap().capital_eur + 1_000_000_000;
+        c.game.history.as_mut().unwrap().opening_balance -= shift;
+        c.game.airline.as_mut().unwrap().capital_eur -= shift;
+        let mut forced = false;
+        for _ in 0..200 {
+            assert!(g.advance(86400.0));
+            forced |= g.competitors[0]
+                .game
+                .fleet
+                .iter()
+                .any(|p| p.maintenance.as_ref().is_some_and(|v| v.unscheduled));
+        }
+        assert!(forced, "unfunded aircraft are grounded at the limit");
+        g.validate_competitors().unwrap();
     }
 
     #[test]

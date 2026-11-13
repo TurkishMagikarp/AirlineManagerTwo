@@ -447,8 +447,7 @@ mod tests {
                     route.plan = Some(operations::FlightPlan {
                         first_departure: 60,
                         interval_seconds: interval,
-                        completed_flights: 0,
-                        airborne: None,
+                        ..Default::default()
                     });
                     let t = quote(&route, &model.id).unwrap();
                     assert!(t.passengers <= previous && t.passengers <= t.seats);

@@ -55,6 +55,9 @@ Das Spielergebnis ist weiterhin kein vollständiger Unternehmens-Nettogewinn.
   Schließt vereinfacht Wartungsrücklage, Navigation, Betrieb/Verwaltung ein;
   sind kalibrierte Schätzungen, keine veröffentlichten Vertragspreise. Kaufpreis
   bleibt separat: keine doppelte Abschreibung oder Leasingrate in der Pauschale.
+  Seit Version 10 gibt es zusätzlich echte Wartungschecks (Zeit und Kosten nach
+  Flugstunden/Zyklen, `config/maintenance.json`, siehe README „Wartung“); die
+  Pauschale bleibt als laufender Betriebskostenanteil unverändert.
 
 Der Referenzpreis verwendet auf ganze km gerundete Entfernung; die neue
 Marktberechnung verwendet ungerundete Entfernung und rundet erst Passagiere ab.

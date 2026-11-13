@@ -50,6 +50,12 @@ var buy_button: Button
 var fleet_status: Label
 var empty_fleet: Label
 var fleet_tree: Tree
+var fleet_rows: Dictionary = {}
+var selected_aircraft: int = 0
+var maintenance_box: VBoxContainer
+var maintenance_details: Label
+var maintenance_button: Button
+var maintenance_status: Label
 var routes_panel: VBoxContainer
 var map_panel: VBoxContainer
 var finances_panel: VBoxContainer
@@ -288,7 +294,7 @@ func _refresh_finance() -> void:
 	metrics["profit"].add_theme_color_override("font_color", UI.POSITIVE if finance["profit_eur"] >= 0 else UI.NEGATIVE)
 	metrics["load"].text = "%.1f %%" % finance["load_percent"]
 	metrics["flights"].text = "%d  /  %d Pax" % [finance["flights"], finance["passengers"]]
-	finance_breakdown.text = "Ticketeinnahmen     %s\nBetriebskosten          %s\n\nTreibstoff                    %s\nFlughäfen                   %s\nPersonal                      %s\nWartung / Verwaltung  %s\n\nFlugzeugkäufe             %s" % [UI.money(finance["revenue_eur"]), UI.money(finance["costs_eur"]), UI.money(finance["fuel_eur"]), UI.money(finance["airport_eur"]), UI.money(finance["crew_eur"]), UI.money(finance["overhead_eur"]), UI.money(finance["purchases_eur"])]
+	finance_breakdown.text = "Ticketeinnahmen     %s\nBetriebskosten          %s\n\nTreibstoff                    %s\nFlughäfen                   %s\nPersonal                      %s\nWartung / Verwaltung  %s\n\nWartungschecks           %s\nFlugzeugkäufe             %s" % [UI.money(finance["revenue_eur"]), UI.money(finance["costs_eur"]), UI.money(finance["fuel_eur"]), UI.money(finance["airport_eur"]), UI.money(finance["crew_eur"]), UI.money(finance["overhead_eur"]), UI.money(finance["maintenance_eur"]), UI.money(finance["purchases_eur"])]
 	var operations: Array = simulation.get_operations()
 	operation_summary.text = "%d Flugzeuge  ·  %d Routen  ·  %d aktive Flugpläne" % [simulation.get_fleet().size(), simulation.get_routes().size(), operations.size()]
 	for operation in operations:
@@ -336,15 +342,18 @@ func _build_fleet(content: VBoxContainer) -> void:
 	empty_fleet = _label("Noch keine Flugzeuge gekauft.", 17, Color("c2cedc"))
 	owned.add_child(empty_fleet)
 	fleet_tree = Tree.new()
-	fleet_tree.columns = 4
+	fleet_tree.columns = 6
 	fleet_tree.hide_root = true
 	fleet_tree.column_titles_visible = true
+	fleet_tree.select_mode = Tree.SELECT_ROW
 	fleet_tree.custom_minimum_size.y = 220
-	for index in range(4):
-		fleet_tree.set_column_title(index, ["Kennung", "Typ", "Standort", "Status"][index])
-		fleet_tree.set_column_expand(index, index == 1)
-		fleet_tree.set_column_custom_minimum_width(index, [115, 145, 90, 210][index])
+	for index in range(6):
+		fleet_tree.set_column_title(index, ["Kennung", "Typ", "Standort", "Status", "Zustand", "Nächste Wartung"][index])
+		fleet_tree.set_column_expand(index, index == 1 or index == 5)
+		fleet_tree.set_column_custom_minimum_width(index, [115, 120, 90, 190, 80, 210][index])
+	fleet_tree.item_selected.connect(_refresh_maintenance)
 	owned.add_child(fleet_tree)
+	_build_maintenance(owned)
 	# The operational register takes precedence over procurement.
 	grid.move_child(owned.get_parent(), 0)
 	_model_selected(model_select.selected)
@@ -382,22 +391,111 @@ func _refresh_fleet() -> void:
 		description.text = "%d Flugzeuge  /  Verfügbares Guthaben: %s" % [fleet.size(), UI.money(airline.get("capital_eur", 0))]
 	empty_fleet.visible = fleet.is_empty()
 	fleet_tree.visible = not fleet.is_empty()
+	maintenance_box.visible = not fleet.is_empty()
+	fleet_rows = {}
+	# Rebuilt every simulated second: keep the selected aircraft.
 	fleet_tree.clear()
 	var root_item := fleet_tree.create_item()
 	for plane in fleet:
+		fleet_rows[plane["id"]] = plane
 		var row := fleet_tree.create_item(root_item)
 		row.set_text(0, plane["identifier"])
 		row.set_text(1, plane["model_name"])
 		row.set_text(2, plane["location_icao"])
-		var phase: String = {"parked": "Geparkt", "in_flight": "Unterwegs", "ground": "Gelandet · Bodenzeit"}.get(plane["status"], "Unbekannt")
+		var phase: String = {"parked": "Geparkt", "in_flight": "Unterwegs", "ground": "Gelandet · Bodenzeit", "maintenance": "In Wartung"}.get(plane["status"], "Unbekannt")
 		row.set_text(3, "%s · Route #%d" % [phase, plane["route_id"]] if plane["route_id"] != 0 else phase)
 		row.set_custom_color(3, UI.ACCENT if plane["status"] == "in_flight" else UI.POSITIVE if plane["status"] == "parked" else Color("e4c287"))
 		if plane["status"] == "in_flight":
 			row.set_text(2, "Ab %s (in der Luft)" % plane["location_icao"])
+		var condition: float = plane.get("condition_percent", 100.0)
+		row.set_text(4, "%.0f %%" % condition)
+		row.set_custom_color(4, UI.POSITIVE if condition >= 50.0 else Color("e4c287") if condition >= 20.0 else UI.NEGATIVE)
+		row.set_text(5, _maintenance_summary(plane))
+		row.set_custom_color(5, UI.NEGATIVE if plane.get("maintenance_due", false) and plane.get("maintenance_state", "none") == "none" else Color("e2eaf4"))
 		row.set_tooltip_text(0, plane["identifier"])
 		row.set_tooltip_text(1, "%s · gezahlter Kaufpreis: %d EUR" % [plane["model_name"], plane["purchase_price_eur"]])
 		row.set_tooltip_text(2, plane["location_name"])
+		row.set_tooltip_text(4, "%.1f / %d FH · %d / %d Zyklen seit letztem Check" % [plane.get("check_flight_hours", 0.0), plane.get("interval_flight_hours", 0), plane.get("check_cycles", 0), plane.get("interval_cycles", 0)])
+		row.set_tooltip_text(5, "Geschätzte Kosten: %s · Dauer %.0f h" % [UI.money(plane.get("maintenance_cost_eur", 0)), plane.get("maintenance_hours", 0.0)])
 		row.set_metadata(0, plane["id"])
+		if plane["id"] == selected_aircraft:
+			row.select(0)
+	if not fleet_rows.has(selected_aircraft) and root_item.get_first_child() != null:
+		root_item.get_first_child().select(0)
+	_refresh_maintenance()
+
+
+func _maintenance_summary(plane: Dictionary) -> String:
+	match plane.get("maintenance_state", "none"):
+		"active":
+			return "%sWartung bis %s" % ["Ungeplante " if plane["maintenance_unscheduled"] else "", plane["maintenance_end"]]
+		"pending":
+			return "Nach Landung · bis %s" % plane["maintenance_end"]
+	if plane.get("maintenance_due", false):
+		return "Fällig · Wartung erforderlich"
+	if not String(plane.get("due_time", "")).is_empty():
+		return "Spätestens %s" % plane["due_time"]
+	return "In %.0f FH / %d Zyklen" % [plane.get("interval_flight_hours", 0) - plane.get("check_flight_hours", 0.0), plane.get("interval_cycles", 0) - plane.get("check_cycles", 0)]
+
+
+func _build_maintenance(parent: VBoxContainer) -> void:
+	maintenance_box = VBoxContainer.new()
+	maintenance_box.add_theme_constant_override("separation", 8)
+	parent.add_child(maintenance_box)
+	maintenance_box.add_child(_label("WARTUNG  /  AUSGEWÄHLTES FLUGZEUG", 13, UI.ACCENT))
+	maintenance_details = _label("", 15, Color("e2eaf4"))
+	maintenance_details.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	maintenance_box.add_child(maintenance_details)
+	maintenance_button = Button.new()
+	maintenance_button.text = "Wartung durchführen"
+	maintenance_button.theme_type_variation = "PrimaryButton"
+	maintenance_button.tooltip_text = "Schickt das Flugzeug in die Wartung. Flugzeuge in der Luft beenden zuerst ihren Flug; während der Wartung finden keine Abflüge statt."
+	maintenance_button.pressed.connect(_request_maintenance)
+	maintenance_box.add_child(maintenance_button)
+	maintenance_status = _label("", 15)
+	maintenance_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	maintenance_box.add_child(maintenance_status)
+
+
+func _refresh_maintenance() -> void:
+	var item := fleet_tree.get_selected()
+	selected_aircraft = item.get_metadata(0) if item != null else 0
+	var plane: Dictionary = fleet_rows.get(selected_aircraft, {})
+	maintenance_button.disabled = plane.is_empty() or not plane.get("can_request_maintenance", false)
+	if plane.is_empty():
+		maintenance_details.text = "Flugzeug in der Tabelle auswählen."
+		return
+	var lines: Array[String] = [
+		"%s · %s · Zustand %.0f %%" % [plane["identifier"], plane["model_name"], plane["condition_percent"]],
+		"Betriebszeit %.1f FH · %d Zyklen · %d abgeschlossene Checks" % [plane["flight_hours"], plane["cycles"], plane["checks"]],
+		"Seit letztem Check: %.1f / %d FH · %d / %d Zyklen (was zuerst erreicht wird)" % [plane["check_flight_hours"], plane["interval_flight_hours"], plane["check_cycles"], plane["interval_cycles"]],
+	]
+	match plane["maintenance_state"]:
+		"active":
+			lines.append("%s läuft: %s – %s · %s" % ["Ungeplante Wartung" if plane["maintenance_unscheduled"] else "Wartung", plane["maintenance_start"], plane["maintenance_end"], UI.money(plane["maintenance_cost_eur"])])
+		"pending":
+			lines.append("Wartung beauftragt: beginnt nach der Landung %s, Ende %s · %s" % [plane["maintenance_start"], plane["maintenance_end"], UI.money(plane["maintenance_cost_eur"])])
+		_:
+			if not String(plane["due_time"]).is_empty():
+				lines.append("Pflichtgrenze mit aktuellem Flugplan: Landung %s" % plane["due_time"])
+			lines.append("Wartung jetzt: ca. %s · %.0f h Dauer" % [UI.money(plane["maintenance_cost_eur"]), plane["maintenance_hours"]])
+			lines.append("Bei Erreichen der Grenze ungeplant: %s · %.0f h (teurer, länger)" % [UI.money(plane["unscheduled_cost_eur"]), plane["unscheduled_hours"]])
+	if plane["status"] == "in_flight" and plane["maintenance_state"] == "none":
+		lines.append("Unterwegs: Die Wartung beginnt erst nach der Landung.")
+	if not String(plane["maintenance_hint"]).is_empty() and plane["maintenance_state"] == "none":
+		lines.append(plane["maintenance_hint"])
+	maintenance_details.text = "\n".join(lines)
+
+
+func _request_maintenance() -> void:
+	if selected_aircraft == 0:
+		return
+	var error: String = simulation.request_maintenance(selected_aircraft)
+	maintenance_status.text = "Wartung beauftragt. Bitte speichern." if error.is_empty() else error
+	maintenance_status.add_theme_color_override("font_color", UI.POSITIVE if error.is_empty() else UI.NEGATIVE)
+	if error.is_empty():
+		save_status.text = "Wartung beauftragt · bitte Spielstand speichern."
+	_refresh_fleet()
 
 
 func _build_founding() -> void:
@@ -495,6 +593,8 @@ func _found_airline() -> void:
 
 func _sync_view() -> void:
 	fleet_status.text = ""
+	maintenance_status.text = ""
+	selected_aircraft = 0
 	routes_panel.status.text = ""
 	overview.visible = simulation.has_airline()
 	founding.visible = not simulation.has_airline()
