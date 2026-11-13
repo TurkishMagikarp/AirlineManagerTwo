@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 /// Simulation time only. No wall clock, engine dependency or UI state.
-#[derive(Default)]
+#[derive(Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct Clock {
     elapsed: Duration,
     running: bool,
@@ -30,6 +30,10 @@ impl Clock {
 
     pub fn speed(&self) -> u32 {
         Self::SPEEDS[self.speed_index]
+    }
+
+    pub(crate) fn is_valid(&self) -> bool {
+        self.speed_index < Self::SPEEDS.len()
     }
 
     pub fn elapsed(&self) -> Duration {

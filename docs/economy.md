@@ -67,7 +67,7 @@ unverändert. Kostenaufschläge ändern **keine** Abflug-/Landetermine.
 
 Passagierzahlen hängen jetzt auch vom Flugplan und parallelen Routen ab; die
 alten Einzelflug-Beispielzahlen gelten nicht mehr. Die Matrix gibt aktuelle
-Ergebnisse mit dem jeweils kürzesten zulässigen Abflugabstand aus:
+Ergebnisse ohne KI-Konkurrenz mit dem jeweils kürzesten zulässigen Abflugabstand aus:
 
 `cargo test --locked --manifest-path rust/Cargo.toml calibrated_route_matrix -- --nocapture`
 prüft vier Strecken, alle Modelle innerhalb ihrer Reichweite, jeweils sieben
@@ -83,11 +83,13 @@ wegen Reichweite ausgeschlossen; keine wirtschaftlich unmöglichen Testflüge.
 
 Version 6 bleibt lesbar: das additive Kostenfeld `overhead` erhält bei alten
 Finanzsummen/Ergebnissen den Wert null. Historische Kosten, Tickets, Käufe und
-Guthaben werden **nicht** neu berechnet. Erst künftige Landungen verwenden neue
-Werte, auch bei einem bereits laufenden Flug. Bestehende Flugpläne und deren
+Guthaben werden **nicht** neu berechnet. Seit Version 8 behalten bereits laufende
+Flüge ihr gespeichertes Ergebnis; neue Werte gelten ab künftigem Abflug. Bestehende Flugpläne und deren
 Zeitgrenzen bleiben gültig. Persönliche Spielstände werden von Tests nicht benutzt.
 
-Weiterhin keine Konkurrenz, Saisonalität, Wetter, Insolvenz oder Kosten für
+Zwei erste KI-Konkurrenten nutzen dieselben Kosten- und Nachfrageregeln wie der
+Spieler; Details: [README](../README.md#erste-ki-fluggesellschaften).
+Weiterhin keine Saisonalität, Wetter, Insolvenz oder Kosten für
 geparkte Flugzeuge. Beide Richtungen sind symmetrisch; parallele Routen teilen
 jetzt den Tagesmarkt. Sehr billige Tickets können volle, aber verlustreiche Flüge
 ergeben. Noch keine harte Quote je Kalendertag und keine Umverteilung unverkaufter

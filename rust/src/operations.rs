@@ -201,7 +201,7 @@ impl Game {
         Ok(())
     }
 
-    pub fn advance(&mut self, seconds: f64) -> bool {
+    pub(crate) fn advance_company(&mut self, seconds: f64, supply: &[Route]) -> bool {
         // Stage the clock and all derived states before committing, including overflow errors.
         let mut clock = crate::clock::Clock::from_state(
             self.clock.elapsed(),
@@ -212,6 +212,14 @@ impl Game {
         if !clock.advance(seconds) {
             return false;
         }
+        self.advance_company_to(clock, supply)
+    }
+
+    pub(crate) fn advance_company_to(
+        &mut self,
+        clock: crate::clock::Clock,
+        supply: &[Route],
+    ) -> bool {
         let mut updates = Vec::new();
         let mut finance = self.finance.clone();
         let mut delta = 0i64;
@@ -247,8 +255,7 @@ impl Game {
                     index += 1;
                 }
                 if index < state.completed {
-                    let Ok(f) =
-                        departure_quote(route, &self.fleet[p].model_id, index, &self.routes)
+                    let Ok(f) = departure_quote(route, &self.fleet[p].model_id, index, supply)
                     else {
                         return false;
                     };
@@ -298,12 +305,9 @@ impl Game {
                 if count == 0 && plan.airborne.is_some() {
                     plan.airborne.clone()
                 } else {
-                    let Ok(f) = departure_quote(
-                        route,
-                        &self.fleet[p].model_id,
-                        state.completed,
-                        &self.routes,
-                    ) else {
+                    let Ok(f) =
+                        departure_quote(route, &self.fleet[p].model_id, state.completed, supply)
+                    else {
                         return false;
                     };
                     Some(f)
@@ -406,6 +410,7 @@ mod tests {
     fn game() -> Game {
         let mut g = Game::default();
         g.found("Flight Air", "DE", "EDDF").unwrap();
+        g.competitors.clear();
         g.buy_aircraft("atr72_600").unwrap();
         g.create_route("EDDF", "EDDM", 1).unwrap();
         g.schedule(1, 1, 120).unwrap();

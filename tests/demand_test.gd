@@ -30,7 +30,7 @@ func _run() -> void:
 		sim.advance(86400.0 / 16.0)
 		sim.pause()
 		var totals: Dictionary = sim.get_financial_summary()
-		if not _check(totals["flights"] == 24 and totals["passengers"] <= 2 * routes[0]["daily_demand"], "Twenty-four flights do not multiply daily demand"):
+		if not _check(totals["flights"] == 24 and totals["passengers"] <= 2 * routes[0]["base_daily_market"], "Twenty-four flights do not multiply the shared base market"):
 			return
 		if not _check(sim.save_game(path).is_empty(), "Save shared market and actual results"):
 			return

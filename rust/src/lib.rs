@@ -1,6 +1,7 @@
 mod aircraft;
 mod airports;
 mod clock;
+mod competition;
 mod demand;
 mod economy;
 mod game;
@@ -366,6 +367,62 @@ impl SimulationClock {
     }
 
     #[func]
+    fn get_route_competition(&self, route_id: u32) -> Array<VarDictionary> {
+        let Some(route) = self.game.routes.iter().find(|r| r.id == route_id) else {
+            return Array::new();
+        };
+        let supply = self.game.market_routes();
+        let mut rows = Vec::new();
+        for (company, action) in std::iter::once((&self.game, "Spieler")).chain(
+            self.game
+                .competitors
+                .iter()
+                .map(|c| (&*c.game, c.last_action.as_str())),
+        ) {
+            let Some(airline) = &company.airline else {
+                continue;
+            };
+            for r in company
+                .routes
+                .iter()
+                .filter(|r| demand::same_market(route, r))
+            {
+                let Some(plane) = company.fleet.iter().find(|p| Some(p.id) == r.aircraft_id) else {
+                    continue;
+                };
+                let seats = aircraft::model(&plane.model_id)
+                    .expect("validated aircraft")
+                    .seats;
+                let frequency = r
+                    .plan
+                    .as_ref()
+                    .map(|p| 43200.0 / p.interval_seconds as f64)
+                    .unwrap_or(0.0);
+                let passengers = demand::passengers(r, &supply)
+                    .unwrap_or(0)
+                    .min(i64::from(seats)) as f64
+                    * frequency;
+                rows.push((
+                    airline.name.as_str(),
+                    r,
+                    &plane.model_id,
+                    seats,
+                    frequency,
+                    passengers,
+                    action,
+                ));
+            }
+        }
+        let total: f64 = rows.iter().map(|r| r.5).sum();
+        rows.into_iter().map(|(name, r, model, seats, frequency, passengers, action)| vdict! {
+            "airline" => name, "ticket_eur" => r.ticket_eur, "model" => model.as_str(),
+            "seats" => seats, "departures_per_day" => frequency,
+            "passengers_per_day" => passengers, "share_percent" => if total > 0.0 { passengers * 100.0 / total } else { 0.0 },
+            "active" => r.plan.is_some(), "last_action" => action
+        }).collect()
+    }
+
+    #[func]
     fn get_routes(&self) -> Array<VarDictionary> {
         self.game
             .routes
@@ -381,9 +438,10 @@ impl SimulationClock {
                     "distance_km" => routes::distance_km(&r.origin_icao, &r.destination_icao).unwrap_or(0.0),
                     "aircraft_id" => r.aircraft_id.unwrap_or(0), "has_plan" => r.plan.is_some(), "ticket_eur" => r.ticket_eur,
                     "daily_demand" => market.total().floor() as i64,
+                    "base_daily_market" => demand::market(r, 0).expect("validated route").total().floor() as i64,
                     "daily_business" => market.business.floor() as i64,
                     "daily_leisure" => market.leisure.floor() as i64,
-                    "estimated_passengers" => demand::passengers(r, &self.game.routes).unwrap_or(0),
+                    "estimated_passengers" => if r.plan.is_some() { demand::passengers(r, &self.game.market_routes()).unwrap_or(0) } else { 0 },
                     "actual_flights" => actual.flights, "actual_load_percent" => actual.load_percent()
                 }
             })

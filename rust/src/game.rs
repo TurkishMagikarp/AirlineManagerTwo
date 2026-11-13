@@ -6,6 +6,7 @@ use crate::{
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Game {
     pub clock: Clock,
     pub airline: Option<Airline>,
@@ -15,6 +16,8 @@ pub struct Game {
     pub next_route_id: u32,
     pub finance: crate::economy::Finance,
     pub history: Option<crate::history::History>,
+    #[serde(default)]
+    pub competitors: Vec<crate::competition::Competitor>,
 }
 
 impl Default for Game {
@@ -28,6 +31,7 @@ impl Default for Game {
             next_route_id: 1,
             finance: crate::economy::Finance::default(),
             history: None,
+            competitors: Vec::new(),
         }
     }
 }
@@ -97,7 +101,9 @@ impl Game {
             capital_eur: starting_capital()?,
         };
         airline.validate()?;
+        let competitors = crate::competition::initial_competitors()?;
         *self = Self {
+            competitors,
             history: Some(crate::history::History::new(0, airline.capital_eur)),
             airline: Some(airline),
             ..Self::default()

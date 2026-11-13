@@ -81,7 +81,7 @@ angezeigten Preis ab. Bei Fehlern bleiben Flotte, Guthaben und Kennungszähler
 unverändert; die Meldung wird im Tab angezeigt. Die Übersicht zeigt nun das
 verbleibende **Guthaben**, nicht mehr unverändert das ursprüngliche Startkapital.
 
-Flugzeuge gehören der einzigen Spieler-Airline, stehen zunächst **geparkt** am
+Gekaufte Flugzeuge gehören der Spieler-Airline, stehen zunächst **geparkt** am
 Heimatflughafen und erscheinen einzeln mit Kennung, Typ, ICAO-Standort und Status.
 Der Flughafenname und der tatsächlich bezahlte Kaufpreis stehen in den Tooltips.
 Die laufenden Kennungen `AM-000001`, `AM-000002`, … sind spielinterne IDs, keine
@@ -158,8 +158,8 @@ Mausrad zoomt, Ziehen verschiebt; Details und Tests: [Flugkarte](docs/map.md).
 Im **Routen**-Tab eine Route auswählen, **Ticketpreis** (0–100.000 ganze EUR pro
 Passagier und Einzelflug) einstellen und **Ticketpreis übernehmen** drücken.
 Neue und migrierte Routen starten mit **100 EUR**. Der Preis gilt für beide
-Pendelrichtungen. Preisänderungen benötigen zunächst einen beendeten Flugplan;
-dadurch bleibt der Preis laufender Flüge unverändert.
+Pendelrichtungen und kann auch bei aktivem Flugplan geändert werden. Bereits
+gestartete Flüge behalten ihr gespeichertes Abflugergebnis und ihren alten Preis.
 
 Alle Regeln, Rundungen und Geldbewegungen liegen in `rust/src/economy.rs` und
 `rust/src/operations.rs`, Godot stellt nur dar. Kein Zufall, keine Frameabhängigkeit.
@@ -168,7 +168,7 @@ bauen. Dieselbe Ausgangslage **mit derselben Konfiguration** liefert dasselbe Er
 
 Nachfrage: Ein sitzplatzunabhängiger Tagesmarkt je Flughafenpaar und Richtung
 berücksichtigt Größe/Bedeutung beider Flughäfen, Entfernung und Geschäfts-/Urlaubsreisen.
-Alle aktiven Pendelflugpläne derselben Verbindung teilen ihn nach ihrer Frequenz,
+Alle aktiven Pendelflugpläne derselben Verbindung teilen ihn nach Preisattraktivität und Frequenz,
 auch bei umgekehrter Routenrichtung. Hohe Preise schrecken beide Gruppen ab,
 Urlauber früher. Gleichmäßiger Tagesdurchschnitt, kein hartes Kalendertageskontingent.
 Die Routenliste zeigt geschätzte Nachfrage/Tag/Richtung und tatsächliche archivierte
@@ -177,7 +177,7 @@ Auslastung. [Formeln, Ausgangsdaten und Grenzen](docs/demand.md).
 Kosten und Preise:
 
 - Referenzpreis: `60 + floor(4 × km / 100)` EUR.
-- Verkaufte Tickets: Minimum aus geteiltem Marktanteil und Sitzplätzen. Ab dem doppelten
+- Verkaufte Tickets: Minimum aus gemeinsam verteiltem Marktanteil und Sitzplätzen. Ab dem doppelten
   Referenzpreis fliegt das Flugzeug leer, bei 0 EUR sind Tickets kostenlos.
 - Einnahmen: Passagiere × Ticketpreis.
 - Treibstoff: Reisezeitverbrauch plus fester Start-/Landeanteil, **0,80 EUR/kg**.
@@ -210,6 +210,42 @@ Flugzeugkäufe werden separat ausgewiesen. Finanzsummen zählen über die begren
 Ergebnisliste hinaus weiter, auch nach Beenden oder Löschen einer Route.
 Große Zeitsprünge werden gebündelt abgerechnet, ohne Schleife über alle Flüge.
 Pause, 1×/4×/16×, Speichern/Laden und erneute Flugpläne verursachen keine Doppelbuchungen.
+
+## Erste KI-Fluggesellschaften
+
+Zwei fiktive Konkurrenten starten mit eigenem Startkapital, gekauften Flugzeugen,
+Flugplänen, Ticketpreisen und separaten Konten/Finanzarchiven:
+
+- **Regional Wings**: Frankfurt–München, ATR 72-600, zunächst 90 EUR.
+- **Continental Sky**: Frankfurt–Istanbul IST, A320-200, zunächst 150 EUR.
+
+Beide pendeln zunächst alle sechs Stunden. Spieler und KI nutzen dieselben
+Rust-Funktionen für Kauf, Streckenprüfung, Flugbewegung, Nachfrage, Kosten und
+Abrechnung. Es gibt keine zusätzlichen Passagiere oder Betriebssubventionen für KI.
+Alle Angebote teilen denselben Markt pro Flughafenpaar und Richtung; günstigere
+Angebote können Passagiere von Konkurrenten gewinnen, Frequenz beeinflusst den
+Tagesanteil und Sitze begrenzen die tatsächlich beförderten Passagiere.
+
+Im **Routen**-Tab eine eigene Route auswählen: Der Wettbewerbsbereich zeigt alle
+passenden Angebote, auch umgekehrte Strecken, mit Airline, Flugzeug/Sitzen, Preis,
+Abflügen/Tag und geschätzten Pax/Tag/Richtung. Prozentwerte beziehen sich auf die
+geschätzten **beförderten** Passagiere, nicht auf den gesamten Basismarkt.
+Inaktive Angebote werden als solche angezeigt. Die letzte KI-Entscheidung steht dabei.
+Karte, eigene Flotte und Finanzansichten bleiben spielerbezogen; KI-Angebote sind
+zunächst im Wettbewerbsbereich der Routen sichtbar.
+
+Alle sieben Spieltage prüft jede KI drei Preise (bisheriger Preis und ±10 EUR)
+mit derselben Gewinnberechnung. Nach zwei aufeinanderfolgenden Verlustwochen
+wird der Flugplan beendet, sofern das Flugzeug geparkt ist; andernfalls wird dies
+bei der nächsten Prüfung erneut versucht. Keine automatische Erschließung neuer
+Strecken, Flottenvergrößerung oder Wiedereröffnung. Aktuell je KI nur eine Strecke;
+die Verlustprüfung verwendet deshalb ihr gesamtes Betriebsergebnis.
+
+Vereinfachung: deterministischer Tagesdurchschnitt ohne Einzelbuchungen,
+Kapazitätsüberhänge werden nicht auf andere Angebote umverteilt. Wöchentliche
+Entscheidungsgrenzen teilen große Zeitsprünge; dazwischen werden Flüge weiter
+gebündelt abgerechnet. Keine Schleife pro Flug. Ausstehende Abflugergebnisse
+bleiben bei Preis-/Angebotsänderungen unverändert.
 
 ## Finanzen und Routencontrolling
 
@@ -268,11 +304,16 @@ Der aktuelle Projektname ist `Airline Manager — UI-Basis`. Der tatsächliche P
 steht auch im Tooltip der Speichermeldung. macOS ist hier nicht praktisch getestet.
 
 Rust (`rust/src/save.rs`) übernimmt Dateizugriff, JSON-Format und Validierung.
-Das Format hat Version **8** und einen `state`-Bereich mit `clock`, `airline`,
+Das Format hat Version **9** und einen `state`-Bereich mit `clock`, `airline`,
 `fleet`, `routes` (einschließlich Ticketpreis und optionalem Flugplan) und `finance`
 (Finanzsummen und letzte 100 Flugergebnisse) sowie `history` (Beginn, Anfangssaldo,
 vorherige Finanzsummen, verlustfreie Flugblöcke und zeitgestempelte Käufe).
+Zusätzlich enthält `competitors` die vollständigen KI-Unternehmenszustände mit
+Flotte, Routen, Konten, Abflugergebnissen, Archiv und nächster Entscheidungszeit.
 Archivzeiten, Summen und Flugdaten werden beim Laden und Speichern validiert.
+Versionen **1–8** bleiben ladbar. Alte Airline-Spielstände erhalten die beiden
+KI-Unternehmen erst zum Ladezeitpunkt, ohne rückwirkende Flüge oder Änderungen
+am Spielerkonto; bereits gespeicherte Abflugergebnisse bleiben erhalten.
 Laufende Flüge enthalten ihr beim Abflug fixiertes Ergebnis (Passagiere, Einnahmen,
 Sitze/Auslastung und Kosten). Änderungen anderer Flugpläne wirken erst auf künftige
 Abflüge. Versionen **1–7** erhalten für bereits laufende Flüge einmal beim Laden
@@ -324,12 +365,14 @@ Godot --headless --path . --script res://tests/operations_test.gd
 Godot --headless --path . --script res://tests/economy_test.gd
 Godot --headless --path . --script res://tests/demand_test.gd
 Godot --headless --path . --script res://tests/demand_test.gd -- --restore-demand
+Godot --headless --path . --script res://tests/competition_test.gd
 Godot --headless --path . --script res://tests/finances_test.gd
 Godot --headless --path . --script res://tests/map_test.gd
 powershell -ExecutionPolicy Bypass -File tests/run_save_restart_test.ps1
 powershell -ExecutionPolicy Bypass -File tests/run_flight_restart_test.ps1
 powershell -ExecutionPolicy Bypass -File tests/run_economy_restart_test.ps1
 powershell -ExecutionPolicy Bypass -File tests/run_finances_restart_test.ps1
+powershell -ExecutionPolicy Bypass -File tests/run_competition_restart_test.ps1
 ```
 
 `Godot` durch den eigenen Executable-Pfad ersetzen. Der Verbindungstest lädt die
@@ -360,7 +403,7 @@ Tabellen ohne neue Buchungen und Layouts bis 680×520. Der separate Neustarttest
 lädt dieses Archiv in einem neuen Godot-Prozess und setzt es ohne Doppelbuchung
 fort. Rust prüft außerdem Preis-/Auslastungswechsel, identische Archive bei
 kleinen/großen 16×-Schritten, Migration aus Version 6 und ungültige Archivdaten.
-Verifiziert: 54 Rust-Tests, Clippy ohne Warnungen, Nachfrage-UI samt separatem
+Vor der KI-Erweiterung verifiziert: 54 Rust-Tests, Clippy ohne Warnungen, Nachfrage-UI samt separatem
 Ladeprozess, bestehende Godot-Tests und alle vier
 Prozess-Neustarttests sowie `START.bat --headless --quit-after 10` erfolgreich.
 Reale Grafikprüfung bei 1440×1000, 1100×720 und 680×520 erfolgreich. Gemessen im
@@ -370,3 +413,13 @@ Optional `-Godot "C:\Pfad\Godot.exe"` angeben. Auf macOS kann dasselbe GDScript
 in separaten Prozessen mit `--save-test-mode=write-running` / `read-running` /
 `write-paused` / `read-paused` und `--save-test-path=/absoluter/testpfad.json`
 nach dem `--`-Trenner aufgerufen werden.
+
+KI-Erweiterung verifiziert: **61 Rust-Tests**, Clippy ohne Warnungen, alle zehn
+bisherigen Godot-Tests, der neue Wettbewerbs-UI-Test und alle fünf
+Prozess-Neustarttests. `START.bat --headless --quit-after 10` funktioniert weiter.
+Die neue Testmatrix prüft gemeinsame Nachfrage bei gemischten Preisen und
+Frequenzen, Sitzgrenzen, Preiswettbewerb, getrennte Konten, wöchentliche
+Preisentscheidungen/Stilllegung, unveränderte laufende Flüge, Altspielstand-Migration,
+beschädigte KI-Daten, transaktionale Fehler sowie identische Ergebnisse bei
+großen/kleinen Schritten und 1×/4×/16×. Der Millionentest mit zwei Spielerrouten
+bleibt kompakt; tatsächliche KI-Marktänderungen erzeugen zusätzliche Archivblöcke.

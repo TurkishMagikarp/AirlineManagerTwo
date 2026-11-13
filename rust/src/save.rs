@@ -8,7 +8,7 @@ use std::io::{Read, Write};
 use std::path::Path;
 use std::time::Duration;
 
-const VERSION: u32 = 8;
+const VERSION: u32 = 9;
 const MAX_BYTES: u64 = 1024 * 1024;
 
 #[derive(Serialize, Deserialize)]
@@ -20,6 +20,7 @@ struct SaveGame {
 // Future simulation data belongs here, not in the UI or a serialized Godot object.
 #[derive(Serialize, Deserialize)]
 struct GameState {
+    competitors: Option<Vec<crate::competition::Competitor>>,
     clock: SavedClock,
     airline: Option<Airline>,
     fleet: Option<SavedFleet>,
@@ -57,10 +58,12 @@ pub fn save(path: &Path, game: &Game) -> Result<(), String> {
     game.validate_operations()?;
     game.validate_finance()?;
     game.validate_history()?;
+    game.validate_competitors()?;
     let clock = &game.clock;
     let data = SaveGame {
         version: VERSION,
         state: GameState {
+            competitors: Some(game.competitors.clone()),
             history: game.history.clone(),
             finance: Some(game.finance.clone()),
             airline: game.airline.clone(),
@@ -173,6 +176,13 @@ pub fn load(path: &Path) -> Result<Game, String> {
         crate::economy::Finance::default()
     };
     let mut game = Game {
+        competitors: if data.version >= 9 {
+            data.state
+                .competitors
+                .ok_or("KI-Airlines fehlen im Spielstand.")?
+        } else {
+            Vec::new()
+        },
         history: if data.version >= 7 {
             if data.state.airline.is_some() && data.state.history.is_none() {
                 return Err("Finanzhistorie fehlt.".into());
@@ -231,6 +241,10 @@ pub fn load(path: &Path) -> Result<Game, String> {
     game.validate_operations()?;
     game.validate_finance()?;
     game.validate_history()?;
+    game.validate_competitors()?;
+    if data.version < 9 && game.airline.is_some() {
+        game.competitors = crate::competition::initial_competitors_at(game.clock.elapsed())?;
+    }
     Ok(game)
 }
 
@@ -311,6 +325,7 @@ mod tests {
             for running in [false, true] {
                 let mut original = Game::default();
                 original.found("Neustart Air", "TR", "LTFM").unwrap();
+                original.competitors.clear(); // This fixture directly replaces the clock.
                 // Loading must retain saved capital, never reapply today's config.
                 original.airline.as_mut().unwrap().capital_eur = 1_234_567;
                 original.history.as_mut().unwrap().opening_balance = 1_234_567;

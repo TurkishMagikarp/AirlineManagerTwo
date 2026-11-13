@@ -21,6 +21,7 @@ mod tests {
     fn game(price: i64) -> Game {
         let mut g = Game::default();
         g.found("Economy Air", "DE", "EDDF").unwrap();
+        g.competitors.clear();
         g.buy_aircraft("atr72_600").unwrap();
         g.create_route("EDDF", "EDDM", 1).unwrap();
         g.set_ticket_price(1, price).unwrap();
@@ -57,7 +58,7 @@ mod tests {
     #[test]
     fn landing_debits_once_empty_flights_can_create_debt_and_prices_validate() {
         let mut g = game(100000);
-        assert!(g.set_ticket_price(1, 20).is_err());
+        assert!(g.set_ticket_price(1, 100000).is_ok());
         let flight = operations::timings(&g.routes[0], "atr72_600").unwrap().0;
         g.airline.as_mut().unwrap().capital_eur = 0;
         // Test-only depletion before the first landing; keep its ledger anchor consistent.
@@ -261,6 +262,7 @@ mod tests {
                     };
                     let mut g = Game::default();
                     g.found("Calibration Air", country, origin).unwrap();
+                    g.competitors.clear();
                     g.buy_aircraft(&model.id).unwrap();
                     g.create_route(origin, destination, 1).unwrap();
                     g.set_ticket_price(1, price).unwrap();
@@ -437,7 +439,9 @@ impl Totals {
     pub fn add(&mut self, other: &Self, count: u64) -> Option<()> {
         let count = i64::try_from(count).ok()?;
         macro_rules! add { ($($f:ident),*) => { $(self.$f = self.$f.checked_add(other.$f.checked_mul(count)?)?;)* }; }
-        add!(flights, passengers, seats, revenue, fuel, airport, crew, overhead);
+        add!(
+            flights, passengers, seats, revenue, fuel, airport, crew, overhead
+        );
         self.fuel
             .checked_add(self.airport)?
             .checked_add(self.crew)?
@@ -489,7 +493,6 @@ pub fn quote_shared(route: &Route, model_id: &str, routes: &[Route]) -> Result<T
 
 impl Game {
     pub fn set_ticket_price(&mut self, id: u32, price: i64) -> Result<(), String> {
-        self.require_no_plan(id)?;
         if !(0..=100_000).contains(&price) {
             return Err("Ticketpreis muss zwischen 0 und 100000 EUR liegen.".into());
         }

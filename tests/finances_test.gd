@@ -37,7 +37,7 @@ func _run() -> void:
 	if not _check(routes.size() == 2 and routes[0]["flights"] == 1_000_000 and routes[0]["profit_eur"] > 0 and routes[1]["profit_eur"] < 0, "Real profitable and loss-making routes"):
 		return
 	var info: Dictionary = sim.get_finance_history_info()
-	if not _check(info["batch_count"] == 2, "Two million flights stored as two lossless batches"):
+	if not _check(info["batch_count"] >= 2 and info["batch_count"] <= 8, "Two million flights use only a few batches at real AI market changes"):
 		return
 	var series: Array = sim.get_finance_series(0)
 	if not _check(series.size() <= 64 and series[-1]["balance"] == sim.get_airline_info()["capital_eur"], "Bounded series reconciles to account"):

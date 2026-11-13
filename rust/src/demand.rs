@@ -61,47 +61,52 @@ pub fn market(route: &Route, price: i64) -> Result<Market, String> {
     })
 }
 
-/// Directed supply, independent of route ownership. Future airlines contribute
-/// offers to this same list, not separate copies of the passenger market.
-pub struct Offer<'a> {
-    pub origin: &'a str,
-    pub destination: &'a str,
-    pub departures_per_day: f64,
-}
-
-pub fn allocate(route: &Route, offers: &[Offer<'_>]) -> Result<i64, String> {
-    let frequency: f64 = offers
-        .iter()
-        .filter(|o| o.origin == route.origin_icao && o.destination == route.destination_icao)
-        .map(|o| o.departures_per_day)
-        .sum();
-    Ok((market(route, route.ticket_eur)?.total() / frequency.max(1.0)).floor() as i64)
-}
-
-/// Each shuttle offers 43200 / interval departures/day/direction. Each departure
-/// gets an equal slice; expensive flights leave their unsold slice unused.
-/// A minimum divisor of one prevents banking several days of demand on rare flights.
+/// Each shuttle offers 43200 / interval departures/day/direction. Segment-specific
+/// willingness weights competing offers. Rare flights cannot bank days of demand.
 pub fn passengers(route: &Route, routes: &[Route]) -> Result<i64, String> {
-    let offers: Vec<_> = routes
+    let matching: Vec<_> = routes
         .iter()
-        .filter_map(|r| r.plan.as_ref().map(|p| (r, p)))
-        .flat_map(|(r, p)| {
-            let frequency = 43200.0 / p.interval_seconds as f64;
-            [
-                Offer {
-                    origin: &r.origin_icao,
-                    destination: &r.destination_icao,
-                    departures_per_day: frequency,
-                },
-                Offer {
-                    origin: &r.destination_icao,
-                    destination: &r.origin_icao,
-                    departures_per_day: frequency,
-                },
-            ]
-        })
+        .filter(|r| r.plan.is_some() && same_market(route, r))
         .collect();
-    allocate(route, &offers)
+    let base = market(route, 0)?;
+    let own = market(route, route.ticket_eur)?;
+    let mut weights = [0.0f64; 2];
+    let mut frequency_sum = [0.0; 2];
+    for r in matching {
+        let m = market(r, r.ticket_eur)?;
+        let frequency = 43200.0 / r.plan.as_ref().unwrap().interval_seconds as f64;
+        for (i, (n, b)) in [(m.business, base.business), (m.leisure, base.leisure)]
+            .into_iter()
+            .enumerate()
+        {
+            let willingness = if b > 0.0 { n / b } else { 0.0 };
+            if willingness > 0.0 {
+                frequency_sum[i] += frequency;
+            }
+            let attractiveness = willingness / (1.0 - willingness).max(1e-9);
+            weights[i] += frequency * attractiveness;
+        }
+    }
+    // One shared market per segment. Price affects both willingness to travel
+    // and relative choice; unsold capacity is not a new passenger market.
+    // An outside option (not flying), scaled by total frequency, keeps the total bounded by the
+    // original market. Cheaper rivals therefore take share, not create a
+    // second market. Cap each departure at its one-day willing segment.
+    let total: f64 = [(own.business, base.business), (own.leisure, base.leisure)]
+        .into_iter()
+        .enumerate()
+        .map(|(i, (n, b))| {
+            let w = if b > 0.0 { n / b } else { 0.0 };
+            let attractiveness = w / (1.0 - w).max(1e-9);
+            (b * attractiveness / (frequency_sum[i].max(1.0) + weights[i])).min(n)
+        })
+        .sum();
+    Ok(total.floor() as i64)
+}
+
+pub fn same_market(a: &Route, b: &Route) -> bool {
+    (a.origin_icao == b.origin_icao && a.destination_icao == b.destination_icao)
+        || (a.origin_icao == b.destination_icao && a.destination_icao == b.origin_icao)
 }
 
 #[cfg(test)]
@@ -112,6 +117,7 @@ mod tests {
     fn game(count: u32, interval: u32) -> Game {
         let mut g = Game::default();
         g.found("Daily Market", "DE", "EDDF").unwrap();
+        g.competitors.clear(); // Isolated market fixture; multi-company coverage is in competition.rs.
         for id in 1..=count {
             g.buy_aircraft("atr72_600").unwrap();
             g.create_route("EDDF", "EDDM", id).unwrap();
@@ -123,36 +129,16 @@ mod tests {
     }
 
     #[test]
-    fn allocation_uses_only_matching_direction_and_accepts_external_supply() {
+    fn unrelated_market_does_not_dilute_supply() {
         let g = game(1, 120);
         let r = &g.routes[0];
-        let daily = market(r, r.ticket_eur).unwrap().total();
-        let offers = [
-            Offer {
-                origin: "EDDF",
-                destination: "EDDM",
-                departures_per_day: 6.0,
-            },
-            Offer {
-                origin: "EDDM",
-                destination: "EDDF",
-                departures_per_day: 60.0,
-            },
-            // Could belong to any other airline; no private market per owner.
-            Offer {
-                origin: "EDDF",
-                destination: "EDDM",
-                departures_per_day: 4.0,
-            },
-        ];
-        assert_eq!(allocate(r, &offers).unwrap(), (daily / 10.0).floor() as i64);
-        let mut back = r.clone();
-        std::mem::swap(&mut back.origin_icao, &mut back.destination_icao);
+        let mut other = r.clone();
+        other.destination_icao = "LTFM".into();
+        let offers = vec![r.clone(), other];
         assert_eq!(
-            allocate(&back, &offers).unwrap(),
-            (daily / 60.0).floor() as i64
+            passengers(r, &offers).unwrap(),
+            passengers(r, &g.routes).unwrap()
         );
-        assert!(allocate(r, &offers).unwrap() as f64 * 10.0 <= daily);
     }
 
     #[test]
@@ -226,12 +212,11 @@ mod tests {
     fn multiple_flights_share_daily_market_instead_of_multiplying_it() {
         let mut one = game(1, 120);
         let mut two = game(2, 120);
-        let daily = market(&one.routes[0], 100).unwrap().total();
+        let daily = market(&one.routes[0], 0).unwrap().total();
         one.advance(86400.0);
         two.advance(86400.0);
         assert_eq!(one.finance.totals.flights, 12);
         assert_eq!(two.finance.totals.flights, 24);
-        assert!(two.finance.totals.passengers <= one.finance.totals.passengers);
         assert!(two.finance.totals.passengers as f64 <= 2.0 * daily);
         assert!(two.finance.totals.load_percent() < one.finance.totals.load_percent());
         // More frequent departures consume smaller slices of the same daily flow.
@@ -249,7 +234,7 @@ mod tests {
         std::mem::swap(&mut r.origin_icao, &mut r.destination_icao);
         assert_eq!(passengers(&g.routes[0], &g.routes).unwrap(), before);
         g.routes[1].plan = None;
-        assert!(passengers(&g.routes[0], &g.routes).unwrap() >= before * 2);
+        assert!(passengers(&g.routes[0], &g.routes).unwrap() > before);
         g.routes[1].plan = Some(operations::FlightPlan {
             first_departure: 60,
             interval_seconds: 7200,
@@ -258,8 +243,8 @@ mod tests {
         });
         g.routes[1].ticket_eur = 100_000;
         assert_eq!(passengers(&g.routes[1], &g.routes).unwrap(), 0);
-        // No redistribution of unsold quotas in this first version.
-        assert_eq!(passengers(&g.routes[0], &g.routes).unwrap(), before);
+        // An unaffordable competitor no longer takes customers from the cheap offer.
+        assert!(passengers(&g.routes[0], &g.routes).unwrap() > before);
     }
 
     #[test]

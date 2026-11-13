@@ -24,6 +24,7 @@ var operations_label: Label
 var ticket_input: SpinBox
 var ticket_button: Button
 var results_tree: Tree
+var competition_label: Label
 
 
 func _ready() -> void:
@@ -85,7 +86,7 @@ func _ready() -> void:
 	add_child(ticket_input)
 	ticket_button = Button.new()
 	ticket_button.text = "Ticketpreis übernehmen"
-	ticket_button.tooltip_text = "Flugplan vorher beenden."
+	ticket_button.tooltip_text = "Gilt ab dem nächsten Abflug; laufende Flüge behalten ihren Preis."
 	ticket_button.pressed.connect(func():
 		var route := _route()
 		if not route.is_empty():
@@ -127,6 +128,9 @@ func _ready() -> void:
 	operations_label = _label("")
 	add_child(operations_label)
 	_arrange_workspace()
+	competition_label = _label("Route auswählen, um den gemeinsamen Passagiermarkt zu sehen.")
+	var competition_panel := UI.panel(self, "05  /  WETTBEWERB · GEMEINSAMER STRECKENMARKT")
+	competition_panel.add_child(competition_label)
 	refresh()
 
 
@@ -246,13 +250,14 @@ func refresh_operations() -> void:
 			if route.is_empty():
 				continue
 			row.set_text(4, "%d Pax" % route["daily_demand"])
-			row.set_tooltip_text(4, "Gesamter Streckenmarkt pro Tag und Richtung bei diesem Preis, NICHT pro Flug oder Route.\nGeschäft: ca. %d · Urlaub/Privat: ca. %d\nGeteilter Anteil pro Abflug vor Sitzlimit: %d Pax%s" % [route["daily_business"], route["daily_leisure"], route["estimated_passengers"], "" if route["has_plan"] else " (ohne eigenen Flugplan)"])
+			row.set_tooltip_text(4, "Nachfrage bei eigenem Preis ohne Preiswettbewerb, NICHT pro Flug oder Route.\nGeschäft: ca. %d · Urlaub/Privat: ca. %d\nGeteilter Anteil pro Abflug vor Sitzlimit: %d Pax%s\nDie gemeinsame Marktaufteilung steht im Wettbewerbsbereich." % [route["daily_business"], route["daily_leisure"], route["estimated_passengers"], "" if route["has_plan"] else " (ohne eigenen Flugplan)"])
 			row.set_text(5, "%.1f %%" % route["actual_load_percent"] if route["actual_flights"] > 0 else "Keine Flüge")
 			row.set_tooltip_text(5, "Tatsächlich beförderte Passagiere / angebotene Sitze aller archivierten Landungen dieser Route. Bei alten Spielständen ab Archivbeginn.")
 	var lines: PackedStringArray = ["Flugbetrieb · nächste Abflüge (sortiert)"]
 	for operation in simulation.get_operations():
 		lines.append("%s · Route #%d · Flug %d min · Boden %d min\n%s\nNächster Abflug: %s" % [operation["identifier"], operation["route_id"], ceili(operation["flight_seconds"] / 60.0), operation["ground_seconds"] / 60, operation["status_text"], operation["next_departure"]])
 	operations_label.text = "\n\n".join(lines)
+	_refresh_competition()
 	results_tree.clear()
 	var root_item := results_tree.create_item()
 	if simulation.get_flight_results().is_empty():
@@ -280,7 +285,7 @@ func _selection_changed() -> void:
 	var route := _route()
 	status.text = ""
 	if ticket_button != null:
-		ticket_button.disabled = route.is_empty() or route.get("has_plan", false)
+		ticket_button.disabled = route.is_empty()
 		ticket_input.editable = not ticket_button.disabled
 		ticket_input.value = route.get("ticket_eur", 100)
 	if schedule_button != null:
@@ -298,6 +303,25 @@ func _selection_changed() -> void:
 	assignment.disabled = route.is_empty()
 	delete_button.disabled = route.is_empty()
 	_assignment_preview()
+	_refresh_competition()
+
+
+func _refresh_competition() -> void:
+	if competition_label == null:
+		return
+	var route := _route()
+	if route.is_empty():
+		competition_label.text = "Route auswählen, um den gemeinsamen Passagiermarkt zu sehen."
+		return
+	var live_route: Dictionary = route
+	for current in simulation.get_routes():
+		if current["id"] == route["id"]:
+			live_route = current
+	var lines: PackedStringArray = ["%s ↔ %s · Schätzung pro Tag und Richtung\nGemeinsamer Basismarkt: ca. %d Pax/Tag vor Preisreaktion" % [route["origin_icao"], route["destination_icao"], live_route["base_daily_market"]]]
+	for offer in simulation.get_route_competition(route["id"]):
+		lines.append("%s · %s · %d Sitze · %d EUR\n%.1f Abflüge/Tag → ca. %.0f Pax/Tag · %.1f %% der beförderten Pax%s\n%s" % [offer["airline"], offer["model"], offer["seats"], offer["ticket_eur"], offer["departures_per_day"], offer["passengers_per_day"], offer["share_percent"], "" if offer["active"] else " · inaktiv", offer["last_action"]])
+	lines.append("Ein Markt für alle Airlines. Preis und Frequenz verteilen Nachfrage; Sitze begrenzen Buchungen. Nicht bediente Nachfrage verfällt. Schätzung, keine garantierten Buchungen. KI prüft wöchentlich Preise und Verluste.")
+	competition_label.text = "\n\n".join(lines)
 
 
 func _assignment_preview() -> void:

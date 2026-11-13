@@ -222,6 +222,7 @@ mod tests {
     fn game() -> Game {
         let mut g = Game::default();
         g.found("Archive Air", "DE", "EDDF").unwrap();
+        g.competitors.clear();
         g.buy_aircraft("atr72_600").unwrap();
         g.create_route("EDDF", "EDDM", 1).unwrap();
         g.set_ticket_price(1, 71).unwrap();

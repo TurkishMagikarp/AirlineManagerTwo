@@ -49,31 +49,39 @@ Gruppen ab, Urlauber früher. Kostenlose Tickets erzeugen keine Einnahmen.
 ## Verteilung und Abrechnung
 
 Jeder aktive Pendelflugplan bietet `43200 / Abflugabstand_in_Sekunden` Flüge pro
-Tag **und Richtung**. Für alle aktiven Pläne eines Flughafenpaars wird diese
-Frequenz addiert. Jeder Flug erhält:
+Tag **und Richtung**. Spieler- und KI-Angebote stehen in **einer gemeinsamen
+Angebotsliste**, ohne Eigentümerbonus. Pro Segment (Geschäft/Privat) gilt:
 
-`floor(kaufbereite Tagesnachfrage bei seinem Preis / max(1, Gesamtfrequenz))`.
+- `B`: ursprünglicher Tagesmarkt des Segments vor Preisreaktion.
+- `w = max(0, 1 − Preis / (Referenzpreis × Preisgrenze))`: Kaufbereitschaft.
+- `a = w / max(1e-9, 1 − w)`: Preisattraktivität, mit endlichem Grenzwert für Freiflüge.
+- `F`: Summe der Frequenzen aller für dieses Segment bezahlbaren Angebote (`w > 0`).
+- Anteil pro Abflug: `min(B × w, B × a / (max(1, F) + Summe(Frequenz × a)))`.
 
-Danach begrenzen die Sitze die Beförderung. Bei gleichem Preis ist die Summe der
-beförderten Passagiere pro Tag im Dauerbetrieb höchstens der Tagesmarkt – mehr
-Frequenz teilt ihn nur feiner. Zusätzliche Kapazität kann vorher abgewiesene
-Passagiere aufnehmen, aber keinen neuen Markt erzeugen. Seltene Flüge sammeln
-nicht mehrere Tagesmärkte an. Nicht verkaufte Anteile teurer oder kleiner Flüge
-werden noch **nicht umverteilt**. Auch ein aktiver Plan mit zukünftigem Erstabflug
-zählt bereits zum angebotenen Dauerfahrplan; ungeplante Routen zählen nicht.
+Die beiden Segmente werden addiert und auf ganze Passagiere abgerundet. Danach
+begrenzen die Sitze die Beförderung. Der Term `max(1,F)` ist die vereinfachte
+Alternative „nicht fliegen“. Bei gleichen Preisen entspricht die Formel weiterhin
+der preisabhängigen Nachfrage geteilt durch die Gesamtfrequenz (bei seltenen
+Flügen maximal ein Tagesmarkt). Günstigere Konkurrenz verringert den Anteil
+teurerer Angebote. Die Tagesbeförderung aller Airlines zusammen überschreitet
+niemals `B`; Preiswettbewerb erzeugt keinen separaten Markt je Airline.
+
+Zusätzliche Kapazität kann zuvor abgewiesene Passagiere aufnehmen, aber keinen
+neuen Markt erzeugen. Sitzbedingt nicht verkaufte Anteile werden noch **nicht
+umverteilt**. Auch ein aktiver Plan mit zukünftigem Erstabflug zählt bereits zum
+angebotenen Dauerfahrplan; ungeplante Routen zählen nicht.
 
 **Beim Abflug** werden Richtung, Landetermin, Ticketpreis, Passagierzahl, Sitze,
 Ticketeinnahmen und Betriebskosten als unveränderliches Flugergebnis gespeichert.
 Damit steht auch die Auslastung fest. Aktivieren/Beenden anderer Flugpläne ändert
 nur künftige Abflüge, nicht bereits gestartete Flüge. **Bei Landung** wird genau
 dieses Ergebnis einmal in Guthaben, Finanzsummen und Archiv übernommen. Es gibt
-weiterhin keine vorgezogene Auszahlung. Preise eigener laufender Flugpläne
-bleiben wie bisher unveränderbar.
+weiterhin keine vorgezogene Auszahlung. Spieler und KI können die Preise auch
+bei laufendem Flugplan ändern; die Änderung betrifft nur künftige Abflüge.
 
-Die Verteilung erhält gerichtete Angebote (`demand::Offer`) ohne Airlinebindung.
-Spätere Konkurrenten können ihre Frequenzen in dieselbe Angebotsliste einspeisen,
-statt je Airline einen neuen Markt zu erzeugen. Hin- und Rückflug eines Pendelplans
-liefern je ein Angebot für ihren jeweiligen Markt, nicht zwei für dieselbe Richtung.
+Die Verteilung erhält alle aktiven Routen (`Game::market_routes`) ohne Airlinebonus.
+Hin- und Rückflug eines Pendelplans liefern je ein Angebot für ihren jeweiligen
+Markt, nicht zwei für dieselbe Richtung.
 Noch keine individuellen Buchungen oder Reservierungsliste: Bei Fahrplanwechseln
 gilt ab dem nächsten Abflug die neue Durchschnittsrate; eine strenge Tagesobergrenze
 wird nicht nachträglich erzwungen.
@@ -84,23 +92,28 @@ Konstante Fahrpläne können weiterhin millionenfach gebündelt abgerechnet werd
 
 ## Anzeige, Spielstände und Tests
 
-Die Routenübersicht zeigt den **gesamten preisabhängigen Markt/Tag/Richtung**,
+Die Routenübersicht zeigt die **preisabhängige Nachfrage ohne Preiswettbewerb**,
 nicht zusätzlich verfügbare Passagiere für jede Routen-ID. Tooltip: Segmente und
 geteilter Anteil vor Sitzlimit. Tatsächliche Auslastung = archivierte Passagiere /
 archivierte angebotene Sitze, sitzgewichtet über alle Landungen dieser Route.
-Ohne Archivflüge steht „Keine Flüge“.
+Ohne Archivflüge steht „Keine Flüge“. Der Wettbewerbsbereich zeigt Basismarkt und
+alle passenden Spieler-/KI-Angebote mit kapazitätsbegrenzten Schätzungen pro Tag
+und Richtung. Prozentwerte sind Anteile der geschätzt beförderten Passagiere.
 
-Speicherformat **Version 8** speichert das Abflugergebnis im laufenden Flugplan.
+Speicherformat **Version 9** speichert auch KI-Unternehmen und Entscheidungszeiten;
+seit Version 8 steht das Abflugergebnis im laufenden Flugplan.
 Laden berechnet es nicht neu. Fehlende/widersprüchliche Ergebnisse in neuen
 Spielständen werden abgelehnt. Versionen **1–7** bleiben ladbar: Für einen bereits
 laufenden Altflug wird einmal beim Laden anhand des gespeicherten Angebots ein
 Ergebnis eingefroren, da sein tatsächlicher Abflugzustand früher nicht gespeichert
 wurde. Vergangene Landungen, Finanzarchiv und Kontostand bleiben unverändert.
 Danach wird der migrierte Flug wie jeder andere nur bei seiner Landung abgerechnet.
+Alte Spielstände erhalten KI-Angebote erst ab dem Ladezeitpunkt. Die neue
+Konkurrenz schreibt keine historischen Spielerflüge oder gespeicherten Ergebnisse um.
 
 Rust- und Godot-Tests prüfen Größen, Preise, beide Segmente, Sitzlimits,
 Parallelrouten, umgekehrte Strecken, Frequenzen, Pause/16×, große/kleine Zeitschritte,
 Speichern/Laden und unveränderte historische Ergebnisse.
 
 Noch nicht enthalten: saisonale/werktägliche Spitzen, Stadtmärkte über mehrere
-Flughäfen, Umsteiger, Wettbewerber, Buchungsvorlauf und echte Quoten pro Kalendertag.
+Flughäfen, Umsteiger, Buchungsvorlauf und echte Quoten pro Kalendertag.
