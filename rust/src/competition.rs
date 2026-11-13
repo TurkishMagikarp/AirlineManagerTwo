@@ -136,7 +136,7 @@ impl Game {
                     let plane = g.fleet.iter().find(|p| Some(p.id) == r.aircraft_id)?;
                     let mut offer = crate::cabins::offer(r, plane).ok()?;
                     offer.awareness = g.marketing.awareness;
-                    offer.owner = g.airline.as_ref()?.name.clone();
+                    offer.owner = g.market_owner_key();
                     Some(offer)
                 })
             })

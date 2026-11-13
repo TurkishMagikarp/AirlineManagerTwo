@@ -56,10 +56,23 @@ impl History {
 impl Game {
     /// Local route/aircraft IDs may coincide across owners. Put this owner first
     /// so the allocator identifies its offer even when every commercial key matches.
+    pub fn market_owner_key(&self) -> String {
+        // The simulation root and its AI leaves have separate namespaces: the
+        // player may choose an AI's name. A standalone company has no rivals.
+        let namespace = if self.competitors.is_empty() {
+            "company"
+        } else {
+            "player"
+        };
+        format!(
+            "{namespace}:{}",
+            self.airline.as_ref().map_or("", |a| a.name.as_str())
+        )
+    }
     pub fn prioritize_market(&self, supply: &[crate::demand::Offer]) -> Vec<crate::demand::Offer> {
-        let name = self.airline.as_ref().map_or("", |a| a.name.as_str());
+        let owner = self.market_owner_key();
         let mut supply = supply.to_vec();
-        supply.sort_by_key(|o| o.owner != name);
+        supply.sort_by_key(|o| o.owner != owner);
         supply
     }
     pub fn set_marketing_budget(&mut self, budget: i64) -> Result<(), String> {

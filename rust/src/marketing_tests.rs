@@ -54,6 +54,7 @@ fn marketing_zero_gradual_diminishing_decay_and_deductible_costs() {
 #[test]
 fn marketing_steps_speeds_pause_midmonth_restart_and_ai_finances() {
     let mut initial = game();
+    initial.airline.as_mut().unwrap().name = "Regional Wings".into();
     initial.competitors = crate::competition::initial_competitors().unwrap();
     initial.buy_aircraft("atr72_600").unwrap();
     initial.staff_up();
@@ -172,9 +173,9 @@ fn marketing_choice_is_modest_preserves_ceilings_and_owner_identity() {
     g.schedule(1, 1, 360).unwrap();
     let route = g.routes[0].clone();
     let mut own = crate::demand::Offer::new(&route, 1000);
-    own.owner = "Brand Air".into();
+    own.owner = g.market_owner_key();
     let mut rival = own.clone();
-    rival.owner = "Other".into();
+    rival.owner = "company:Other".into();
     // Identical IDs and commercial keys must retain each owner's awareness.
     let base = crate::demand::estimate_at(&route, 1000, &[own.clone(), rival.clone()], 0)
         .unwrap()

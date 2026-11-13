@@ -502,14 +502,15 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 47 impl History
 48 pub fn marketing_through(&self, time: u64) -> i128
 56 impl Game
-59 pub fn prioritize_market(&self, supply: &[crate::demand::Offer]) -> Vec<crate::demand::Offer>
-65 pub fn set_marketing_budget(&mut self, budget: i64) -> Result<(), String>
-76 pub fn next_marketing_event(&self) -> Option<u64>
-89 fn settle_marketing(&mut self) -> Result<(), String>
-118 pub fn apply_marketing(&mut self) -> Result<(), String>
-145 pub fn review_marketing(&mut self) -> Result<(), String>
-155 pub fn validate_marketing(&self) -> Result<(), String>
-183 pub fn migrate(v: &mut serde_json::Value)
+59 pub fn market_owner_key(&self) -> String
+72 pub fn prioritize_market(&self, supply: &[crate::demand::Offer]) -> Vec<crate::demand::Offer>
+78 pub fn set_marketing_budget(&mut self, budget: i64) -> Result<(), String>
+89 pub fn next_marketing_event(&self) -> Option<u64>
+102 fn settle_marketing(&mut self) -> Result<(), String>
+131 pub fn apply_marketing(&mut self) -> Result<(), String>
+158 pub fn review_marketing(&mut self) -> Result<(), String>
+168 pub fn validate_marketing(&self) -> Result<(), String>
+196 pub fn migrate(v: &mut serde_json::Value)
 
 ## rust/src/marketing_tests.rs
 6 fn game() -> Game
@@ -517,11 +518,11 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 16 fn restart(g: &Game) -> Game
 23 fn marketing_zero_gradual_diminishing_decay_and_deductible_costs()
 55 fn marketing_steps_speeds_pause_midmonth_restart_and_ai_finances()
-95 fn marketing_rate_changes_carry_fractional_costs_and_ai_cuts()
-119 fn marketing_v19_migration_zero_for_all_owners_no_retroactive_cost()
-128 fn strip(v: &mut serde_json::Value)
-167 fn marketing_choice_is_modest_preserves_ceilings_and_owner_identity()
-205 fn marketing_changed_rates_and_airborne_restart_are_partition_independent()
+96 fn marketing_rate_changes_carry_fractional_costs_and_ai_cuts()
+120 fn marketing_v19_migration_zero_for_all_owners_no_retroactive_cost()
+129 fn strip(v: &mut serde_json::Value)
+168 fn marketing_choice_is_modest_preserves_ceilings_and_owner_identity()
+206 fn marketing_changed_rates_and_airborne_restart_are_partition_independent()
 
 ## rust/src/operations.rs
 10 pub struct FlightPlan
