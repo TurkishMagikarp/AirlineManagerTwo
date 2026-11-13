@@ -738,23 +738,12 @@ impl Competitor {
                     .ok_or("KI-Flugzeug fehlt")?;
                 // History::totals aggregates public routes; review each service
                 // exactly once while retaining its existing save-compatible cursor.
-                let mut totals = crate::economy::Totals::default();
-                for batch in self
+                let totals = self
                     .game
                     .history
                     .as_ref()
                     .unwrap()
-                    .batches
-                    .iter()
-                    .filter(|b| b.route_id == r.id)
-                {
-                    totals
-                        .add(
-                            &batch.totals,
-                            batch.through(self.game.clock.elapsed().as_secs()),
-                        )
-                        .ok_or("KI-Finanzüberlauf")?;
-                }
+                    .settled_service_totals(r.id);
                 let previous = self
                     .route_reviews
                     .iter()

@@ -69,6 +69,10 @@ func _run() -> void:
 		return
 	if not _check(main.finance_breakdown.is_visible_in_tree() and "Wartung / Verwaltung" in main.finance_breakdown.text and main.UI.money(totals["overhead_eur"]) in main.finance_breakdown.text, "Operating allowance is transparently displayed"):
 		return
+	main._show_page(4)
+	var fuel_note: Label = main.finances_panel.note
+	if not _check(fuel_note.is_visible_in_tree() and ("Treibstoff weltweit: %.2f EUR/kg" % (totals["fuel_cents_per_kg"] / 100.0)) in fuel_note.text and ("%d Cent/kg gegenüber vor 30 Tagen" % totals["fuel_month_delta_cents"]) in fuel_note.text, "Fuel display forwards the Rust global price and monthly change"):
+		return
 	simulation.start()
 	simulation.advance(7200.0 / 16.0)
 	if not _check(simulation.get_financial_summary()["flights"] == 4, "Loaded 16x plan continues without duplicate charges"):

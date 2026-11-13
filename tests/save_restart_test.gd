@@ -99,6 +99,8 @@ func _run() -> void:
 		if not _check("Nicht genügend Guthaben" in main.fleet_status.text and clock.get_fleet() == fleet and clock.get_airline_info() == airline, "Insufficient funds after restart does not alter state"):
 			return
 		await _click(main.navigation[0])
+		# Refresh time-dependent demand fields after the deliberate clock advance.
+		routes = clock.get_routes()
 		# All failures must preserve the current live state and the good on-disk save.
 		var good_bytes := FileAccess.get_file_as_bytes(path)
 		main.save_path = path + ".corrupt"
@@ -110,10 +112,10 @@ func _run() -> void:
 			if not _check(main.save_status.text != "Spielstand geladen." and clock.get_elapsed_seconds() == expected and clock.is_running() == running and clock.get_speed() == speed, "Corrupt load preserves live state"):
 				return
 		var invalid_company: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(path))
-		var invalid_routes: Dictionary = invalid_company.duplicate(true)
-		invalid_routes["state"]["routes"]["routes"][0]["aircraft_id"] = 999
+		# Preserve seed/u64 encodings so this fails specifically on the assignment.
+		var invalid_routes := FileAccess.get_file_as_string(path).replace('"aircraft_ids":[1]', '"aircraft_ids":[999]')
 		var route_file := FileAccess.open(main.save_path, FileAccess.WRITE)
-		route_file.store_string(JSON.stringify(invalid_routes))
+		route_file.store_string(invalid_routes)
 		route_file.close()
 		await _click(main.load_button)
 		if not _check(main.save_status.text != "Spielstand geladen." and clock.get_routes() == routes and clock.get_fleet() == fleet, "Invalid route load preserves live routes and aircraft"):

@@ -9,8 +9,9 @@ use std::path::Path;
 use std::time::Duration;
 
 const VERSION: u32 = 16;
-// Bounded input, but allow multi-year archives with frequent legitimate changes.
-const MAX_BYTES: u64 = 8 * 1024 * 1024;
+// Bounded input, including centuries of fuel/seasonal quotes for the player
+// and both AI airlines in the million-flight finance restart scenario.
+const MAX_BYTES: u64 = 64 * 1024 * 1024;
 
 #[derive(Serialize, Deserialize)]
 struct SaveGame {

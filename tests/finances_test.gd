@@ -62,9 +62,10 @@ func _run() -> void:
 	for plane in sim.get_fleet():
 		checks += plane["checks"] + (1 if plane["maintenance_state"] != "none" else 0)
 	var info: Dictionary = sim.get_finance_history_info()
-	# Own checks pause the shuttle; competitor hangar visits change the shared
-	# market and thus the departure quotes. Both legitimately start new blocks.
-	if not _check(checks > 2000 and info["batch_count"] >= checks and info["batch_count"] < 20_000, "Archive grows only with real interruptions: %d checks, %d blocks" % [checks, info["batch_count"]]):
+	# Checks, weekly fuel, seasonal passenger rounding and competitor service
+	# changes legitimately start blocks. The archive still compresses millions
+	# of flights without discarding any departure quote.
+	if not _check(checks > 2000 and info["batch_count"] >= checks and info["batch_count"] < 100_000, "Archive grows only with real interruptions: %d checks, %d blocks" % [checks, info["batch_count"]]):
 		return
 	var series: Array = sim.get_finance_series(0)
 	if not _check(series.size() <= 64 and series[-1]["balance"] == sim.get_airline_info()["capital_eur"], "Bounded series reconciles to account"):

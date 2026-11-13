@@ -69,6 +69,35 @@ pub struct History {
     pub payroll: Vec<Purchase>,
     #[serde(default)]
     pub financing: Vec<crate::financing::Entry>,
+    #[serde(skip)]
+    settled: SettledCache,
+}
+
+// Derived service totals accelerate AI lifetime reviews. Cache population must
+// not affect game equality, serialization or save/load determinism.
+#[derive(Clone, Debug, Default)]
+struct SettledCache(std::cell::RefCell<Option<SettledTotals>>);
+impl PartialEq for SettledCache {
+    fn eq(&self, _: &Self) -> bool {
+        true
+    }
+}
+#[derive(Clone, Debug, Default)]
+struct SettledTotals {
+    through: u64,
+    services: std::collections::BTreeMap<u32, Totals>,
+}
+impl SettledTotals {
+    fn record(&mut self, batch: &Batch) {
+        self.through = self
+            .through
+            .max(batch.first + (batch.count - 1) * batch.interval);
+        self.services
+            .entry(batch.route_id)
+            .or_default()
+            .add(&batch.totals, batch.count)
+            .expect("validated archive totals");
+    }
 }
 impl History {
     pub fn new(since: u64, opening_balance: i64) -> Self {
@@ -83,9 +112,13 @@ impl History {
             maintenance: Vec::new(),
             payroll: Vec::new(),
             financing: Vec::new(),
+            settled: SettledCache::default(),
         }
     }
     pub fn record(&mut self, batch: Batch) {
+        if let Some(totals) = self.settled.0.get_mut() {
+            totals.record(&batch);
+        }
         if let Some(last) = self
             .batches
             .iter_mut()
@@ -110,16 +143,49 @@ impl History {
                 return;
             }
         }
-        self.batches.push(batch);
-        // Different frame sizes can discover simultaneous route batches in a
-        // different order. Store them by first landing for identical saves.
-        self.batches.sort_by_key(|b| (b.first, b.route_id));
+        // Most settlements append chronologically. Insert only the new batch
+        // at its canonical position; sorting the entire lifetime archive here
+        // made long advances quadratic as fuel/season changes added blocks.
+        let key = (batch.first, batch.route_id);
+        let index = self
+            .batches
+            .partition_point(|b| (b.first, b.route_id) <= key);
+        self.batches.insert(index, batch);
     }
     pub fn public_route(&self, service: u32) -> u32 {
         self.route_groups.get(&service).copied().unwrap_or(service)
     }
 
+    fn with_settled<T>(&self, f: impl FnOnce(&SettledTotals) -> T) -> T {
+        let mut cached = self.settled.0.borrow_mut();
+        let totals = cached.get_or_insert_with(|| {
+            let mut totals = SettledTotals::default();
+            for batch in &self.batches {
+                totals.record(batch);
+            }
+            totals
+        });
+        f(totals)
+    }
+
+    pub(crate) fn settled_service_totals(&self, service: u32) -> Totals {
+        self.with_settled(|t| t.services.get(&service).cloned().unwrap_or_default())
+    }
+
     pub fn totals(&self, route: u32, through: u64) -> Totals {
+        if let Some(totals) = self.with_settled(|totals| {
+            (through >= totals.through).then(|| {
+                let mut sum = Totals::default();
+                for (service, total) in &totals.services {
+                    if route == 0 || self.public_route(*service) == route {
+                        sum.add(total, 1).expect("validated archive totals");
+                    }
+                }
+                sum
+            })
+        }) {
+            return totals;
+        }
         let mut t = Totals::default();
         for b in self
             .batches
@@ -362,6 +428,53 @@ mod tests {
     }
 
     #[test]
+    fn settled_cache_matches_scans_after_merges_groups_and_reload() {
+        let mut h = History::new(0, 0);
+        h.route_groups.insert(2, 1);
+        for (route_id, first, count) in [(1, 100, 2), (2, 110, 3), (1, 220, 2), (3, 90, 8)] {
+            h.record(Batch {
+                route_id,
+                first,
+                count,
+                interval: 60,
+                origin: "EDDF".into(),
+                destination: "EDDM".into(),
+                ticket_eur: 71,
+                totals: Totals {
+                    flights: 1,
+                    seats: 72,
+                    passengers: 50,
+                    revenue: 3550,
+                    fuel: 100,
+                    ..Default::default()
+                },
+            });
+            for route in 0..=3 {
+                for through in [0, 109, 200, u64::MAX] {
+                    let mut expected = Totals::default();
+                    for b in &h.batches {
+                        if route == 0 || h.public_route(b.route_id) == route {
+                            expected.add(&b.totals, b.through(through)).unwrap();
+                        }
+                    }
+                    assert_eq!(h.totals(route, through), expected);
+                }
+            }
+            let cold: History = serde_json::from_value(serde_json::to_value(&h).unwrap()).unwrap();
+            assert!(cold.settled.0.borrow().is_none());
+            assert_eq!(cold, h);
+            for service in 1..=3 {
+                let mut expected = Totals::default();
+                for b in h.batches.iter().filter(|b| b.route_id == service) {
+                    expected.add(&b.totals, b.count).unwrap();
+                }
+                assert_eq!(h.settled_service_totals(service), expected);
+                assert_eq!(cold.settled_service_totals(service), expected);
+            }
+        }
+    }
+
+    #[test]
     fn million_flights_are_lossless_compact_and_random_access() {
         let mut g = game();
         g.advance(60.0 + 7200.0 * 1_000_000.0);
@@ -396,6 +509,63 @@ mod tests {
         loaded.advance(7200.0);
         assert_eq!(loaded.history, g.history);
     }
+    #[test]
+    fn million_flight_finance_scenario_stays_within_budget() {
+        // Match finances_test.gd: two player fares, normal AI airlines, and an
+        // endowment to keep the intentionally loss-making service flying.
+        let mut g = game();
+        g.competitors = crate::competition::initial_competitors().unwrap();
+        g.buy_aircraft("atr72_600").unwrap();
+        g.create_route("EDDF", "EDDM", 2).unwrap();
+        g.set_ticket_price(2, 134).unwrap();
+        g.staff_up();
+        g.schedule(2, 1, 120).unwrap();
+        g.airline.as_mut().unwrap().capital_eur += 100_000_000_000;
+        g.history.as_mut().unwrap().opening_balance += 100_000_000_000;
+        let started = std::time::Instant::now();
+        assert!(g.advance(60.0 + 7200.0 * 1_000_000.0));
+        let elapsed = started.elapsed();
+        eprintln!("Finance stress advance: {elapsed:?}");
+        assert!(
+            elapsed < std::time::Duration::from_secs(300),
+            "finance stress advance took {elapsed:?}"
+        );
+        let h = g.history.as_ref().unwrap();
+        assert!(h.totals(1, u64::MAX).flights > 900_000);
+        assert!(h.totals(2, u64::MAX).flights > 900_000);
+        assert!(h.totals(1, u64::MAX).profit() > 0);
+        assert!(h.totals(2, u64::MAX).profit() < 0);
+        assert!(h.batches.len() < 100_000);
+        assert_eq!(g.competitors.len(), 2);
+        assert!(
+            g.competitors
+                .iter()
+                .all(|c| c.game.finance.totals.flights > 0)
+        );
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("finance-stress.json");
+        crate::save::save(&path, &g).unwrap();
+        eprintln!(
+            "Finance stress save: {} bytes",
+            std::fs::metadata(&path).unwrap().len()
+        );
+        let mut loaded = crate::save::load(&path).unwrap();
+        assert_eq!(
+            serde_json::to_value(&loaded).unwrap(),
+            serde_json::to_value(&g).unwrap()
+        );
+        assert!(g.advance(7200.0));
+        assert!(loaded.advance(7200.0));
+        assert_eq!(
+            serde_json::to_value(&loaded).unwrap(),
+            serde_json::to_value(&g).unwrap()
+        );
+        eprintln!(
+            "Finance stress including save/reload/continuation: {:?}",
+            started.elapsed()
+        );
+    }
+
     #[test]
     fn frame_partitioning_and_simultaneous_routes_match_archive() {
         let mut a = game();
