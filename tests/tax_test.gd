@@ -122,6 +122,9 @@ func _verify_ui() -> bool:
 	var panel = main.finances_panel
 	panel.refresh(true)
 	var summary: Dictionary = main.simulation.get_financial_summary()
+	var rates: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://config/tax.json"))
+	if not _check(summary["tax_rate_bps"] == rates["country_rates_bps"]["DE"], "German home rate equals configuration"):
+		return false
 	var expected := "Ertragsteuer · letzter Abschluss Jahr %d: %s · Verlustvortrag: %s · Heimatsteuersatz: %.2f %% · Steuern insgesamt: %s." % [summary["tax_year"], main.UI.money(summary["tax_year_eur"]), main.UI.money(summary["tax_loss_eur"]), summary["tax_rate_bps"] / 100.0, main.UI.money(summary["tax_eur"])]
 	if not _check(expected in panel.note.text, "Tax note equals Rust summary: " + panel.note.text):
 		return false

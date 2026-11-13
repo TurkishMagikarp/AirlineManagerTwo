@@ -98,6 +98,9 @@ func _run() -> void:
 				file = FileAccess.open(path, FileAccess.WRITE)
 				file.store_string(contents)
 				file.close()
+			var fixture_text := FileAccess.get_file_as_string(path)
+			if not _check(JSON.parse_string(fixture_text)["version"] == (17 if legacy else 18) and not '"tax"' in fixture_text and not '"taxes"' in fixture_text, "Named historical service format without tax fields"):
+				return
 			print("PASS: service fixture " + mode)
 			quit(0)
 			return
