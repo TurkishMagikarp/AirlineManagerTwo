@@ -81,6 +81,13 @@ func _run() -> void:
 			var file := FileAccess.open(path + ".flight", FileAccess.WRITE)
 			file.store_var(frozen)
 			file.close()
+			# Both restart fixtures use their named historical format.
+			var tax_free := FileAccess.get_file_as_string(path)
+			tax_free = RegEx.create_from_string('"tax":\\{[^}]*\\},|,"tax":\\{[^}]*\\}').sub(tax_free, "", true)
+			tax_free = tax_free.replace('"taxes":[],', '').replace(',"taxes":[]', '')
+			file = FileAccess.open(path, FileAccess.WRITE)
+			file.store_string(tax_free.replace('"version":19', '"version":18'))
+			file.close()
 			if legacy:
 				# Preserve u64 seeds and nanoseconds: never reserialize the save as GDScript JSON.
 				var contents := FileAccess.get_file_as_string(path).replace('"version":18', '"version":17')
@@ -91,6 +98,9 @@ func _run() -> void:
 				file = FileAccess.open(path, FileAccess.WRITE)
 				file.store_string(contents)
 				file.close()
+			var fixture_text := FileAccess.get_file_as_string(path)
+			if not _check(JSON.parse_string(fixture_text)["version"] == (17 if legacy else 18) and not '"tax"' in fixture_text and not '"taxes"' in fixture_text, "Named historical service format without tax fields"):
+				return
 			print("PASS: service fixture " + mode)
 			quit(0)
 			return
@@ -154,7 +164,7 @@ func _run() -> void:
 	if mode == "read-v17":
 		await _click(main.navigation[0])
 		await _click(main.save_button)
-		if not _check(main.save_status.text == "Spielstand gespeichert." and JSON.parse_string(FileAccess.get_file_as_string(path))["version"] == 18, "Migrated v17 resaves as v18"):
+		if not _check(main.save_status.text == "Spielstand gespeichert." and JSON.parse_string(FileAccess.get_file_as_string(path))["version"] == 19, "Migrated v17 resaves as v19"):
 			return
 	print("PASS: real service input, frozen costs, archive/Finances agreement and layout; mode=" + mode)
 	main.queue_free()
