@@ -30,11 +30,28 @@ impl FlightPlan {
     }
 }
 
+#[cfg(test)]
 pub fn departure_quote(
     route: &Route,
     model: &str,
     index: u64,
     routes: &[crate::demand::Offer],
+) -> Result<crate::economy::FlightResult, String> {
+    departure_quote_in_market(
+        route,
+        model,
+        index,
+        routes,
+        &crate::economy::FuelMarket::default(),
+    )
+}
+
+pub fn departure_quote_in_market(
+    route: &Route,
+    model: &str,
+    index: u64,
+    routes: &[crate::demand::Offer],
+    market: &crate::economy::FuelMarket,
 ) -> Result<crate::economy::FlightResult, String> {
     let plan = route.plan.as_ref().ok_or("Kein Flugplan.")?;
     let mut directed = route.clone();
@@ -53,7 +70,12 @@ pub fn departure_quote(
         origin: directed.origin_icao.clone(),
         destination: directed.destination_icao.clone(),
         ticket_eur: route.ticket_eur,
-        totals: crate::economy::quote_shared(&directed, model, routes)?,
+        totals: crate::economy::quote_at_price(
+            &directed,
+            model,
+            routes,
+            market.price_at(landing - flight),
+        )?,
     })
 }
 
@@ -314,8 +336,8 @@ impl Game {
             let Some(count) = state.completed.checked_sub(plan.completed_flights) else {
                 return false;
             };
-            // No user actions occur inside an advance. The stationary market permits
-            // batching all new departures; only the pre-existing flight may differ.
+            // No user actions occur inside an advance. Batch only departures with
+            // the same offer snapshot and fuel week; preserve the existing flight.
             let wear = if count > 0 {
                 let Ok((flight, _)) = timings(route, &self.fleet[p].model_id) else {
                     return false;
@@ -335,11 +357,24 @@ impl Game {
                     index += 1;
                 }
                 if index < state.completed {
-                    let Ok(f) = departure_quote(route, &self.fleet[p].model_id, index, supply)
-                    else {
-                        return false;
-                    };
-                    batches.push((state.completed - index, f));
+                    while index < state.completed {
+                        let departure = plan.first_departure + index * plan.interval_seconds;
+                        let boundary = self.fuel_market.next_change(departure);
+                        let count = (boundary - departure)
+                            .div_ceil(plan.interval_seconds)
+                            .min(state.completed - index);
+                        let Ok(f) = departure_quote_in_market(
+                            route,
+                            &self.fleet[p].model_id,
+                            index,
+                            supply,
+                            &self.fuel_market,
+                        ) else {
+                            return false;
+                        };
+                        batches.push((count, f));
+                        index += count;
+                    }
                 }
             }
             for (count, result) in batches {
@@ -386,9 +421,13 @@ impl Game {
                 if count == 0 && plan.airborne.is_some() {
                     plan.airborne.clone()
                 } else {
-                    let Ok(f) =
-                        departure_quote(route, &self.fleet[p].model_id, state.completed, supply)
-                    else {
+                    let Ok(f) = departure_quote_in_market(
+                        route,
+                        &self.fleet[p].model_id,
+                        state.completed,
+                        supply,
+                        &self.fuel_market,
+                    ) else {
                         return false;
                     };
                     Some(f)
@@ -614,13 +653,7 @@ mod tests {
             assert!(small.advance(300.0));
         }
         assert_eq!(large.finance, small.finance);
-        // Archive insertion order follows route order, not allocation priority.
-        small
-            .history
-            .as_mut()
-            .unwrap()
-            .batches
-            .sort_by_key(|b| (b.route_id, b.first));
+        // History is canonical by first landing and route, across fuel blocks.
         assert_eq!(large.history, small.history);
         assert_eq!(large.airline, small.airline);
         large.validate_operations().unwrap();

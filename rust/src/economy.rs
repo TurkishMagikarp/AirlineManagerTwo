@@ -3,6 +3,61 @@ use crate::{aircraft, game::Game, operations, routes::Route};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, sync::LazyLock};
 
+// Scoped to the current test thread: exercise the real economy continuously at
+// the configured upper bound without changing production rules or save format.
+#[cfg(test)]
+thread_local! { pub(crate) static HIGH_FUEL: std::cell::Cell<bool> = const { std::cell::Cell::new(false) }; }
+
+/// One world seed and timeline, shared verbatim by all companies. Prices are
+/// derived at departure time; no frame-driven RNG or mutable UI clock.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct FuelMarket {
+    pub seed: u64,
+    pub started_at: u64,
+}
+impl Default for FuelMarket {
+    fn default() -> Self {
+        Self {
+            seed: 0x4149524c494e45,
+            started_at: 0,
+        }
+    }
+}
+impl FuelMarket {
+    pub fn price_at(&self, time: u64) -> i64 {
+        #[cfg(test)]
+        if HIGH_FUEL.with(|enabled| enabled.get()) {
+            return CONFIG.fuel_max_cents_per_kg;
+        }
+        let c = &*CONFIG;
+        let mut price = c.fuel_cents_per_kg;
+        let mut rng = self.seed;
+        for _ in 0..time.saturating_sub(self.started_at) / c.fuel_cadence_seconds {
+            // SplitMix64, explicitly wrapping and independent of platform RNGs.
+            rng = rng.wrapping_add(0x9e3779b97f4a7c15);
+            let mut z = rng;
+            z = (z ^ (z >> 30)).wrapping_mul(0xbf58476d1ce4e5b9);
+            z = (z ^ (z >> 27)).wrapping_mul(0x94d049bb133111eb);
+            z ^= z >> 31;
+            let shock =
+                (z % (2 * c.fuel_volatility_cents + 1) as u64) as i64 - c.fuel_volatility_cents;
+            price = (price + shock + (c.fuel_cents_per_kg - price) / c.fuel_mean_reversion_divisor)
+                .clamp(c.fuel_min_cents_per_kg, c.fuel_max_cents_per_kg);
+        }
+        price
+    }
+
+    pub fn max_price(&self) -> i64 {
+        CONFIG.fuel_max_cents_per_kg
+    }
+
+    pub fn next_change(&self, time: u64) -> u64 {
+        let c = CONFIG.fuel_cadence_seconds;
+        self.started_at
+            .saturating_add((time.saturating_sub(self.started_at) / c + 1).saturating_mul(c))
+    }
+}
+
 pub const HISTORY_LIMIT: usize = 100;
 #[derive(Deserialize)]
 pub struct Config {
@@ -10,6 +65,11 @@ pub struct Config {
     reference_base_eur: i64,
     reference_eur_per_100_km: i64,
     fuel_cents_per_kg: i64,
+    fuel_min_cents_per_kg: i64,
+    fuel_max_cents_per_kg: i64,
+    fuel_volatility_cents: i64,
+    fuel_mean_reversion_divisor: i64,
+    fuel_cadence_seconds: u64,
     airport_eur_per_passenger: i64,
     models: HashMap<String, Rates>,
 }
@@ -35,6 +95,11 @@ static CONFIG: LazyLock<Config> = LazyLock::new(|| {
         assert!((0..=100_000).contains(&n));
     }
     assert!(c.reference_base_eur > 0);
+    assert!(0 < c.fuel_min_cents_per_kg && c.fuel_min_cents_per_kg <= c.fuel_cents_per_kg);
+    assert!((c.fuel_cents_per_kg..=100_000).contains(&c.fuel_max_cents_per_kg));
+    assert!((0..=100_000).contains(&c.fuel_volatility_cents));
+    assert!((1..=100_000).contains(&c.fuel_mean_reversion_divisor));
+    assert!(c.fuel_cadence_seconds >= 86400);
     for m in aircraft::models().expect("models") {
         let r = &c.models[&m.id];
         for n in [
@@ -116,6 +181,7 @@ pub struct Finance {
     pub recent: Vec<FlightResult>,
 }
 
+#[cfg(test)]
 pub fn quote(route: &Route, model_id: &str) -> Result<Totals, String> {
     quote_shared(
         route,
@@ -127,10 +193,20 @@ pub fn quote(route: &Route, model_id: &str) -> Result<Totals, String> {
     )
 }
 
+#[cfg(test)]
 pub fn quote_shared(
     route: &Route,
     model_id: &str,
     routes: &[crate::demand::Offer],
+) -> Result<Totals, String> {
+    quote_at_price(route, model_id, routes, CONFIG.fuel_cents_per_kg)
+}
+
+pub fn quote_at_price(
+    route: &Route,
+    model_id: &str,
+    routes: &[crate::demand::Offer],
+    fuel_cents: i64,
 ) -> Result<Totals, String> {
     let c = &*CONFIG;
     let model = aircraft::model(model_id)?;
@@ -143,8 +219,7 @@ pub fn quote_shared(
         passengers,
         seats: model.seats.into(),
         revenue: passengers * route.ticket_eur,
-        fuel: ((seconds * rates.fuel_kg_per_hour + rates.fuel_cycle_kg * 3600)
-            * c.fuel_cents_per_kg
+        fuel: ((seconds * rates.fuel_kg_per_hour + rates.fuel_cycle_kg * 3600) * fuel_cents
             + 359999)
             / 360000,
         airport: rates.airport_base_eur + c.airport_eur_per_passenger * passengers,

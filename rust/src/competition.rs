@@ -147,6 +147,7 @@ impl Game {
         for c in &self.competitors {
             let g = &c.game;
             if !g.clock.is_valid()
+                || g.fuel_market != self.fuel_market
                 || !g.competitors.is_empty()
                 || g.clock.elapsed() != self.clock.elapsed()
                 || c.next_review <= self.clock.elapsed().as_secs()
@@ -616,8 +617,14 @@ impl Competitor {
                     &candidate,
                     crate::aircraft::model(&plane.model_id).unwrap().seats,
                 ));
-                let Ok(t) = crate::economy::quote_shared(&candidate, &plane.model_id, &offers)
-                else {
+                let Ok(t) = crate::economy::quote_at_price(
+                    &candidate,
+                    &plane.model_id,
+                    &offers,
+                    self.game
+                        .fuel_market
+                        .price_at(self.game.clock.elapsed().as_secs()),
+                ) else {
                     return false;
                 };
                 if t.profit() > best.0 || (t.profit() == best.0 && price == old) {
@@ -752,7 +759,14 @@ impl Competitor {
                 if let Some(l) = &plane.lease {
                     week -= i128::from(l.monthly) * i128::from(REVIEW) / i128::from(l.period);
                 }
-                let quote = crate::economy::quote_shared(r, &plane.model_id, supply)?;
+                let quote = crate::economy::quote_at_price(
+                    r,
+                    &plane.model_id,
+                    supply,
+                    self.game
+                        .fuel_market
+                        .price_at(self.game.clock.elapsed().as_secs()),
+                )?;
                 expected.add(&quote, 1).ok_or("KI-Finanzüberlauf")?;
                 previous_losses = previous_losses.min(previous.losses);
                 self.route_reviews.retain(|v| v.route_id != r.id);
@@ -831,7 +845,14 @@ impl Competitor {
                 .iter()
                 .find(|p| Some(p.id) == route.aircraft_id)
                 .ok_or("KI-Flugzeug fehlt")?;
-            let t = crate::economy::quote_shared(route, &plane.model_id, &offers)?;
+            let t = crate::economy::quote_at_price(
+                route,
+                &plane.model_id,
+                &offers,
+                self.game
+                    .fuel_market
+                    .price_at(self.game.clock.elapsed().as_secs()),
+            )?;
             committed_weekly_costs += (t.costs() + maintenance_per_flight(route, &plane.model_id)?)
                 * (REVIEW / route.plan.as_ref().unwrap().interval_seconds) as i64;
         }
@@ -915,7 +936,14 @@ impl Competitor {
                         .iter()
                         .find(|p| Some(p.id) == r.aircraft_id)
                         .ok_or("KI-Flugzeug fehlt")?;
-                    let q = crate::economy::quote_shared(r, &p.model_id, &offers)?;
+                    let q = crate::economy::quote_at_price(
+                        r,
+                        &p.model_id,
+                        &offers,
+                        self.game
+                            .fuel_market
+                            .price_at(self.game.clock.elapsed().as_secs()),
+                    )?;
                     let rent = p.lease.as_ref().map_or(0, |l| {
                         (l.monthly * REVIEW as i64 + l.period as i64 - 1) / l.period as i64
                     });
@@ -987,7 +1015,14 @@ impl Competitor {
                     }
                     let mut market = offers.clone();
                     market.push(crate::demand::Offer::new(&r, m.seats));
-                    let t = crate::economy::quote_shared(&r, model, &market)?;
+                    let t = crate::economy::quote_at_price(
+                        &r,
+                        model,
+                        &market,
+                        self.game
+                            .fuel_market
+                            .price_at(self.game.clock.elapsed().as_secs()),
+                    )?;
                     // Charge the loss of revenue on our existing services too:
                     // an added aircraft must earn its keep after market dilution.
                     let mut dilution = 0;
@@ -1002,8 +1037,22 @@ impl Competitor {
                                 .iter()
                                 .find(|p| Some(p.id) == old.aircraft_id)
                                 .ok_or("KI-Flugzeug fehlt")?;
-                            let before = crate::economy::quote_shared(old, &p.model_id, &offers)?;
-                            let after = crate::economy::quote_shared(old, &p.model_id, &market)?;
+                            let before = crate::economy::quote_at_price(
+                                old,
+                                &p.model_id,
+                                &offers,
+                                self.game
+                                    .fuel_market
+                                    .price_at(self.game.clock.elapsed().as_secs()),
+                            )?;
+                            let after = crate::economy::quote_at_price(
+                                old,
+                                &p.model_id,
+                                &market,
+                                self.game
+                                    .fuel_market
+                                    .price_at(self.game.clock.elapsed().as_secs()),
+                            )?;
                             dilution += (before.profit() - after.profit())
                                 * (REVIEW / old.plan.as_ref().unwrap().interval_seconds) as i64;
                         }
@@ -1124,7 +1173,14 @@ impl Competitor {
                 &candidate,
                 crate::aircraft::model(&model).unwrap().seats,
             ));
-            let Ok(t) = crate::economy::quote_shared(&candidate, &model, &offers) else {
+            let Ok(t) = crate::economy::quote_at_price(
+                &candidate,
+                &model,
+                &offers,
+                self.game
+                    .fuel_market
+                    .price_at(self.game.clock.elapsed().as_secs()),
+            ) else {
                 return false;
             };
             let rent = plane.lease.as_ref().map_or(0, |l| {
