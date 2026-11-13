@@ -25,6 +25,7 @@ var loan_status: Label
 var loan_rules: Label
 var loan_amount: SpinBox
 var loan_borrow: Button
+var loan_reschedule: Button
 var loan_repay: Button
 var loan_result: Label
 var aircraft_journal: Tree
@@ -65,6 +66,13 @@ func _ready() -> void:
 	loan_repay.text = "Sondertilgung"
 	loan_repay.pressed.connect(func(): _loan_action(false))
 	actions.add_child(loan_repay)
+	loan_reschedule = Button.new()
+	loan_reschedule.text = "Kredit einmalig umschulden"
+	loan_reschedule.pressed.connect(func():
+		var error: String = simulation.reschedule_loan()
+		loan_result.text = error if not error.is_empty() else "Kredit umgeschuldet. Gebühr gebucht; Frist bleibt bestehen."
+		refresh(true))
+	actions.add_child(loan_reschedule)
 	loan_result = UI.label("")
 	loan_result.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	loans.add_child(loan_result)
@@ -73,7 +81,7 @@ func _ready() -> void:
 	aircraft.add_child(aircraft_journal)
 	var company := UI.panel(self, "WIRTSCHAFTLICHE ENTWICKLUNG")
 	chart_select = OptionButton.new()
-	for title in ["Kontostand · EUR", "Ticketeinnahmen · EUR je Zeitabschnitt", "Kosten inkl. Zinsen und Leasing · EUR je Zeitabschnitt", "Ergebnis · EUR je Zeitabschnitt"]:
+	for title in ["Kontostand · EUR", "Ticketeinnahmen · EUR je Zeitabschnitt", "Kosten inkl. Zinsen, Gebühren und Leasing · EUR je Zeitabschnitt", "Ergebnis · EUR je Zeitabschnitt"]:
 		chart_select.add_item(title)
 	chart_select.item_selected.connect(func(_i: int): _chart())
 	company.add_child(chart_select)
@@ -125,12 +133,14 @@ func refresh(force: bool = false) -> void:
 	if key == signature and not force:
 		return
 	signature = key
-	loan_status.text = "Verfügbar: %s · Restschuld: %s · Zinsen bisher: %s\nNächste Rate: %s am %s (davon Zinsen: %s) · Überfällige Tilgung: %s\n%s" % [UI.money(financing["available_cash_eur"]), UI.money(financing["debt_eur"]), UI.money(financing["interest_eur"]), UI.money(financing["payment_eur"]), financing["next_due"], UI.money(financing["next_interest_eur"]), UI.money(financing["overdue_eur"]), financing["status"]]
+	loan_status.text = "Verfügbar: %s · Restschuld: %s · Zinsen / Gebühren bisher: %s\nNächste Rate: %s am %s (davon Zinsen: %s) · Überfällige Tilgung: %s\n%s" % [UI.money(financing["available_cash_eur"]), UI.money(financing["debt_eur"]), UI.money(financing["interest_eur"]), UI.money(financing["payment_eur"]), financing["next_due"], UI.money(financing["next_interest_eur"]), UI.money(financing["overdue_eur"]), financing["status"]]
 	loan_status.text += "\nNächste Gehälter: %s am %s · Verfügbares Guthaben ist nicht für künftige Ausgaben reserviert." % [UI.money(financing["payroll_eur"]), financing["payroll_due"]]
 	loan_status.add_theme_color_override("font_color", UI.NEGATIVE if financing["distressed"] else UI.MUTED)
-	loan_rules.text = financing["rules"]
+	loan_status.text += "\nRestrukturierungsfrist: %s" % financing["deadline"]
+	loan_rules.text = financing["rules"] + "\n" + financing["rescue_rules"]
+	loan_reschedule.disabled = not financing["can_reschedule"]
 	loan_borrow.disabled = not financing["can_borrow"]
-	loan_repay.disabled = financing["debt_eur"] <= 0 or financing["available_cash_eur"] <= 0
+	loan_repay.disabled = financing["insolvent"] or financing["debt_eur"] <= 0 or financing["available_cash_eur"] <= 0
 	metrics["balance"].text = UI.money(airline.get("capital_eur", 0))
 	for field in ["revenue", "costs", "profit"]:
 		metrics[field].text = UI.money(summary[field + "_eur"])

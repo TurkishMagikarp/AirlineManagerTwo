@@ -334,3 +334,288 @@ fn financing_ai_distress_and_loans_match_across_restart_and_all_speeds() {
         assert_eq!(state(&g), state(&expected));
     }
 }
+
+#[test]
+fn restructuring_grace_deadline_terminal_save_and_management_lock() {
+    let mut g = fresh();
+    cash(&mut g, -1);
+    g.clock.set_running(true);
+    let grace = RULES.distress_grace_days as f64 * DAY;
+    let window = RULES.restructuring_days as f64 * DAY;
+    assert!(g.advance(grace - 1.0));
+    assert_eq!(g.resolution.distress_since, Some(0));
+    assert_eq!(g.resolution.deadline, None);
+    assert!(g.advance(1.0));
+    assert_eq!(g.resolution.deadline, Some((grace + window) as u64));
+    assert!(!g.insolvent());
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("restructuring.json");
+    save::save(&path, &g).unwrap();
+    let mut loaded = save::load(&path).unwrap();
+    assert_eq!(state(&loaded), state(&g));
+    assert!(loaded.advance(window - 1.0));
+    assert!(!loaded.insolvent());
+    assert!(loaded.advance(1000.0));
+    assert!(loaded.insolvent());
+    assert_eq!(loaded.clock.elapsed().as_secs(), (grace + window) as u64);
+    assert!(!loaded.clock.is_running());
+    let terminal = state(&loaded);
+    assert!(loaded.advance(100.0 * DAY));
+    assert!(loaded.found("Restart", "DE", "EDDF").is_err());
+    assert!(loaded.borrow(100).is_err());
+    assert!(loaded.repay(1).is_err());
+    assert!(loaded.buy_aircraft("atr72_600").is_err());
+    assert!(loaded.hire_staff(Role::Pilot, 1).is_err());
+    assert!(loaded.reschedule_loan().is_err());
+    assert_eq!(state(&loaded), terminal);
+    save::save(&path, &loaded).unwrap();
+    assert_eq!(state(&save::load(&path).unwrap()), terminal);
+}
+
+#[test]
+fn restructuring_recovery_resets_grace_and_rescue_reconciles_without_cash_injection() {
+    let mut g = fresh();
+    g.borrow(1_200_000).unwrap();
+    cash(&mut g, 1);
+    g.clock.set_running(true);
+    assert!(g.advance(30.0 * DAY));
+    assert!(g.advance(RULES.distress_grace_days as f64 * DAY));
+    assert!(g.can_reschedule());
+    let debt = g.financing.debt;
+    let fee = (debt * RULES.reschedule_fee_bps + 9999) / 10000;
+    // Cover the fee but not overdue principal: rescheduling can actually rescue
+    // this airline by deferring arrears, rather than manufacturing cash.
+    cash(&mut g, fee + 1);
+    assert!(g.distressed());
+    let start = g.cash();
+    g.reschedule_loan().unwrap();
+    assert_eq!(g.cash(), start - fee);
+    assert_eq!(g.financing.debt, debt);
+    assert_eq!(g.financing.overdue, 0);
+    assert_eq!(
+        g.financing.installment,
+        (debt + RULES.reschedule_term_periods - 1) / RULES.reschedule_term_periods
+    );
+    assert_eq!(
+        g.financing.next_due,
+        g.clock.elapsed().as_secs() + RULES.repayment_period_days * 86400
+    );
+    assert!(!g.distressed());
+    assert_eq!(g.resolution.deadline, None);
+    assert_eq!(g.resolution.distress_since, None);
+    g.validate_financing().unwrap();
+    g.validate_history().unwrap();
+    let entry = g.history.as_ref().unwrap().financing.last().unwrap();
+    assert_eq!(
+        (entry.cash, entry.principal, entry.interest),
+        (-fee, 0, fee)
+    );
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("used-rescue.json");
+    save::save(&path, &g).unwrap();
+    let restored = save::load(&path).unwrap();
+    assert_eq!(state(&restored), state(&g));
+    g = restored;
+    let before = state(&g);
+    assert!(g.reschedule_loan().is_err());
+    assert_eq!(state(&g), before);
+    cash(&mut g, -1);
+    let now = g.clock.elapsed().as_secs();
+    assert!(g.advance(RULES.distress_grace_days as f64 * DAY));
+    assert_eq!(g.resolution.distress_since, Some(now));
+    assert!(g.resolution.deadline.is_some());
+    assert!(!g.can_reschedule());
+}
+
+#[test]
+fn restructuring_sale_recovers_and_failed_rescue_keeps_original_deadline() {
+    let mut g = fresh();
+    g.buy_aircraft("atr72_600").unwrap();
+    cash(&mut g, -1);
+    g.clock.set_running(true);
+    assert!(g.advance(RULES.distress_grace_days as f64 * DAY));
+    g.sell_aircraft(1).unwrap();
+    assert!(!g.distressed());
+    assert_eq!(g.resolution.deadline, None);
+    assert!(g.advance((RULES.restructuring_days + 1) as f64 * DAY));
+    assert!(!g.insolvent());
+
+    let mut g = fresh();
+    g.borrow(120_000).unwrap();
+    cash(&mut g, -1);
+    g.clock.set_running(true);
+    assert!(g.advance(RULES.distress_grace_days as f64 * DAY));
+    let deadline = g.resolution.deadline;
+    g.reschedule_loan().unwrap();
+    assert!(g.distressed());
+    assert_eq!(g.resolution.deadline, deadline);
+    assert!(g.advance(RULES.restructuring_days as f64 * DAY));
+    assert!(g.insolvent());
+}
+
+#[test]
+fn restructuring_ai_exit_and_player_terminal_are_deterministic_across_steps_and_restart() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("exit.json");
+    for player in [false, true] {
+        let mut initial = Game::default();
+        initial.found("Exit audit", "DE", "EDDF").unwrap();
+        if player {
+            cash(&mut initial, -1);
+        } else {
+            cash(&mut initial.competitors[0].game, -100_000_000);
+        }
+        initial.clock.set_running(true);
+        let days = RULES.distress_grace_days + RULES.restructuring_days + 10;
+        let mut expected = initial.clone();
+        assert!(expected.advance(days as f64 * DAY));
+        if player {
+            assert!(expected.insolvent());
+        } else {
+            assert_eq!(expected.competitors.len(), 1);
+            assert!(
+                expected
+                    .competitors
+                    .iter()
+                    .all(|c| c.game.airline.as_ref().unwrap().name != "Regional Wings")
+            );
+            // No removed routes remain in the market or flight snapshot.
+            assert_eq!(
+                expected.market_routes().len(),
+                expected.routes.len() + expected.competitors[0].game.routes.len()
+            );
+            expected.validate_competitors().unwrap();
+            expected.validate_history().unwrap();
+        }
+        for speed in [1, 4, 16] {
+            for step in [DAY, DAY / 7.0] {
+                let mut g = initial.clone();
+                g.clock.set_speed(speed);
+                // Integer-second partitions avoid floating-point fixture drift.
+                let step = step.floor();
+                let mut remaining = days * 86400;
+                let mut saved = false;
+                while remaining > 0 {
+                    let dt = remaining.min(step as u64);
+                    assert!(g.advance(dt as f64 / f64::from(speed)));
+                    remaining -= dt;
+                    if !saved
+                        && g.clock.elapsed().as_secs() >= (RULES.distress_grace_days + 1) * 86400
+                    {
+                        save::save(&path, &g).unwrap();
+                        g = save::load(&path).unwrap();
+                        saved = true;
+                    }
+                }
+                g.clock.set_speed(1);
+                assert_eq!(
+                    state(&g),
+                    state(&expected),
+                    "player={player} speed={speed} step={step}"
+                );
+                save::save(&path, &g).unwrap();
+                assert_eq!(state(&save::load(&path).unwrap()), state(&g));
+            }
+        }
+    }
+}
+
+#[test]
+fn restructuring_v13_migration_starts_fresh_grace_without_replaying_costs() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("v13.json");
+    let mut g = fresh();
+    cash(&mut g, -10);
+    g.clock =
+        crate::clock::Clock::from_state(std::time::Duration::from_secs(200 * 86400), false, 1)
+            .unwrap();
+    save::save(&path, &g).unwrap();
+    let original: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    assert_eq!(original["version"], 14);
+    let mut old = original.clone();
+    old["version"] = serde_json::json!(13);
+    old["state"].as_object_mut().unwrap().remove("resolution");
+    std::fs::write(&path, serde_json::to_vec(&old).unwrap()).unwrap();
+    let mut restored = save::load(&path).unwrap();
+    assert_eq!(state(&restored), state(&g));
+    restored.clock.set_running(true);
+    assert!(restored.advance(1.0));
+    assert_eq!(restored.resolution.distress_since, Some(200 * 86400));
+    assert_eq!(restored.cash(), -10);
+    for resolution in [
+        serde_json::json!({"distress_since":null,"deadline":1,"rescheduled":false,"insolvent_at":null}),
+        serde_json::json!({"distress_since":999999999,"deadline":null,"rescheduled":false,"insolvent_at":null}),
+    ] {
+        let mut bad = original.clone();
+        bad["state"]["resolution"] = resolution;
+        std::fs::write(&path, serde_json::to_vec(&bad).unwrap()).unwrap();
+        assert!(save::load(&path).is_err());
+    }
+}
+
+#[test]
+fn restructuring_recovery_before_grace_and_at_deadline_wins() {
+    let mut g = fresh();
+    cash(&mut g, -1);
+    g.clock.set_running(true);
+    assert!(g.advance(RULES.distress_grace_days as f64 * DAY - 1.0));
+    g.borrow(100).unwrap();
+    assert_eq!(g.resolution.distress_since, None);
+    assert_eq!(g.resolution.deadline, None);
+    assert!(g.advance(1.0));
+    assert!(!g.insolvent());
+    assert_eq!(g.resolution.deadline, None);
+
+    // Simulate a cash-settlement event exactly at the deadline. Final settled
+    // solvency, rather than the opening distressed balance, decides the result.
+    let mut g = fresh();
+    cash(&mut g, -1);
+    g.clock.set_running(true);
+    assert!(g.advance(RULES.distress_grace_days as f64 * DAY));
+    let end = g.resolution.deadline.unwrap();
+    g.clock =
+        crate::clock::Clock::from_state(std::time::Duration::from_secs(end), true, 1).unwrap();
+    cash(&mut g, 0);
+    g.apply_financing().unwrap();
+    assert!(!g.insolvent());
+    assert_eq!(g.resolution.distress_since, None);
+    assert_eq!(g.resolution.deadline, None);
+    g.validate_financing().unwrap();
+}
+
+#[test]
+fn restructuring_ai_uses_the_same_one_time_paid_reschedule() {
+    let mut world = Game::default();
+    world.found("AI rescue audit", "DE", "EDDF").unwrap();
+    world.competitors.truncate(1);
+    let mut broken = fresh();
+    broken.borrow(120_000).unwrap();
+    cash(&mut broken, -1);
+    world.competitors[0].game = Box::new(broken);
+    world.clock.set_running(true);
+    assert!(world.advance(35.0 * DAY));
+    let g = &world.competitors[0].game;
+    assert!(g.resolution.rescheduled);
+    assert!(!g.can_reschedule());
+    assert!(g.distressed());
+    assert_eq!(
+        g.resolution.deadline,
+        Some((RULES.distress_grace_days + RULES.restructuring_days) * 86400)
+    );
+    let fee = (g.financing.debt * RULES.reschedule_fee_bps + 9999) / 10000;
+    assert!(
+        g.history
+            .as_ref()
+            .unwrap()
+            .financing
+            .iter()
+            .any(|e| e.time == 35 * 86400
+                && e.cash == -fee
+                && e.principal == 0
+                && e.interest == fee)
+    );
+    world.validate_competitors().unwrap();
+    assert!(world.advance(100.0 * DAY));
+    assert!(world.competitors.is_empty());
+}

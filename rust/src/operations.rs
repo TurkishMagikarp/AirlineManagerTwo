@@ -209,6 +209,7 @@ impl Game {
     }
 
     pub fn stop_schedule(&mut self, id: u32) -> Result<(), String> {
+        self.require_active()?;
         let route = self
             .routes
             .iter()

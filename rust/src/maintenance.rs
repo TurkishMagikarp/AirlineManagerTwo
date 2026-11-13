@@ -289,6 +289,7 @@ impl Game {
 
     /// Airborne aircraft finish their flight first; others enter the hangar now.
     pub fn request_maintenance(&mut self, aircraft_id: u32) -> Result<(), String> {
+        self.require_active()?;
         let visit = self.quote_maintenance(aircraft_id)?;
         let p = self.fleet.iter().position(|p| p.id == aircraft_id).unwrap();
         let immediate = visit.start <= self.clock.elapsed().as_secs();
@@ -304,6 +305,7 @@ impl Game {
     /// was debited yet and the flight plan simply continues. Running checks and
     /// forced (unscheduled) groundings cannot be cancelled.
     pub fn cancel_maintenance(&mut self, aircraft_id: u32) -> Result<(), String> {
+        self.require_active()?;
         let plane = self
             .fleet
             .iter_mut()

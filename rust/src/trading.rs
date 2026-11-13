@@ -75,6 +75,7 @@ impl Game {
             cash,
             kind,
         });
+        self.observe_distress();
         Ok(())
     }
 
@@ -162,12 +163,14 @@ impl Game {
     }
 
     pub fn sell_aircraft(&mut self, id: u32) -> Result<(), String> {
+        self.require_active()?;
         if self.disposable(id)?.lease.is_some() {
             return Err("Leasingflugzeuge können nur zurückgegeben, nicht verkauft werden.".into());
         }
         self.dispose_aircraft(id, Kind::Sale)
     }
     pub fn return_aircraft(&mut self, id: u32) -> Result<(), String> {
+        self.require_active()?;
         if self.disposable(id)?.lease.is_none() {
             return Err("Eigene Flugzeuge müssen verkauft werden.".into());
         }

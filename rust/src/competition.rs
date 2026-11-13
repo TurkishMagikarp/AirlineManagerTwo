@@ -169,6 +169,9 @@ impl Game {
     }
 
     pub fn advance(&mut self, seconds: f64) -> bool {
+        if self.insolvent() {
+            return true;
+        }
         let mut target = self.clock.clone();
         if !target.advance(seconds) {
             return false;
@@ -326,6 +329,9 @@ impl Game {
             {
                 return false;
             }
+            // Remove the whole AI company, including aircraft, plans, staff and
+            // event sources. Its already settled flights remain in other ledgers.
+            staged.competitors.retain(|c| !c.game.insolvent());
             // All companies settle against the same immutable offer snapshot first.
             for i in 0..staged.competitors.len() {
                 let supply = staged.market_routes();
@@ -333,6 +339,11 @@ impl Game {
                 if c.next_review == end.as_secs() && !c.review(&supply) {
                     return false;
                 }
+            }
+            if staged.insolvent() {
+                staged.clock.set_speed(target.speed());
+                *self = staged;
+                return true;
             }
         }
         staged.clock = target;
@@ -366,6 +377,9 @@ impl Competitor {
     }
 
     fn review(&mut self, supply: &[Route]) -> bool {
+        if self.game.can_reschedule() && self.game.reschedule_loan().is_err() {
+            return false;
+        }
         if self.game.distressed() {
             // Dispose only idle parked aircraft, using exactly the player's quotes.
             let idle: Vec<_> = self
@@ -1161,23 +1175,22 @@ mod tests {
         let mut forced = false;
         for _ in 0..200 {
             assert!(g.advance(86400.0));
-            forced |= g.competitors[0]
-                .game
-                .fleet
-                .iter()
-                .any(|p| p.maintenance.as_ref().is_some_and(|v| v.unscheduled));
+            if let Some(c) = g.competitors.first() {
+                forced |= c
+                    .game
+                    .fleet
+                    .iter()
+                    .any(|p| p.maintenance.as_ref().is_some_and(|v| v.unscheduled));
+                assert!(c.game.routes.iter().all(|r| r.plan.is_none()));
+            }
         }
         assert!(
             !forced,
             "distress must stop flights before another forced check"
         );
-        assert!(g.competitors[0].game.distressed());
         assert!(
-            g.competitors[0]
-                .game
-                .routes
-                .iter()
-                .all(|r| r.plan.is_none())
+            g.competitors.is_empty(),
+            "unrescued AI must leave the market"
         );
         g.validate_competitors().unwrap();
     }

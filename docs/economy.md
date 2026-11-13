@@ -69,6 +69,11 @@ wird aus Stunden- und Zyklusmenge gemeinsam berechnet und einmal aufgerundet.
 Die bisherige Flugzeit `ceil(Luftlinie / Reisegeschwindigkeit × 3600)` bleibt
 unverändert. Kostenaufschläge ändern **keine** Abflug-/Landetermine.
 
+## Finanznot und Unternehmensende
+
+Fristen, einmalige Kreditumschuldung, KI-Marktaustritt und Spielstand v14:
+[Restrukturierung und Insolvenz](restructuring.md).
+
 ## Reproduzierbare Matrix aus dem Rust-Test
 
 Passagierzahlen hängen jetzt auch vom Flugplan und parallelen Routen ab; die

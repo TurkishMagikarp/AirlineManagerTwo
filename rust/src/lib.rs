@@ -295,10 +295,23 @@ impl SimulationClock {
             "payroll_due" => g.next_payroll_event().map(operations::display_time).unwrap_or_else(|| "—".into()).as_str(),
             "next_due" => if g.financing.debt > 0 { operations::display_time(g.financing.next_due) } else { "—".into() }.as_str(),
             "distressed" => g.distressed(), "status" => g.financing_status(),
+            "insolvent" => g.insolvent(), "can_reschedule" => g.can_reschedule(),
+            "deadline" => g.resolution.deadline.map(operations::display_time).unwrap_or_else(|| "—".into()).as_str(),
+            "rescue_rules" => format!("Finanznot: {} Tage Schonfrist, danach {} Tage Restrukturierung. Einmalige Umschuldung: {} Raten, {:.2} % Gebühr auf Restschuld (jetzt {} EUR), Zinssatz unverändert; Rückstände werden gestundet, Frist bleibt bestehen. Keine Geldzufuhr. Gebühr in Finanzierungskosten enthalten.", r.distress_grace_days, r.restructuring_days, r.reschedule_term_periods, r.reschedule_fee_bps as f64 / 100.0, g.reschedule_fee()).as_str(),
             "limit_eur" => r.maximum_loan_eur,
-            "can_borrow" => g.airline.is_some() && g.financing.debt == 0,
+            "can_borrow" => g.airline.is_some() && !g.insolvent() && g.financing.debt == 0,
             "rules" => format!("Ein Kredit bis {} EUR · {:.2} % p.a. · Rate alle {} Tage · {} Raten. Zinsen auf Restschuld, ganze EUR aufgerundet, Jahr = 365 Tage. Sondertilgung kostenlos; keine automatische Kreditaufnahme. Negative Kontostände sind offene Verpflichtungen, kein frei verfügbares Geld.", r.maximum_loan_eur, r.annual_interest_bps as f64 / 100.0, r.repayment_period_days, r.term_periods).as_str()
         }
+    }
+
+    #[func]
+    fn reschedule_loan(&mut self) -> GString {
+        self.game
+            .reschedule_loan()
+            .err()
+            .unwrap_or_default()
+            .as_str()
+            .into()
     }
 
     #[func]
@@ -1088,7 +1101,9 @@ impl SimulationClock {
 
     #[func]
     fn start(&mut self) {
-        self.game.clock.set_running(true);
+        if !self.game.insolvent() {
+            self.game.clock.set_running(true);
+        }
     }
 
     #[func]
