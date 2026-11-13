@@ -83,7 +83,7 @@ pub fn flights(game: &Game) -> Vec<Flight> {
             let b = airport(&state.destination)?;
             Some(Flight {
                 aircraft_id: plane.id,
-                route_id: r.id,
+                route_id: r.public_id(),
                 origin: state.origin,
                 destination: state.destination,
                 departure,

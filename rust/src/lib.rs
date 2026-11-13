@@ -14,6 +14,9 @@ mod map;
 mod operations;
 #[cfg(test)]
 mod quality;
+#[cfg(test)]
+mod rotation_tests;
+mod route_save;
 mod routes;
 mod save;
 mod staff;
@@ -85,7 +88,7 @@ impl SimulationClock {
         let mut rows = std::collections::BTreeMap::new();
         for r in &self.game.routes {
             rows.insert(
-                r.id,
+                r.public_id(),
                 (
                     r.origin_icao.as_str(),
                     r.destination_icao.as_str(),
@@ -95,7 +98,7 @@ impl SimulationClock {
             );
         }
         for b in &h.batches {
-            let row = rows.entry(b.route_id).or_insert((
+            let row = rows.entry(h.public_route(b.route_id)).or_insert((
                 b.origin.as_str(),
                 b.destination.as_str(),
                 false,
@@ -122,7 +125,11 @@ impl SimulationClock {
         };
         h.page(route_id, offset.max(0) as u64, 50)
             .iter()
-            .map(flight_dictionary)
+            .map(|f| {
+                let mut row = flight_dictionary(f);
+                row.set("route_id", h.public_route(f.route_id));
+                row
+            })
             .collect()
     }
 
@@ -181,6 +188,7 @@ impl SimulationClock {
         self.game
             .routes
             .iter()
+            .filter(|r| r.parent_route_id.is_none())
             .filter_map(|r| {
                 let a = map::airport(&r.origin_icao)?;
                 let b = map::airport(&r.destination_icao)?;
@@ -190,7 +198,7 @@ impl SimulationClock {
                         Vector2::new(lon as f32, lat as f32)
                     })
                     .collect();
-                Some(vdict! { "id" => r.id, "points" => &points, "active" => r.plan.is_some() })
+                Some(vdict! { "id" => r.id, "points" => &points, "active" => self.game.routes.iter().any(|s| s.public_id() == r.id && s.plan.is_some()) })
             })
             .collect()
     }
@@ -341,7 +349,17 @@ impl SimulationClock {
             .recent
             .iter()
             .rev()
-            .map(flight_dictionary)
+            .map(|f| {
+                let mut row = flight_dictionary(f);
+                row.set(
+                    "route_id",
+                    self.game
+                        .history
+                        .as_ref()
+                        .map_or(f.route_id, |h| h.public_route(f.route_id)),
+                );
+                row
+            })
             .collect()
     }
 
@@ -435,8 +453,13 @@ impl SimulationClock {
             } else {
                 "Kein Flugplan".into()
             };
+            let text = if route.remove_at.is_some() {
+                format!("{text} · Freigabe nach Bodenzeit vorgemerkt")
+            } else {
+                text
+            };
             rows.push((state.as_ref().map(|s| s.next_departure).unwrap_or(u64::MAX), vdict! {
-                "route_id" => route.id, "aircraft_id" => plane.id,
+                "route_id" => route.public_id(), "aircraft_id" => plane.id,
                 "identifier" => plane.identifier().as_str(), "status_text" => text.as_str(),
                 "has_plan" => route.plan.is_some(),
                 "flight_seconds" => flight as i64, "ground_seconds" => ground as i64,
@@ -484,6 +507,26 @@ impl SimulationClock {
     fn assign_route(&mut self, route_id: u32, aircraft_id: u32) -> GString {
         self.game
             .assign_route(route_id, (aircraft_id != 0).then_some(aircraft_id))
+            .err()
+            .unwrap_or_default()
+            .as_str()
+            .into()
+    }
+
+    #[func]
+    fn add_route_aircraft(&mut self, route_id: u32, aircraft_id: u32) -> GString {
+        self.game
+            .add_route_aircraft(route_id, aircraft_id)
+            .err()
+            .unwrap_or_default()
+            .as_str()
+            .into()
+    }
+
+    #[func]
+    fn remove_route_aircraft(&mut self, route_id: u32, aircraft_id: u32) -> GString {
+        self.game
+            .remove_route_aircraft(route_id, aircraft_id)
             .err()
             .unwrap_or_default()
             .as_str()
@@ -647,13 +690,28 @@ impl SimulationClock {
         self.game
             .routes
             .iter()
+            .filter(|r| r.parent_route_id.is_none())
             .filter_map(|r| {
                 let market = demand::market(r, r.ticket_eur).ok()?;
                 let base = demand::market(r, 0).ok()?;
-                let estimate = r.plan.as_ref().and_then(|_| {
-                    let plane = self.game.fleet.iter().find(|p| Some(p.id) == r.aircraft_id)?;
-                    demand::estimate(r, aircraft::model(&plane.model_id).ok()?.seats, &supply).ok()
-                }).unwrap_or_default();
+                let services: Vec<_> = self.game.routes.iter().filter(|s| s.public_id() == r.id).collect();
+                let aircraft_ids: Array<u32> = services.iter().filter_map(|s| s.aircraft_id).collect();
+                let has_plan = services.iter().any(|s| s.plan.is_some());
+                let mut estimate = demand::Estimate::default();
+                for service in &services {
+                    if service.plan.is_none() { continue; }
+                    if let Some(plane) = self.game.fleet.iter().find(|p| Some(p.id) == service.aircraft_id)
+                        && let Ok(model) = aircraft::model(&plane.model_id)
+                        && let Ok(e) = demand::estimate(service, model.seats, &supply) {
+                        estimate.daily_passengers += e.daily_passengers;
+                        estimate.daily_spill += e.daily_spill;
+                        estimate.per_departure += e.per_departure;
+                    }
+                }
+                let maintenance = services.iter().map(|s| self.route_maintenance_status(s)).filter(|s| !s.is_empty()).collect::<Vec<_>>().join("\n");
+                let staff = services.iter().map(|s| self.route_staff_status(s)).filter(|s| !s.is_empty()).collect::<Vec<_>>().join("\n");
+                let active_count = services.iter().filter(|s| s.plan.is_some()).count() as i64;
+                estimate.per_departure /= active_count.max(1);
                 let actual = self
                     .game
                     .history
@@ -664,7 +722,7 @@ impl SimulationClock {
                     "id" => r.id, "origin_icao" => r.origin_icao.as_str(),
                     "destination_icao" => r.destination_icao.as_str(),
                     "distance_km" => routes::distance_km(&r.origin_icao, &r.destination_icao).unwrap_or(0.0),
-                    "aircraft_id" => r.aircraft_id.unwrap_or(0), "has_plan" => r.plan.is_some(), "ticket_eur" => r.ticket_eur,
+                    "aircraft_id" => r.aircraft_id.unwrap_or(0), "aircraft_ids" => &aircraft_ids, "has_plan" => has_plan, "ticket_eur" => r.ticket_eur,
                     "daily_demand" => market.total().floor() as i64,
                     "base_daily_market" => base.total().floor() as i64,
                     "daily_business" => market.business.floor() as i64,
@@ -673,9 +731,9 @@ impl SimulationClock {
                     "expected_daily_passengers" => estimate.daily_passengers.floor() as i64,
                     "daily_spill" => estimate.daily_spill.floor() as i64,
                     "actual_flights" => actual.flights, "actual_load_percent" => actual.load_percent(),
-                    "maintenance_status" => self.route_maintenance_status(r).as_str(),
-                    "staff_status" => self.route_staff_status(r).as_str(),
-                    "can_schedule" => r.plan.is_none() && r.aircraft_id.is_some() && self.route_maintenance_status(r).is_empty() && self.route_staff_status(r).is_empty()
+                    "maintenance_status" => maintenance.as_str(),
+                    "staff_status" => staff.as_str(),
+                    "can_schedule" => !has_plan && !aircraft_ids.is_empty() && maintenance.is_empty() && staff.is_empty()
                 })
             })
             .collect()
@@ -791,7 +849,7 @@ impl SimulationClock {
                     "lease_monthly_eur" => plane.lease.as_ref().map_or(0, |l| l.monthly),
                     "lease_due" => plane.lease.as_ref().map(|l| operations::display_time(l.next_due)).unwrap_or_default().as_str(),
                     "range_km" => aircraft::model(&plane.model_id).map(|m| m.range_km).unwrap_or(0),
-                    "route_id" => self.game.routes.iter().find(|r| r.aircraft_id == Some(plane.id)).map(|r| r.id).unwrap_or(0)
+                    "route_id" => self.game.routes.iter().find(|r| r.aircraft_id == Some(plane.id)).map(|r| r.public_id()).unwrap_or(0)
                 }
             })
             .zip(self.game.fleet.iter().enumerate())

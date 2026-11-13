@@ -12,6 +12,7 @@ pub struct Game {
     pub airline: Option<Airline>,
     pub fleet: Vec<Aircraft>,
     pub next_aircraft_id: u32,
+    #[serde(with = "crate::route_save")]
     pub routes: Vec<crate::routes::Route>,
     pub next_route_id: u32,
     pub finance: crate::economy::Finance,

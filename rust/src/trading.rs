@@ -183,6 +183,8 @@ impl Game {
             if r.aircraft_id == Some(id) {
                 r.plan = None;
                 r.aircraft_id = None;
+                r.remove_at = None;
+                r.rotation_phase = None;
             }
         }
         self.fleet.retain(|p| p.id != id);

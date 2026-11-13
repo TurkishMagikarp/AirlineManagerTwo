@@ -55,6 +55,9 @@ pub struct History {
     pub opening_balance: i64,
     pub prior_totals: Totals,
     pub batches: Vec<Batch>,
+    /// Stable service-to-public-route mapping, retained after route deletion.
+    #[serde(default)]
+    pub route_groups: std::collections::BTreeMap<u32, u32>,
     pub purchases: Vec<Purchase>,
     #[serde(default)]
     pub aircraft_cash: Vec<crate::trading::Entry>,
@@ -74,6 +77,7 @@ impl History {
             opening_balance,
             prior_totals: Totals::default(),
             batches: Vec::new(),
+            route_groups: Default::default(),
             purchases: Vec::new(),
             aircraft_cash: Vec::new(),
             maintenance: Vec::new(),
@@ -111,12 +115,16 @@ impl History {
         // different order. Store them by first landing for identical saves.
         self.batches.sort_by_key(|b| (b.first, b.route_id));
     }
+    pub fn public_route(&self, service: u32) -> u32 {
+        self.route_groups.get(&service).copied().unwrap_or(service)
+    }
+
     pub fn totals(&self, route: u32, through: u64) -> Totals {
         let mut t = Totals::default();
         for b in self
             .batches
             .iter()
-            .filter(|b| route == 0 || b.route_id == route)
+            .filter(|b| route == 0 || self.public_route(b.route_id) == route)
         {
             t.add(&b.totals, b.through(through))
                 .expect("validated archive totals");
@@ -186,26 +194,40 @@ impl History {
     }
     /// Batches of a route never overlap. Work depends on batches and page size, not flights.
     pub fn page(&self, route: u32, offset: u64, limit: usize) -> Vec<FlightResult> {
-        let mut batches: Vec<_> = self
+        let batches: Vec<_> = self
             .batches
             .iter()
-            .filter(|b| b.route_id == route)
+            .filter(|b| self.public_route(b.route_id) == route)
             .collect();
-        batches.sort_by_key(|b| std::cmp::Reverse(b.first));
-        let mut skip = offset;
+        // Merge interleaved aircraft histories by landing time, without expanding
+        // the lifetime archive into one object per flight.
+        let mut heap = std::collections::BinaryHeap::new();
+        for (batch, b) in batches.iter().enumerate() {
+            if b.count > 0 {
+                let index = if batches.len() == 1 {
+                    offset.checked_add(1).and_then(|n| b.count.checked_sub(n))
+                } else {
+                    Some(b.count - 1)
+                };
+                if let Some(i) = index {
+                    heap.push((b.at(i).landing, b.route_id, batch, i));
+                }
+            }
+        }
+        let mut skip = if batches.len() == 1 { 0 } else { offset };
         let mut rows = Vec::new();
-        for b in batches {
-            if skip >= b.count {
-                skip -= b.count;
-                continue;
-            }
-            let end = b.count - skip;
-            for i in (end.saturating_sub((limit - rows.len()) as u64)..end).rev() {
-                rows.push(b.at(i));
-            }
-            skip = 0;
-            if rows.len() == limit {
+        while rows.len() < limit {
+            let Some((_, _, batch, index)) = heap.pop() else {
                 break;
+            };
+            let b = batches[batch];
+            if skip > 0 {
+                skip -= 1;
+            } else {
+                rows.push(b.at(index));
+            }
+            if index > 0 {
+                heap.push((b.at(index - 1).landing, b.route_id, batch, index - 1));
             }
         }
         rows
@@ -224,6 +246,18 @@ impl Game {
         let now = self.clock.elapsed().as_secs();
         if self.airline.is_none() || h.since > now {
             return Err("Ungültiger Finanzbeginn.".into());
+        }
+        if h.route_groups.iter().any(|(service, route)| {
+            *route == 0
+                || *service <= *route
+                || *service >= self.next_route_id
+                || h.route_groups.contains_key(route)
+        }) || self
+            .routes
+            .iter()
+            .any(|r| h.public_route(r.id) != r.public_id())
+        {
+            return Err("Ungültige Archiv-Routengruppe.".into());
         }
         let mut sum = Totals::default();
         let mut ends = std::collections::HashMap::new();
