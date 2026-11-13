@@ -21,6 +21,12 @@ var signature := ""
 var elapsed := 0.0
 var company_series: Array = []
 var chart_range: Label
+var loan_status: Label
+var loan_rules: Label
+var loan_amount: SpinBox
+var loan_borrow: Button
+var loan_repay: Button
+var loan_result: Label
 
 func _ready() -> void:
 	add_theme_constant_override("separation", 12)
@@ -29,14 +35,41 @@ func _ready() -> void:
 	grid.add_theme_constant_override("v_separation", 12)
 	add_child(grid)
 	grid.resized.connect(func(): grid.columns = 4 if grid.size.x >= 1150 else 2)
-	for item in [["balance", "KONTOSTAND"], ["revenue", "TICKETUMSÄTZE"], ["costs", "BETRIEBSKOSTEN"], ["profit", "GEWINN / VERLUST"]]:
+	for item in [["balance", "KONTOSTAND"], ["revenue", "TICKETUMSÄTZE"], ["costs", "GESAMTKOSTEN"], ["profit", "GEWINN / VERLUST"]]:
 		metrics[item[0]] = UI.metric(grid, item[1])
 	note = UI.label("", 13, UI.MUTED)
 	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	add_child(note)
+	var loans := UI.panel(self, "KREDITE / LIQUIDITÄT")
+	loan_status = UI.label("")
+	loan_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	loans.add_child(loan_status)
+	loan_rules = UI.label("", 13, UI.MUTED)
+	loan_rules.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	loans.add_child(loan_rules)
+	var actions := HFlowContainer.new()
+	loans.add_child(actions)
+	loan_amount = SpinBox.new()
+	loan_amount.min_value = 1
+	loan_amount.max_value = 1000000000
+	loan_amount.step = 1
+	loan_amount.value = 1000000
+	loan_amount.custom_minimum_size.x = 180
+	actions.add_child(loan_amount)
+	loan_borrow = Button.new()
+	loan_borrow.text = "Kredit aufnehmen"
+	loan_borrow.pressed.connect(func(): _loan_action(true))
+	actions.add_child(loan_borrow)
+	loan_repay = Button.new()
+	loan_repay.text = "Sondertilgung"
+	loan_repay.pressed.connect(func(): _loan_action(false))
+	actions.add_child(loan_repay)
+	loan_result = UI.label("")
+	loan_result.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	loans.add_child(loan_result)
 	var company := UI.panel(self, "WIRTSCHAFTLICHE ENTWICKLUNG")
 	chart_select = OptionButton.new()
-	for title in ["Kontostand · EUR", "Ticketeinnahmen · EUR je Zeitabschnitt", "Betriebskosten · EUR je Zeitabschnitt", "Ergebnis · EUR je Zeitabschnitt"]:
+	for title in ["Kontostand · EUR", "Ticketeinnahmen · EUR je Zeitabschnitt", "Kosten inkl. Zinsen · EUR je Zeitabschnitt", "Ergebnis · EUR je Zeitabschnitt"]:
 		chart_select.add_item(title)
 	chart_select.item_selected.connect(func(_i: int): _chart())
 	company.add_child(chart_select)
@@ -83,10 +116,17 @@ func _process(delta: float) -> void:
 func refresh(force: bool = false) -> void:
 	var summary: Dictionary = simulation.get_financial_summary()
 	var airline: Dictionary = simulation.get_airline_info()
-	var key := "%s/%s" % [summary, airline]
+	var financing: Dictionary = simulation.get_financing()
+	var key := "%s/%s/%s" % [summary, airline, financing]
 	if key == signature and not force:
 		return
 	signature = key
+	loan_status.text = "Verfügbar: %s · Restschuld: %s · Zinsen bisher: %s\nNächste Rate: %s am %s (davon Zinsen: %s) · Überfällige Tilgung: %s\n%s" % [UI.money(financing["available_cash_eur"]), UI.money(financing["debt_eur"]), UI.money(financing["interest_eur"]), UI.money(financing["payment_eur"]), financing["next_due"], UI.money(financing["next_interest_eur"]), UI.money(financing["overdue_eur"]), financing["status"]]
+	loan_status.text += "\nNächste Gehälter: %s am %s · Verfügbares Guthaben ist nicht für künftige Ausgaben reserviert." % [UI.money(financing["payroll_eur"]), financing["payroll_due"]]
+	loan_status.add_theme_color_override("font_color", UI.NEGATIVE if financing["distressed"] else UI.MUTED)
+	loan_rules.text = financing["rules"]
+	loan_borrow.disabled = not financing["can_borrow"]
+	loan_repay.disabled = financing["debt_eur"] <= 0 or financing["available_cash_eur"] <= 0
 	metrics["balance"].text = UI.money(airline.get("capital_eur", 0))
 	for field in ["revenue", "costs", "profit"]:
 		metrics[field].text = UI.money(summary[field + "_eur"])
@@ -94,7 +134,7 @@ func refresh(force: bool = false) -> void:
 	var info: Dictionary = simulation.get_finance_history_info()
 	note.text = "Summen: gesamte erfasste Wirtschaft. Routenarchiv und Diagramme ab %s.\nBei älteren Spielständen fehlt frühere Detailhistorie; sie wird nicht nachberechnet. Flugzeugkäufe insgesamt: %s · Wartungschecks insgesamt: %s · Gehälter insgesamt: %s." % [info.get("since", "—"), UI.money(summary["purchases_eur"]), UI.money(summary["maintenance_eur"]), UI.money(summary["payroll_eur"])]
 	company_series = simulation.get_finance_series(0)
-	chart_range.text = "%s → %s\nBis zu 64 Zeitpunkte · Werte im Tooltip · Käufe sind keine Betriebskosten." % [company_series[0]["time"], company_series[-1]["time"]] if not company_series.is_empty() else "Noch keine Finanzhistorie."
+	chart_range.text = "%s → %s\nBis zu 64 Zeitpunkte · Werte im Tooltip · Käufe und Tilgung sind keine Betriebskosten; Zinsen sind enthalten." % [company_series[0]["time"], company_series[-1]["time"]] if not company_series.is_empty() else "Noch keine Finanzhistorie."
 	_chart()
 	route_tree.clear()
 	var root := route_tree.create_item()
@@ -121,6 +161,11 @@ func refresh(force: bool = false) -> void:
 
 func _chart() -> void:
 	chart.set_series(company_series, ["balance", "revenue", "costs", "profit"][chart_select.selected])
+
+func _loan_action(borrowing: bool) -> void:
+	var error: String = simulation.borrow_money(int(loan_amount.value)) if borrowing else simulation.repay_loan(int(loan_amount.value))
+	loan_result.text = error if not error.is_empty() else "Kredit aufgenommen." if borrowing else "Tilgung gebucht."
+	refresh(true)
 
 func _select_route() -> void:
 	var row := route_tree.get_selected()

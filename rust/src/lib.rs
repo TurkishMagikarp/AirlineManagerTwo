@@ -4,6 +4,9 @@ mod clock;
 mod competition;
 mod demand;
 mod economy;
+mod financing;
+#[cfg(test)]
+mod financing_tests;
 mod game;
 mod history;
 mod maintenance;
@@ -138,7 +141,7 @@ impl SimulationClock {
             // Central expenses belong only to the company series, never to
             // every route (which would duplicate them again).
             let costs = i128::from(t.costs()) + if route_id == 0 {
-                h.maintenance_through(time) + h.payroll_through(time)
+                h.maintenance_through(time) + h.payroll_through(time) + h.interest_through(time)
             } else { 0 };
             let period_costs = costs - previous_costs;
             let period_profit = i128::from(t.revenue - previous.revenue) - period_costs;
@@ -244,7 +247,13 @@ impl SimulationClock {
             .as_ref()
             .map(|h| h.payroll_through(u64::MAX).min(i128::from(i64::MAX)) as i64)
             .unwrap_or(0);
-        let costs = i128::from(t.costs()) + i128::from(maintenance) + i128::from(payroll);
+        let interest = self
+            .game
+            .history
+            .as_ref()
+            .map_or(0, |h| h.interest_through(u64::MAX));
+        let costs =
+            i128::from(t.costs()) + i128::from(maintenance) + i128::from(payroll) + interest;
         let profit = i128::from(t.revenue) - costs;
         vdict! { "flights" => t.flights, "passengers" => t.passengers, "revenue_eur" => t.revenue,
         "maintenance_eur" => maintenance, "payroll_eur" => payroll,
@@ -252,6 +261,49 @@ impl SimulationClock {
         "costs_eur" => costs.min(i128::from(i64::MAX)) as i64,
         "profit_eur" => profit.clamp(i128::from(i64::MIN), i128::from(i64::MAX)) as i64, "purchases_eur" => purchases,
         "load_percent" => t.load_percent() }
+    }
+
+    #[func]
+    fn get_financing(&self) -> VarDictionary {
+        let g = &self.game;
+        let r = &*financing::RULES;
+        let interest = g
+            .history
+            .as_ref()
+            .map_or(0, |h| h.interest_through(u64::MAX));
+        vdict! {
+            "cash_eur" => g.cash(), "available_cash_eur" => g.cash().max(0),
+            "debt_eur" => g.financing.debt, "overdue_eur" => g.financing.overdue,
+            "interest_eur" => interest.min(i128::from(i64::MAX)) as i64,
+            "next_interest_eur" => g.loan_interest(), "payment_eur" => g.loan_payment(),
+            "payroll_eur" => g.next_payroll_amount().unwrap_or(i64::MAX),
+            "payroll_due" => g.next_payroll_event().map(operations::display_time).unwrap_or_else(|| "—".into()).as_str(),
+            "next_due" => if g.financing.debt > 0 { operations::display_time(g.financing.next_due) } else { "—".into() }.as_str(),
+            "distressed" => g.distressed(), "status" => g.financing_status(),
+            "limit_eur" => r.maximum_loan_eur,
+            "can_borrow" => g.airline.is_some() && g.financing.debt == 0,
+            "rules" => format!("Ein Kredit bis {} EUR · {:.2} % p.a. · Rate alle {} Tage · {} Raten. Zinsen auf Restschuld, ganze EUR aufgerundet, Jahr = 365 Tage. Sondertilgung kostenlos; keine automatische Kreditaufnahme. Negative Kontostände sind offene Verpflichtungen, kein frei verfügbares Geld.", r.maximum_loan_eur, r.annual_interest_bps as f64 / 100.0, r.repayment_period_days, r.term_periods).as_str()
+        }
+    }
+
+    #[func]
+    fn borrow_money(&mut self, amount: i64) -> GString {
+        self.game
+            .borrow(amount)
+            .err()
+            .unwrap_or_default()
+            .as_str()
+            .into()
+    }
+
+    #[func]
+    fn repay_loan(&mut self, amount: i64) -> GString {
+        self.game
+            .repay(amount)
+            .err()
+            .unwrap_or_default()
+            .as_str()
+            .into()
     }
 
     #[func]

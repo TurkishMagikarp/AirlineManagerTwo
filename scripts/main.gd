@@ -297,6 +297,7 @@ func _show_page(index: int) -> void:
 func _refresh_finance() -> void:
 	var airline: Dictionary = simulation.get_airline_info()
 	var finance: Dictionary = simulation.get_financial_summary()
+	var financing: Dictionary = simulation.get_financing()
 	heading.text = airline["name"]
 	description.text = "%s  /  %s · %s" % [airline["airport_icao"], airline["airport_name"], airline["country_name"]]
 	metrics["balance"].text = UI.money(airline["capital_eur"])
@@ -308,6 +309,7 @@ func _refresh_finance() -> void:
 	finance_breakdown.text = "Ticketeinnahmen     %s\nBetriebskosten          %s\n\nTreibstoff                    %s\nFlughäfen                   %s\nCrewkosten (historisch) %s\nGehälter                       %s\nWartung / Verwaltung  %s\nWartungschecks           %s\n\nFlugzeugkäufe             %s" % [UI.money(finance["revenue_eur"]), UI.money(finance["costs_eur"]), UI.money(finance["fuel_eur"]), UI.money(finance["airport_eur"]), UI.money(finance["crew_eur"]), UI.money(finance["payroll_eur"]), UI.money(finance["overhead_eur"]), UI.money(finance["maintenance_eur"]), UI.money(finance["purchases_eur"])]
 	var operations: Array = simulation.get_operations()
 	operation_summary.text = "%d Flugzeuge  ·  %d Routen  ·  %d aktive Flugpläne" % [simulation.get_fleet().size(), simulation.get_routes().size(), operations.size()]
+	operation_summary.text += "\n\n%s\nRestschuld: %s · Zinsen bisher: %s · Details und Kreditaktionen unter Finanzen." % [financing["status"], UI.money(financing["debt_eur"]), UI.money(financing["interest_eur"])]
 	for operation in operations:
 		operation_summary.text += "\n\n%s  /  Route #%d\n%s\nNächster Abflug: %s" % [operation["identifier"], operation["route_id"], operation["status_text"], operation["next_departure"]]
 

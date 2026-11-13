@@ -149,6 +149,7 @@ impl Game {
             g.validate_operations()?;
             g.validate_maintenance()?;
             g.validate_staff()?;
+            g.validate_financing()?;
             g.validate_finance()?;
             g.validate_history()?;
             let mut reviewed = std::collections::HashSet::new();
@@ -186,6 +187,9 @@ impl Game {
             return true;
         }
         if self.competitors.is_empty()
+            && self
+                .next_financing_event()
+                .is_none_or(|t| Duration::from_secs(t) > target.elapsed())
             && self
                 .next_maintenance_event()
                 .is_none_or(|t| Duration::from_secs(t) > target.elapsed())
@@ -233,15 +237,19 @@ impl Game {
                 .min()
                 .unwrap_or(u64::MAX);
             // Maintenance starts, ends and forced groundings of every company.
-            let maintenance =
-                std::iter::once(staged.next_maintenance_event())
-                    .chain(std::iter::once(staged.next_payroll_event()))
-                    .chain(staged.competitors.iter().flat_map(|c| {
-                        [c.game.next_maintenance_event(), c.game.next_payroll_event()]
-                    }))
-                    .flatten()
-                    .min()
-                    .unwrap_or(u64::MAX);
+            let maintenance = std::iter::once(staged.next_maintenance_event())
+                .chain(std::iter::once(staged.next_payroll_event()))
+                .chain(std::iter::once(staged.next_financing_event()))
+                .chain(staged.competitors.iter().flat_map(|c| {
+                    [
+                        c.game.next_maintenance_event(),
+                        c.game.next_payroll_event(),
+                        c.game.next_financing_event(),
+                    ]
+                }))
+                .flatten()
+                .min()
+                .unwrap_or(u64::MAX);
             // A loss review can occur in flight every week at the same phase.
             // Stop at the next ground-time end, not at an arbitrary later review.
             let closures: Vec<_> = staged
@@ -309,10 +317,12 @@ impl Game {
             }
             if staged.apply_maintenance().is_err()
                 || staged.apply_payroll().is_err()
-                || staged
-                    .competitors
-                    .iter_mut()
-                    .any(|c| c.game.apply_maintenance().is_err() || c.game.apply_payroll().is_err())
+                || staged.apply_financing().is_err()
+                || staged.competitors.iter_mut().any(|c| {
+                    c.game.apply_maintenance().is_err()
+                        || c.game.apply_payroll().is_err()
+                        || c.game.apply_financing().is_err()
+                })
             {
                 return false;
             }
@@ -356,6 +366,38 @@ impl Competitor {
     }
 
     fn review(&mut self, supply: &[Route]) -> bool {
+        // Rescue existing services, never borrow to buy aircraft. Same capped
+        // facility and eligibility as the player; no grants or hidden overdraft.
+        let reserve = crate::financing::RULES
+            .low_cash_warning_eur
+            .max(self.game.monthly_payroll().saturating_mul(2));
+        if self.game.cash() < reserve
+            && self.game.financing.debt == 0
+            && (self.game.monthly_payroll() > 0 || self.game.cash() < 0)
+        {
+            let amount = reserve.saturating_sub(self.game.cash());
+            if self.game.borrow(amount).is_ok() {
+                self.last_action =
+                    "Liquiditätskredit für bestehende Verpflichtungen aufgenommen".into();
+            }
+        }
+        if self.game.distressed() {
+            if self.game.dismiss_surplus().is_err() {
+                return false;
+            }
+            self.last_action =
+                "Finanznot: Expansion ausgesetzt, ungenutztes Personal abgebaut".into();
+            let Some(next) = self.next_review.checked_add(REVIEW) else {
+                return false;
+            };
+            self.next_review = next;
+            return true;
+        }
+        let surplus = self.game.cash().saturating_sub(reserve.saturating_mul(2));
+        let repayment = surplus.min(self.game.financing.debt);
+        if repayment > 0 && self.game.repay(repayment).is_err() {
+            return false;
+        }
         let mut other_supply = supply.to_vec();
         for r in &self.game.routes {
             if let Some(i) = other_supply.iter().position(|o| o == r) {
@@ -363,8 +405,10 @@ impl Competitor {
             }
         }
         let maintenance = self.game.history.as_ref().map_or(0, |h| {
-            h.maintenance_through(self.game.clock.elapsed().as_secs())
-                .clamp(0, i128::from(i64::MAX)) as i64
+            (h.maintenance_through(self.game.clock.elapsed().as_secs())
+                + h.payroll_through(self.game.clock.elapsed().as_secs())
+                + h.interest_through(self.game.clock.elapsed().as_secs()))
+            .clamp(0, i128::from(i64::MAX)) as i64
         });
         let Some(profit) = self.game.finance.totals.profit().checked_sub(maintenance) else {
             return false;
@@ -519,6 +563,9 @@ impl Competitor {
 
     /// Bounded catalog search, no flight loop or separate economic model.
     fn expand(&mut self, supply: &[Route]) -> Result<(), String> {
+        if self.game.distressed() || self.game.financing.debt > 0 {
+            return Ok(());
+        }
         let g = &self.game;
         let airline = g.airline.as_ref().ok_or("KI-Airline fehlt")?;
         // Caller removed precisely our pre-review offers, including closed routes.
@@ -905,7 +952,7 @@ mod tests {
             c.airline.as_ref().unwrap().capital_eur
         );
         g.validate_competitors().unwrap();
-        // A broke AI cannot request a check; the forced one follows at landing.
+        // An unrescuable AI now suspends service before accumulating more wear.
         let c = &mut g.competitors[0];
         let shift = c.game.airline.as_ref().unwrap().capital_eur + 1_000_000_000;
         c.game.history.as_mut().unwrap().opening_balance -= shift;
@@ -919,7 +966,18 @@ mod tests {
                 .iter()
                 .any(|p| p.maintenance.as_ref().is_some_and(|v| v.unscheduled));
         }
-        assert!(forced, "unfunded aircraft are grounded at the limit");
+        assert!(
+            !forced,
+            "distress must stop flights before another forced check"
+        );
+        assert!(g.competitors[0].game.distressed());
+        assert!(
+            g.competitors[0]
+                .game
+                .routes
+                .iter()
+                .all(|r| r.plan.is_none())
+        );
         g.validate_competitors().unwrap();
     }
 
@@ -1154,7 +1212,7 @@ mod tests {
         let c = &g.competitors[0];
         assert!(c.game.routes.is_empty());
         assert!(
-            c.last_action.contains("nicht rentabel"),
+            c.last_action.contains("nicht rentabel") || c.last_action.contains("Liquiditätskredit"),
             "{}",
             c.last_action
         );
@@ -1259,8 +1317,18 @@ mod tests {
                 "accepted corrupt AI: {pointer}"
             );
         }
+        // An already airborne loss is unavoidable even in distress.
+        assert!(g.advance(120.0));
         g.competitors[0].game.airline.as_mut().unwrap().capital_eur = i64::MIN;
-        g.competitors[0].game.routes[0].ticket_eur = 100_000;
+        let frozen = g.competitors[0].game.routes[0]
+            .plan
+            .as_mut()
+            .unwrap()
+            .airborne
+            .as_mut()
+            .unwrap();
+        frozen.ticket_eur = 0;
+        frozen.totals.revenue = 0;
         let before = state(&g);
         assert!(!g.advance(86400.0));
         assert_eq!(state(&g), before);

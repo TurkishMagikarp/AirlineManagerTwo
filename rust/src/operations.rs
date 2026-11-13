@@ -155,6 +155,7 @@ impl Game {
         delay_minutes: u32,
         interval_minutes: u32,
     ) -> Result<(), String> {
+        self.require_solvent()?;
         self.require_no_plan(id)?;
         let route = self
             .routes

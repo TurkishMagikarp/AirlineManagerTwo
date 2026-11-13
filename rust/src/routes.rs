@@ -76,6 +76,7 @@ impl Game {
         destination: &str,
         aircraft_id: u32,
     ) -> Result<(), String> {
+        self.require_solvent()?;
         self.check_route(origin, destination, aircraft_id, None)?;
         let next = self
             .next_route_id

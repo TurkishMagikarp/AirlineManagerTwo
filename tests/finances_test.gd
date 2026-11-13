@@ -30,6 +30,25 @@ func _run() -> void:
 			sim.hire_missing_staff()
 			sim.schedule_route(id, 1, 120)
 		sim.start()
+		# Test-only endowment: the archive stress scenario intentionally runs a
+		# loss-making route for centuries. Without funding it must now suspend.
+		if not _check(sim.save_game(path).is_empty(), "Save funded archive fixture"):
+			return
+		# Keep Rust integer encodings intact (Godot's JSON parser uses doubles).
+		var text := FileAccess.get_file_as_string(path)
+		var fixture: Dictionary = JSON.parse_string(text)
+		var balance := int(fixture["state"]["airline"]["capital_eur"])
+		var opening := int(fixture["state"]["history"]["opening_balance"])
+		var position := text.find('"capital_eur":', text.find('"name":"Ledger Air"'))
+		text = text.left(position) + text.substr(position).replace('"capital_eur":%d' % balance, '"capital_eur":%d' % (balance + 100_000_000_000))
+		position = text.rfind('"opening_balance":')
+		text = text.left(position) + text.substr(position).replace('"opening_balance":%d' % opening, '"opening_balance":%d' % (opening + 100_000_000_000))
+		var file := FileAccess.open(path, FileAccess.WRITE)
+		file.store_string(text)
+		file.close()
+		var error: String = sim.load_game(path)
+		if not _check(error.is_empty(), "Load funded archive fixture: " + error):
+			return
 		sim.advance(60.0 + 7200.0 * 1_000_000)
 		sim.pause()
 		if not _check(sim.save_game(path).is_empty(), "Save million-flight archive"):
