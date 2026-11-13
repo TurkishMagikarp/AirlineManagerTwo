@@ -19,6 +19,9 @@ mod save;
 mod staff;
 #[cfg(test)]
 mod staff_tests;
+mod trading;
+#[cfg(test)]
+mod trading_tests;
 
 use game::Game;
 use godot::prelude::*;
@@ -141,7 +144,7 @@ impl SimulationClock {
             // Central expenses belong only to the company series, never to
             // every route (which would duplicate them again).
             let costs = i128::from(t.costs()) + if route_id == 0 {
-                h.maintenance_through(time) + h.payroll_through(time) + h.interest_through(time)
+                h.maintenance_through(time) + h.payroll_through(time) + h.interest_through(time) + h.rent_through(time)
             } else { 0 };
             let period_costs = costs - previous_costs;
             let period_profit = i128::from(t.revenue - previous.revenue) - period_costs;
@@ -228,13 +231,23 @@ impl SimulationClock {
     #[func]
     fn get_financial_summary(&self) -> VarDictionary {
         let t = &self.game.finance.totals;
-        let purchases: i64 = self
+        let purchases = self.game.history.as_ref().map_or(0, |h| {
+            h.purchases
+                .iter()
+                .map(|p| i128::from(p.amount))
+                .sum::<i128>()
+                .min(i128::from(i64::MAX)) as i64
+        });
+        let rent = self
             .game
-            .fleet
-            .iter()
-            .map(|p| i128::from(p.purchase_price_eur))
-            .sum::<i128>()
-            .min(i128::from(i64::MAX)) as i64;
+            .history
+            .as_ref()
+            .map_or(0, |h| h.rent_through(u64::MAX));
+        let aircraft_cash = self
+            .game
+            .history
+            .as_ref()
+            .map_or(0, |h| h.aircraft_cash_through(u64::MAX));
         let maintenance = self
             .game
             .history
@@ -253,10 +266,12 @@ impl SimulationClock {
             .as_ref()
             .map_or(0, |h| h.interest_through(u64::MAX));
         let costs =
-            i128::from(t.costs()) + i128::from(maintenance) + i128::from(payroll) + interest;
+            i128::from(t.costs()) + i128::from(maintenance) + i128::from(payroll) + interest + rent;
         let profit = i128::from(t.revenue) - costs;
         vdict! { "flights" => t.flights, "passengers" => t.passengers, "revenue_eur" => t.revenue,
         "maintenance_eur" => maintenance, "payroll_eur" => payroll,
+        "rent_eur" => rent.min(i128::from(i64::MAX)) as i64,
+        "aircraft_cash_eur" => aircraft_cash.clamp(i128::from(i64::MIN), i128::from(i64::MAX)) as i64,
         "fuel_eur" => t.fuel, "airport_eur" => t.airport, "crew_eur" => t.crew, "overhead_eur" => t.overhead,
         "costs_eur" => costs.min(i128::from(i64::MAX)) as i64,
         "profit_eur" => profit.clamp(i128::from(i64::MIN), i128::from(i64::MAX)) as i64, "purchases_eur" => purchases,
@@ -653,7 +668,10 @@ impl SimulationClock {
         };
         models.iter().map(|model| vdict! {
             "id" => model.id.as_str(), "name" => model.name.as_str(),
-            "seats" => model.seats, "range_km" => model.range_km, "price_eur" => model.price_eur
+            "seats" => model.seats, "range_km" => model.range_km, "price_eur" => model.price_eur,
+            "lease_deposit_eur" => trading::lease_terms(&model.id).map(|t| t.0).unwrap_or(0),
+            "lease_monthly_eur" => trading::lease_terms(&model.id).map(|t| t.1).unwrap_or(0),
+            "lease_period_days" => trading::RULES.lease_period_days as i64
         }).collect()
     }
 
@@ -663,6 +681,59 @@ impl SimulationClock {
             Ok(()) => GString::new(),
             Err(error) => error.as_str().into(),
         }
+    }
+
+    #[func]
+    fn lease_aircraft(&mut self, model_id: GString) -> GString {
+        self.game
+            .lease_aircraft(&model_id.to_string())
+            .err()
+            .unwrap_or_default()
+            .as_str()
+            .into()
+    }
+
+    #[func]
+    fn sell_aircraft(&mut self, aircraft_id: u32) -> GString {
+        self.game
+            .sell_aircraft(aircraft_id)
+            .err()
+            .unwrap_or_default()
+            .as_str()
+            .into()
+    }
+
+    #[func]
+    fn return_aircraft(&mut self, aircraft_id: u32) -> GString {
+        self.game
+            .return_aircraft(aircraft_id)
+            .err()
+            .unwrap_or_default()
+            .as_str()
+            .into()
+    }
+
+    #[func]
+    fn get_aircraft_cash_history(&self) -> Array<VarDictionary> {
+        self.game
+            .history
+            .iter()
+            .flat_map(|h| h.aircraft_cash.iter())
+            .rev()
+            .take(100)
+            .map(|e| {
+                vdict! {
+                    "time" => operations::display_time(e.time).as_str(),
+                    "cash_eur" => e.cash,
+                    "kind" => match e.kind {
+                        trading::Kind::Sale => "Verkauf",
+                        trading::Kind::Deposit => "Leasingkaution",
+                        trading::Kind::Rent => "Leasingrate",
+                        trading::Kind::Return => "Rückgabe (Kaution abzüglich Zustandsgebühr)"
+                    }
+                }
+            })
+            .collect()
     }
 
     #[func]
@@ -690,7 +761,15 @@ impl SimulationClock {
                     "location_icao" => plane.location_icao.as_str(),
                     "location_name" => location_name,
                     "status" => match plane.status { aircraft::AircraftStatus::Parked => "parked", aircraft::AircraftStatus::InFlight => "in_flight", aircraft::AircraftStatus::Ground => "ground", aircraft::AircraftStatus::Maintenance => "maintenance" },
-                    "purchase_price_eur" => plane.purchase_price_eur,
+                    "purchase_price_eur" => if plane.lease.is_none() { plane.purchase_price_eur } else { 0 },
+                    "ownership" => if plane.lease.is_some() { "Leasing" } else { "Eigentum" },
+                    "leased" => plane.lease.is_some(),
+                    "acquired" => operations::display_time(plane.acquired_at.unwrap_or(0)).as_str(),
+                    "disposal_quote_eur" => self.game.disposal_quote(plane.id).unwrap_or(0),
+                    "disposal_error" => self.game.disposal_quote(plane.id).err().unwrap_or_default().as_str(),
+                    "lease_deposit_eur" => plane.lease.as_ref().map_or(0, |l| l.deposit),
+                    "lease_monthly_eur" => plane.lease.as_ref().map_or(0, |l| l.monthly),
+                    "lease_due" => plane.lease.as_ref().map(|l| operations::display_time(l.next_due)).unwrap_or_default().as_str(),
                     "range_km" => aircraft::model(&plane.model_id).map(|m| m.range_km).unwrap_or(0),
                     "route_id" => self.game.routes.iter().find(|r| r.aircraft_id == Some(plane.id)).map(|r| r.id).unwrap_or(0)
                 }

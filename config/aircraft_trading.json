@@ -1,0 +1,10 @@
+{
+  "resale_initial_bps": 8000,
+  "resale_floor_bps": 2000,
+  "annual_depreciation_bps": 500,
+  "condition_floor_bps": 5000,
+  "lease_deposit_bps": 500,
+  "monthly_lease_bps": 100,
+  "lease_period_days": 30,
+  "return_damage_bps": 500
+}

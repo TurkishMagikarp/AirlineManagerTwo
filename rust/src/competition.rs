@@ -366,6 +366,58 @@ impl Competitor {
     }
 
     fn review(&mut self, supply: &[Route]) -> bool {
+        if self.game.distressed() {
+            // Dispose only idle parked aircraft, using exactly the player's quotes.
+            let idle: Vec<_> = self
+                .game
+                .fleet
+                .iter()
+                .filter(|p| {
+                    p.status == crate::aircraft::AircraftStatus::Parked && p.maintenance.is_none()
+                })
+                .filter(|p| {
+                    !self
+                        .game
+                        .routes
+                        .iter()
+                        .any(|r| r.aircraft_id == Some(p.id) && r.plan.is_some())
+                })
+                .map(|p| (p.id, p.lease.is_some()))
+                .collect();
+            for (id, leased) in idle {
+                let routes: Vec<_> = self
+                    .game
+                    .routes
+                    .iter()
+                    .filter(|r| r.aircraft_id == Some(id))
+                    .map(|r| r.id)
+                    .collect();
+                let result = if leased {
+                    self.game.return_aircraft(id)
+                } else {
+                    self.game.sell_aircraft(id)
+                };
+                if result.is_err() {
+                    return false;
+                }
+                for route in routes {
+                    if self.game.delete_route(route).is_err() {
+                        return false;
+                    }
+                    self.route_reviews.retain(|r| r.route_id != route);
+                }
+                if self.game.apply_financing().is_err() {
+                    return false;
+                }
+                if !self.game.distressed() {
+                    break;
+                }
+            }
+            // Reduce idle payroll before sizing a rescue loan.
+            if self.game.dismiss_surplus().is_err() {
+                return false;
+            }
+        }
         // Rescue existing services, never borrow to buy aircraft. Same capped
         // facility and eligibility as the player; no grants or hidden overdraft.
         let reserve = crate::financing::RULES
@@ -407,7 +459,8 @@ impl Competitor {
         let maintenance = self.game.history.as_ref().map_or(0, |h| {
             (h.maintenance_through(self.game.clock.elapsed().as_secs())
                 + h.payroll_through(self.game.clock.elapsed().as_secs())
-                + h.interest_through(self.game.clock.elapsed().as_secs()))
+                + h.interest_through(self.game.clock.elapsed().as_secs())
+                + h.rent_through(self.game.clock.elapsed().as_secs()))
             .clamp(0, i128::from(i64::MAX)) as i64
         });
         let Some(profit) = self.game.finance.totals.profit().checked_sub(maintenance) else {
@@ -467,7 +520,10 @@ impl Competitor {
             let week = i128::from(total)
                 - i128::from(previous.profit)
                 - i128::from(landed) * i128::from(maintenance);
-            let losses = if week < 0 {
+            let rent = plane.lease.as_ref().map_or(0, |l| {
+                i128::from(l.monthly) * i128::from(REVIEW) / i128::from(l.period)
+            });
+            let losses = if week - rent < 0 {
                 (previous.losses + 1).min(2)
             } else {
                 0
@@ -571,7 +627,13 @@ impl Competitor {
         // Caller removed precisely our pre-review offers, including closed routes.
         let mut offers = supply.to_vec();
         offers.extend(g.routes.iter().cloned());
-        let mut committed_weekly_costs = 0;
+        let mut committed_weekly_costs = g.monthly_payroll() * 7 / 30;
+        committed_weekly_costs += g
+            .fleet
+            .iter()
+            .filter_map(|p| p.lease.as_ref())
+            .map(|l| (l.monthly * REVIEW as i64 + l.period as i64 - 1) / l.period as i64)
+            .sum::<i64>();
         for route in g.routes.iter().filter(|r| r.plan.is_some()) {
             let plane = g
                 .fleet
@@ -594,18 +656,50 @@ impl Competitor {
             .collect();
         let mut options: Vec<_> = free
             .iter()
-            .map(|p| (Some(p.id), p.model_id.as_str(), p.location_icao.as_str(), 0))
+            .map(|p| {
+                (
+                    Some(p.id),
+                    p.model_id.as_str(),
+                    p.location_icao.as_str(),
+                    0,
+                    false,
+                    p.lease.as_ref().map_or(0, |l| {
+                        (l.monthly * REVIEW as i64 + l.period as i64 - 1) / l.period as i64
+                    }),
+                )
+            })
             .collect();
         if free.is_empty() && g.fleet.len() < MAX_FLEET {
             for m in crate::aircraft::models()? {
                 if airline.capital_eur.saturating_sub(m.price_eur) >= RESERVE {
-                    options.push((None, &m.id, &airline.home_airport_icao, m.price_eur));
+                    options.push((
+                        None,
+                        &m.id,
+                        &airline.home_airport_icao,
+                        m.price_eur,
+                        false,
+                        0,
+                    ));
+                } else {
+                    let (deposit, monthly) = crate::trading::lease_terms(&m.id)?;
+                    if airline.capital_eur.saturating_sub(deposit) >= RESERVE {
+                        let period = crate::trading::RULES.lease_period_days * 86400;
+                        let rent = (monthly * REVIEW as i64 + period as i64 - 1) / period as i64;
+                        options.push((
+                            None,
+                            &m.id,
+                            &airline.home_airport_icao,
+                            deposit,
+                            true,
+                            rent,
+                        ));
+                    }
                 }
             }
         }
         let mut best = None;
         let mut best_week = 0;
-        for (plane, model, origin, cost) in options {
+        for (plane, model, origin, cost, leased, rent) in options {
             let m = crate::aircraft::model(model)?;
             for airport in &crate::airports::catalog()?.airports {
                 if airport.icao == origin {
@@ -644,9 +738,12 @@ impl Competitor {
                     market.push(r.clone());
                     let t = crate::economy::quote_shared(&r, model, &market)?;
                     let week = (t.profit() - maintenance) * (REVIEW / (interval * 60)) as i64
-                        - staffing_per_week(g, model)?;
+                        - staffing_per_week(g, model)?
+                        - rent;
                     // Reserve also covers four weeks of gross operating costs.
                     let buffer = ((committed_weekly_costs
+                        + staffing_per_week(g, model)?
+                        + if plane.is_none() { rent } else { 0 }
                         + (t.costs() + maintenance) * (REVIEW / (interval * 60)) as i64)
                         * 4)
                     .max(RESERVE);
@@ -656,12 +753,12 @@ impl Competitor {
                         && airline.capital_eur.saturating_sub(cost) >= buffer
                     {
                         best_week = week;
-                        best = Some((plane, model.to_string(), r.clone(), interval as u32));
+                        best = Some((plane, model.to_string(), r.clone(), interval as u32, leased));
                     }
                 }
             }
         }
-        let Some((plane, model, route, interval)) = best else {
+        let Some((plane, model, route, interval, leased)) = best else {
             self.last_action =
                 "Expansion geprüft · Budget/Reserve oder Markt nicht rentabel".into();
             return Ok(());
@@ -674,7 +771,11 @@ impl Competitor {
         let plane = match plane {
             Some(id) => id,
             None => {
-                self.game.buy_aircraft(&model)?;
+                if leased {
+                    self.game.lease_aircraft(&model)?;
+                } else {
+                    self.game.buy_aircraft(&model)?;
+                }
                 self.game.fleet.last().unwrap().id
             }
         };
@@ -688,6 +789,8 @@ impl Competitor {
             route.destination_icao,
             if route.aircraft_id.is_some() {
                 "freie Maschine"
+            } else if leased {
+                "Flugzeug geleast"
             } else {
                 "Flugzeug gekauft"
             }
@@ -737,7 +840,13 @@ impl Competitor {
             let Ok(t) = crate::economy::quote_shared(&candidate, &model, &offers) else {
                 return false;
             };
-            let profit = t.profit() - maintenance;
+            let rent = plane.lease.as_ref().map_or(0, |l| {
+                (l.monthly * candidate.plan.as_ref().unwrap().interval_seconds as i64
+                    + l.period as i64
+                    - 1)
+                    / l.period as i64
+            });
+            let profit = t.profit() - maintenance - rent;
             if best.is_none_or(|(best, _)| profit > best) {
                 best = Some((profit, price));
             }
@@ -768,6 +877,98 @@ impl Competitor {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn trading_ai_leases_only_affordable_profitable_growth_and_sells_in_distress() {
+        let mut c = super::initial_competitors().unwrap().remove(0);
+        c.game.routes.clear();
+        c.game.fleet.clear();
+        c.game.next_aircraft_id = 1;
+        c.game.next_route_id = 1;
+        c.game.staff = Default::default();
+        c.game.finance = Default::default();
+        c.game.airline.as_mut().unwrap().capital_eur = 1_500_000;
+        c.game.history = Some(crate::history::History::new(0, 1_500_000));
+        c.expand(&[]).unwrap();
+        assert_eq!(c.game.fleet.len(), 1);
+        assert!(c.game.fleet[0].lease.is_some());
+        assert!(c.game.cash() >= super::RESERVE);
+        c.game.validate_history().unwrap();
+        // No grant: the exact contractual deposit was charged.
+        let deposit = c.game.fleet[0].lease.as_ref().unwrap().deposit;
+        assert_eq!(c.game.cash(), 1_500_000 - deposit);
+        let poor = c.game.cash();
+        c.game.airline.as_mut().unwrap().capital_eur = 100;
+        c.expand(&[]).unwrap();
+        assert_eq!(c.game.fleet.len(), 1);
+        c.game.airline.as_mut().unwrap().capital_eur = poor;
+
+        // Same return rule for AI: clear the parked service and return its deposit.
+        c.game.stop_schedule(c.game.routes[0].id).unwrap();
+        let shift = -50_000 - c.game.cash();
+        c.game.history.as_mut().unwrap().opening_balance += shift;
+        c.game.airline.as_mut().unwrap().capital_eur = -50_000;
+        let quote = c.game.disposal_quote(1).unwrap();
+        assert!(c.review(&[]));
+        assert!(c.game.fleet.is_empty());
+        assert!(c.game.routes.is_empty());
+        assert_eq!(c.game.cash(), -50_000 + quote);
+        assert_eq!(c.game.financing.debt, 0);
+        c.game.validate_history().unwrap();
+
+        let mut c = super::initial_competitors().unwrap().remove(0);
+        c.game.stop_schedule(1).unwrap();
+        let quote = c.game.disposal_quote(1).unwrap();
+        let shift = -50_000 - c.game.cash();
+        c.game.history.as_mut().unwrap().opening_balance += shift;
+        c.game.airline.as_mut().unwrap().capital_eur = -50_000;
+        assert!(c.review(&[]));
+        assert!(c.game.fleet.is_empty());
+        assert_eq!(c.game.cash(), quote - 50_000);
+        assert_eq!(c.game.financing.debt, 0);
+        c.game.validate_history().unwrap();
+    }
+
+    #[test]
+    fn trading_ai_lease_economy_is_bounded_and_deterministic_over_two_years() {
+        let mut g = super::tests::game();
+        for c in &mut g.competitors {
+            c.game.routes.clear();
+            c.game.fleet.clear();
+            c.game.staff = Default::default();
+            c.game.finance = Default::default();
+            c.game.airline.as_mut().unwrap().capital_eur = 1_500_000;
+            c.game.history = Some(crate::history::History::new(0, 1_500_000));
+        }
+        let mut expected = g.clone();
+        assert!(expected.advance(730.0 * 86400.0));
+        g.clock.set_speed(16);
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("ai-leases.json");
+        for day in 0..730 {
+            assert!(g.advance(86400.0 / 16.0));
+            if day == 360 {
+                crate::save::save(&path, &g).unwrap();
+                g = crate::save::load(&path).unwrap();
+            }
+        }
+        g.clock.set_speed(1);
+        assert_eq!(state(&g), state(&expected));
+        g.validate_competitors().unwrap();
+        let mut rents = 0;
+        for c in &g.competitors {
+            assert!(c.game.fleet.len() <= super::MAX_FLEET);
+            assert!(
+                c.game.cash() >= 0,
+                "AI failed to recover: {}",
+                c.game.cash()
+            );
+            let h = c.game.history.as_ref().unwrap();
+            rents += h.rent_through(u64::MAX);
+            c.game.validate_history().unwrap();
+            c.game.validate_financing().unwrap();
+        }
+        assert!(rents > 0, "scenario must exercise actual rent payments");
+    }
     use super::*;
 
     fn game() -> Game {

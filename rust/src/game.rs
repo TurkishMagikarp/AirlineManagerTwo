@@ -141,6 +141,8 @@ impl Game {
             location_icao: airline.home_airport_icao.clone(),
             status: AircraftStatus::Parked,
             purchase_price_eur: model.price_eur,
+            acquired_at: Some(self.clock.elapsed().as_secs()),
+            lease: None,
             wear: Default::default(),
             maintenance: None,
         };
@@ -157,6 +159,7 @@ impl Game {
     }
 
     pub fn validate_fleet(&self) -> Result<(), String> {
+        self.validate_trading()?;
         if self.next_aircraft_id == 0 || (self.airline.is_none() && !self.fleet.is_empty()) {
             return Err("Ungültige Flottendaten im Spielstand.".into());
         }

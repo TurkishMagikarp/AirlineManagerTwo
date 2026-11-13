@@ -296,9 +296,17 @@ fn financing_ai_borrows_for_existing_costs_restricts_growth_and_repays() {
 fn financing_ai_distress_and_loans_match_across_restart_and_all_speeds() {
     let mut initial = Game::default();
     initial.found("AI distress", "DE", "EDDF").unwrap();
+    // Aircraft sales are now a recovery source. Keep this fixture beyond both
+    // liquidation proceeds and the capped rescue facility.
+    let liquidation: i64 = initial.competitors[0]
+        .game
+        .fleet
+        .iter()
+        .map(|p| initial.competitors[0].game.disposal_quote(p.id).unwrap())
+        .sum();
     cash(
         &mut initial.competitors[0].game,
-        -RULES.maximum_loan_eur - 1,
+        -RULES.maximum_loan_eur - liquidation - 1,
     );
     cash(&mut initial.competitors[1].game, 100_000);
     initial.clock.set_running(true);

@@ -53,6 +53,9 @@ var fleet_status: Label
 var empty_fleet: Label
 var fleet_tree: Tree
 var fleet_rows: Dictionary = {}
+var lease_button: Button
+var disposal_button: Button
+var disposal_details: Label
 var selected_aircraft: int = 0
 var maintenance_box: VBoxContainer
 var maintenance_details: Label
@@ -342,6 +345,10 @@ func _build_fleet(content: VBoxContainer) -> void:
 	buy_button.tooltip_text = "Kauft das gewählte Modell sofort zum angezeigten Preis."
 	buy_button.pressed.connect(_buy_aircraft)
 	purchase.add_child(buy_button)
+	lease_button = Button.new()
+	lease_button.text = "Flugzeug leasen"
+	lease_button.pressed.connect(_lease_aircraft)
+	purchase.add_child(lease_button)
 	model_details = _label("", 18, Color("90d6dc"))
 	model_details.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	shop.add_child(model_details)
@@ -351,8 +358,8 @@ func _build_fleet(content: VBoxContainer) -> void:
 	var hint := _label("Vorläufige Kaufpreise · Sitzkonfiguration und Reichweite sind vereinfachte Modellangaben.", 14, Color("b0becf"))
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	shop.add_child(hint)
-	var owned := UI.panel(grid, "FLOTTENREGISTER  /  EIGENE FLUGZEUGE")
-	empty_fleet = _label("Noch keine Flugzeuge gekauft.", 17, Color("c2cedc"))
+	var owned := UI.panel(grid, "FLOTTENREGISTER  /  EIGENTUM & LEASING")
+	empty_fleet = _label("Noch keine Flugzeuge beschafft.", 17, Color("c2cedc"))
 	owned.add_child(empty_fleet)
 	fleet_tree = Tree.new()
 	fleet_tree.columns = 6
@@ -366,6 +373,12 @@ func _build_fleet(content: VBoxContainer) -> void:
 		fleet_tree.set_column_custom_minimum_width(index, [115, 120, 90, 190, 80, 210][index])
 	fleet_tree.item_selected.connect(_refresh_maintenance)
 	owned.add_child(fleet_tree)
+	disposal_details = _label("", 15)
+	disposal_details.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	owned.add_child(disposal_details)
+	disposal_button = Button.new()
+	disposal_button.pressed.connect(_dispose_aircraft)
+	owned.add_child(disposal_button)
 	_build_maintenance(owned)
 	# The operational register takes precedence over procurement.
 	grid.move_child(owned.get_parent(), 0)
@@ -374,11 +387,33 @@ func _build_fleet(content: VBoxContainer) -> void:
 
 func _model_selected(index: int) -> void:
 	buy_button.disabled = index < 0
+	lease_button.disabled = index < 0
 	if index < 0:
 		model_details.text = "Kein Flugzeugmodell verfügbar. Bitte Katalog und Preise prüfen."
 		return
 	var model: Dictionary = model_select.get_item_metadata(index)
 	model_details.text = "%s\n%d Sitzplätze   /   %d km Referenzreichweite" % [UI.money(model["price_eur"]), model["seats"], model["range_km"]]
+	model_details.text += "\nLeasing: Kaution %s · Rate %s alle %d Spieltage · erste Rate nach einer Periode. Kaution bei Rückgabe abzüglich Zustandsgebühr." % [UI.money(model["lease_deposit_eur"]), UI.money(model["lease_monthly_eur"]), model["lease_period_days"]]
+
+
+func _lease_aircraft() -> void:
+	if model_select.selected < 0:
+		return
+	var model: Dictionary = model_select.get_item_metadata(model_select.selected)
+	var error: String = simulation.lease_aircraft(model["id"])
+	fleet_status.text = "Flugzeug geleast. Kaution gebucht. Bitte speichern." if error.is_empty() else error
+	_refresh_fleet()
+	save_status.text = "Flotte geändert · bitte Spielstand speichern."
+
+
+func _dispose_aircraft() -> void:
+	var plane: Dictionary = fleet_rows.get(selected_aircraft, {})
+	if plane.is_empty():
+		return
+	var error: String = simulation.return_aircraft(selected_aircraft) if plane["leased"] else simulation.sell_aircraft(selected_aircraft)
+	fleet_status.text = "Flugzeug abgegeben und Gutschrift gebucht. Bitte speichern." if error.is_empty() else error
+	_refresh_fleet()
+	save_status.text = "Flotte geändert · bitte Spielstand speichern."
 
 
 func _buy_aircraft() -> void:
@@ -413,7 +448,7 @@ func _refresh_fleet() -> void:
 		fleet_rows[plane["id"]] = plane
 		var row := fleet_tree.create_item(root_item)
 		row.set_text(0, plane["identifier"])
-		row.set_text(1, plane["model_name"])
+		row.set_text(1, "%s · %s" % [plane["model_name"], plane["ownership"]])
 		row.set_text(2, plane["location_icao"])
 		var phase: String = {"parked": "Geparkt", "in_flight": "Unterwegs", "ground": "Gelandet · Bodenzeit", "maintenance": "In Wartung"}.get(plane["status"], "Unbekannt")
 		row.set_text(3, "%s · Route #%d" % [phase, plane["route_id"]] if plane["route_id"] != 0 else phase)
@@ -483,6 +518,17 @@ func _refresh_maintenance() -> void:
 	var plane: Dictionary = fleet_rows.get(selected_aircraft, {})
 	maintenance_button.disabled = plane.is_empty() or not plane.get("can_request_maintenance", false)
 	cancel_maintenance_button.visible = plane.get("can_cancel_maintenance", false)
+	disposal_button.disabled = plane.is_empty() or not String(plane.get("disposal_error", "")).is_empty()
+	disposal_button.text = "Leasing zurückgeben" if plane.get("leased", false) else "Flugzeug verkaufen"
+	disposal_details.text = ""
+	if not plane.is_empty():
+		disposal_details.text = "%s · Erwerb: %s" % [plane["ownership"], plane["acquired"]]
+		if plane["leased"]:
+			disposal_details.text += "\nKaution: %s · Rate: %s · nächste Rate: %s" % [UI.money(plane["lease_deposit_eur"]), UI.money(plane["lease_monthly_eur"]), plane["lease_due"]]
+		if String(plane["disposal_error"]).is_empty():
+			disposal_details.text += "\nRückgabe: %s (Kaution abzüglich Zustandsgebühr %s)" % [UI.money(plane["disposal_quote_eur"]), UI.money(plane["lease_deposit_eur"] - plane["disposal_quote_eur"])] if plane["leased"] else "\nVerkaufsangebot: %s" % UI.money(plane["disposal_quote_eur"])
+		else:
+			disposal_details.text += "\n" + String(plane["disposal_error"])
 	if plane.is_empty():
 		maintenance_details.text = "Flugzeug in der Tabelle auswählen."
 		return

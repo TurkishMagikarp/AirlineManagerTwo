@@ -27,6 +27,7 @@ var loan_amount: SpinBox
 var loan_borrow: Button
 var loan_repay: Button
 var loan_result: Label
+var aircraft_journal: Tree
 
 func _ready() -> void:
 	add_theme_constant_override("separation", 12)
@@ -67,9 +68,12 @@ func _ready() -> void:
 	loan_result = UI.label("")
 	loan_result.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	loans.add_child(loan_result)
+	var aircraft := UI.panel(self, "FLUGZEUGBUCHUNGEN / LETZTE 100")
+	aircraft_journal = UI.table(["Zeit", "Buchung", "Geldbewegung"], [170, 330, 140], 160)
+	aircraft.add_child(aircraft_journal)
 	var company := UI.panel(self, "WIRTSCHAFTLICHE ENTWICKLUNG")
 	chart_select = OptionButton.new()
-	for title in ["Kontostand · EUR", "Ticketeinnahmen · EUR je Zeitabschnitt", "Kosten inkl. Zinsen · EUR je Zeitabschnitt", "Ergebnis · EUR je Zeitabschnitt"]:
+	for title in ["Kontostand · EUR", "Ticketeinnahmen · EUR je Zeitabschnitt", "Kosten inkl. Zinsen und Leasing · EUR je Zeitabschnitt", "Ergebnis · EUR je Zeitabschnitt"]:
 		chart_select.add_item(title)
 	chart_select.item_selected.connect(func(_i: int): _chart())
 	company.add_child(chart_select)
@@ -133,8 +137,16 @@ func refresh(force: bool = false) -> void:
 	metrics["profit"].add_theme_color_override("font_color", UI.POSITIVE if summary["profit_eur"] >= 0 else UI.NEGATIVE)
 	var info: Dictionary = simulation.get_finance_history_info()
 	note.text = "Summen: gesamte erfasste Wirtschaft. Routenarchiv und Diagramme ab %s.\nBei älteren Spielständen fehlt frühere Detailhistorie; sie wird nicht nachberechnet. Flugzeugkäufe insgesamt: %s · Wartungschecks insgesamt: %s · Gehälter insgesamt: %s." % [info.get("since", "—"), UI.money(summary["purchases_eur"]), UI.money(summary["maintenance_eur"]), UI.money(summary["payroll_eur"])]
+	note.text += "\nLeasingraten (in Kosten enthalten): %s · Flugzeugjournal netto inkl. Verkäufen, Kautionen, Raten und Rückgaben: %s." % [UI.money(summary["rent_eur"]), UI.money(summary["aircraft_cash_eur"])]
+	aircraft_journal.clear()
+	var journal_root := aircraft_journal.create_item()
+	for entry in simulation.get_aircraft_cash_history():
+		var row := aircraft_journal.create_item(journal_root)
+		row.set_text(0, entry["time"])
+		row.set_text(1, entry["kind"])
+		row.set_text(2, UI.money(entry["cash_eur"]))
 	company_series = simulation.get_finance_series(0)
-	chart_range.text = "%s → %s\nBis zu 64 Zeitpunkte · Werte im Tooltip · Käufe und Tilgung sind keine Betriebskosten; Zinsen sind enthalten." % [company_series[0]["time"], company_series[-1]["time"]] if not company_series.is_empty() else "Noch keine Finanzhistorie."
+	chart_range.text = "%s → %s\nBis zu 64 Zeitpunkte · Werte im Tooltip · Käufe und Tilgung sind keine Betriebskosten; Zinsen und Leasingraten sind enthalten; Verkäufe und Kautionen erscheinen im Kontostand." % [company_series[0]["time"], company_series[-1]["time"]] if not company_series.is_empty() else "Noch keine Finanzhistorie."
 	_chart()
 	route_tree.clear()
 	var root := route_tree.create_item()
