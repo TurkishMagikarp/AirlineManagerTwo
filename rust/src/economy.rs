@@ -202,15 +202,40 @@ pub fn quote_shared(
     quote_at_price(route, model_id, routes, CONFIG.fuel_cents_per_kg)
 }
 
+/// Annual-demand planning quote. Actual departures use `quote_at_time`.
 pub fn quote_at_price(
     route: &Route,
     model_id: &str,
     routes: &[crate::demand::Offer],
     fuel_cents: i64,
 ) -> Result<Totals, String> {
+    quote_with_time(route, model_id, routes, fuel_cents, None)
+}
+
+pub fn quote_at_time(
+    route: &Route,
+    model_id: &str,
+    routes: &[crate::demand::Offer],
+    fuel_cents: i64,
+    departure: u64,
+) -> Result<Totals, String> {
+    quote_with_time(route, model_id, routes, fuel_cents, Some(departure))
+}
+
+fn quote_with_time(
+    route: &Route,
+    model_id: &str,
+    routes: &[crate::demand::Offer],
+    fuel_cents: i64,
+    departure: Option<u64>,
+) -> Result<Totals, String> {
     let c = &*CONFIG;
     let model = aircraft::model(model_id)?;
-    let demand = crate::demand::estimate(route, model.seats, routes)?.per_departure;
+    let demand = match departure {
+        Some(time) => crate::demand::estimate_at(route, model.seats, routes, time)?,
+        None => crate::demand::estimate(route, model.seats, routes)?,
+    }
+    .per_departure;
     let passengers = demand.min(i64::from(model.seats));
     let seconds = operations::timings(route, model_id)?.0 as i64;
     let rates = &c.models[model_id];
@@ -541,7 +566,14 @@ mod tests {
                         interval_seconds: interval,
                         ..Default::default()
                     });
-                    let t = quote(&route, &model.id).unwrap();
+                    let t = quote_at_time(
+                        &route,
+                        &model.id,
+                        &[crate::demand::Offer::new(&route, model.seats)],
+                        CONFIG.fuel_cents_per_kg,
+                        60,
+                    )
+                    .unwrap();
                     assert!(t.passengers <= previous && t.passengers <= t.seats);
                     previous = t.passengers;
                     assert_eq!(t.costs(), t.fuel + t.airport + t.crew + t.overhead);

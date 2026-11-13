@@ -54,6 +54,21 @@ pub fn departure_quote_in_market(
     market: &crate::economy::FuelMarket,
 ) -> Result<crate::economy::FlightResult, String> {
     let plan = route.plan.as_ref().ok_or("Kein Flugplan.")?;
+    let departure = index
+        .checked_mul(plan.interval_seconds)
+        .and_then(|t| t.checked_add(plan.first_departure))
+        .ok_or("Flugplan-Zeitüberlauf.")?;
+    departure_quote_at_price(route, model, index, routes, market.price_at(departure))
+}
+
+fn departure_quote_at_price(
+    route: &Route,
+    model: &str,
+    index: u64,
+    routes: &[crate::demand::Offer],
+    fuel_cents: i64,
+) -> Result<crate::economy::FlightResult, String> {
+    let plan = route.plan.as_ref().ok_or("Kein Flugplan.")?;
     let mut directed = route.clone();
     if plan.is_return(index) {
         std::mem::swap(&mut directed.origin_icao, &mut directed.destination_icao);
@@ -70,11 +85,12 @@ pub fn departure_quote_in_market(
         origin: directed.origin_icao.clone(),
         destination: directed.destination_icao.clone(),
         ticket_eur: route.ticket_eur,
-        totals: crate::economy::quote_at_price(
+        totals: crate::economy::quote_at_time(
             &directed,
             model,
             routes,
-            market.price_at(landing - flight),
+            fuel_cents,
+            landing - flight,
         )?,
     })
 }
@@ -337,7 +353,8 @@ impl Game {
                 return false;
             };
             // No user actions occur inside an advance. Batch only departures with
-            // the same offer snapshot and fuel week; preserve the existing flight.
+            // the same offer snapshot; seasonality varies at every departure.
+            // Preserve the immutable existing flight, then quote each departure.
             let wear = if count > 0 {
                 let Ok((flight, _)) = timings(route, &self.fleet[p].model_id) else {
                     return false;
@@ -357,18 +374,22 @@ impl Game {
                     index += 1;
                 }
                 if index < state.completed {
+                    // Fuel is constant within its configured week. Cache only
+                    // this derived price locally; still quote demand per departure.
+                    let (mut fuel_until, mut fuel_cents) = (0, 0);
                     while index < state.completed {
                         let departure = plan.first_departure + index * plan.interval_seconds;
-                        let boundary = self.fuel_market.next_change(departure);
-                        let count = (boundary - departure)
-                            .div_ceil(plan.interval_seconds)
-                            .min(state.completed - index);
-                        let Ok(f) = departure_quote_in_market(
+                        if departure >= fuel_until {
+                            fuel_cents = self.fuel_market.price_at(departure);
+                            fuel_until = self.fuel_market.next_change(departure);
+                        }
+                        let count = 1;
+                        let Ok(f) = departure_quote_at_price(
                             route,
                             &self.fleet[p].model_id,
                             index,
                             supply,
-                            &self.fuel_market,
+                            fuel_cents,
                         ) else {
                             return false;
                         };

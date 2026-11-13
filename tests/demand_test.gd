@@ -43,6 +43,8 @@ func _run() -> void:
 	var row: TreeItem = panel.route_tree.get_root().get_child(0)
 	if not _check(row.get_text(4) == "%d / %d / %d" % [route["base_daily_market"], route["expected_daily_passengers"], route["daily_spill"]] and row.get_text(5) == "%.1f %%" % route["actual_load_percent"] and route["actual_flights"] == 12, "Route UI shows Rust market, carried, spill and real weighted load"):
 		return
+	if not _check(panel.season_label.visible and panel.season_label.text == "Saisonfaktor · Geschäft %.2f × · Urlaub %.2f ×" % [route["season_business_factor"], route["season_leisure_factor"]], "Season label forwards both Rust segment factors"):
+		return
 	var historical: Array = sim.get_flight_results()
 	if not _check(sim.stop_schedule(1).is_empty(), "Stop parked plan"):
 		return

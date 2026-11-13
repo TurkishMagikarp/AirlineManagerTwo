@@ -2,7 +2,7 @@
 
 ## Markt statt Passagiere pro Flug
 
-Rust berechnet einen **gleichmäßigen Tagesdurchschnitt je Flughafenpaar und
+Rust berechnet einen **saisonalen Tagesdurchschnitt je Flughafenpaar und
 Richtung**, unabhängig von Flugzeug und Sitzplätzen. Hin- und Rückrichtung sind
 symmetrisch groß, aber getrennte Märkte: A→B ist nicht B→A. Mehrere Routen-IDs,
 auch mit umgekehrtem Start/Ziel, teilen jeweils den passenden Richtungsmarkt.
@@ -52,7 +52,7 @@ Jeder aktive Pendelflugplan bietet `43200 / Abflugabstand_in_Sekunden` Flüge pr
 Tag **und Richtung**. Spieler- und KI-Angebote stehen in **einer gemeinsamen
 Angebotsliste**, ohne Eigentümerbonus. Pro Segment (Geschäft/Privat) gilt:
 
-- `B`: ursprünglicher Tagesmarkt des Segments vor Preisreaktion.
+- `B`: Tagesmarkt des Segments × saisonaler Segmentfaktor, vor Preisreaktion.
 - `w = max(0, 1 − Preis / (Referenzpreis × Preisgrenze))`: Kaufbereitschaft.
 - `a = w / max(1e-9, 1 − w)`: Preisattraktivität, mit endlichem Grenzwert für Freiflüge.
 - `F`: Summe der Frequenzen aller für dieses Segment bezahlbaren Angebote (`w > 0`).
@@ -100,7 +100,8 @@ wird nicht nachträglich erzwungen.
 
 Alle Werte und Berechnungen liegen in Rust; Stellwerte in `config/demand.json`,
 Referenzpreis/Kosten in `config/economy.json`. Anschließend über `START.bat` neu bauen.
-Konstante Fahrpläne können weiterhin millionenfach gebündelt abgerechnet werden.
+Jeder künftige Abflug wird mit seinem eigenen saisonalen Faktor berechnet;
+das Archiv fasst weiterhin aufeinanderfolgende identische Flugergebnisse zusammen.
 
 ## Anzeige, Spielstände und Tests
 
@@ -137,7 +138,7 @@ Rust- und Godot-Tests prüfen Größen, Preise, beide Segmente, Sitzlimits,
 Parallelrouten, umgekehrte Strecken, Frequenzen, Pause/16×, große/kleine Zeitschritte,
 Speichern/Laden und unveränderte historische Ergebnisse.
 
-Noch nicht enthalten: saisonale/werktägliche Spitzen, Stadtmärkte über mehrere
+Noch nicht enthalten: werktägliche Spitzen, Stadtmärkte über mehrere
 Flughäfen, Umsteiger, Buchungsvorlauf und echte Quoten pro Kalendertag.
 
 
@@ -167,3 +168,59 @@ Auf dem Linux-Server bestanden Rust Build, alle 126 Tests und Clippy. Godot,
 START.bat, GUI/Screenshots und Windows-Prozessneustarts konnten dort nicht geprüft
 werden. Der angepasste Godot-Anzeigetest wurde nicht ausgeführt; das tatsächliche
 Layout benötigt eine Godot-Prüfung.
+
+
+## Saisonale Nachfrage (365-Tage-Jahr)
+
+`config/demand.json` enthält je zwölf Stützwerte für Geschäft und Urlaub/Privat.
+Tag 1 ist der Januar-Anfang; die zwölf Modellmonate sind gleich lang
+(365/12 Tage). Zwischen benachbarten Werten interpoliert Rust mit
+`(1 − cos(π × Monatsanteil)) / 2`, einschließlich Dezember → Januar.
+Wert und Steigung sind an allen Übergängen stetig. Jede Kurve wird durch den
+Mittelwert ihrer zwölf Werte geteilt: Das kontinuierliche Jahresmittel ist
+exakt 1,0, auch nach einer Änderung der Amplituden.
+
+Urlaub erreicht 1,35 im Sommer und 1,20 im Dezember, mit 0,70 im Februar.
+Geschäft bleibt ruhiger: 0,94 im Sommer, 0,90 im Dezember, maximal 1,04.
+Die Kurven sind geschätzte Spielregeln, keine empirischen Reisedaten.
+Kein Hemisphärenwechsel: Die vorhandenen Flughäfen liegen nördlich des Äquators;
+ein späterer Wechsel sollte Sommer und Jahresendfeiertage getrennt behandeln.
+
+Nur der Basismarkt `B` wird je Segment skaliert. Preisreaktion, Sitzgrenzen,
+Umverteilung und mehrere Flugzeuge pro Route bleiben dieselben Regeln.
+Die gemeinsame Simulationszeit am **Abflug** bestimmt den Faktor für Spieler
+und KI. Pause und Geschwindigkeit erzeugen keine eigene Saisonzeit.
+Die Routenansicht zeigt beide aktuellen Rust-Faktoren unter der Tabelle;
+Markt- und Wettbewerbswerte nutzen ebenfalls die aktuelle Saison.
+
+KI-Preise, Expansion, Wiedereinstieg und Frequenzplanung verwenden den
+Jahresbasismarkt (Segmentfaktoren 1,0), mit dem aktuellen Fuelpreis und realem
+Angebot. Eine beobachtete Verlustwoche zählt zur Stilllegung nur, wenn auch die
+Jahresplanung negativ ist, einschließlich Wartungsanteil und Leasing;
+bei mehreren Maschinen zusätzlich Personal. Die Auslastungsprüfung verwendet
+ebenfalls die Jahresplanung. Saisonale Spitzen lösen deshalb keine zusätzliche
+Expansionsentscheidung aus; Liquiditätsregeln und echte Kosten gelten weiterhin.
+Das ist eine geglättete Planungsnäherung: Wegen Sitzlimits und Rundung entspricht
+der Gewinn bei mittlerem `B` nicht exakt dem mittleren Jahresgewinn.
+
+Keine neuen gespeicherten Felder, Speicherformat bleibt **Version 16**.
+Bestehende Abflugangebote und historische Landungen werden nicht neu berechnet.
+Alte Migrationspfade bleiben erhalten. Rust-Tests prüfen kontinuierliche Kurven,
+Jahresmittel, Segment-/Preisregeln, ein ganzes Jahr mit 1×/4×/16×,
+unterschiedliche Schritte, Pause und Sommer-Neustart sowie das unveränderte
+Abflugangebot eines alten Spielstands. KI-Tests prüfen saisonunabhängige
+Expansion und den Erhalt jährlich tragfähiger Dienste trotz Verlustwochen.
+Der fünfjährige Fuel-Obergrenzenlauf prüft zusätzlich ungefähr monatlich, dass
+Spieler und beide KI ohne Finanznot leben. Eine kurze KI-Neuplanung ohne
+aktiven Dienst ist erlaubt, mehrere aufeinanderfolgende Monatsproben ohne
+Dienst oder Wartung dagegen nicht.
+
+Godot/GUI, Screenshots, START.bat und Windows-Prozessneustarts sind auf diesem
+Linux-Server nicht ausführbar. Der ergänzte Godot-Anzeigetest ist ungetestet;
+Rust-Tests bestätigen kein tatsächliches Layout.
+
+Der Zehnjahreslauf mit täglich wechselnden Tarifen speichert rund 3,89 MB;
+Saisonwechsel erzeugen zusätzliche legitime Archivblöcke. Das Testbudget liegt
+jetzt bei 5 MiB, die produktive Grenze bleibt unverändert bei 8 MiB.
+Die lokale Fuelpreis-Zwischenspeicherung gilt nur innerhalb eines Fortschritts;
+Saison und laufende Abflugangebote bleiben unabhängig von Schrittgrößen.

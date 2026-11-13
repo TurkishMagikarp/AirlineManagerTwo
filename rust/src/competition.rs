@@ -579,7 +579,22 @@ impl Competitor {
             let rent = plane.lease.as_ref().map_or(0, |l| {
                 i128::from(l.monthly) * i128::from(REVIEW) / i128::from(l.period)
             });
-            let losses = if week - rent < 0 {
+            // A seasonal trough alone must not retire an annually viable route.
+            // Real losses still count when annual demand cannot cover the service.
+            let Ok(annual) = crate::economy::quote_at_price(
+                r,
+                &plane.model_id,
+                supply,
+                self.game
+                    .fuel_market
+                    .price_at(self.game.clock.elapsed().as_secs()),
+            ) else {
+                return false;
+            };
+            let annual_week = i128::from(annual.profit() - maintenance) * i128::from(REVIEW)
+                / i128::from(r.plan.as_ref().unwrap().interval_seconds)
+                - rent;
+            let losses = if week - rent < 0 && annual_week < 0 {
                 (previous.losses + 1).min(2)
             } else {
                 0
@@ -711,6 +726,7 @@ impl Competitor {
             }
             let mut week = 0i128;
             let mut expected = crate::economy::Totals::default();
+            let mut annual_week = 0i128;
             let mut observed = false;
             let mut previous_losses = 2;
             for r in &services {
@@ -767,6 +783,15 @@ impl Competitor {
                         .fuel_market
                         .price_at(self.game.clock.elapsed().as_secs()),
                 )?;
+                annual_week +=
+                    i128::from(quote.profit() - maintenance_per_flight(r, &plane.model_id)?)
+                        * i128::from(REVIEW)
+                        / i128::from(r.plan.as_ref().unwrap().interval_seconds)
+                        - i128::from(staffing_per_week(&self.game, &plane.model_id)?);
+                if let Some(l) = &plane.lease {
+                    annual_week -=
+                        i128::from(l.monthly) * i128::from(REVIEW) / i128::from(l.period);
+                }
                 expected.add(&quote, 1).ok_or("KI-Finanzüberlauf")?;
                 previous_losses = previous_losses.min(previous.losses);
                 self.route_reviews.retain(|v| v.route_id != r.id);
@@ -778,7 +803,8 @@ impl Competitor {
                 });
             }
             let losses = if observed
-                && (week < 0 || expected.load_percent() < FREQUENCY.load_factor_percent)
+                && ((week < 0 && annual_week < 0)
+                    || expected.load_percent() < FREQUENCY.load_factor_percent)
             {
                 (previous_losses + 1).min(2)
             } else {
@@ -1229,6 +1255,63 @@ mod tests {
         c.game.buy_aircraft("atr72_600").unwrap();
         c.game.equip_staff_for("atr72_600").unwrap();
         c
+    }
+
+    #[test]
+    fn seasonal_ai_growth_uses_annual_view_and_weak_weeks_keep_viable_rotations() {
+        let mut results = Vec::new();
+        for day in [45, 180, 350] {
+            let mut c = frequency_ai();
+            c.game.clock = Clock::from_state(Duration::from_secs(day * 86400), true, 1).unwrap();
+            c.expand(&[]).unwrap();
+            results.push(
+                c.game
+                    .routes
+                    .iter()
+                    .map(|r| {
+                        (
+                            r.origin_icao.clone(),
+                            r.destination_icao.clone(),
+                            r.ticket_eur,
+                            r.aircraft_id,
+                        )
+                    })
+                    .collect::<Vec<_>>(),
+            );
+        }
+        assert!(results.windows(2).all(|w| w[0] == w[1]));
+        let mut c = frequency_ai();
+        c.game.add_route_aircraft(1, 2).unwrap();
+        c.game.clock.set_running(true);
+        assert!(c.game.advance(3.0 * 86400.0));
+        let supply = c.game.market_routes();
+        for r in &c.game.routes {
+            let annual = crate::economy::quote_at_price(
+                r,
+                "atr72_600",
+                &supply,
+                c.game
+                    .fuel_market
+                    .price_at(c.game.clock.elapsed().as_secs()),
+            )
+            .unwrap();
+            assert!(annual.load_percent() >= FREQUENCY.load_factor_percent);
+        }
+        for _ in 0..3 {
+            // Model a weak observed period without altering the annual market.
+            c.route_reviews.clear();
+            for r in &c.game.routes {
+                c.route_reviews.push(RouteReview {
+                    route_id: r.id,
+                    profit: 10_000_000,
+                    losses: 1,
+                    flights: Some(0),
+                });
+            }
+            c.review_rotations(&supply).unwrap();
+            assert_eq!(c.game.routes.len(), 2);
+            assert!(c.game.routes.iter().all(|r| r.remove_at.is_none()));
+        }
     }
 
     #[test]
@@ -1766,8 +1849,11 @@ mod tests {
             .unwrap()
             .totals(route.id, 3 * 86400);
         assert!(t.flights > 1);
-        let losses = |gain: i64, flights: Option<u64>| {
+        let losses = |gain: i64, flights: Option<u64>, annual_loss: bool| {
             let mut c = base.clone();
+            if annual_loss {
+                c.game.routes[0].ticket_eur = 100_000;
+            }
             c.route_reviews = vec![RouteReview {
                 route_id: route.id,
                 profit: t.profit() - gain,
@@ -1784,11 +1870,13 @@ mod tests {
             r.losses
         };
         let since = Some(t.flights as u64 - 1);
+        // A healthy annual plan tolerates a seasonal loss; an unviable one does not.
+        assert_eq!(losses(maintenance - 1, since, false), 0);
         // One landing earned less than its maintenance share: a losing week.
-        assert_eq!(losses(maintenance - 1, since), 1);
-        assert_eq!(losses(maintenance, since), 0);
+        assert_eq!(losses(maintenance - 1, since, true), 1);
+        assert_eq!(losses(maintenance, since, true), 0);
         // Older saves without a landing count judge that first week as before.
-        assert_eq!(losses(1, None), 0);
+        assert_eq!(losses(1, None, true), 0);
     }
 
     #[test]
