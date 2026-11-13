@@ -61,6 +61,12 @@ func _run() -> void:
 	check(sim.get_map_flights() == before, "Paused position frozen")
 	await process_frame
 	await process_frame
+	var static_draws: int = canvas.background.draw_count
+	for _i in range(5):
+		panel.refresh_flights()
+		canvas.queue_redraw()
+		await process_frame
+	check(canvas.background.draw_count == static_draws, "Flight redraws reuse the retained basemap")
 	point = canvas.project(flight["position"])
 	var wheel := InputEventMouseButton.new()
 	wheel.button_index = MOUSE_BUTTON_WHEEL_UP
@@ -74,6 +80,7 @@ func _run() -> void:
 	Input.parse_input_event(wheel_release)
 	await process_frame
 	check(canvas.zoom > 1, "Mouse wheel zoom")
+	check(canvas.background.draw_count > static_draws, "Zoom invalidates the basemap")
 	check(canvas.project(flight["position"]).distance_to(point) < 0.1, "Zoom anchored to cursor")
 	var start: Vector2 = canvas.global_position + canvas.size / 2
 	var press := InputEventMouseButton.new()

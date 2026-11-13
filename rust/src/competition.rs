@@ -136,9 +136,6 @@ impl Game {
     }
 
     pub fn advance(&mut self, seconds: f64) -> bool {
-        if self.competitors.is_empty() {
-            return self.advance_company(seconds, &self.routes.clone());
-        }
         let mut target = self.clock.clone();
         if !target.advance(seconds) {
             return false;
@@ -146,16 +143,94 @@ impl Game {
         if target.elapsed() == self.clock.elapsed() {
             return true;
         }
+        // Events, reviews and cash postings are on whole-second boundaries.
+        // Subsecond frames need only update the authoritative clocks, not clone
+        // every company's fleet, recent results and lifetime archive.
+        if target.elapsed().as_secs() == self.clock.elapsed().as_secs() {
+            for c in &mut self.competitors {
+                c.game.clock = Clock::from_state(target.elapsed(), true, 1).unwrap();
+            }
+            self.clock = target;
+            return true;
+        }
+        if self.competitors.is_empty() {
+            return self.advance_company_to(target, &self.routes.clone());
+        }
         // Transactional across all companies: no partial time or cash updates.
         let mut staged = self.clone();
         while staged.clock.elapsed() < target.elapsed() {
+            // Older saves may already be parked after a deferred loss review.
+            // Close these at the current instant, never move the clock backward.
+            for c in &mut staged.competitors {
+                let parked: Vec<_> = c
+                    .route_reviews
+                    .iter()
+                    .filter(|r| r.losses >= 2)
+                    .filter_map(|r| {
+                        let route = c
+                            .game
+                            .routes
+                            .iter()
+                            .find(|route| route.id == r.route_id && route.plan.is_some())?;
+                        let plane = c
+                            .game
+                            .fleet
+                            .iter()
+                            .find(|p| Some(p.id) == route.aircraft_id)?;
+                        (plane.status == crate::aircraft::AircraftStatus::Parked)
+                            .then(|| (route.id, plane.id, plane.location_icao.clone()))
+                    })
+                    .collect();
+                for (route, plane, location) in parked {
+                    if c.close_loss_route(route, plane, location).is_err() {
+                        return false;
+                    }
+                }
+            }
             let review = staged
                 .competitors
                 .iter()
                 .map(|c| c.next_review)
                 .min()
                 .unwrap();
-            let end = target.elapsed().min(Duration::from_secs(review));
+            // A loss review can occur in flight every week at the same phase.
+            // Stop at the next ground-time end, not at an arbitrary later review.
+            let closures: Vec<_> = staged
+                .competitors
+                .iter()
+                .enumerate()
+                .flat_map(|(i, c)| {
+                    c.route_reviews
+                        .iter()
+                        .filter(|r| r.losses >= 2)
+                        .filter_map(move |r| {
+                            let route = c
+                                .game
+                                .routes
+                                .iter()
+                                .find(|route| route.id == r.route_id && route.plan.is_some())?;
+                            let plane = c
+                                .game
+                                .fleet
+                                .iter()
+                                .find(|p| Some(p.id) == route.aircraft_id)?;
+                            let state = crate::operations::movement(
+                                route,
+                                &plane.model_id,
+                                c.game.clock.elapsed().as_secs(),
+                            )
+                            .ok()?;
+                            Some((i, route.id, plane.id, state.ready, state.destination))
+                        })
+                })
+                .collect();
+            let boundary = closures
+                .iter()
+                .map(|c| c.3)
+                .min()
+                .unwrap_or(review)
+                .min(review);
+            let end = target.elapsed().min(Duration::from_secs(boundary));
             let supply = staged.market_routes();
             // Exact integer/nanosecond target, not repeated floating-point conversion.
             if !staged.advance_company_to(Clock::from_state(end, true, 1).unwrap(), &supply) {
@@ -167,6 +242,16 @@ impl Game {
                     .advance_company_to(Clock::from_state(end, true, 1).unwrap(), &supply)
                 {
                     return false;
+                }
+            }
+            for (i, route, plane, ready, destination) in closures {
+                if Duration::from_secs(ready) == end {
+                    let c = &mut staged.competitors[i];
+                    // Also handles a zero idle gap: do not dispatch another flight
+                    // at the exact instant the previous ground time ends.
+                    if c.close_loss_route(route, plane, destination).is_err() {
+                        return false;
+                    }
                 }
             }
             // All companies settle against the same immutable offer snapshot first.
@@ -185,6 +270,29 @@ impl Game {
 }
 
 impl Competitor {
+    fn close_loss_route(
+        &mut self,
+        route: u32,
+        plane: u32,
+        destination: String,
+    ) -> Result<(), String> {
+        self.game.route_mut(route)?.plan = None;
+        let p = self
+            .game
+            .fleet
+            .iter_mut()
+            .find(|p| p.id == plane)
+            .ok_or("KI-Flugzeug fehlt")?;
+        p.status = crate::aircraft::AircraftStatus::Parked;
+        p.location_icao = destination;
+        self.game.delete_route(route)?;
+        self.route_reviews.retain(|r| r.route_id != route);
+        self.idle_reviews = 0;
+        self.growth_reviews = 0;
+        self.last_action = "Verluststrecke nach Landung und Bodenzeit geschlossen".into();
+        Ok(())
+    }
+
     fn review(&mut self, supply: &[Route]) -> bool {
         let mut other_supply = supply.to_vec();
         for r in &self.game.routes {
@@ -502,6 +610,61 @@ mod tests {
 
     fn state(g: &Game) -> serde_json::Value {
         serde_json::to_value(g).unwrap()
+    }
+
+    #[test]
+    fn airborne_loss_reviews_close_after_ground_time_even_across_restart() {
+        for interval in [360, 66, 0] {
+            let mut g = game();
+            let c = &mut g.competitors[0];
+            c.game.stop_schedule(1).unwrap();
+            c.game.set_ticket_price(1, 100_000).unwrap();
+            c.game.schedule(1, 359, interval.max(66)).unwrap();
+            if interval == 0 {
+                let (flight, ground) =
+                    crate::operations::timings(&c.game.routes[0], "atr72_600").unwrap();
+                c.game.routes[0].plan.as_mut().unwrap().interval_seconds = flight + ground;
+            }
+            assert!(g.advance(2.0 * REVIEW as f64));
+            let mut small = g.clone();
+            let dir = tempfile::tempdir().unwrap();
+            let path = dir.path().join("closing.json");
+            crate::save::save(&path, &g).unwrap();
+            let mut loaded = crate::save::load(&path).unwrap();
+            assert!(g.advance(86400.0));
+            for _ in 0..1440 {
+                assert!(small.advance(60.0));
+            }
+            assert!(loaded.advance(86400.0));
+            assert!(
+                g.competitors[0].game.routes.is_empty(),
+                "losses must not wait for a parked weekly phase"
+            );
+            assert_eq!(state(&g), state(&small));
+            assert_eq!(state(&g), state(&loaded));
+            g.validate_competitors().unwrap();
+        }
+        // A pre-fix save may have reached a parked, fractional-second state
+        // while still waiting for a third weekly review.
+        let mut g = game();
+        assert!(g.advance(86400.125));
+        let c = &mut g.competitors[0];
+        assert_eq!(
+            c.game.fleet[0].status,
+            crate::aircraft::AircraftStatus::Parked
+        );
+        c.route_reviews = vec![RouteReview {
+            route_id: 1,
+            profit: 0,
+            losses: 2,
+        }];
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("legacy-pending.json");
+        crate::save::save(&path, &g).unwrap();
+        let mut g = crate::save::load(&path).unwrap();
+        assert!(g.advance(1.0));
+        assert!(g.competitors[0].game.routes.is_empty());
+        g.validate_competitors().unwrap();
     }
 
     #[test]

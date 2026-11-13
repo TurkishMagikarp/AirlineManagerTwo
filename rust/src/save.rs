@@ -9,7 +9,8 @@ use std::path::Path;
 use std::time::Duration;
 
 const VERSION: u32 = 9;
-const MAX_BYTES: u64 = 1024 * 1024;
+// Bounded input, but allow multi-year archives with frequent legitimate changes.
+const MAX_BYTES: u64 = 8 * 1024 * 1024;
 
 #[derive(Serialize, Deserialize)]
 struct SaveGame {
@@ -83,7 +84,7 @@ pub fn save(path: &Path, game: &Game) -> Result<(), String> {
             },
         },
     };
-    let bytes = serde_json::to_vec_pretty(&data)
+    let bytes = serde_json::to_vec(&data)
         .map_err(|error| format!("Spielstand konnte nicht erzeugt werden: {error}"))?;
     if bytes.len() as u64 > MAX_BYTES {
         return Err("Spielstand ist zu groß.".into());
@@ -499,19 +500,18 @@ mod tests {
     }
 
     #[test]
-    fn oversized_fleet_cannot_overwrite_a_loadable_save() {
+    fn oversized_archive_cannot_overwrite_a_loadable_save() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("fleet_limit.json");
         let mut game = Game::default();
         game.found("Large Fleet Air", "DE", "EDDF").unwrap();
         save(&path, &game).unwrap();
         let previous = fs::read(&path).unwrap();
-        game.airline.as_mut().unwrap().capital_eur =
-            crate::aircraft::model("atr72_600").unwrap().price_eur * 10_000;
-        game.history.as_mut().unwrap().opening_balance = game.airline.as_ref().unwrap().capital_eur;
-        for _ in 0..10_000 {
-            game.buy_aircraft("atr72_600").unwrap();
-        }
+        let count = MAX_BYTES as usize / 10;
+        game.history.as_mut().unwrap().purchases =
+            vec![crate::history::Purchase { time: 0, amount: 1 }; count];
+        game.airline.as_mut().unwrap().capital_eur -= count as i64;
+        game.validate_history().unwrap();
         assert!(save(&path, &game).is_err());
         assert_eq!(fs::read(&path).unwrap(), previous);
         assert!(load(&path).unwrap().fleet.is_empty());

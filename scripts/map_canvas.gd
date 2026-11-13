@@ -7,7 +7,7 @@ var flights: Array = []
 var selected_id: int = 0
 var zoom: float = 1.0
 var offset := Vector2.ZERO
-var land: Array[PackedVector2Array] = []
+var background: Control
 var dragging := false
 var drag_distance: float = 0.0
 
@@ -15,15 +15,14 @@ func _ready() -> void:
 	clip_contents = true
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	mouse_default_cursor_shape = Control.CURSOR_DRAG
-	var geo: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://data/world_land.geojson"))
-	for feature in geo["features"]:
-		var geometry: Dictionary = feature["geometry"]
-		var polygons: Array = geometry["coordinates"] if geometry["type"] == "MultiPolygon" else [geometry["coordinates"]]
-		for polygon in polygons:
-			var ring := PackedVector2Array()
-			for point in polygon[0]: ring.append(Vector2(point[0], point[1]))
-			if not Geometry2D.triangulate_polygon(ring).is_empty(): land.append(ring)
-	resized.connect(queue_redraw)
+	background = preload("res://scripts/map_background.gd").new()
+	background.show_behind_parent = true
+	add_child(background)
+	resized.connect(_camera_changed)
+
+func _camera_changed() -> void:
+	queue_redraw()
+	if is_instance_valid(background): background.queue_redraw()
 
 func scale_factor() -> float:
 	return minf(size.x / 360.0, size.y / 180.0) * zoom
@@ -34,14 +33,14 @@ func project(point: Vector2) -> Vector2:
 func reset_view() -> void:
 	zoom = 1.0
 	offset = Vector2.ZERO
-	queue_redraw()
+	_camera_changed()
 
 func zoom_at(cursor: Vector2, factor: float) -> void:
 	var old := zoom
 	zoom = clampf(zoom * factor, 1.0, 12.0)
 	offset = cursor - size / 2 - (cursor - size / 2 - offset) * (zoom / old)
 	_constrain()
-	queue_redraw()
+	_camera_changed()
 
 func _constrain() -> void:
 	var world := 360.0 * scale_factor()
@@ -58,19 +57,6 @@ func unwrap_path(points: PackedVector2Array) -> PackedVector2Array:
 	return result
 
 func _draw() -> void:
-	draw_rect(Rect2(Vector2.ZERO, size), Color("0b1725"))
-	for lon in range(-180, 181, 30):
-		for copy in range(-1, 2):
-			var x := lon + copy * 360
-			draw_line(project(Vector2(x, -90)), project(Vector2(x, 90)), Color("182b3e"))
-	for lat in range(-60, 61, 30):
-		draw_line(Vector2(0, project(Vector2(0, lat)).y), Vector2(size.x, project(Vector2(0, lat)).y), Color("182b3e"))
-	for ring in land:
-		for copy in range(-1, 2):
-			var polygon := PackedVector2Array()
-			for point in ring: polygon.append(project(point + Vector2(copy * 360, 0)))
-			draw_colored_polygon(polygon, Color("223b4b"))
-			draw_polyline(polygon, Color("355466"), 1, true)
 	for route in routes:
 		var path := unwrap_path(route["points"])
 		for copy in range(-1, 2):
@@ -127,5 +113,5 @@ func _gui_input(event: InputEvent) -> void:
 		drag_distance += event.relative.length()
 		offset += event.relative
 		_constrain()
-		queue_redraw()
+		_camera_changed()
 		accept_event()

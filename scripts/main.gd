@@ -59,6 +59,7 @@ var metrics: Dictionary = {}
 var finance_breakdown: Label
 var operation_summary: Label
 var metric_grid: GridContainer
+var last_clock_view := ""
 
 
 func _ready() -> void:
@@ -206,6 +207,7 @@ func _load_game() -> void:
 func _set_speed(speed: int) -> void:
 	if not simulation.set_speed(speed):
 		push_error("Rust hat die Zeitgeschwindigkeit abgelehnt.")
+	last_clock_view = "" # Clicking the selected toggle must still reselect it.
 	_refresh_time()
 
 
@@ -220,7 +222,7 @@ func _process(delta: float) -> void:
 		save_status.add_theme_color_override("font_color", UI.NEGATIVE)
 	_refresh_time()
 	var second := int(simulation.get_elapsed_seconds())
-	if current_page == 3:
+	if current_page == 3 and simulation.is_running():
 		map_panel.refresh_flights()
 	if second != last_operation_second:
 		last_operation_second = second
@@ -233,7 +235,11 @@ func _process(delta: float) -> void:
 
 
 func _refresh_time() -> void:
-	time_label.text = simulation.get_display_time()
+	var display: String = simulation.get_display_time()
+	var view := "%s/%s/%d" % [display, simulation.is_running(), simulation.get_speed()]
+	if view == last_clock_view: return
+	last_clock_view = view
+	time_label.text = display
 	state_label.text = "%s · %d×" % ["Läuft" if simulation.is_running() else "Pausiert", simulation.get_speed()]
 	state_label.add_theme_color_override("font_color", UI.POSITIVE if simulation.is_running() else UI.MUTED)
 	start_button.disabled = simulation.is_running()

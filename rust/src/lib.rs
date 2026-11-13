@@ -8,6 +8,8 @@ mod game;
 mod history;
 mod map;
 mod operations;
+#[cfg(test)]
+mod quality;
 mod routes;
 mod save;
 

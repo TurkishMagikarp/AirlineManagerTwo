@@ -8,6 +8,8 @@ var canvas: Control
 var details: Label
 var summary: Label
 var selected_id: int = 0
+var last_flights: Array = []
+var last_selected_id := -1
 
 func _ready() -> void:
 	var toolbar := HBoxContainer.new()
@@ -40,12 +42,16 @@ func refresh() -> void:
 	if not is_instance_valid(canvas): return
 	canvas.airports = simulation.get_map_airports()
 	canvas.routes = simulation.get_map_routes()
+	last_selected_id = -1 # Route/airport snapshots may change without a flight change.
 	refresh_flights()
 
 func refresh_flights() -> void:
 	if not is_instance_valid(canvas): return
 	canvas.flights = simulation.get_map_flights()
 	canvas.selected_id = selected_id
+	if canvas.flights == last_flights and selected_id == last_selected_id: return
+	last_flights = canvas.flights
+	last_selected_id = selected_id
 	summary.text = "%d unterwegs  /  %d Routen" % [canvas.flights.size(), canvas.routes.size()]
 	details.text = "Kein Flug ausgewählt · Nur tatsächlich fliegende Flugzeuge werden angezeigt."
 	for flight in canvas.flights:

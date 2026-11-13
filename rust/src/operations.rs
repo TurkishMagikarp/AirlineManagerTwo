@@ -202,27 +202,13 @@ impl Game {
         Ok(())
     }
 
-    pub(crate) fn advance_company(&mut self, seconds: f64, supply: &[Route]) -> bool {
-        // Stage the clock and all derived states before committing, including overflow errors.
-        let mut clock = crate::clock::Clock::from_state(
-            self.clock.elapsed(),
-            self.clock.is_running(),
-            self.clock.speed(),
-        )
-        .unwrap();
-        if !clock.advance(seconds) {
-            return false;
-        }
-        self.advance_company_to(clock, supply)
-    }
-
     pub(crate) fn advance_company_to(
         &mut self,
         clock: crate::clock::Clock,
         supply: &[Route],
     ) -> bool {
         let mut updates = Vec::new();
-        let mut finance = self.finance.clone();
+        let mut finance = None;
         let mut delta = 0i64;
         let mut archive = Vec::new();
         for (i, route) in self
@@ -264,6 +250,7 @@ impl Game {
                 }
             }
             for (count, result) in batches {
+                let finance = finance.get_or_insert_with(|| self.finance.clone());
                 let totals = result.totals;
                 if finance.totals.add(&totals, count).is_none() {
                     return false;
@@ -326,13 +313,15 @@ impl Game {
             None if delta == 0 => None,
             None => return false,
         };
-        finance.recent.sort_by_key(|f| (f.landing, f.route_id));
-        let excess = finance
-            .recent
-            .len()
-            .saturating_sub(crate::economy::HISTORY_LIMIT);
-        finance.recent.drain(..excess);
-        self.finance = finance;
+        if let Some(mut finance) = finance {
+            finance.recent.sort_by_key(|f| (f.landing, f.route_id));
+            let excess = finance
+                .recent
+                .len()
+                .saturating_sub(crate::economy::HISTORY_LIMIT);
+            finance.recent.drain(..excess);
+            self.finance = finance;
+        }
         if let Some(h) = &mut self.history {
             for batch in archive {
                 h.record(batch);

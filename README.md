@@ -237,7 +237,8 @@ Kaufzeitpunkte, Guthaben und die letzte Entscheidung.
 
 Alle sieben Spieltage prüft jede KI drei Preise (bisheriger Preis und ±10 EUR)
 mit derselben Gewinnberechnung. Zwei aufeinanderfolgende Verlustwochen **je Route**
-führen zur Schließung, sobald die Maschine geparkt ist. Flugzeug, Konto und
+führen zur Schließung nach der nächsten Landung und Bodenzeit, falls die Maschine
+bei der Prüfung noch unterwegs ist; eine weitere Wochenprüfung ist nicht nötig. Flugzeug, Konto und
 Finanzarchiv bleiben erhalten; Gewinne anderer Strecken verdecken Verluste nicht.
 
 Alle vier Wochen sucht die KI höchstens eine neue Verbindung: freie geparkte
@@ -357,8 +358,9 @@ Ordner ersetzt erst zum Schluss den bisherigen Spielstand. Fehler beim Laden
 verändern die laufende Simulation nicht. Noch keine mehreren Speicherplätze,
 Backups oder automatische Wiederherstellung. Ungültige Airline- und Flottendaten werden
 ebenso abgelehnt wie defekte Zeitdaten, ohne den laufenden Zustand zu ersetzen.
-Das bisherige Dateilimit beträgt 1 MiB; auch Speichern prüft es, damit keine
+Das Dateilimit beträgt 8 MiB; auch Speichern prüft es, damit keine
 zu große, anschließend nicht mehr ladbare Datei einen guten Spielstand ersetzt.
+JSON wird ohne unnötige Einrückung geschrieben; vorhandene formatierte Dateien bleiben lesbar.
 Das Limit gilt weiterhin auch mit Archiv: Sehr viele Preis-/Flugplanwechsel können
 es erreichen; gleichbleibender Flugbetrieb braucht dagegen auch für Millionen
 Flüge nur wenige Archivblöcke. Noch keine Auslagerung des Archivs in eine Datenbank.
@@ -450,3 +452,60 @@ prüft zusätzlich Expansion über ein Jahr und das Laden vergrößerter Flotten
 `START.bat --headless --quit-after 10` weiterhin erfolgreich. Noch keine Überführungen,
 Flugzeugverkäufe, Kredite, Insolvenz oder globale Netz-/Frequenzoptimierung;
 KI-Entscheidungen bleiben bewusst eine kleine deterministische Heuristik.
+
+## Qualitätscheck / Langzeittest (13.11.2026)
+
+71 Rust-Tests, Clippy ohne Warnungen, 13 Godot-Testskripte (zusätzlich separate
+Nachfrage-/Abflugergebnis-Ladeprozesse) und alle fünf Prozess-Neustarttests.
+Vier Szenarien laufen jeweils zehn Jahre: ohne Spielerbetrieb, kostenlose Tickets,
+90 EUR und 100.000 EUR auf Frankfurt–München. Jährliche Sprünge und tägliche Schritte
+mit jährlichem Speichern/Laden ergeben exakt dieselben Zustände. Zusätzliche
+Marktprüfung: alle 28 Flughafenpaare mit drei gemischten Angeboten, Preisen,
+Frequenzen und umgekehrten Richtungen; keine Überschreitung des Basismarkts.
+
+Behoben: Verluststrecken konnten bei stets fliegender Maschine zum wöchentlichen
+Prüfzeitpunkt unendlich weiterfliegen. Die Schließung hat nun eine eigene
+Ereignisgrenze am Bodenzeitende, auch ohne freien Abstand zum nächsten Abflug;
+Speichern/Laden und kleine/große Schritte bleiben identisch. Frames ohne
+Ganzsekundenwechsel kopieren keine Unternehmensarchive; Finanzlisten werden nur
+bei tatsächlichen Landungen kopiert und sortiert. Die UI aktualisiert unveränderte
+Uhr-/Statusdarstellung nicht mehr pro Frame.
+
+Karte: statischer Hintergrund getrennt, Landflächen einmal trianguliert,
+Offscreen-Weltkopien ausgespart; keine erneute Kartenprojektion je Flugzeug-Update.
+Gemessen mit echtem OpenGL-Renderer auf RTX 3080, Godot 4.7.2, Debug-Build,
+1100×720, VSync aus, je 120 Frames (Median / P95 in ms):
+
+| Aktion | Vorher | Nachher |
+| --- | ---: | ---: |
+| Flugzeug-Layer neu zeichnen | 52,06 / 71,34 | 4,17 / 4,66 |
+| Verschieben | 51,26 / 59,32 | 10,71 / 16,36 |
+| Zoomen | 51,08 / 57,30 | 6,71 / 10,48 |
+
+Diese Messung isoliert die Karte, nicht die gesamte laufende Simulation.
+Reproduktion: `Godot --path . --script res://tests/map_benchmark.gd --disable-vsync --max-fps 0`.
+Rust-Messungen/Szenarien: `cargo test --locked --manifest-path rust/Cargo.toml quality:: -- --nocapture --test-threads=1`.
+Im isolierten Rust-Debug-Test kosten 8.192 Frames mit 1/64 s nach einem Jahr
+im Mittel ca. 1,2 / 4,0 / 15,7 µs bei 1× / 4× / 16×. Mit 3.650 Preiswechseln
+sind es bei 16× ca. 0,42 ms/Frame; transaktionale Kopien an echten
+Sekundengrenzen wachsen weiterhin mit dem Archiv (kein unbegrenzter Stresstest).
+Normale Zehnjahresstände benötigen jetzt ca. 47–68 KB statt 116–159 KB.
+3.650 tägliche echte Preiswechsel erzeugen berechtigt 3.650 Archivblöcke;
+der Stand benötigt ca. 2,55 MB und ist nun speicher-/ladbar (vorher über 1-MiB-Limit).
+Das Archiv wird nicht gekürzt; die neue Größenobergrenze schützt weiterhin die
+vorherige Datei. Beliebig viele Wirtschaftsänderungen sind weiterhin nicht unbegrenzt speicherbar.
+
+**Offene Wirtschaftsvorschläge, nicht umgesetzt:**
+
+- Ohne Spielerangebot wachsen Regional Wings / Continental Sky nach zehn Jahren
+  auf ca. 54 / 167 Mio. EUR Guthaben bei nur einem / zwei Flugzeugen. Buchungen
+  stimmen; dauerhaft konstante Nachfrage, niedrige Testkaufpreise und fehlende
+  Fixkosten, Alterung, Finanzierung und Steuern begünstigen die hohen Renditen.
+  Diese Größen gemeinsam kalibrieren, nicht einfach KI-Konten deckeln.
+- Kostenlose Spielertickets führen nach zehn Jahren zu ca. −168 Mio. EUR Guthaben,
+  überteuerte Leerflüge zu −89 Mio. EUR. Negative Salden sind ausdrücklich erlaubt;
+  Liquiditätswarnung, Kreditlimit oder Insolvenz brauchen eine eigene Spielregel.
+- Der gemeinsame Markt bleibt begrenzt, aber wegen der bewusst fehlenden
+  Kapazitätsumverteilung können ausgebuchte Billigangebote Nachfrage binden,
+  die andere Airlines nicht bekommen. Eine kapazitätsbewusste zweite Verteilung
+  wäre eine Wirtschaftsänderung, kein reiner technischer Fix.
