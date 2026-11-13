@@ -62,6 +62,12 @@ fn ten_year_scenarios_reconcile_and_survive_annual_restart() {
                     .all(|c| !c.game.insolvent() && c.game.resolution.deadline.is_none())
             );
             for c in &fast.competitors {
+                let h = c.game.history.as_ref().unwrap();
+                assert_eq!(
+                    h.taxes.len(),
+                    (fast.clock.elapsed().as_secs() / crate::demand::YEAR_SECONDS) as usize
+                );
+                c.game.validate_tax().unwrap();
                 let t = &c.game.finance.totals;
                 assert!(
                     t.service >= 0 && i128::from(t.service) * 5 <= i128::from(t.revenue),
@@ -81,11 +87,12 @@ fn ten_year_scenarios_reconcile_and_survive_annual_restart() {
                 for c in &fast.competitors {
                     let g = &c.game;
                     println!(
-                        "AUDIT price={price:?} year={year} airline={} cash={} profit={} service={} fleet={} routes={} batches={} save_bytes={bytes}",
+                        "AUDIT price={price:?} year={year} airline={} cash={} profit={} service={} tax={} fleet={} routes={} batches={} save_bytes={bytes}",
                         g.airline.as_ref().unwrap().name,
                         g.airline.as_ref().unwrap().capital_eur,
                         g.finance.totals.profit(),
                         g.finance.totals.service,
+                        g.history.as_ref().unwrap().tax_through(u64::MAX),
                         g.fleet.len(),
                         g.routes.len(),
                         g.history.as_ref().unwrap().batches.len()

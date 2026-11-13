@@ -32,6 +32,9 @@ mod service_tests;
 mod staff;
 #[cfg(test)]
 mod staff_tests;
+mod tax;
+#[cfg(test)]
+mod tax_tests;
 mod trading;
 #[cfg(test)]
 mod trading_tests;
@@ -86,6 +89,25 @@ impl SimulationClock {
                     "since" => operations::display_time(h.since).as_str(),
                     "batch_count" => h.batches.len() as i64
                 }
+            })
+            .unwrap_or_default()
+    }
+
+    #[func]
+    fn get_tax_history(&self) -> Array<VarDictionary> {
+        self.game
+            .history
+            .as_ref()
+            .map(|h| {
+                h.taxes
+                    .iter()
+                    .rev()
+                    .map(|a| {
+                        vdict! { "year" => (a.time / demand::YEAR_SECONDS) as i64,
+                        "profit_eur" => a.profit, "tax_eur" => a.amount,
+                        "loss_eur" => a.loss, "rate_bps" => a.rate_bps }
+                    })
+                    .collect()
             })
             .unwrap_or_default()
     }
@@ -155,6 +177,7 @@ impl SimulationClock {
         let steps = span.clamp(1, 63);
         let mut previous = economy::Totals::default();
         let mut previous_costs = 0i128;
+        let mut previous_tax = 0i128;
         (0..=steps).map(|i| {
             let time = h.since + (u128::from(span) * u128::from(i) / u128::from(steps)) as u64;
             let t = h.totals(route_id, time);
@@ -163,17 +186,20 @@ impl SimulationClock {
             // Central expenses belong only to the company series, never to
             // every route (which would duplicate them again).
             let costs = i128::from(t.costs()) + if route_id == 0 {
-                h.maintenance_through(time) + h.payroll_through(time) + h.interest_through(time) + h.rent_through(time)
+                h.maintenance_through(time) + h.payroll_through(time) + h.interest_through(time) + h.rent_through(time) + h.tax_through(time)
             } else { 0 };
+            let tax = if route_id == 0 { h.tax_through(time) } else { 0 };
             let period_costs = costs - previous_costs;
             let period_profit = i128::from(t.revenue - previous.revenue) - period_costs;
             let row = vdict! { "seconds" => time as i64, "time" => operations::display_time(time).as_str(),
                 "balance" => h.balance(time), "revenue" => t.revenue - previous.revenue,
+                "tax" => (tax - previous_tax).min(i128::from(i64::MAX)) as i64,
                 "costs" => period_costs.min(i128::from(i64::MAX)) as i64,
                 "profit" => period_profit.clamp(i128::from(i64::MIN), i128::from(i64::MAX)) as i64,
                 "load" => load };
             previous = t;
             previous_costs = costs;
+            previous_tax = tax;
             row
         }).collect()
     }
@@ -285,12 +311,26 @@ impl SimulationClock {
             .history
             .as_ref()
             .map_or(0, |h| h.interest_through(u64::MAX));
-        let costs =
-            i128::from(t.costs()) + i128::from(maintenance) + i128::from(payroll) + interest + rent;
+        let tax = self
+            .game
+            .history
+            .as_ref()
+            .map_or(0, |h| h.tax_through(u64::MAX));
+        let last_tax = self.game.history.as_ref().and_then(|h| h.taxes.last());
+        let costs = tax
+            + i128::from(t.costs())
+            + i128::from(maintenance)
+            + i128::from(payroll)
+            + interest
+            + rent;
         let profit = i128::from(t.revenue) - costs;
         vdict! { "fuel_cents_per_kg" => self.game.fuel_market.price_at(self.game.clock.elapsed().as_secs()),
         "fuel_month_delta_cents" => self.game.fuel_market.price_at(self.game.clock.elapsed().as_secs()) - self.game.fuel_market.price_at(self.game.clock.elapsed().as_secs().saturating_sub(30 * 86400)),
         "flights" => t.flights, "passengers" => t.passengers, "revenue_eur" => t.revenue,
+        "tax_eur" => tax.min(i128::from(i64::MAX)) as i64,
+        "tax_year_eur" => last_tax.map_or(0, |a| a.amount),
+        "tax_year" => last_tax.map_or(0, |a| a.time / demand::YEAR_SECONDS) as i64,
+        "tax_loss_eur" => self.game.tax_loss(), "tax_rate_bps" => self.game.tax_rate(),
         "maintenance_eur" => maintenance, "payroll_eur" => payroll,
         "rent_eur" => rent.min(i128::from(i64::MAX)) as i64,
         "aircraft_cash_eur" => aircraft_cash.clamp(i128::from(i64::MIN), i128::from(i64::MAX)) as i64,

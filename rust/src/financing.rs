@@ -369,6 +369,9 @@ impl Game {
                 .checked_add(RULES.repayment_period_days * DAY)
                 .ok_or("Zeitüberlauf.")?;
         }
+        // Annual tax includes bills posted at this instant, before principal
+        // repayment and the shared cash/distress/restructuring decision.
+        self.apply_tax()?;
         let payment = self.financing.overdue.min(self.cash().max(0));
         if payment > 0 {
             self.repay(payment)?;

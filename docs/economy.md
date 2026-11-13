@@ -237,3 +237,37 @@ Winter-Stilllegung. Nach fünf Jahren verändert sich der Kontostand um −0,13 
 Sitzlimits, Rundung, Konkurrenz oder andere Planungsentscheidungen.
 Dies ist ein deterministisches Qualitätsszenario, keine allgemeine Balancegarantie.
 Godot-/GUI- und Windows-Neustartprüfung bleiben offen; siehe [Nachfrage](demand.md).
+
+## Vereinfachte Ertragsteuer
+
+`config/tax.json` enthält feste Heimatland-Sätze in Basispunkten (100 = 1 %):
+Deutschland 30 %, Türkei 25 %, USA 26 %, sonst 25 % als Spielstandard.
+Die gerundeten Näherungen orientieren sich an den kombinierten gesetzlichen
+Sätzen aus [OECD Corporate Tax Statistics 2026](https://www.oecd.org/en/publications/corporate-tax-statistics-2026_73af6222-en/full-report/statutory-corporate-income-tax-rates_ce84abb9.html)
+und der [Länderübersicht 2025 der Tax Foundation](https://taxfoundation.org/data/all/global/corporate-tax-rates-by-country-2025/).
+Sie sind Spielparameter, keine aktuelle steuerliche Beratung. Kommunale Unterschiede,
+Progression, Sonderregeln, Abkommen und Transferpreise werden nicht modelliert.
+
+Spieljahre dauern 365 Tage ab Simulationsbeginn. Am Jahresende werden zuerst die
+Landungen und fälligen Rechnungen (Gehälter, Wartung, Leasing, Zinsen/Gebühren)
+gebucht, dann die Steuer und anschließend die Tilgung und Liquiditätsprüfung.
+Das Vorsteuerergebnis entspricht den in Finanzen erfassten Einnahmen minus
+Kosten, ohne Steuer. Käufe, Verkäufe, Kautionen und Kredit-Tilgungen sind wie
+bisher Kapitalbewegungen und kein Aufwand/Ertrag dieser Ergebnisrechnung.
+Verluste werden unbegrenzt vorgetragen; positive Ergebnisse verbrauchen zuerst
+den Verlustvortrag. Auf den verbleibenden Gewinn wird der Heimatflughafen-Satz
+angewandt, kaufmännisch auf ganze EUR gerundet (exakte Ganzzahlarithmetik).
+Die Steuer wird auch bei fehlendem Guthaben gebucht und nutzt dieselbe
+Verschuldungs-/Restrukturierungslogik wie andere Ausgaben. KI-Airlines folgen
+denselben Regeln. Steuerkosten werden nicht nochmals auf einzelne Routen verteilt.
+
+Finanzen zeigt den letzten Jahresabschluss mit Jahr, Steuer, Verlustvortrag und
+Heimatsteuersatz; Jahr 0 bedeutet noch kein Abschluss. Das Jahresarchiv enthält
+auch Nullabschlüsse und Vorsteuerergebnisse. Unternehmensdiagramme und Gesamtkosten
+enthalten gebuchte Steuern; eine eigene Steuerkurve zeigt die Jahresbuchungen.
+Godot rendert ausschließlich Rust-Werte.
+
+Save-Version 19 speichert Steuerbeginn, Ergebnisbasis und Jahresabschlüsse.
+Ältere Saves beginnen am Ladezeitpunkt ohne Verlustvortrag, mit dem bereits
+aufgelaufenen Vorsteuerergebnis als Basis. Nur die danach erfassten Ergebnisse
+werden beim nächsten 365-Tage-Jahreswechsel besteuert, nie vergangene Jahre.

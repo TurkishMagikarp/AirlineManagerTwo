@@ -1,0 +1,4 @@
+{
+  "default_rate_bps": 2500,
+  "country_rates_bps": { "DE": 3000, "TR": 2500, "US": 2600 }
+}
