@@ -157,3 +157,56 @@ Finanznot. Speichern prüft Restschuld gegen Journal und Konto gegen Historie.
 Alle Zahlungstermine, Landungen und Aussetzungen sind unabhängig von 1×/4×/16×
 und Schrittgröße. Noch keine Insolvenz, Liquidation, Umschuldung, Verkäufe,
 Steuern, Rating-/Sicherheitenmodelle oder ausgefeilte KI-Sanierung.
+
+## Globaler Treibstoffmarkt (Version 16)
+
+Ein gespeicherter Weltseed (`fuel_market.seed`, derzeit gleicher Startseed für
+neue Spiele) bestimmt einen weltweiten Preis. `config/economy.json` enthält
+Basis 80 Cent/kg, Grenzen 50–120, Volatilität ±12 Cent, Rückkehrdivisor 8 und
+Kadenz 604.800 Simulationssekunden (eine Woche). Jede Woche gilt:
+`clamp(Preis + Seed-Zufallsschritt + trunc((Basis - Preis) / 8), Minimum, Maximum)`.
+SplitMix64 mit explizitem Integer-Wrapping macht die Folge plattformunabhängig.
+Es gibt keinen Zufallsaufruf pro Frame und keine zweite Uhr.
+
+Der Preis wird für den genauen Abflugzeitpunkt abgeleitet und im bestehenden
+Abflugergebnis als Treibstoffkosten eingefroren. Große Simulationsschritte teilen
+Flugabrechnungen an Preisgrenzen; bereits fliegende Flugzeuge behalten ihre
+Kosten bis zur Landung. Spieler und KI verwenden dieselbe Folge. KI-Tarifprüfung,
+Frequenz- und Flottenplanung rechnen mit dem aktuellen Preis. Die konservative
+Liquiditätsprognose verwendet die Obergrenze, damit ein übersprungener Preissprung
+keine Finanznot-Ereignisse zwischen großen und kleinen Schritten verändert.
+
+Spielstände vor v16 beginnen beim Laden einen neuen Markt zur Basis, ohne alte
+Abflugangebote oder Kontobuchungen zu verändern. Die Finanzansicht zeigt EUR/kg
+und die Richtung/Differenz gegenüber vor 30 Simulationstagen; vor Beginn der
+Markthistorie gilt die Basis. Kein Chart, keine Absicherung und keine Regionalpreise.
+
+### Prüfung am 13.11.2026 (Linux, Rust)
+
+`cargo test --locked --manifest-path rust/Cargo.toml quality:: -- --nocapture`
+wurde vor und nach der Änderung ausgeführt. Alle vier bisherigen Szenarien
+bestehen weiter, einschließlich jährlichem Speichern/Laden und Vergleich großer
+mit täglichen Schritten. Im ATR-Szenario FRA–MUC mit 90-EUR-Ticket:
+
+| Guthaben nach 10 Jahren | Vorher (80 Cent konstant) | Schwankender Markt |
+| --- | ---: | ---: |
+| Spieler | 18.054.744 EUR | 17.900.937 EUR |
+| Regional Wings | 86.817.438 EUR | 65.252.453 EUR |
+| Continental Sky | 170.694.976 EUR | 97.463.052 EUR |
+
+Die KI wächst abhängig von den Preissprüngen anders, bleibt aber in allen
+bestehenden Szenarien solvent. Absichtlich unbrauchbare Spielertarife (0 bzw.
+100.000 EUR) scheitern weiterhin. Der tägliche Tarifwechsel-Test bleibt unter
+3 MiB Savegröße (3.089.102 statt 2.792.194 Bytes).
+
+Ein zusätzlicher Test erzwingt ausschließlich im Testthread durchgehend die
+konfigurierte Obergrenze (120 Cent/kg), auch über jährliches Speichern/Laden.
+Nach fünf Jahren ohne Finanznot: Spieler 8.251.438 EUR, Regional Wings
+9.399.985 EUR, Continental Sky 52.677.116 EUR. Dafür war keine Neukalibrierung
+nötig; dies ist eine Szenarioprüfung, keine Garantie für jede Spielerstrategie.
+
+Weitere Rust-Tests prüfen Preisgrenzen, Seedabhängigkeit, Wochenwechsel,
+Abflugsnapshot über einen Preissprung, Pause, 1×/4×/16×, Schrittgrößen und
+v15-Migration. Godot, START.bat, GUI/Screenshots und Windows-Neustarttests
+konnten auf diesem Server nicht ausgeführt werden; die Rust-Tests bestätigen
+keine visuelle Darstellung.

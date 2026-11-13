@@ -7,6 +7,8 @@ mod economy;
 mod financing;
 #[cfg(test)]
 mod financing_tests;
+#[cfg(test)]
+mod fuel_tests;
 mod game;
 mod history;
 mod maintenance;
@@ -276,7 +278,9 @@ impl SimulationClock {
         let costs =
             i128::from(t.costs()) + i128::from(maintenance) + i128::from(payroll) + interest + rent;
         let profit = i128::from(t.revenue) - costs;
-        vdict! { "flights" => t.flights, "passengers" => t.passengers, "revenue_eur" => t.revenue,
+        vdict! { "fuel_cents_per_kg" => self.game.fuel_market.price_at(self.game.clock.elapsed().as_secs()),
+        "fuel_month_delta_cents" => self.game.fuel_market.price_at(self.game.clock.elapsed().as_secs()) - self.game.fuel_market.price_at(self.game.clock.elapsed().as_secs().saturating_sub(30 * 86400)),
+        "flights" => t.flights, "passengers" => t.passengers, "revenue_eur" => t.revenue,
         "maintenance_eur" => maintenance, "payroll_eur" => payroll,
         "rent_eur" => rent.min(i128::from(i64::MAX)) as i64,
         "aircraft_cash_eur" => aircraft_cash.clamp(i128::from(i64::MIN), i128::from(i64::MAX)) as i64,

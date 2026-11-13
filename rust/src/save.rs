@@ -8,7 +8,7 @@ use std::io::{Read, Write};
 use std::path::Path;
 use std::time::Duration;
 
-const VERSION: u32 = 15;
+const VERSION: u32 = 16;
 // Bounded input, but allow multi-year archives with frequent legitimate changes.
 const MAX_BYTES: u64 = 8 * 1024 * 1024;
 
@@ -21,6 +21,8 @@ struct SaveGame {
 // Future simulation data belongs here, not in the UI or a serialized Godot object.
 #[derive(Serialize, Deserialize)]
 struct GameState {
+    #[serde(default)]
+    fuel_market: Option<crate::economy::FuelMarket>,
     competitors: Option<Vec<crate::competition::Competitor>>,
     clock: SavedClock,
     airline: Option<Airline>,
@@ -62,6 +64,9 @@ pub fn save(path: &Path, game: &Game) -> Result<(), String> {
     if let Some(airline) = &game.airline {
         airline.validate()?;
     }
+    if game.fuel_market.started_at > game.clock.elapsed().as_secs() {
+        return Err("Ungültiger Treibstoffmarkt.".into());
+    }
     game.validate_fleet()?;
     game.validate_routes()?;
     game.validate_operations()?;
@@ -75,6 +80,7 @@ pub fn save(path: &Path, game: &Game) -> Result<(), String> {
     let data = SaveGame {
         version: VERSION,
         state: GameState {
+            fuel_market: Some(game.fuel_market.clone()),
             competitors: Some(game.competitors.clone()),
             history: game.history.clone(),
             staff: Some(game.staff.clone()),
@@ -195,7 +201,19 @@ pub fn load(path: &Path) -> Result<Game, String> {
     } else {
         crate::economy::Finance::default()
     };
+    let fuel_market = if data.version >= 16 {
+        data.state.fuel_market.ok_or("Treibstoffmarkt fehlt.")?
+    } else {
+        crate::economy::FuelMarket {
+            started_at: clock.elapsed().as_secs(),
+            ..Default::default()
+        }
+    };
+    if fuel_market.started_at > clock.elapsed().as_secs() {
+        return Err("Ungültiger Treibstoffmarkt.".into());
+    }
     let mut game = Game {
+        fuel_market,
         competitors: if data.version >= 9 {
             data.state
                 .competitors
@@ -250,6 +268,11 @@ pub fn load(path: &Path) -> Result<Game, String> {
             }
         }
     }
+    if data.version < 16 {
+        for c in &mut game.competitors {
+            c.game.fuel_market = game.fuel_market.clone();
+        }
+    }
     game.validate_fleet()?;
     game.validate_routes()?;
     if data.version < 5 && game.routes.iter().any(|r| r.plan.is_some()) {
@@ -272,11 +295,12 @@ pub fn load(path: &Path) -> Result<Game, String> {
                     game.clock.elapsed().as_secs(),
                 )?;
                 let airborne = if state.status == crate::aircraft::AircraftStatus::InFlight {
-                    Some(crate::operations::departure_quote(
+                    Some(crate::operations::departure_quote_in_market(
                         route,
                         &plane.model_id,
                         state.completed,
                         &game.market_routes(),
+                        &game.fuel_market,
                     )?)
                 } else {
                     None
@@ -302,6 +326,14 @@ pub fn load(path: &Path) -> Result<Game, String> {
     game.validate_competitors()?;
     if data.version < 9 && game.airline.is_some() {
         game.competitors = crate::competition::initial_competitors_at(game.clock.elapsed())?;
+    }
+    for c in &mut game.competitors {
+        if data.version < 16 {
+            c.game.fuel_market = game.fuel_market.clone();
+        }
+        if c.game.fuel_market != game.fuel_market {
+            return Err("Abweichender Treibstoffmarkt.".into());
+        }
     }
     Ok(game)
 }

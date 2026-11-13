@@ -3,6 +3,11 @@
   "reference_base_eur": 60,
   "reference_eur_per_100_km": 4,
   "fuel_cents_per_kg": 80,
+  "fuel_min_cents_per_kg": 50,
+  "fuel_max_cents_per_kg": 120,
+  "fuel_volatility_cents": 12,
+  "fuel_mean_reversion_divisor": 8,
+  "fuel_cadence_seconds": 604800,
   "airport_eur_per_passenger": 25,
   "models": {
     "a320_200": { "fuel_kg_per_hour": 2500, "fuel_cycle_kg": 550, "airport_base_eur": 1400, "overhead_eur_per_hour": 2400, "overhead_cycle_eur": 700 },

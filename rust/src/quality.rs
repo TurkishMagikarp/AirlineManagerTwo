@@ -235,3 +235,40 @@ fn first_diff(a: &serde_json::Value, b: &serde_json::Value, path: &str) -> Optio
     }
     Some(format!("{path}: {a} vs {b}"))
 }
+
+#[test]
+fn sustained_high_fuel_keeps_viable_player_and_both_ai_alive() {
+    struct Reset;
+    impl Drop for Reset {
+        fn drop(&mut self) {
+            crate::economy::HIGH_FUEL.with(|v| v.set(false));
+        }
+    }
+    crate::economy::HIGH_FUEL.with(|v| v.set(true));
+    let _reset = Reset;
+    let mut g = scenario(Some(90));
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("high-fuel.json");
+    for year in 1..=5 {
+        assert_eq!(g.fuel_market.price_at(g.clock.elapsed().as_secs()), 120);
+        assert!(g.advance(365.0 * 86400.0));
+        assert!(!g.insolvent() && !g.distressed(), "player year={year}");
+        assert_eq!(g.competitors.len(), 2);
+        assert!(
+            g.competitors
+                .iter()
+                .all(|c| !c.game.insolvent() && !c.game.distressed())
+        );
+        g.validate_history().unwrap();
+        crate::save::save(&path, &g).unwrap();
+        g = crate::save::load(&path).unwrap();
+        println!(
+            "HIGH_FUEL year={year} player_cash={} ai_cash={:?}",
+            g.cash(),
+            g.competitors
+                .iter()
+                .map(|c| c.game.cash())
+                .collect::<Vec<_>>()
+        );
+    }
+}

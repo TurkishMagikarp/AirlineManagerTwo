@@ -532,12 +532,14 @@ fn restructuring_v13_migration_starts_fresh_grace_without_replaying_costs() {
     save::save(&path, &g).unwrap();
     let original: serde_json::Value =
         serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
-    assert_eq!(original["version"], 15);
+    assert_eq!(original["version"], 16);
     let mut old = original.clone();
     old["version"] = serde_json::json!(13);
     old["state"].as_object_mut().unwrap().remove("resolution");
     std::fs::write(&path, serde_json::to_vec(&old).unwrap()).unwrap();
     let mut restored = save::load(&path).unwrap();
+    assert_eq!(restored.fuel_market.started_at, 200 * 86400);
+    g.fuel_market = restored.fuel_market.clone();
     assert_eq!(state(&restored), state(&g));
     restored.clock.set_running(true);
     assert!(restored.advance(1.0));
