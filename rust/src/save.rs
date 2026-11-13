@@ -8,10 +8,11 @@ use std::io::{Read, Write};
 use std::path::Path;
 use std::time::Duration;
 
-const VERSION: u32 = 16;
+const VERSION: u32 = 17;
 // Bounded input, including centuries of fuel/seasonal quotes for the player
 // and both AI airlines in the million-flight finance restart scenario.
-const MAX_BYTES: u64 = 64 * 1024 * 1024;
+// Version 17 retains per-class quotes, which also split more archive batches.
+const MAX_BYTES: u64 = 128 * 1024 * 1024;
 
 #[derive(Serialize, Deserialize)]
 struct SaveGame {
@@ -143,6 +144,9 @@ pub fn load(path: &Path) -> Result<Game, String> {
         .map_err(|_| "Spielstand ist beschädigt oder unvollständig.".to_string())?;
     if value["version"].as_u64().is_some_and(|v| v < 15) {
         crate::route_save::migrate(&mut value["state"]);
+    }
+    if value["version"].as_u64().is_some_and(|v| v < 17) {
+        crate::cabins::migrate(&mut value["state"]);
     }
     let data: SaveGame = serde_json::from_value(value)
         .map_err(|_| "Spielstand ist beschädigt oder unvollständig.".to_string())?;

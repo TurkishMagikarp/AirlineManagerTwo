@@ -23,6 +23,8 @@ var schedule_button: Button
 var stop_button: Button
 var maintenance_label: Label
 var operations_label: Label
+var business_input: SpinBox
+var business_button: Button
 var ticket_input: SpinBox
 var ticket_button: Button
 var results_tree: Tree
@@ -83,7 +85,7 @@ func _ready() -> void:
 	delete_button.pressed.connect(_delete)
 	actions.add_child(delete_button)
 	assignment.item_selected.connect(func(_index: int): _assignment_preview())
-	add_child(_label("Ticketpreis der ausgewählten Route · EUR pro Passagier und Einzelflug (vorläufig)"))
+	add_child(_label("Economy-Preis der ausgewählten Route · EUR pro Passagier und Einzelflug (vorläufig)"))
 	ticket_input = SpinBox.new()
 	ticket_input.min_value = 0
 	ticket_input.max_value = 100000
@@ -98,6 +100,20 @@ func _ready() -> void:
 			_feedback(simulation.set_ticket_price(route["id"], int(ticket_input.value)), "Ticketpreis geändert.")
 	)
 	add_child(ticket_button)
+	add_child(_label("Business-Preis · EUR pro Passagier und Einzelflug"))
+	business_input = SpinBox.new()
+	business_input.min_value = 0
+	business_input.max_value = 100000
+	business_input.step = 1
+	add_child(business_input)
+	business_button = Button.new()
+	business_button.text = "Business-Preis übernehmen"
+	business_button.pressed.connect(func():
+		var route := _route()
+		if not route.is_empty():
+			_feedback(simulation.set_business_ticket_price(route["id"], int(business_input.value)), "Business-Preis geändert.")
+	)
+	add_child(business_button)
 	var rules := _label("Wirtschaftsregeln & Berechnung: Details im Tooltip")
 	rules.tooltip_text = simulation.get_economy_rules()
 	add_child(rules)
@@ -295,6 +311,8 @@ func refresh_operations() -> void:
 		for i in range(values.size()):
 			row.set_text(i, values[i])
 			row.set_tooltip_text(i, "Ticket: %s\nTreibstoff: %s\nFlughäfen: %s\nPersonal: %s\nWartung / Verwaltung: %s" % [UI.money(result["ticket_eur"]), UI.money(result["fuel_eur"]), UI.money(result["airport_eur"]), UI.money(result["crew_eur"]), UI.money(result["overhead_eur"])])
+		row.set_text(2, "Y %d/%d · J %d/%d" % [result["economy_passengers"], result["economy_seats"], result["business_passengers"], result["business_seats"]])
+		row.set_tooltip_text(3, "Economy: %s · Business: %s" % [UI.money(result["economy_revenue_eur"]), UI.money(result["business_revenue_eur"])])
 		row.set_custom_color(5, UI.POSITIVE if result["profit_eur"] >= 0 else UI.NEGATIVE)
 
 
@@ -313,6 +331,9 @@ func _selection_changed() -> void:
 		ticket_button.disabled = route.is_empty()
 		ticket_input.editable = not ticket_button.disabled
 		ticket_input.value = route.get("ticket_eur", 100)
+		business_input.value = route.get("business_ticket_eur", 200)
+		business_button.disabled = route.is_empty()
+		business_input.editable = not route.is_empty()
 	if schedule_button != null:
 		_update_schedule_controls(route)
 	assignment.clear()

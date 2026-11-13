@@ -169,6 +169,7 @@ func refresh(force: bool = false) -> void:
 		row.set_metadata(0, r)
 		row.set_text(0, "#%d %s–%s%s" % [r["route_id"], r["origin"], r["destination"], " · gelöscht" if not r["active"] else ""])
 		row.set_text(1, str(r["flights"]))
+		row.set_tooltip_text(2, "Economy: %s (%d Pax) · Business: %s (%d Pax)" % [UI.money(r["economy_revenue_eur"]), r["economy_passengers"], UI.money(r["business_revenue_eur"]), r["business_passengers"]])
 		for pair in [[2, "revenue_eur"], [3, "costs_eur"], [4, "profit_eur"]]:
 			row.set_text(pair[0], UI.money(r[pair[1]]))
 		row.set_text(5, "%.1f %%" % r["load_percent"] if r["flights"] > 0 else "Keine Flüge")

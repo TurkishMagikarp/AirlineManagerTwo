@@ -224,3 +224,38 @@ Saisonwechsel erzeugen zusätzliche legitime Archivblöcke. Das Testbudget liegt
 jetzt bei 5 MiB, die produktive Grenze bleibt unverändert bei 8 MiB.
 Die lokale Fuelpreis-Zwischenspeicherung gilt nur innerhalb eines Fortschritts;
 Saison und laufende Abflugangebote bleiben unabhängig von Schrittgrößen.
+
+## Zwei Kabinenklassen (Save-Version 17)
+
+`config/cabins.json` regelt Fläche, Umbaugebühr, Zahlungsbereitschaft,
+Business-Präferenz und KI-Schwellen. Ein Business-Sitz belegt zunächst zwei
+Economy-Flächeneinheiten: `Economy = Modellsitze − Business × Verhältnis`.
+Der Umbau kostet einmalig 500 EUR (Flugzeugjournal), ohne zusätzliche Bodenzeit;
+er ist nur geparkt oder während der Bodenzeit ohne beauftragte/aktive Wartung
+möglich. Unveränderte Layouts kosten nichts. Flottenansicht: Business-Sitze
+bearbeiten, Economy und Obergrenze kommen aus Rust.
+
+Jede Route hat einen Economy- und einen Business-Preis, auch über alle ihre
+Flugzeugrotationen hinweg. Beide Kabinen sind Angebote im bisherigen gemeinsamen
+Segmentmarkt und derselben Sitzüberhangverteilung. Nur Geschäftsreisende bekommen
+ein Business-Angebot: doppelte Zahlungsbereitschaft und dreifache Attraktivität
+(jeweils konfigurierbar). Freizeitpassagiere bleiben in Economy. Ist Business voll,
+wechselt kaufbereiter Überhang auch in freie Economy-Sitze; ist Business zu teuer,
+bleibt das Economy-Angebot verfügbar. Es entsteht kein zweiter Tagesmarkt.
+Die Frequenz der Alternative „nicht fliegen“ wird pro Flugzeug nur einmal gezählt.
+Nach der gemeinsamen Verteilung wird je Kabine auf ganze Passagiere abgerundet.
+
+Abflug-Snapshots und Archive behalten Passagiere, Sitze und Erlöse für Business;
+Economy ergibt sich aus Gesamtsumme minus Business. Preisänderungen und spätere
+Umbauten schreiben keine alten Ergebnisse um. Routenergebnisse zeigen Y/J,
+Einnahmen-Tooltips und Routencontrolling die getrennten Erlöse/Passagiere.
+Bestehende Spielstände migrieren für Spieler und KI auf null Business-Sitze,
+mit unveränderter Economy-Kapazität, Guthaben und alten Abflug-Snapshots.
+KI-Prüfungen versuchen bei mindestens 40 % Geschäftsreiseanteil eine kleine
+Business-Kabine (20 % der Fläche) am Boden über dieselbe kostenpflichtige API;
+bei Geldmangel/Wartung/Flug wird der Umbau übersprungen. Bestehende Preis- und
+Wirtschaftlichkeitsprüfungen nutzen die tatsächliche Kabinenkapazität; die KI
+setzt den Business-Preis auf den konfigurierten Aufschlag zum Economy-Preis.
+
+Nullwerte der Business-Summen werden im Archiv ausgelassen; das begrenzte
+Save-/Ladelimit beträgt wegen zusätzlicher Klassendetails jetzt 128 MiB.

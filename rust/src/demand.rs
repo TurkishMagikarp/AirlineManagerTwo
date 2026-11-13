@@ -107,18 +107,23 @@ fn market_with_season(route: &Route, price: i64, time: Option<u64>) -> Result<Ma
 pub struct Offer {
     pub route: Route,
     pub seats: u32,
+    pub business_seats: u32,
+    premium: bool,
 }
 impl Offer {
     pub fn new(route: &Route, seats: u32) -> Self {
         Self {
             route: route.clone(),
             seats,
+            business_seats: 0,
+            premium: false,
         }
     }
 }
 
 #[derive(Default)]
 pub struct Estimate {
+    pub business: i64,
     pub daily_passengers: f64,
     pub daily_spill: f64,
     pub per_departure: i64,
@@ -131,11 +136,12 @@ fn frequency(route: &Route) -> f64 {
         .map_or(1.0, |p| 43200.0 / p.interval_seconds as f64)
 }
 
-fn same_offer(a: &Route, b: &Route) -> bool {
+pub(crate) fn same_offer(a: &Route, b: &Route) -> bool {
     same_market(a, b)
         && a.id == b.id
         && a.aircraft_id == b.aircraft_id
         && a.ticket_eur == b.ticket_eur
+        && a.business_ticket_eur == b.business_ticket_eur
         && a.plan.as_ref().map(|p| p.interval_seconds)
             == b.plan.as_ref().map(|p| p.interval_seconds)
 }
@@ -166,30 +172,74 @@ fn estimate_with_season(
         .filter(|o| o.route.plan.is_some() && same_market(route, &o.route))
         .cloned()
         .collect();
-    let own = Offer::new(route, seats);
+    let mut own = routes
+        .iter()
+        .find(|o| same_offer(route, &o.route))
+        .cloned()
+        .unwrap_or_else(|| Offer::new(route, seats));
+    own.seats = seats;
+    if own.business_seats > seats {
+        return Err("Ungültige Kabinenkapazität.".into());
+    }
     if !matching
         .iter()
         .any(|o| o.seats == seats && same_offer(route, &o.route))
     {
         if let Some(o) = matching.iter_mut().find(|o| same_offer(route, &o.route)) {
-            o.seats = seats;
+            *o = own;
         } else {
             matching.push(own);
         }
     }
+    // Both cabins participate in this same segmented allocator and spill loop.
+    // Premium has no leisure weight; unsatisfied business can spill to economy.
+    let mut own_indices = Vec::new();
+    let mut cabins = Vec::new();
+    let own_index = matching
+        .iter()
+        .position(|o| o.seats == seats && same_offer(route, &o.route))
+        .unwrap();
+    for (index, o) in matching.into_iter().enumerate() {
+        let is_own = index == own_index;
+        let mut economy = o.clone();
+        economy.seats -= o.business_seats;
+        if is_own {
+            own_indices.push(cabins.len());
+        }
+        cabins.push(economy);
+        if o.business_seats > 0 {
+            let mut business = o;
+            business.seats = business.business_seats;
+            business.route.ticket_eur = business.route.business_ticket_eur;
+            business.premium = true;
+            if is_own {
+                own_indices.push(cabins.len());
+            }
+            cabins.push(business);
+        }
+    }
+    // Preserve identity independently of equal prices/IDs across owners.
+    let mut matching: Vec<_> = cabins
+        .into_iter()
+        .enumerate()
+        .map(|(i, o)| (o, own_indices.contains(&i)))
+        .collect();
     // Economic keys give a canonical floating-point reduction order even when
     // owner order, route IDs or direction differ. Equal keys are interchangeable.
-    matching.sort_by(|a, b| {
+    matching.sort_by(|(a, _), (b, _)| {
         a.route
             .ticket_eur
             .cmp(&b.route.ticket_eur)
             .then_with(|| frequency(&a.route).total_cmp(&frequency(&b.route)))
             .then(a.seats.cmp(&b.seats))
+            .then(a.premium.cmp(&b.premium))
     });
-    let own_index = matching
+    let own_indices: Vec<_> = matching
         .iter()
-        .position(|o| o.seats == seats && same_offer(route, &o.route))
-        .unwrap();
+        .enumerate()
+        .filter_map(|(i, (_, own))| own.then_some(i))
+        .collect();
+    let matching: Vec<_> = matching.into_iter().map(|(o, _)| o).collect();
     let at = |route: &Route, price| match time {
         Some(time) => market_at(route, price, time),
         None => market(route, price),
@@ -203,16 +253,32 @@ fn estimate_with_season(
     for (j, o) in matching.iter().enumerate() {
         let f = frequency(&o.route);
         capacities.push(f * f64::from(o.seats));
-        let m = at(&o.route, o.route.ticket_eur)?;
+        let mut m = at(
+            &o.route,
+            if o.premium {
+                (o.route.ticket_eur as f64 / crate::cabins::RULES.business_price_multiplier).ceil()
+                    as i64
+            } else {
+                o.route.ticket_eur
+            },
+        )?;
+        if o.premium {
+            m.leisure = 0.0;
+        }
         for (i, (n, b)) in [(m.business, base.business), (m.leisure, base.leisure)]
             .into_iter()
             .enumerate()
         {
             let w = if b > 0.0 { n / b } else { 0.0 };
-            if w > 0.0 {
+            if w > 0.0 && !o.premium {
                 frequency_sum[i] += f;
             }
-            weights[j][i] = f * w / (1.0 - w).max(1e-9);
+            weights[j][i] = f * w / (1.0 - w).max(1e-9)
+                * if o.premium {
+                    crate::cabins::RULES.business_preference
+                } else {
+                    1.0
+                };
             weight_sum[i] += weights[j][i];
             // Rare flights cannot bank days of willing demand.
             limits[j][i] = n * f.min(1.0);
@@ -225,7 +291,10 @@ fn estimate_with_season(
                 (b * weights[j][i] / (frequency_sum[i].max(1.0) + weight_sum[i])).min(limits[j][i]);
         }
     }
-    let requested = allocated[own_index].iter().sum::<f64>();
+    let requested = own_indices
+        .iter()
+        .map(|&j| allocated[j].iter().sum::<f64>())
+        .sum::<f64>();
     let mut spill = [0.0; 2];
     for j in 0..matching.len() {
         let total = allocated[j].iter().sum::<f64>();
@@ -279,14 +348,27 @@ fn estimate_with_season(
             spill[i] = (spill[i] - accepted[i]).max(0.0);
         }
     }
-    let daily = allocated[own_index].iter().sum::<f64>();
-    let per_flight = daily / frequency(route);
-    let per_departure = if (per_flight - f64::from(seats)).abs() < 1e-9 {
-        i64::from(seats)
-    } else {
-        per_flight.floor().min(f64::from(seats)) as i64
-    };
+    let daily = own_indices
+        .iter()
+        .map(|&j| allocated[j].iter().sum::<f64>())
+        .sum::<f64>();
+    let mut business = 0;
+    let mut per_departure = 0;
+    for &j in &own_indices {
+        let per_flight = allocated[j].iter().sum::<f64>() / frequency(route);
+        let cap = f64::from(matching[j].seats);
+        let n = if (per_flight - cap).abs() < 1e-9 {
+            cap as i64
+        } else {
+            per_flight.floor().min(cap) as i64
+        };
+        per_departure += n;
+        if matching[j].premium {
+            business += n;
+        }
+    }
     Ok(Estimate {
+        business,
         daily_passengers: per_departure as f64 * frequency(route),
         daily_spill: (requested - daily).max(0.0),
         per_departure,

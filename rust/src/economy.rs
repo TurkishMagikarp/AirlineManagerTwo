@@ -169,8 +169,18 @@ pub fn reference_price(km: f64) -> f64 {
     (CONFIG.reference_base_eur + km.round() as i64 * CONFIG.reference_eur_per_100_km / 100) as f64
 }
 
+fn zero(value: &i64) -> bool {
+    *value == 0
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Totals {
+    #[serde(default, skip_serializing_if = "zero")]
+    pub business_passengers: i64,
+    #[serde(default, skip_serializing_if = "zero")]
+    pub business_revenue: i64,
+    #[serde(default, skip_serializing_if = "zero")]
+    pub business_seats: i64,
     pub flights: i64,
     pub passengers: i64,
     pub seats: i64,
@@ -183,6 +193,25 @@ pub struct Totals {
     pub overhead: i64,
 }
 impl Totals {
+    pub fn valid_cabins(&self, economy_fare: i64) -> bool {
+        self.business_passengers >= 0
+            && self.business_passengers <= self.passengers
+            && self.business_seats >= self.business_passengers
+            && self.business_seats <= self.seats
+            && self.passengers - self.business_passengers <= self.seats - self.business_seats
+            && self.business_revenue >= 0
+            && self.business_revenue <= self.revenue
+            && if self.business_passengers == 0 {
+                self.business_revenue == 0
+            } else {
+                self.business_revenue % self.business_passengers == 0
+                    && self.business_revenue / self.business_passengers <= 100_000
+            }
+            && (self.passengers - self.business_passengers)
+                .checked_mul(economy_fare)
+                .and_then(|v| v.checked_add(self.business_revenue))
+                == Some(self.revenue)
+    }
     pub fn costs(&self) -> i64 {
         self.fuel + self.airport + self.crew + self.overhead
     }
@@ -200,7 +229,17 @@ impl Totals {
         let count = i64::try_from(count).ok()?;
         macro_rules! add { ($($f:ident),*) => { $(self.$f = self.$f.checked_add(other.$f.checked_mul(count)?)?;)* }; }
         add!(
-            flights, passengers, seats, revenue, fuel, airport, crew, overhead
+            flights,
+            passengers,
+            seats,
+            revenue,
+            fuel,
+            airport,
+            crew,
+            overhead,
+            business_passengers,
+            business_revenue,
+            business_seats
         );
         self.fuel
             .checked_add(self.airport)?
@@ -274,19 +313,27 @@ fn quote_with_time(
 ) -> Result<Totals, String> {
     let c = &*CONFIG;
     let model = aircraft::model(model_id)?;
+    let offer = routes
+        .iter()
+        .find(|o| crate::demand::same_offer(route, &o.route));
+    let seats = offer.map_or(model.seats, |o| o.seats);
+    let business_seats = offer.map_or(0, |o| o.business_seats);
     let demand = match departure {
-        Some(time) => crate::demand::estimate_at(route, model.seats, routes, time)?,
-        None => crate::demand::estimate(route, model.seats, routes)?,
-    }
-    .per_departure;
-    let passengers = demand.min(i64::from(model.seats));
+        Some(time) => crate::demand::estimate_at(route, seats, routes, time)?,
+        None => crate::demand::estimate(route, seats, routes)?,
+    };
+    let passengers = demand.per_departure;
+    let business_revenue = demand.business * route.business_ticket_eur;
     let seconds = operations::timings(route, model_id)?.0 as i64;
     let rates = &c.models[model_id];
     Ok(Totals {
         flights: 1,
         passengers,
-        seats: model.seats.into(),
-        revenue: passengers * route.ticket_eur,
+        seats: seats.into(),
+        business_seats: business_seats.into(),
+        business_passengers: demand.business,
+        business_revenue,
+        revenue: (passengers - demand.business) * route.ticket_eur + business_revenue,
         fuel: ((seconds * rates.fuel_kg_per_hour + rates.fuel_cycle_kg * 3600) * fuel_cents
             + 359999)
             / 360000,
@@ -311,7 +358,13 @@ impl Game {
     }
     pub fn validate_finance(&self) -> Result<(), String> {
         let valid = |t: &Totals| {
-            t.flights >= 0
+            t.business_passengers >= 0
+                && t.business_passengers <= t.passengers
+                && t.business_seats >= t.business_passengers
+                && t.business_seats <= t.seats
+                && t.business_revenue >= 0
+                && t.business_revenue <= t.revenue
+                && t.flights >= 0
                 && t.passengers >= 0
                 && t.seats >= t.passengers
                 && t.revenue >= 0
@@ -342,7 +395,7 @@ impl Game {
                 || f.route_id >= self.next_route_id
                 || f.landing > self.clock.elapsed().as_secs()
                 || !(0..=100_000).contains(&f.ticket_eur)
-                || f.totals.passengers.checked_mul(f.ticket_eur) != Some(f.totals.revenue)
+                || !f.totals.valid_cabins(f.ticket_eur)
                 || crate::routes::distance_km(&f.origin, &f.destination).is_err()
                 || previous.is_some_and(|p| p >= (f.landing, f.route_id))
             {
@@ -355,7 +408,10 @@ impl Game {
         if t.flights <= HISTORY_LIMIT as i64 && sum != *t {
             return Err("Unvollständige Finanzsummen.".into());
         }
-        if sum.flights > t.flights
+        if sum.business_passengers > t.business_passengers
+            || sum.business_seats > t.business_seats
+            || sum.business_revenue > t.business_revenue
+            || sum.flights > t.flights
             || sum.passengers > t.passengers
             || sum.seats > t.seats
             || sum.revenue > t.revenue
@@ -634,6 +690,7 @@ mod tests {
                 prices.dedup();
                 for price in prices {
                     let route = Route {
+                        business_ticket_eur: crate::cabins::default_business_fare(),
                         id: 1,
                         origin_icao: origin.into(),
                         destination_icao: destination.into(),

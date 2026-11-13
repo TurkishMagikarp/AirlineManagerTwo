@@ -344,7 +344,7 @@ impl Game {
                 || t.passengers < 0
                 || t.seats < t.passengers
                 || !(0..=100_000).contains(&b.ticket_eur)
-                || t.passengers.checked_mul(b.ticket_eur) != Some(t.revenue)
+                || !t.valid_cabins(b.ticket_eur)
                 || [t.fuel, t.airport, t.crew, t.overhead]
                     .iter()
                     .any(|v| *v < 0)

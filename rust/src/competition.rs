@@ -132,8 +132,7 @@ impl Game {
             .flat_map(|g| {
                 g.routes.iter().filter_map(|r| {
                     let plane = g.fleet.iter().find(|p| Some(p.id) == r.aircraft_id)?;
-                    let model = crate::aircraft::model(&plane.model_id).ok()?;
-                    Some(crate::demand::Offer::new(r, model.seats))
+                    crate::cabins::offer(r, plane).ok()
                 })
             })
             .collect()
@@ -505,6 +504,10 @@ impl Competitor {
                 other_supply.remove(i);
             }
         }
+        self.game.review_cabins();
+        let mut updated_supply = other_supply.clone();
+        updated_supply.extend(self.game.market_routes());
+        let supply = updated_supply.as_slice();
         let maintenance = self.game.history.as_ref().map_or(0, |h| {
             (h.maintenance_through(self.game.clock.elapsed().as_secs())
                 + h.payroll_through(self.game.clock.elapsed().as_secs())
@@ -623,15 +626,15 @@ impl Competitor {
             for price in [old.saturating_sub(10).max(0), old, (old + 10).min(100_000)] {
                 let mut candidate = r.clone();
                 candidate.ticket_eur = price;
+                if plane.business_seats > 0 {
+                    candidate.business_ticket_eur = crate::cabins::premium_fare(price);
+                }
                 let mut offers = supply.to_vec();
                 // Replace precisely this offer, not an extra fictional service.
                 if let Some(index) = offers.iter().position(|o| &o.route == r) {
                     offers.remove(index);
                 }
-                offers.push(crate::demand::Offer::new(
-                    &candidate,
-                    crate::aircraft::model(&plane.model_id).unwrap().seats,
-                ));
+                offers.push(crate::cabins::offer(&candidate, plane).unwrap());
                 let Ok(t) = crate::economy::quote_at_price(
                     &candidate,
                     &plane.model_id,
@@ -646,7 +649,12 @@ impl Competitor {
                     best = (t.profit(), price);
                 }
             }
-            if self.game.set_ticket_price(id, best.1).is_err() {
+            let business_fare =
+                (plane.business_seats > 0).then(|| crate::cabins::premium_fare(best.1));
+            if self.game.set_ticket_price(id, best.1).is_err()
+                || business_fare
+                    .is_some_and(|fare| self.game.set_business_ticket_price(id, fare).is_err())
+            {
                 return false;
             }
             self.last_action = format!("Preisprüfung: {old} → {} EUR", best.1);
@@ -982,6 +990,7 @@ impl Competitor {
                     continue;
                 }
                 let r = Route {
+                    business_ticket_eur: crate::cabins::default_business_fare(),
                     id: g.next_route_id,
                     origin_icao: origin.into(),
                     destination_icao: airport.icao.clone(),
@@ -1028,8 +1037,16 @@ impl Competitor {
                             / 10.0)
                             .round() as i64;
                     }
+                    if r.parent_route_id.is_none() {
+                        r.business_ticket_eur = crate::cabins::premium_fare(r.ticket_eur);
+                    }
                     let mut market = offers.clone();
-                    market.push(crate::demand::Offer::new(&r, m.seats));
+                    market.push(
+                        match plane.and_then(|id| g.fleet.iter().find(|p| p.id == id)) {
+                            Some(p) => crate::cabins::offer(&r, p)?,
+                            None => crate::demand::Offer::new(&r, m.seats),
+                        },
+                    );
                     let t = crate::economy::quote_at_price(
                         &r,
                         model,
@@ -1124,6 +1141,8 @@ impl Competitor {
             self.game
                 .create_route(&route.origin_icao, &route.destination_icao, plane)?;
             self.game.set_ticket_price(route.id, route.ticket_eur)?;
+            self.game
+                .set_business_ticket_price(route.id, route.business_ticket_eur)?;
             self.game.schedule(route.id, 1, interval)?;
         }
         self.last_action = format!(
@@ -1183,11 +1202,11 @@ impl Competitor {
         for step in 3..=15 {
             let price = ((reference * f64::from(step) / 10.0).round() as i64).clamp(0, 100_000);
             candidate.ticket_eur = price;
+            if plane.business_seats > 0 {
+                candidate.business_ticket_eur = crate::cabins::premium_fare(price);
+            }
             let mut offers = supply.to_vec();
-            offers.push(crate::demand::Offer::new(
-                &candidate,
-                crate::aircraft::model(&model).unwrap().seats,
-            ));
+            offers.push(crate::cabins::offer(&candidate, plane).unwrap());
             let Ok(t) = crate::economy::quote_at_price(
                 &candidate,
                 &model,
@@ -1222,6 +1241,10 @@ impl Competitor {
         route.origin_icao = candidate.origin_icao;
         route.destination_icao = candidate.destination_icao;
         if self.game.set_ticket_price(id, price).is_err()
+            || self
+                .game
+                .set_business_ticket_price(id, crate::cabins::premium_fare(price))
+                .is_err()
             || self.game.schedule(id, 1, AI_INTERVAL_MINUTES).is_err()
         {
             return false;
@@ -1371,11 +1394,25 @@ mod tests {
         let mut g = game();
         let mut c = frequency_ai();
         c.game.add_route_aircraft(1, 2).unwrap();
-        c.game.set_ticket_price(1, 105).unwrap();
-        for r in &c.game.routes {
-            let q = crate::economy::quote_shared(r, "atr72_600", &c.game.market_routes()).unwrap();
-            assert!(q.profit() > 0 && q.load_percent() < FREQUENCY.load_factor_percent);
-        }
+        c.game.set_cabin_layout(1, 6).unwrap();
+        c.game.set_cabin_layout(2, 6).unwrap();
+        // Select a profitable but weak fare for the actual two-class capacity.
+        // A fixed all-economy fare no longer describes the same load factor.
+        let weak_price = (60..=200).find(|&price| {
+            c.game.set_ticket_price(1, price).unwrap();
+            c.game
+                .set_business_ticket_price(1, crate::cabins::premium_fare(price))
+                .unwrap();
+            c.game.routes.iter().all(|r| {
+                let q =
+                    crate::economy::quote_shared(r, "atr72_600", &c.game.market_routes()).unwrap();
+                q.profit() > 0 && q.load_percent() < FREQUENCY.load_factor_percent
+            })
+        });
+        assert!(
+            weak_price.is_some(),
+            "fixture needs profitable weak service"
+        );
         g.competitors = vec![c];
         assert!(g.advance(2.0 * REVIEW as f64 + 86400.0));
         assert_eq!(

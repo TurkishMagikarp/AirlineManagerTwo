@@ -5,6 +5,8 @@ use std::collections::HashSet;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Route {
+    #[serde(default = "crate::cabins::default_business_fare")]
+    pub business_ticket_eur: i64,
     pub id: u32,
     pub origin_icao: String,
     pub destination_icao: String,
@@ -97,6 +99,7 @@ impl Game {
             .checked_add(1)
             .ok_or_else(|| "Keine weitere Routenkennung verfügbar.".to_string())?;
         self.routes.push(Route {
+            business_ticket_eur: crate::cabins::default_business_fare(),
             id: self.next_route_id,
             origin_icao: origin.into(),
             destination_icao: destination.into(),
@@ -363,7 +366,9 @@ impl Game {
         }
         let mut ids = HashSet::new();
         for route in &self.routes {
-            if !(0..=100_000).contains(&route.ticket_eur) {
+            if !(0..=100_000).contains(&route.ticket_eur)
+                || !(0..=100_000).contains(&route.business_ticket_eur)
+            {
                 return Err("Ungültiger Ticketpreis im Spielstand.".into());
             }
             if route.id == 0 || route.id >= self.next_route_id || !ids.insert(route.id) {
@@ -404,6 +409,7 @@ impl Game {
                 if root.origin_icao != route.origin_icao
                     || root.destination_icao != route.destination_icao
                     || root.ticket_eur != route.ticket_eur
+                    || root.business_ticket_eur != route.business_ticket_eur
                     || route.id <= parent
                 {
                     return Err("Widersprüchliche Routengruppe.".into());
