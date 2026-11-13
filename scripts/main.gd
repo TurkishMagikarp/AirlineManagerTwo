@@ -193,6 +193,7 @@ func _save_game() -> void:
 func _load_game() -> void:
 	var error: String = simulation.load_game(save_path)
 	save_status.text = "Spielstand geladen." if error.is_empty() else error
+	save_status.add_theme_color_override("font_color", Color("b0becf"))
 	founding_status.text = save_status.text
 	save_status.tooltip_text = save_path
 	if error.is_empty():
@@ -213,7 +214,10 @@ func _process(delta: float) -> void:
 		return
 	if not simulation.advance(delta):
 		simulation.pause()
-		push_error("Rust konnte die Spielzeit nicht fortschreiben; Simulation pausiert.")
+		var message := "Simulation angehalten: Die Spielzeit konnte nicht fortgeschrieben werden (z. B. Zahlenüberlauf). Bitte letzten Spielstand laden."
+		push_error(message)
+		save_status.text = message
+		save_status.add_theme_color_override("font_color", UI.NEGATIVE)
 	_refresh_time()
 	var second := int(simulation.get_elapsed_seconds())
 	if current_page == 3:

@@ -237,8 +237,12 @@ zunächst im Wettbewerbsbereich der Routen sichtbar.
 Alle sieben Spieltage prüft jede KI drei Preise (bisheriger Preis und ±10 EUR)
 mit derselben Gewinnberechnung. Nach zwei aufeinanderfolgenden Verlustwochen
 wird der Flugplan beendet, sofern das Flugzeug geparkt ist; andernfalls wird dies
-bei der nächsten Prüfung erneut versucht. Keine automatische Erschließung neuer
-Strecken, Flottenvergrößerung oder Wiedereröffnung. Aktuell je KI nur eine Strecke;
+bei der nächsten Prüfung erneut versucht. Nach vier weiteren Wochenprüfungen ohne
+Flugbetrieb prüft die KI den gemeinsamen Markt erneut (Preise 30–150 % des
+Referenzpreises, gleiche Gewinnberechnung) und nimmt die Verbindung zum
+gewinnstärksten Preis wieder auf, sofern ein Gewinn je Flug erwartet wird; sonst
+wartet sie weitere vier Wochen. Das Flugzeug startet dort, wo es geparkt ist.
+Keine automatische Erschließung neuer Strecken oder Flottenvergrößerung. Aktuell je KI nur eine Strecke;
 die Verlustprüfung verwendet deshalb ihr gesamtes Betriebsergebnis.
 
 Vereinfachung: deterministischer Tagesdurchschnitt ohne Einzelbuchungen,
@@ -423,3 +427,7 @@ Preisentscheidungen/Stilllegung, unveränderte laufende Flüge, Altspielstand-Mi
 beschädigte KI-Daten, transaktionale Fehler sowie identische Ergebnisse bei
 großen/kleinen Schritten und 1×/4×/16×. Der Millionentest mit zwei Spielerrouten
 bleibt kompakt; tatsächliche KI-Marktänderungen erzeugen zusätzliche Archivblöcke.
+
+KI-Wiedereinstieg verifiziert: **62 Rust-Tests** (inkl. Wiederaufnahme nach
+Stilllegung und Warten bei unrentablem Markt), Clippy ohne Warnungen, alle
+Godot-Tests und alle fünf Prozess-Neustarttests.
