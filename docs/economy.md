@@ -100,7 +100,8 @@ Zeitgrenzen bleiben gültig. Persönliche Spielstände werden von Tests nicht be
 
 Zwei erste KI-Konkurrenten nutzen dieselben Kosten- und Nachfrageregeln wie der
 Spieler; Details: [README](../README.md#erste-ki-fluggesellschaften).
-Weiterhin keine Saisonalität, Wetter, formale Insolvenz oder Kosten für
+Saisonale Segmentnachfrage: [Nachfrage](demand.md#saisonale-nachfrage-365-tage-jahr).
+Weiterhin kein Wetter oder Kosten für
 geparkte Flugzeuge. Beide Richtungen sind symmetrisch; parallele Routen teilen
 jetzt den Tagesmarkt. Sehr billige Tickets können volle, aber verlustreiche Flüge
 ergeben. Noch keine harte Quote je Kalendertag und keine Umverteilung unverkaufter
@@ -210,3 +211,29 @@ Abflugsnapshot über einen Preissprung, Pause, 1×/4×/16×, Schrittgrößen und
 v15-Migration. Godot, START.bat, GUI/Screenshots und Windows-Neustarttests
 konnten auf diesem Server nicht ausgeführt werden; die Rust-Tests bestätigen
 keine visuelle Darstellung.
+
+## Saisonvergleich bei dauerhafter Fuel-Obergrenze
+
+`quality::sustained_high_fuel_keeps_viable_player_and_both_ai_alive`, fünf Jahre
+mit 120 Cent/kg, Spieler ATR FRA–MUC zu 90 EUR, gleiche Ausgangslage und beide KI.
+Baseline `c2c71e6` ohne Saison gegenüber saisonaler Segmentnachfrage und
+Jahresplanung. Kontostand am jeweiligen Jahresende in Mio. EUR:
+
+| Jahr | Spieler vorher / nachher | Regional Wings vorher / nachher | Continental Sky vorher / nachher |
+| --- | ---: | ---: | ---: |
+| 1 | 7,655 / 7,668 | 8,099 / 8,070 | 12,053 / 11,537 |
+| 2 | 7,777 / 7,803 | 9,086 / 9,032 | 22,194 / 21,128 |
+| 3 | 7,893 / 7,940 | 6,944 / 6,856 | 32,250 / 30,637 |
+| 4 | 8,194 / 8,215 | 8,161 / 8,131 | 42,426 / 40,277 |
+| 5 | 8,251 / 8,241 | 9,400 / 9,394 | 52,677 / 49,996 |
+
+Beide Läufe überleben ohne Finanznot an den jährlichen Prüfungen und speichern/
+laden jedes Jahr. Der saisonale Lauf prüft zusätzlich ungefähr monatlich:
+keine Finanznot/Restrukturierungsfrist und keine mehrmonatige Dienstaufgabe.
+Regional Wings plant im dritten Jahr kurz ohne aktiven Dienst neu; liquide,
+ohne Kredit oder Restrukturierung, anschließend wieder aktiv. Keine jährliche
+Winter-Stilllegung. Nach fünf Jahren verändert sich der Kontostand um −0,13 % /
+−0,06 % / −5,09 %. Normiertes Marktmittel verhindert keine Gewinneffekte durch
+Sitzlimits, Rundung, Konkurrenz oder andere Planungsentscheidungen.
+Dies ist ein deterministisches Qualitätsszenario, keine allgemeine Balancegarantie.
+Godot-/GUI- und Windows-Neustartprüfung bleiben offen; siehe [Nachfrage](demand.md).

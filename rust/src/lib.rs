@@ -21,6 +21,8 @@ mod rotation_tests;
 mod route_save;
 mod routes;
 mod save;
+#[cfg(test)]
+mod seasonal_tests;
 mod staff;
 #[cfg(test)]
 mod staff_tests;
@@ -656,10 +658,15 @@ impl SimulationClock {
                     .as_ref()
                     .map(|p| 43200.0 / p.interval_seconds as f64)
                     .unwrap_or(0.0);
-                let passengers = demand::estimate(r, model.seats, &supply)
-                    .map(|e| e.per_departure)
-                    .unwrap_or(0)
-                    .min(i64::from(model.seats)) as f64
+                let passengers = demand::estimate_at(
+                    r,
+                    model.seats,
+                    &supply,
+                    self.game.clock.elapsed().as_secs(),
+                )
+                .map(|e| e.per_departure)
+                .unwrap_or(0)
+                .min(i64::from(model.seats)) as f64
                     * frequency;
                 offers.push(Offer {
                     airline: airline.name.as_str(),
@@ -696,8 +703,9 @@ impl SimulationClock {
             .iter()
             .filter(|r| r.parent_route_id.is_none())
             .filter_map(|r| {
-                let market = demand::market(r, r.ticket_eur).ok()?;
-                let base = demand::market(r, 0).ok()?;
+                let season = demand::season_factors(now);
+                let market = demand::market_at(r, r.ticket_eur, now).ok()?;
+                let base = demand::market_at(r, 0, now).ok()?;
                 let services: Vec<_> = self.game.routes.iter().filter(|s| s.public_id() == r.id).collect();
                 let aircraft_ids: Array<u32> = services.iter().filter_map(|s| s.aircraft_id).collect();
                 let has_plan = services.iter().any(|s| s.plan.is_some());
@@ -706,7 +714,7 @@ impl SimulationClock {
                     if service.plan.is_none() { continue; }
                     if let Some(plane) = self.game.fleet.iter().find(|p| Some(p.id) == service.aircraft_id)
                         && let Ok(model) = aircraft::model(&plane.model_id)
-                        && let Ok(e) = demand::estimate(service, model.seats, &supply) {
+                        && let Ok(e) = demand::estimate_at(service, model.seats, &supply, now) {
                         estimate.daily_passengers += e.daily_passengers;
                         estimate.daily_spill += e.daily_spill;
                         estimate.per_departure += e.per_departure;
@@ -727,6 +735,8 @@ impl SimulationClock {
                     "destination_icao" => r.destination_icao.as_str(),
                     "distance_km" => routes::distance_km(&r.origin_icao, &r.destination_icao).unwrap_or(0.0),
                     "aircraft_id" => r.aircraft_id.unwrap_or(0), "aircraft_ids" => &aircraft_ids, "has_plan" => has_plan, "ticket_eur" => r.ticket_eur,
+                    "season_business_factor" => season.business,
+                    "season_leisure_factor" => season.leisure,
                     "daily_demand" => market.total().floor() as i64,
                     "base_daily_market" => base.total().floor() as i64,
                     "daily_business" => market.business.floor() as i64,

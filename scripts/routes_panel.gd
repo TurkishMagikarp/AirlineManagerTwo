@@ -11,6 +11,7 @@ var aircraft: OptionButton
 var preview: Label
 var create_button: Button
 var status: Label
+var season_label: Label
 var route_tree: Tree
 var empty_label: Label
 var assignment: OptionButton
@@ -66,6 +67,9 @@ func _ready() -> void:
 		route_tree.set_column_custom_minimum_width(i, [65, 140, 110, 170, 220, 100][i])
 	route_tree.item_selected.connect(_selection_changed)
 	add_child(route_tree)
+	season_label = _label("")
+	season_label.tooltip_text = "Skaliert den Basismarkt vor Preisreaktion und Sitzverteilung. 1,00 = Jahresmittel."
+	add_child(season_label)
 	assignment = _select("Ausgewählte Route: Flugzeugzuweisung")
 	var actions := HBoxContainer.new()
 	add_child(actions)
@@ -251,6 +255,10 @@ func refresh_operations() -> void:
 	var metrics: Dictionary = {}
 	for route in simulation.get_routes():
 		metrics[route["id"]] = route
+	season_label.visible = not metrics.is_empty()
+	if not metrics.is_empty():
+		var season: Dictionary = metrics.values()[0]
+		season_label.text = "Saisonfaktor · Geschäft %.2f × · Urlaub %.2f ×" % [season["season_business_factor"], season["season_leisure_factor"]]
 	var tree_root := route_tree.get_root()
 	if tree_root != null:
 		for row in tree_root.get_children():

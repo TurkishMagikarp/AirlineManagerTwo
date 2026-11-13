@@ -119,7 +119,9 @@ fn ten_years_of_daily_fare_changes_remain_saveable_and_lossless() {
     crate::save::save(&path, &g).unwrap();
     let bytes = std::fs::metadata(&path).unwrap().len();
     println!("CHURN save_bytes={bytes}");
-    assert!(bytes < 3 * 1024 * 1024);
+    // Seasonal departure quotes add legitimate archive changes. Keep at least
+    // 3 MiB headroom below the unchanged 8 MiB production save limit.
+    assert!(bytes < 5 * 1024 * 1024);
     let mut loaded = crate::save::load(&path).unwrap();
     assert_eq!(
         serde_json::to_value(&g).unwrap(),
@@ -249,9 +251,36 @@ fn sustained_high_fuel_keeps_viable_player_and_both_ai_alive() {
     let mut g = scenario(Some(90));
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("high-fuel.json");
+    let mut inactive_samples = [0; 2];
     for year in 1..=5 {
         assert_eq!(g.fuel_market.price_at(g.clock.elapsed().as_secs()), 120);
-        assert!(g.advance(365.0 * 86400.0));
+        for days in [30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 35] {
+            assert!(g.advance(f64::from(days) * 86400.0));
+            assert!(!g.insolvent() && !g.distressed(), "player year={year}");
+            assert_eq!(g.competitors.len(), 2);
+            assert!(
+                g.competitors.iter().all(|c| !c.game.insolvent()
+                    && !c.game.distressed()
+                    && c.game.resolution.deadline.is_none()
+                    && c.game.fleet.len() <= 6),
+                "seasonal distress spiral year={year}"
+            );
+            for (i, c) in g.competitors.iter().enumerate() {
+                let operating = c.game.routes.iter().any(|r| r.plan.is_some())
+                    || c.game.fleet.iter().any(|p| p.maintenance.is_some());
+                inactive_samples[i] = if operating {
+                    0
+                } else {
+                    inactive_samples[i] + 1
+                };
+                // A review can rebalance a market and retry after four weeks.
+                // Permit one idle sample, never a multi-month service collapse.
+                assert!(
+                    inactive_samples[i] <= 1,
+                    "prolonged inactivity year={year} ai={i}"
+                );
+            }
+        }
         assert!(!g.insolvent() && !g.distressed(), "player year={year}");
         assert_eq!(g.competitors.len(), 2);
         assert!(

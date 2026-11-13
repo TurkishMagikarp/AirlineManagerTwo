@@ -1,4 +1,4 @@
-//! Stationary daily O&D market. No backlog, aircraft-size dependence or per-flight spawning.
+//! Seasonal daily O&D market. No backlog, aircraft-size dependence or per-flight spawning.
 use crate::{airports, routes::Route};
 use serde::Deserialize;
 use std::sync::LazyLock;
@@ -10,6 +10,8 @@ struct Config {
     distance_decay_km: f64,
     business_price_limit: f64,
     leisure_price_limit: f64,
+    business_monthly: [f64; 12],
+    leisure_monthly: [f64; 12],
 }
 static CONFIG: LazyLock<Config> = LazyLock::new(|| {
     let c: Config =
@@ -23,8 +25,34 @@ static CONFIG: LazyLock<Config> = LazyLock::new(|| {
     ] {
         assert!(n.is_finite() && n > 0.0 && n <= 100_000.0);
     }
+    for curve in [&c.business_monthly, &c.leisure_monthly] {
+        assert!(
+            curve
+                .iter()
+                .all(|v| v.is_finite() && *v > 0.0 && *v <= 10.0)
+        );
+    }
     c
 });
+
+pub const YEAR_SECONDS: u64 = 365 * 86400;
+
+/// Twelve equally spaced knots, starting on simulation day 1 (January).
+/// Cosine interpolation is continuous with zero slope at every knot, including
+/// year wrap. Normalization makes the continuous annual mean exactly one.
+fn curve_at(curve: &[f64; 12], time: u64) -> f64 {
+    let month = (time % YEAR_SECONDS) as f64 * 12.0 / YEAR_SECONDS as f64;
+    let i = month.floor() as usize;
+    let blend = (1.0 - ((month - i as f64) * std::f64::consts::PI).cos()) / 2.0;
+    (curve[i] * (1.0 - blend) + curve[(i + 1) % 12] * blend) / (curve.iter().sum::<f64>() / 12.0)
+}
+
+pub fn season_factors(time: u64) -> Market {
+    Market {
+        business: curve_at(&CONFIG.business_monthly, time),
+        leisure: curve_at(&CONFIG.leisure_monthly, time),
+    }
+}
 
 pub struct Market {
     pub business: f64,
@@ -36,7 +64,16 @@ impl Market {
     }
 }
 
+/// Annual demand used for strategic planning, with the same market formula.
 pub fn market(route: &Route, price: i64) -> Result<Market, String> {
+    market_with_season(route, price, None)
+}
+
+pub fn market_at(route: &Route, price: i64, time: u64) -> Result<Market, String> {
+    market_with_season(route, price, Some(time))
+}
+
+fn market_with_season(route: &Route, price: i64, time: Option<u64>) -> Result<Market, String> {
     let airports = &airports::catalog()?.airports;
     let a = airports
         .iter()
@@ -55,9 +92,13 @@ pub fn market(route: &Route, price: i64) -> Result<Market, String> {
     let share = f64::from(a.business_percent + b.business_percent) / 200.0;
     let reference = crate::economy::reference_price(km);
     let willingness = |limit: f64| (1.0 - price as f64 / (reference * limit)).clamp(0.0, 1.0);
+    let season = time.map(season_factors).unwrap_or(Market {
+        business: 1.0,
+        leisure: 1.0,
+    });
     Ok(Market {
-        business: base * share * willingness(c.business_price_limit),
-        leisure: base * (1.0 - share) * willingness(c.leisure_price_limit),
+        business: season.business * base * share * willingness(c.business_price_limit),
+        leisure: season.leisure * base * (1.0 - share) * willingness(c.leisure_price_limit),
     })
 }
 
@@ -102,6 +143,24 @@ fn same_offer(a: &Route, b: &Route) -> bool {
 /// Daily rates per direction. Redistribute only seat spill, preserving the outside
 /// option and each segment's willingness ceiling. No booking state or randomness.
 pub fn estimate(route: &Route, seats: u32, routes: &[Offer]) -> Result<Estimate, String> {
+    estimate_with_season(route, seats, routes, None)
+}
+
+pub fn estimate_at(
+    route: &Route,
+    seats: u32,
+    routes: &[Offer],
+    time: u64,
+) -> Result<Estimate, String> {
+    estimate_with_season(route, seats, routes, Some(time))
+}
+
+fn estimate_with_season(
+    route: &Route,
+    seats: u32,
+    routes: &[Offer],
+    time: Option<u64>,
+) -> Result<Estimate, String> {
     let mut matching: Vec<_> = routes
         .iter()
         .filter(|o| o.route.plan.is_some() && same_market(route, &o.route))
@@ -131,7 +190,11 @@ pub fn estimate(route: &Route, seats: u32, routes: &[Offer]) -> Result<Estimate,
         .iter()
         .position(|o| o.seats == seats && same_offer(route, &o.route))
         .unwrap();
-    let base = market(route, 0)?;
+    let at = |route: &Route, price| match time {
+        Some(time) => market_at(route, price, time),
+        None => market(route, price),
+    };
+    let base = at(route, 0)?;
     let mut weights = vec![[0.0; 2]; matching.len()];
     let mut limits = weights.clone();
     let mut frequency_sum = [0.0_f64; 2];
@@ -140,7 +203,7 @@ pub fn estimate(route: &Route, seats: u32, routes: &[Offer]) -> Result<Estimate,
     for (j, o) in matching.iter().enumerate() {
         let f = frequency(&o.route);
         capacities.push(f * f64::from(o.seats));
-        let m = market(&o.route, o.route.ticket_eur)?;
+        let m = at(&o.route, o.route.ticket_eur)?;
         for (i, (n, b)) in [(m.business, base.business), (m.leisure, base.leisure)]
             .into_iter()
             .enumerate()
