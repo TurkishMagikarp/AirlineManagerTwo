@@ -107,9 +107,16 @@ func _run() -> void:
 		await _click(main.save_button)
 		if not _check(main.save_status.text == "Spielstand gespeichert.", "Save restart fixture via UI"):
 			return
+		if mode.ends_with("v17") or mode.ends_with("v16"):
+			var version := 16 if mode.ends_with("v16") else 17
+			var contents := FileAccess.get_file_as_string(path).replace('"version":18', '"version":%d' % version)
+			var service := RegEx.create_from_string('"service_level":"[a-z]+",|,"service_level":"[a-z]+"|"service":-?\\d+,|,"service":-?\\d+')
+			var file := FileAccess.open(path, FileAccess.WRITE)
+			file.store_string(service.sub(contents, "", true))
+			file.close()
 		if mode.ends_with("v16"):
 			# Strip only new integer fields; do not round u64 seeds through JSON floats.
-			var contents := FileAccess.get_file_as_string(path).replace('"version":17', '"version":16')
+			var contents := FileAccess.get_file_as_string(path)
 			var fields := RegEx.new()
 			fields.compile('"business_(seats|ticket_eur|passengers|revenue)":\\d+,|,"business_(seats|ticket_eur|passengers|revenue)":\\d+')
 			contents = fields.sub(contents, "", true)
