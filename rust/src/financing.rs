@@ -152,6 +152,7 @@ impl Game {
             .next_maintenance_event()
             .into_iter()
             .chain(self.next_payroll_event())
+            .chain(self.next_lease_event())
             .min()
             .unwrap_or(u64::MAX);
         if self.financing.debt > 0 {
@@ -213,6 +214,7 @@ impl Game {
     }
 
     pub fn apply_financing(&mut self) -> Result<(), String> {
+        self.apply_leases()?;
         let now = self.clock.elapsed().as_secs();
         if self.financing.debt > 0 && self.financing.next_due <= now {
             let interest = self.loan_interest();

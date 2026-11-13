@@ -8,7 +8,7 @@ use std::io::{Read, Write};
 use std::path::Path;
 use std::time::Duration;
 
-const VERSION: u32 = 12;
+const VERSION: u32 = 13;
 // Bounded input, but allow multi-year archives with frequent legitimate changes.
 const MAX_BYTES: u64 = 8 * 1024 * 1024;
 
@@ -220,6 +220,20 @@ pub fn load(path: &Path) -> Result<Game, String> {
             Default::default()
         },
     };
+    if data.version < 13 {
+        // Aircraft predating acquisition tracking are treated as acquired at founding.
+        // Do not invent leases, payments or sale income during migration.
+        for p in &mut game.fleet {
+            p.acquired_at = Some(0);
+            p.lease = None;
+        }
+        for c in &mut game.competitors {
+            for p in &mut c.game.fleet {
+                p.acquired_at = Some(0);
+                p.lease = None;
+            }
+        }
+    }
     game.validate_fleet()?;
     game.validate_routes()?;
     if data.version < 5 && game.routes.iter().any(|r| r.plan.is_some()) {

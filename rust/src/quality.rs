@@ -28,10 +28,9 @@ fn ten_year_scenarios_reconcile_and_survive_annual_restart() {
             for _ in 0..365 {
                 assert!(daily.advance(86400.0));
             }
-            assert_eq!(
-                serde_json::to_value(&fast).unwrap(),
-                serde_json::to_value(&daily).unwrap()
-            );
+            let a = serde_json::to_value(&fast).unwrap();
+            let b = serde_json::to_value(&daily).unwrap();
+            assert_eq!(first_diff(&a, &b, ""), None, "year={year} price={price:?}");
             fast.validate_history().unwrap();
             fast.validate_competitors().unwrap();
             let path = dir.path().join("annual.json");
@@ -175,4 +174,28 @@ fn subsecond_frames_match_single_step_at_every_speed() {
             serde_json::to_value(&single).unwrap()
         );
     }
+}
+
+fn first_diff(a: &serde_json::Value, b: &serde_json::Value, path: &str) -> Option<String> {
+    if a == b {
+        return None;
+    }
+    match (a, b) {
+        (serde_json::Value::Object(a), serde_json::Value::Object(b)) => {
+            for (k, v) in a {
+                if let Some(d) = first_diff(v, &b[k], &format!("{path}/{k}")) {
+                    return Some(d);
+                }
+            }
+        }
+        (serde_json::Value::Array(a), serde_json::Value::Array(b)) if a.len() == b.len() => {
+            for (i, (a, b)) in a.iter().zip(b).enumerate() {
+                if let Some(d) = first_diff(a, b, &format!("{path}/{i}")) {
+                    return Some(d);
+                }
+            }
+        }
+        _ => {}
+    }
+    Some(format!("{path}: {a} vs {b}"))
 }

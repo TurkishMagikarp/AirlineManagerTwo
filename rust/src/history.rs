@@ -56,6 +56,8 @@ pub struct History {
     pub prior_totals: Totals,
     pub batches: Vec<Batch>,
     pub purchases: Vec<Purchase>,
+    #[serde(default)]
+    pub aircraft_cash: Vec<crate::trading::Entry>,
     /// Additive (version 10): maintenance checks, debited at their start.
     #[serde(default)]
     pub maintenance: Vec<Purchase>,
@@ -73,6 +75,7 @@ impl History {
             prior_totals: Totals::default(),
             batches: Vec::new(),
             purchases: Vec::new(),
+            aircraft_cash: Vec::new(),
             maintenance: Vec::new(),
             payroll: Vec::new(),
             financing: Vec::new(),
@@ -104,6 +107,9 @@ impl History {
             }
         }
         self.batches.push(batch);
+        // Different frame sizes can discover simultaneous route batches in a
+        // different order. Store them by first landing for identical saves.
+        self.batches.sort_by_key(|b| (b.first, b.route_id));
     }
     pub fn totals(&self, route: u32, through: u64) -> Totals {
         let mut t = Totals::default();
@@ -136,9 +142,24 @@ impl History {
                 .filter(|e| e.time <= time)
                 .map(|e| i128::from(e.cash))
                 .sum::<i128>()
+            + self.aircraft_cash_through(time)
             - purchases
             - self.maintenance_through(time)
             - self.payroll_through(time)
+    }
+    pub fn aircraft_cash_through(&self, time: u64) -> i128 {
+        self.aircraft_cash
+            .iter()
+            .filter(|e| e.time <= time)
+            .map(|e| i128::from(e.cash))
+            .sum()
+    }
+    pub fn rent_through(&self, time: u64) -> i128 {
+        self.aircraft_cash
+            .iter()
+            .filter(|e| e.time <= time && e.kind == crate::trading::Kind::Rent)
+            .map(|e| -i128::from(e.cash))
+            .sum()
     }
     /// Salaries paid up to and including `time`.
     pub fn payroll_through(&self, time: u64) -> i128 {
@@ -279,6 +300,33 @@ mod tests {
         g.clock.set_running(true);
         g
     }
+    #[test]
+    fn interleaved_route_batches_have_canonical_order_and_still_merge() {
+        let batch = |route_id, first, count| Batch {
+            route_id,
+            first,
+            count,
+            interval: 60,
+            origin: "EDDF".into(),
+            destination: "EDDM".into(),
+            ticket_eur: 0,
+            totals: Totals::default(),
+        };
+        let mut large = History::new(0, 0);
+        large.record(batch(1, 120, 2));
+        large.record(batch(2, 100, 2));
+        let mut small = History::new(0, 0);
+        small.record(batch(2, 100, 1));
+        small.record(batch(1, 120, 1));
+        for (route, first) in [(1, 180), (2, 160)] {
+            let mut next = batch(route, first, 1);
+            std::mem::swap(&mut next.origin, &mut next.destination);
+            small.record(next);
+        }
+        assert_eq!(large, small);
+        assert_eq!(large.batches.len(), 2);
+    }
+
     #[test]
     fn million_flights_are_lossless_compact_and_random_access() {
         let mut g = game();
