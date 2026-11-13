@@ -103,6 +103,7 @@ pub fn initial_competitors_at(now: Duration) -> Result<Vec<Competitor>, String> 
             airline: Some(airline),
             ..Game::default()
         };
+        g.tax.since = now.as_secs();
         g.buy_aircraft(model)?;
         g.equip_staff_for(model)?;
         g.create_route(origin, destination, 1)?;
@@ -169,6 +170,7 @@ impl Game {
             g.validate_maintenance()?;
             g.validate_staff()?;
             g.validate_financing()?;
+            g.validate_tax()?;
             g.validate_finance()?;
             g.validate_history()?;
             let mut reviewed = std::collections::HashSet::new();
@@ -209,6 +211,9 @@ impl Game {
             return true;
         }
         if self.competitors.is_empty()
+            && self
+                .next_tax_event()
+                .is_none_or(|t| Duration::from_secs(t) > target.elapsed())
             && self
                 .next_financing_event()
                 .is_none_or(|t| Duration::from_secs(t) > target.elapsed())
@@ -270,12 +275,14 @@ impl Game {
                 .chain(std::iter::once(staged.next_rotation_event()))
                 .chain(std::iter::once(staged.next_payroll_event()))
                 .chain(std::iter::once(staged.next_financing_event()))
+                .chain(std::iter::once(staged.next_tax_event()))
                 .chain(staged.competitors.iter().flat_map(|c| {
                     [
                         c.game.next_maintenance_event(),
                         c.game.next_rotation_event(),
                         c.game.next_payroll_event(),
                         c.game.next_financing_event(),
+                        c.game.next_tax_event(),
                     ]
                 }))
                 .flatten()

@@ -26,6 +26,8 @@ pub struct Game {
     #[serde(default)]
     pub financing: crate::financing::Financing,
     #[serde(default)]
+    pub tax: crate::tax::Tax,
+    #[serde(default)]
     pub resolution: crate::financing::Resolution,
 }
 
@@ -44,6 +46,7 @@ impl Default for Game {
             competitors: Vec::new(),
             staff: crate::staff::Staff::default(),
             financing: Default::default(),
+            tax: Default::default(),
             resolution: Default::default(),
         }
     }

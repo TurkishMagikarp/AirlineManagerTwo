@@ -70,12 +70,16 @@ func _run() -> void:
 	var series: Array = sim.get_finance_series(0)
 	if not _check(series.size() <= 64 and series[-1]["balance"] == sim.get_airline_info()["capital_eur"], "Bounded series reconciles to account"):
 		return
+	var tax := 0
 	var revenue := 0
 	var costs := 0
 	for sample in series:
 		revenue += sample["revenue"]
 		costs += sample["costs"]
+		tax += sample["tax"]
 	if not _check(revenue == sim.get_financial_summary()["revenue_eur"] and costs == sim.get_financial_summary()["costs_eur"], "Chart periods reconcile to real totals"):
+		return
+	if not _check(tax == sim.get_financial_summary()["tax_eur"] and not sim.get_tax_history().is_empty(), "Annual tax archive reconciles to chart"):
 		return
 	var started := Time.get_ticks_usec()
 	for i in range(100):
@@ -85,6 +89,8 @@ func _run() -> void:
 	main.navigation[4].pressed.emit()
 	var panel = main.finances_panel
 	panel.set_process(false)
+	if not _check(panel.note.text.contains("Ertragsteuer") and panel.tax_history.get_root().get_child_count() == sim.get_tax_history().size(), "Tax line and annual assessments render from Rust"):
+		return
 	panel.route_tree.get_root().get_first_child().select(0)
 	panel._select_route()
 	if not _check(panel.is_visible_in_tree() and panel.flight_count == count and panel.flights_tree.get_root().get_child_count() == 50, "Clicked route renders only 50 flights"):

@@ -186,6 +186,10 @@ fn service_v17_migration_preserves_neutral_money_history_and_airborne_quotes() {
     v["version"] = 17.into();
     std::fs::write(&path, serde_json::to_vec(&v).unwrap()).unwrap();
     let loaded = save::load(&path).unwrap();
+    g.migrate_tax().unwrap();
+    for c in &mut g.competitors {
+        c.game.migrate_tax().unwrap();
+    }
     assert_eq!(state(&loaded), state(&g));
     let mut advanced = loaded;
     assert!(advanced.advance(86400.0));

@@ -29,6 +29,7 @@ var loan_reschedule: Button
 var loan_repay: Button
 var loan_result: Label
 var aircraft_journal: Tree
+var tax_history: Tree
 
 func _ready() -> void:
 	add_theme_constant_override("separation", 12)
@@ -42,6 +43,9 @@ func _ready() -> void:
 	note = UI.label("", 13, UI.MUTED)
 	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	add_child(note)
+	var taxes := UI.panel(self, "ERTRAGSTEUER / JAHRESABSCHLÜSSE")
+	tax_history = UI.table(["Jahr", "Vorsteuerergebnis", "Steuersatz", "Steuer", "Verlustvortrag"], [65, 160, 100, 140, 160], 140)
+	taxes.add_child(tax_history)
 	var loans := UI.panel(self, "KREDITE / LIQUIDITÄT")
 	loan_status = UI.label("")
 	loan_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -81,7 +85,7 @@ func _ready() -> void:
 	aircraft.add_child(aircraft_journal)
 	var company := UI.panel(self, "WIRTSCHAFTLICHE ENTWICKLUNG")
 	chart_select = OptionButton.new()
-	for title in ["Kontostand · EUR", "Ticketeinnahmen · EUR je Zeitabschnitt", "Kosten inkl. Zinsen, Gebühren und Leasing · EUR je Zeitabschnitt", "Ergebnis · EUR je Zeitabschnitt"]:
+	for title in ["Kontostand · EUR", "Ticketeinnahmen · EUR je Zeitabschnitt", "Kosten inkl. Zinsen, Gebühren, Leasing und Steuern · EUR je Zeitabschnitt", "Ergebnis · EUR je Zeitabschnitt", "Ertragsteuer · EUR je Zeitabschnitt"]:
 		chart_select.add_item(title)
 	chart_select.item_selected.connect(func(_i: int): _chart())
 	company.add_child(chart_select)
@@ -151,6 +155,14 @@ func refresh(force: bool = false) -> void:
 	note.text += "\nTreibstoff weltweit: %.2f EUR/kg · %s%d Cent/kg gegenüber vor 30 Tagen (wöchentlich)." % [summary["fuel_cents_per_kg"] / 100.0, "↑ +" if summary["fuel_month_delta_cents"] > 0 else ("↓ " if summary["fuel_month_delta_cents"] < 0 else "→ "), summary["fuel_month_delta_cents"]]
 	note.text += "\nLeasingraten (in Kosten enthalten): %s · Flugzeugjournal netto inkl. Verkäufen, Kautionen, Raten und Rückgaben: %s." % [UI.money(summary["rent_eur"]), UI.money(summary["aircraft_cash_eur"])]
 	note.text += "\nBordservice (Kosten / Ersparnis gegenüber Standard, in Gesamtkosten enthalten): %s." % UI.money(summary["service_eur"])
+	note.text += "\nErtragsteuer · letzter Abschluss Jahr %d: %s · Verlustvortrag: %s · Heimatsteuersatz: %.2f %% · Steuern insgesamt: %s. Abschluss alle 365 Tage; Jahr 0 = noch kein Abschluss." % [summary["tax_year"], UI.money(summary["tax_year_eur"]), UI.money(summary["tax_loss_eur"]), summary["tax_rate_bps"] / 100.0, UI.money(summary["tax_eur"])]
+	tax_history.clear()
+	var tax_root := tax_history.create_item()
+	for assessment in simulation.get_tax_history():
+		var tax_row := tax_history.create_item(tax_root)
+		var tax_values := [str(assessment["year"]), UI.money(assessment["profit_eur"]), "%.2f %%" % (assessment["rate_bps"] / 100.0), UI.money(assessment["tax_eur"]), UI.money(assessment["loss_eur"])]
+		for column in range(tax_values.size()):
+			tax_row.set_text(column, tax_values[column])
 	aircraft_journal.clear()
 	var journal_root := aircraft_journal.create_item()
 	for entry in simulation.get_aircraft_cash_history():
@@ -186,7 +198,7 @@ func refresh(force: bool = false) -> void:
 		_reset_flights()
 
 func _chart() -> void:
-	chart.set_series(company_series, ["balance", "revenue", "costs", "profit"][chart_select.selected])
+	chart.set_series(company_series, ["balance", "revenue", "costs", "profit", "tax"][chart_select.selected])
 
 func _loan_action(borrowing: bool) -> void:
 	var error: String = simulation.borrow_money(int(loan_amount.value)) if borrowing else simulation.repay_loan(int(loan_amount.value))

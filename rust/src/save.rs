@@ -8,7 +8,7 @@ use std::io::{Read, Write};
 use std::path::Path;
 use std::time::Duration;
 
-const VERSION: u32 = 18;
+const VERSION: u32 = 19;
 // Bounded input, including centuries of fuel/seasonal quotes for the player
 // and both AI airlines in the million-flight finance restart scenario.
 // Version 17 retains per-class quotes, which also split more archive batches.
@@ -39,6 +39,8 @@ struct GameState {
     financing: Option<crate::financing::Financing>,
     #[serde(default)]
     resolution: Option<crate::financing::Resolution>,
+    #[serde(default)]
+    tax: Option<crate::tax::Tax>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -77,6 +79,7 @@ pub fn save(path: &Path, game: &Game) -> Result<(), String> {
     game.validate_financing()?;
     game.validate_finance()?;
     game.validate_history()?;
+    game.validate_tax()?;
     game.validate_competitors()?;
     let clock = &game.clock;
     let data = SaveGame {
@@ -88,6 +91,7 @@ pub fn save(path: &Path, game: &Game) -> Result<(), String> {
             staff: Some(game.staff.clone()),
             financing: Some(game.financing.clone()),
             resolution: Some(game.resolution.clone()),
+            tax: Some(game.tax.clone()),
             finance: Some(game.finance.clone()),
             airline: game.airline.clone(),
             routes: Some(SavedRoutes {
@@ -221,6 +225,11 @@ pub fn load(path: &Path) -> Result<Game, String> {
         return Err("Ungültiger Treibstoffmarkt.".into());
     }
     let mut game = Game {
+        tax: if data.version >= 19 {
+            data.state.tax.ok_or("Steuerdaten fehlen.")?
+        } else {
+            Default::default()
+        },
         fuel_market,
         competitors: if data.version >= 9 {
             data.state
@@ -326,11 +335,18 @@ pub fn load(path: &Path) -> Result<Game, String> {
             c.game.grandfather_staff()?;
         }
     }
+    if data.version < 19 {
+        game.migrate_tax()?;
+        for c in &mut game.competitors {
+            c.game.migrate_tax()?;
+        }
+    }
     game.validate_maintenance()?;
     game.validate_staff()?;
     game.validate_financing()?;
     game.validate_finance()?;
     game.validate_history()?;
+    game.validate_tax()?;
     game.validate_competitors()?;
     if data.version < 9 && game.airline.is_some() {
         game.competitors = crate::competition::initial_competitors_at(game.clock.elapsed())?;

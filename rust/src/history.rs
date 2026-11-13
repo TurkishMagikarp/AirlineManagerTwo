@@ -69,6 +69,8 @@ pub struct History {
     pub payroll: Vec<Purchase>,
     #[serde(default)]
     pub financing: Vec<crate::financing::Entry>,
+    #[serde(default)]
+    pub taxes: Vec<crate::tax::Assessment>,
     #[serde(skip)]
     settled: SettledCache,
 }
@@ -112,6 +114,7 @@ impl History {
             maintenance: Vec::new(),
             payroll: Vec::new(),
             financing: Vec::new(),
+            taxes: Vec::new(),
             settled: SettledCache::default(),
         }
     }
@@ -220,6 +223,7 @@ impl History {
             - purchases
             - self.maintenance_through(time)
             - self.payroll_through(time)
+            - self.tax_through(time)
     }
     pub fn aircraft_cash_through(&self, time: u64) -> i128 {
         self.aircraft_cash
