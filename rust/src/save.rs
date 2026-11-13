@@ -11,7 +11,8 @@ use std::time::Duration;
 const VERSION: u32 = 17;
 // Bounded input, including centuries of fuel/seasonal quotes for the player
 // and both AI airlines in the million-flight finance restart scenario.
-const MAX_BYTES: u64 = 64 * 1024 * 1024;
+// Version 17 retains per-class quotes, which also split more archive batches.
+const MAX_BYTES: u64 = 128 * 1024 * 1024;
 
 #[derive(Serialize, Deserialize)]
 struct SaveGame {

@@ -569,25 +569,25 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 
 ## rust/src/save.rs
 11 const VERSION: u32 = 17;
-14 const MAX_BYTES: u64 = 64 * 1024 * 1024;
-17 struct SaveGame
-24 struct GameState
-44 struct SavedRoutes
-51 struct SavedFleet
-57 struct SavedClock
-64 pub fn save(path: &Path, game: &Game) -> Result<(), String>
-133 pub fn load(path: &Path) -> Result<Game, String>
-346 mod tests
-350 fn routes_roundtrip_migration_and_rejecting_corrupt_assignments()
-417 fn exact_roundtrip_and_overwrite_for_all_clock_states()
-442 fn rejects_missing_corrupt_truncated_invalid_and_future_saves()
-472 fn rejects_oversized_saves_and_write_errors()
-483 fn migrates_clock_only_v1_without_fabricating_a_company()
-497 fn rejects_invalid_company_data()
-517 fn fleet_and_balance_roundtrip_and_identifiers_continue_after_load()
-543 fn v2_company_migrates_without_buying_aircraft_or_changing_balance()
-561 fn rejects_corrupt_fleet_instead_of_silently_losing_aircraft()
-603 fn oversized_archive_cannot_overwrite_a_loadable_save()
+15 const MAX_BYTES: u64 = 128 * 1024 * 1024;
+18 struct SaveGame
+25 struct GameState
+45 struct SavedRoutes
+52 struct SavedFleet
+58 struct SavedClock
+65 pub fn save(path: &Path, game: &Game) -> Result<(), String>
+134 pub fn load(path: &Path) -> Result<Game, String>
+347 mod tests
+351 fn routes_roundtrip_migration_and_rejecting_corrupt_assignments()
+418 fn exact_roundtrip_and_overwrite_for_all_clock_states()
+443 fn rejects_missing_corrupt_truncated_invalid_and_future_saves()
+473 fn rejects_oversized_saves_and_write_errors()
+484 fn migrates_clock_only_v1_without_fabricating_a_company()
+498 fn rejects_invalid_company_data()
+518 fn fleet_and_balance_roundtrip_and_identifiers_continue_after_load()
+544 fn v2_company_migrates_without_buying_aircraft_or_changing_balance()
+562 fn rejects_corrupt_fleet_instead_of_silently_losing_aircraft()
+604 fn oversized_archive_cannot_overwrite_a_loadable_save()
 
 ## rust/src/seasonal_tests.rs
 3 const DAY: u64 = 86400;

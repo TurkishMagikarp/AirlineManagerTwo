@@ -256,3 +256,6 @@ Business-Kabine (20 % der Fläche) am Boden über dieselbe kostenpflichtige API;
 bei Geldmangel/Wartung/Flug wird der Umbau übersprungen. Bestehende Preis- und
 Wirtschaftlichkeitsprüfungen nutzen die tatsächliche Kabinenkapazität; die KI
 setzt den Business-Preis auf den konfigurierten Aufschlag zum Economy-Preis.
+
+Nullwerte der Business-Summen werden im Archiv ausgelassen; das begrenzte
+Save-/Ladelimit beträgt wegen zusätzlicher Klassendetails jetzt 128 MiB.
