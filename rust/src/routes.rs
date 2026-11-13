@@ -108,12 +108,15 @@ impl Game {
                 Some(route_id),
             )?;
         }
+        self.route_mut(route_id)?.aircraft_id = aircraft_id;
+        Ok(())
+    }
+
+    pub fn route_mut(&mut self, id: u32) -> Result<&mut Route, String> {
         self.routes
             .iter_mut()
-            .find(|r| r.id == route_id)
-            .unwrap()
-            .aircraft_id = aircraft_id;
-        Ok(())
+            .find(|r| r.id == id)
+            .ok_or_else(|| "Unbekannte Route.".to_string())
     }
 
     pub fn delete_route(&mut self, route_id: u32) -> Result<(), String> {

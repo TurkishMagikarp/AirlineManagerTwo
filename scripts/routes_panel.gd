@@ -260,11 +260,12 @@ func refresh_operations() -> void:
 	_refresh_competition()
 	results_tree.clear()
 	var root_item := results_tree.create_item()
-	if simulation.get_flight_results().is_empty():
+	var results: Array = simulation.get_flight_results()
+	if results.is_empty():
 		var empty := results_tree.create_item(root_item)
 		empty.set_text(0, "Noch keine Landungen")
 		empty.set_selectable(0, false)
-	for result in simulation.get_flight_results():
+	for result in results:
 		var row := results_tree.create_item(root_item)
 		var values := ["%s / #%d" % [result["landing"], result["route_id"]], "%s → %s" % [result["origin"], result["destination"]], "%d/%d · %.1f %%" % [result["passengers"], result["seats"], result["load_percent"]], UI.money(result["revenue_eur"]), UI.money(result["costs_eur"]), UI.money(result["profit_eur"])]
 		for i in range(values.size()):
@@ -319,7 +320,7 @@ func _refresh_competition() -> void:
 			live_route = current
 	var lines: PackedStringArray = ["%s ↔ %s · Schätzung pro Tag und Richtung\nGemeinsamer Basismarkt: ca. %d Pax/Tag vor Preisreaktion" % [route["origin_icao"], route["destination_icao"], live_route["base_daily_market"]]]
 	for offer in simulation.get_route_competition(route["id"]):
-		lines.append("%s · %s · %d Sitze · %d EUR\n%.1f Abflüge/Tag → ca. %.0f Pax/Tag · %.1f %% der beförderten Pax%s\n%s" % [offer["airline"], offer["model"], offer["seats"], offer["ticket_eur"], offer["departures_per_day"], offer["passengers_per_day"], offer["share_percent"], "" if offer["active"] else " · inaktiv", offer["last_action"]])
+		lines.append("%s · %s · %d Sitze · %d EUR\n%.1f Abflüge/Tag je Richtung → ca. %.0f Pax/Tag · %.1f %% der beförderten Pax%s\n%s" % [offer["airline"], offer["model"], offer["seats"], offer["ticket_eur"], offer["departures_per_day_per_direction"], offer["passengers_per_day"], offer["share_percent"], "" if offer["active"] else " · inaktiv", offer["last_action"]])
 	lines.append("Ein Markt für alle Airlines. Preis und Frequenz verteilen Nachfrage; Sitze begrenzen Buchungen. Nicht bediente Nachfrage verfällt. Schätzung, keine garantierten Buchungen. KI prüft wöchentlich Preise und Verluste.")
 	competition_label.text = "\n\n".join(lines)
 

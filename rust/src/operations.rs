@@ -27,10 +27,11 @@ pub fn departure_quote(
     if !index.is_multiple_of(2) {
         std::mem::swap(&mut directed.origin_icao, &mut directed.destination_icao);
     }
+    let (flight, _) = timings(route, model)?;
     let landing = index
         .checked_mul(plan.interval_seconds)
         .and_then(|t| t.checked_add(plan.first_departure))
-        .and_then(|t| t.checked_add(timings(route, model).ok()?.0))
+        .and_then(|t| t.checked_add(flight))
         .ok_or("Flugplan-Zeitüberlauf.")?;
     Ok(crate::economy::FlightResult {
         route_id: route.id,
@@ -174,7 +175,7 @@ impl Game {
             )
             .filter(|t| *t <= u64::MAX / 2)
             .ok_or("Flugplan-Zeitüberlauf.")?;
-        self.routes.iter_mut().find(|r| r.id == id).unwrap().plan = Some(FlightPlan {
+        self.route_mut(id)?.plan = Some(FlightPlan {
             first_departure: first,
             interval_seconds: interval,
             completed_flights: 0,
@@ -197,7 +198,7 @@ impl Game {
         {
             return Err("Flugplan erst nach Landung und Bodenzeit beenden.".into());
         }
-        self.routes.iter_mut().find(|r| r.id == id).unwrap().plan = None;
+        self.route_mut(id)?.plan = None;
         Ok(())
     }
 

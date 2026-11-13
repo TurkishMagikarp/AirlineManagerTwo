@@ -89,7 +89,8 @@ impl SimulationClock {
                 false,
                 economy::Totals::default(),
             ));
-            row.3.add(&b.totals, b.count).expect("validated totals");
+            // Archive totals are validated on load; skip rather than panic over FFI.
+            let _ = row.3.add(&b.totals, b.count);
         }
         rows.into_iter()
             .map(|(id, (a, b, active, t))| {
@@ -176,21 +177,16 @@ impl SimulationClock {
     fn get_map_flights(&self) -> Array<VarDictionary> {
         map::flights(&self.game)
             .iter()
-            .map(|f| {
-                let p = self
-                    .game
-                    .fleet
-                    .iter()
-                    .find(|p| p.id == f.aircraft_id)
-                    .unwrap();
-                let model = aircraft::model(&p.model_id).unwrap();
-                vdict! { "aircraft_id" => f.aircraft_id, "route_id" => f.route_id,
+            .filter_map(|f| {
+                let p = self.game.fleet.iter().find(|p| p.id == f.aircraft_id)?;
+                let model = aircraft::model(&p.model_id).ok()?;
+                Some(vdict! { "aircraft_id" => f.aircraft_id, "route_id" => f.route_id,
                 "flight_number" => format!("AM-{}-{}", f.route_id, f.departure).as_str(),
                 "identifier" => p.identifier().as_str(), "model" => model.name.as_str(),
                 "origin" => f.origin.as_str(), "destination" => f.destination.as_str(),
                 "progress" => f.progress, "arrival" => operations::display_time(f.landing).as_str(),
                 "position" => Vector2::new(f.position.0 as f32, f.position.1 as f32),
-                "ahead" => Vector2::new(f.ahead.0 as f32, f.ahead.1 as f32) }
+                "ahead" => Vector2::new(f.ahead.0 as f32, f.ahead.1 as f32) })
             })
             .collect()
     }
@@ -371,8 +367,18 @@ impl SimulationClock {
         let Some(route) = self.game.routes.iter().find(|r| r.id == route_id) else {
             return Array::new();
         };
+        struct Offer<'a> {
+            airline: &'a str,
+            route: &'a routes::Route,
+            model: &'a str,
+            seats: u32,
+            /// Departures per day in each direction.
+            frequency: f64,
+            passengers: f64,
+            action: &'a str,
+        }
         let supply = self.game.market_routes();
-        let mut rows = Vec::new();
+        let mut offers = Vec::new();
         for (company, action) in std::iter::once((&self.game, "Spieler")).chain(
             self.game
                 .competitors
@@ -390,9 +396,9 @@ impl SimulationClock {
                 let Some(plane) = company.fleet.iter().find(|p| Some(p.id) == r.aircraft_id) else {
                     continue;
                 };
-                let seats = aircraft::model(&plane.model_id)
-                    .expect("validated aircraft")
-                    .seats;
+                let Ok(model) = aircraft::model(&plane.model_id) else {
+                    continue;
+                };
                 let frequency = r
                     .plan
                     .as_ref()
@@ -400,50 +406,62 @@ impl SimulationClock {
                     .unwrap_or(0.0);
                 let passengers = demand::passengers(r, &supply)
                     .unwrap_or(0)
-                    .min(i64::from(seats)) as f64
+                    .min(i64::from(model.seats)) as f64
                     * frequency;
-                rows.push((
-                    airline.name.as_str(),
-                    r,
-                    &plane.model_id,
-                    seats,
+                offers.push(Offer {
+                    airline: airline.name.as_str(),
+                    route: r,
+                    model: &plane.model_id,
+                    seats: model.seats,
                     frequency,
                     passengers,
                     action,
-                ));
+                });
             }
         }
-        let total: f64 = rows.iter().map(|r| r.5).sum();
-        rows.into_iter().map(|(name, r, model, seats, frequency, passengers, action)| vdict! {
-            "airline" => name, "ticket_eur" => r.ticket_eur, "model" => model.as_str(),
-            "seats" => seats, "departures_per_day" => frequency,
-            "passengers_per_day" => passengers, "share_percent" => if total > 0.0 { passengers * 100.0 / total } else { 0.0 },
-            "active" => r.plan.is_some(), "last_action" => action
-        }).collect()
+        let total: f64 = offers.iter().map(|o| o.passengers).sum();
+        offers
+            .into_iter()
+            .map(|o| {
+                vdict! {
+                    "airline" => o.airline, "ticket_eur" => o.route.ticket_eur, "model" => o.model,
+                    "seats" => o.seats, "departures_per_day_per_direction" => o.frequency,
+                    "passengers_per_day" => o.passengers,
+                    "share_percent" => if total > 0.0 { o.passengers * 100.0 / total } else { 0.0 },
+                    "active" => o.route.plan.is_some(), "last_action" => o.action
+                }
+            })
+            .collect()
     }
 
     #[func]
     fn get_routes(&self) -> Array<VarDictionary> {
+        let supply = self.game.market_routes();
+        let now = self.game.clock.elapsed().as_secs();
         self.game
             .routes
             .iter()
-            .map(|r| {
-                let market = demand::market(r, r.ticket_eur).expect("validated route");
-                let actual = self.game.history.as_ref()
-                    .map(|h| h.totals(r.id, self.game.clock.elapsed().as_secs()))
+            .filter_map(|r| {
+                let market = demand::market(r, r.ticket_eur).ok()?;
+                let base = demand::market(r, 0).ok()?;
+                let actual = self
+                    .game
+                    .history
+                    .as_ref()
+                    .map(|h| h.totals(r.id, now))
                     .unwrap_or_default();
-                vdict! {
+                Some(vdict! {
                     "id" => r.id, "origin_icao" => r.origin_icao.as_str(),
                     "destination_icao" => r.destination_icao.as_str(),
                     "distance_km" => routes::distance_km(&r.origin_icao, &r.destination_icao).unwrap_or(0.0),
                     "aircraft_id" => r.aircraft_id.unwrap_or(0), "has_plan" => r.plan.is_some(), "ticket_eur" => r.ticket_eur,
                     "daily_demand" => market.total().floor() as i64,
-                    "base_daily_market" => demand::market(r, 0).expect("validated route").total().floor() as i64,
+                    "base_daily_market" => base.total().floor() as i64,
                     "daily_business" => market.business.floor() as i64,
                     "daily_leisure" => market.leisure.floor() as i64,
-                    "estimated_passengers" => if r.plan.is_some() { demand::passengers(r, &self.game.market_routes()).unwrap_or(0) } else { 0 },
+                    "estimated_passengers" => if r.plan.is_some() { demand::passengers(r, &supply).unwrap_or(0) } else { 0 },
                     "actual_flights" => actual.flights, "actual_load_percent" => actual.load_percent()
-                }
+                })
             })
             .collect()
     }

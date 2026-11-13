@@ -4,6 +4,10 @@ use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
 const REVIEW: u64 = 7 * 86400;
+/// Weekly reviews a stopped service waits before the market is checked again.
+const RETRY_AFTER: u32 = 4;
+/// Departure interval used by AI services, in minutes.
+const AI_INTERVAL_MINUTES: u32 = 360;
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Competitor {
@@ -12,6 +16,9 @@ pub struct Competitor {
     pub losing_reviews: u32,
     pub last_profit: i64,
     pub last_action: String,
+    /// Reviews since the last service was stopped; restart is checked at RETRY_AFTER.
+    #[serde(default)]
+    pub idle_reviews: u32,
 }
 
 pub fn initial_competitors() -> Result<Vec<Competitor>, String> {
@@ -43,7 +50,7 @@ pub fn initial_competitors_at(now: Duration) -> Result<Vec<Competitor>, String> 
         g.buy_aircraft(model)?;
         g.create_route(origin, destination, 1)?;
         g.set_ticket_price(1, price)?;
-        g.schedule(1, 1, 360)?;
+        g.schedule(1, 1, AI_INTERVAL_MINUTES)?;
         companies.push(Competitor {
             game: Box::new(g),
             next_review: now
@@ -53,6 +60,7 @@ pub fn initial_competitors_at(now: Duration) -> Result<Vec<Competitor>, String> 
             losing_reviews: 0,
             last_profit: 0,
             last_action: "Flugbetrieb aufgenommen".into(),
+            idle_reviews: 0,
         });
     }
     Ok(companies)
@@ -80,6 +88,7 @@ impl Game {
                 || c.next_review <= self.clock.elapsed().as_secs()
                 || c.next_review - self.clock.elapsed().as_secs() > REVIEW
                 || c.losing_reviews > 2
+                || c.idle_reviews > RETRY_AFTER
                 || c.last_action.len() > 200
             {
                 return Err("Widersprüchlicher KI-Zustand.".into());
@@ -164,11 +173,15 @@ impl Competitor {
         for i in 0..self.game.routes.len() {
             let r = &self.game.routes[i];
             if r.plan.is_none() {
+                if !self.retry(i, supply) {
+                    return false;
+                }
                 continue;
             }
             let id = r.id;
             if self.losing_reviews >= 2 && self.game.stop_schedule(id).is_ok() {
                 self.last_action = "Verlustverbindung nach zwei Verlustwochen eingestellt".into();
+                self.idle_reviews = 0;
                 continue;
             }
             let r = &self.game.routes[i];
@@ -204,6 +217,69 @@ impl Competitor {
             return false;
         };
         self.next_review = next;
+        true
+    }
+
+    /// A stopped service waits RETRY_AFTER reviews, then restarts at the most
+    /// profitable fare in the current shared market, or waits another period.
+    /// Returns false only on an internal error.
+    fn retry(&mut self, i: usize, supply: &[Route]) -> bool {
+        self.idle_reviews = (self.idle_reviews + 1).min(RETRY_AFTER);
+        if self.idle_reviews < RETRY_AFTER {
+            return true;
+        }
+        self.idle_reviews = 0;
+        let r = &self.game.routes[i];
+        let Some(plane) = self.game.fleet.iter().find(|p| Some(p.id) == r.aircraft_id) else {
+            return false;
+        };
+        let model = plane.model_id.clone();
+        let location = plane.location_icao.clone();
+        let Ok(km) = crate::routes::distance_km(&r.origin_icao, &r.destination_icao) else {
+            return false;
+        };
+        let reference = crate::economy::reference_price(km);
+        let now = self.game.clock.elapsed().as_secs();
+        let mut candidate = r.clone();
+        // The aircraft stays where it last landed; serve the route from there.
+        if location == candidate.destination_icao {
+            std::mem::swap(&mut candidate.origin_icao, &mut candidate.destination_icao);
+        }
+        candidate.plan = Some(crate::operations::FlightPlan {
+            first_departure: now.saturating_add(60),
+            interval_seconds: u64::from(AI_INTERVAL_MINUTES) * 60,
+            completed_flights: 0,
+            airborne: None,
+        });
+        let mut best: Option<(i64, i64)> = None;
+        for step in 3..=15 {
+            let price = ((reference * f64::from(step) / 10.0).round() as i64).clamp(0, 100_000);
+            candidate.ticket_eur = price;
+            let mut offers = supply.to_vec();
+            offers.push(candidate.clone());
+            let Ok(t) = crate::economy::quote_shared(&candidate, &model, &offers) else {
+                return false;
+            };
+            if best.is_none_or(|(profit, _)| t.profit() > profit) {
+                best = Some((t.profit(), price));
+            }
+        }
+        let Some((profit, price)) = best.filter(|(profit, _)| *profit > 0) else {
+            self.last_action = "Markt erneut geprüft · Wiedereinstieg noch nicht rentabel".into();
+            return true;
+        };
+        let id = r.id;
+        let route = &mut self.game.routes[i];
+        route.origin_icao = candidate.origin_icao;
+        route.destination_icao = candidate.destination_icao;
+        if self.game.set_ticket_price(id, price).is_err()
+            || self.game.schedule(id, 1, AI_INTERVAL_MINUTES).is_err()
+        {
+            return false;
+        }
+        self.losing_reviews = 0;
+        self.last_action =
+            format!("Verbindung wieder aufgenommen zu {price} EUR (erwartet {profit} EUR je Flug)");
         true
     }
 }
@@ -344,6 +420,50 @@ mod tests {
         let flights = c.game.finance.totals.flights;
         assert!(g.advance(REVIEW as f64));
         assert_eq!(g.competitors[0].game.finance.totals.flights, flights);
+        g.validate_competitors().unwrap();
+        // After RETRY_AFTER idle reviews the rival re-enters at a viable fare.
+        assert!(g.advance(f64::from(RETRY_AFTER - 1) * REVIEW as f64));
+        let c = &g.competitors[0];
+        let r = &c.game.routes[0];
+        assert!(r.plan.is_some(), "{}", c.last_action);
+        assert!(r.ticket_eur < 100_000);
+        assert_eq!(c.losing_reviews, 0);
+        let restarted = c.game.finance.totals.flights;
+        assert!(g.advance(86400.0));
+        assert!(g.competitors[0].game.finance.totals.flights > restarted);
+        g.validate_competitors().unwrap();
+        // The restarted state survives a save round trip.
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("retry.json");
+        crate::save::save(&path, &g).unwrap();
+        assert_eq!(state(&g), state(&crate::save::load(&path).unwrap()));
+    }
+
+    #[test]
+    fn unprofitable_markets_keep_rivals_idle_until_the_next_retry() {
+        let mut g = game();
+        g.competitors[0].game.routes[0].ticket_eur = 100_000;
+        assert!(g.advance(2.0 * REVIEW as f64));
+        assert!(g.competitors[0].game.routes[0].plan.is_none());
+        // Make every fare unprofitable by flooding the market with free seats.
+        for _ in 0..3 {
+            g.airline.as_mut().unwrap().capital_eur += 200_000_000;
+            g.history.as_mut().unwrap().opening_balance += 200_000_000;
+            g.buy_aircraft("a320_200").unwrap();
+            let id = g.fleet.last().unwrap().id;
+            g.create_route("EDDF", "EDDM", id).unwrap();
+            let route = g.routes.last().unwrap().id;
+            g.set_ticket_price(route, 0).unwrap();
+            g.schedule(route, 1, 180).unwrap();
+        }
+        assert!(g.advance(f64::from(RETRY_AFTER) * REVIEW as f64));
+        let c = &g.competitors[0];
+        assert!(c.game.routes[0].plan.is_none());
+        assert!(
+            c.last_action.contains("nicht rentabel"),
+            "{}",
+            c.last_action
+        );
         g.validate_competitors().unwrap();
     }
 

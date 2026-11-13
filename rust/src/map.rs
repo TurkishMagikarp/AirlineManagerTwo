@@ -119,7 +119,8 @@ mod tests {
             let before = flights(&g);
             assert!(g.advance(999.0));
             assert_eq!(flights(&g), before);
-            let path = std::env::temp_dir().join(format!("airline-map-{}-{speed}.json", std::process::id()));
+            let path = std::env::temp_dir()
+                .join(format!("airline-map-{}-{speed}.json", std::process::id()));
             crate::save::save(&path, &g).unwrap();
             let restored = crate::save::load(&path).unwrap();
             std::fs::remove_file(path).unwrap();
