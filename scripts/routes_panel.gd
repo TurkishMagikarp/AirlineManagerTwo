@@ -20,6 +20,7 @@ var delay_input: SpinBox
 var interval_input: SpinBox
 var schedule_button: Button
 var stop_button: Button
+var maintenance_label: Label
 var operations_label: Label
 var ticket_input: SpinBox
 var ticket_button: Button
@@ -125,6 +126,10 @@ func _ready() -> void:
 			_feedback(simulation.stop_schedule(route["id"]), "Flugplan beendet.")
 	)
 	add_child(stop_button)
+	maintenance_label = _label("")
+	maintenance_label.add_theme_color_override("font_color", UI.NEGATIVE)
+	maintenance_label.visible = false
+	add_child(maintenance_label)
 	operations_label = _label("")
 	add_child(operations_label)
 	_arrange_workspace()
@@ -229,6 +234,8 @@ func refresh() -> void:
 		for plane in fleet:
 			if plane["id"] == route["aircraft_id"]:
 				row.set_text(3, "%s · %s" % [plane["identifier"], plane["model_name"]])
+		if not String(route["maintenance_status"]).is_empty():
+			row.set_text(3, row.get_text(3) + " · Wartung")
 		for i in range(6):
 			row.set_tooltip_text(i, row.get_text(i))
 		if route["id"] == selected_route:
@@ -253,6 +260,9 @@ func refresh_operations() -> void:
 			row.set_tooltip_text(4, "Nachfrage bei eigenem Preis ohne Preiswettbewerb, NICHT pro Flug oder Route.\nGeschäft: ca. %d · Urlaub/Privat: ca. %d\nGeteilter Anteil pro Abflug vor Sitzlimit: %d Pax%s\nDie gemeinsame Marktaufteilung steht im Wettbewerbsbereich." % [route["daily_business"], route["daily_leisure"], route["estimated_passengers"], "" if route["has_plan"] else " (ohne eigenen Flugplan)"])
 			row.set_text(5, "%.1f %%" % route["actual_load_percent"] if route["actual_flights"] > 0 else "Keine Flüge")
 			row.set_tooltip_text(5, "Tatsächlich beförderte Passagiere / angebotene Sitze aller archivierten Landungen dieser Route. Bei alten Spielständen ab Archivbeginn.")
+			if not String(route["maintenance_status"]).is_empty():
+				row.set_tooltip_text(3, row.get_text(3) + "\n" + route["maintenance_status"])
+	_update_schedule_controls(metrics.get(_route().get("id", 0), {}))
 	var lines: PackedStringArray = ["Flugbetrieb · nächste Abflüge (sortiert)"]
 	for operation in simulation.get_operations():
 		lines.append("%s · Route #%d · Flug %d min · Boden %d min\n%s\nNächster Abflug: %s" % [operation["identifier"], operation["route_id"], ceili(operation["flight_seconds"] / 60.0), operation["ground_seconds"] / 60, operation["status_text"], operation["next_departure"]])
@@ -290,8 +300,7 @@ func _selection_changed() -> void:
 		ticket_input.editable = not ticket_button.disabled
 		ticket_input.value = route.get("ticket_eur", 100)
 	if schedule_button != null:
-		schedule_button.disabled = route.is_empty() or route.get("has_plan", false)
-		stop_button.disabled = route.is_empty() or not route.get("has_plan", false)
+		_update_schedule_controls(route)
 	assignment.clear()
 	assignment.add_item("Keine Zuweisung (Flugzeug freigeben)")
 	assignment.set_item_metadata(0, 0)
@@ -305,6 +314,18 @@ func _selection_changed() -> void:
 	delete_button.disabled = route.is_empty()
 	_assignment_preview()
 	_refresh_competition()
+
+
+# Maintenance starts and ends while time runs, so this follows live route data.
+func _update_schedule_controls(route: Dictionary) -> void:
+	if schedule_button == null:
+		return
+	var hangar: String = route.get("maintenance_status", "")
+	schedule_button.disabled = route.is_empty() or not route.get("can_schedule", false)
+	schedule_button.text = "Flugplan gesperrt · Wartung" if not hangar.is_empty() and not route.get("has_plan", false) else "Flugplan aktivieren"
+	stop_button.disabled = route.is_empty() or not route.get("has_plan", false)
+	maintenance_label.text = hangar
+	maintenance_label.visible = not hangar.is_empty()
 
 
 func _refresh_competition() -> void:

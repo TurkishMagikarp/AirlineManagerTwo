@@ -139,6 +139,18 @@ pub fn cost(wear: &Wear, r: &Rules, unscheduled: bool) -> Result<i64, String> {
         .map_err(|_| "Wartungskosten-Überlauf.".to_string())
 }
 
+/// Planning value for AI decisions: the regular check after a full interval of
+/// `flight_seconds` legs, spread over those landings (rounded up).
+pub fn cost_per_flight(model_id: &str, flight_seconds: u64) -> Result<i64, String> {
+    let r = rules(model_id)?;
+    let flights = Wear::default().flights_until_due(r, flight_seconds).max(1);
+    let wear = Wear::default()
+        .added(flights, flight_seconds)
+        .ok_or("Betriebszeit-Überlauf.")?;
+    let flights = i64::try_from(flights).map_err(|_| "Wartungskosten-Überlauf.")?;
+    Ok((cost(&wear, r, false)? + flights - 1) / flights)
+}
+
 pub fn duration(r: &Rules, unscheduled: bool) -> Result<u64, String> {
     let seconds = r.duration_hours * 3600;
     Ok(if unscheduled {
@@ -273,6 +285,28 @@ impl Game {
             return Err(error);
         }
         Ok(())
+    }
+
+    /// Withdraw an order that has not started (aircraft still airborne). Nothing
+    /// was debited yet and the flight plan simply continues. Running checks and
+    /// forced (unscheduled) groundings cannot be cancelled.
+    pub fn cancel_maintenance(&mut self, aircraft_id: u32) -> Result<(), String> {
+        let plane = self
+            .fleet
+            .iter_mut()
+            .find(|p| p.id == aircraft_id)
+            .ok_or("Unbekanntes Flugzeug.")?;
+        match &plane.maintenance {
+            None => Err("Keine Wartung geplant.".into()),
+            Some(_) if plane.status == AircraftStatus::Maintenance => {
+                Err("Die Wartung läuft bereits und wird regulär abgeschlossen.".into())
+            }
+            Some(v) if v.unscheduled => Err("Pflichtwartung kann nicht storniert werden.".into()),
+            Some(_) => {
+                plane.maintenance = None;
+                Ok(())
+            }
+        }
     }
 
     /// All fallible checks precede the first mutation.
@@ -588,6 +622,62 @@ mod tests {
         assert_eq!(g.fleet[0].wear.checks, 1);
         assert!(g.routes[0].plan.as_ref().unwrap().reversed);
         g.validate_history().unwrap();
+    }
+
+    #[test]
+    fn pending_order_can_be_cancelled_until_the_check_starts() {
+        assert!(game().cancel_maintenance(1).is_err(), "nothing ordered");
+        for speed in crate::clock::Clock::SPEEDS {
+            let mut g = game();
+            g.clock.set_speed(speed);
+            let untouched = g.clone();
+            assert!(g.advance(100.0 / f64::from(speed)));
+            let before = g.airline.as_ref().unwrap().capital_eur;
+            g.request_maintenance(1).unwrap();
+            // Cancelled after a restart: no debit, plan keeps flying as if never ordered.
+            let dir = tempfile::tempdir().unwrap();
+            let path = dir.path().join("cancel.json");
+            crate::save::save(&path, &g).unwrap();
+            let mut g = crate::save::load(&path).unwrap();
+            g.cancel_maintenance(1).unwrap();
+            assert!(g.fleet[0].maintenance.is_none());
+            assert_eq!(g.airline.as_ref().unwrap().capital_eur, before);
+            g.validate_maintenance().unwrap();
+            let mut reference = untouched.clone();
+            assert!(reference.advance(100.0 / f64::from(speed)));
+            assert_eq!(state(&g), state(&reference));
+            for _ in 0..20 {
+                assert!(g.advance(3600.0 / f64::from(speed)));
+            }
+            assert!(reference.advance(20.0 * 3600.0 / f64::from(speed)));
+            assert_eq!(state(&g), state(&reference));
+            assert_eq!(g.fleet[0].wear.checks, 0);
+            assert!(g.history.as_ref().unwrap().maintenance.is_empty());
+            // Once the aircraft is in the hangar the check runs to completion.
+            loop {
+                assert!(g.advance(60.0 / f64::from(speed)));
+                if g.fleet[0].status != AircraftStatus::InFlight && g.request_maintenance(1).is_ok()
+                {
+                    break;
+                }
+            }
+            assert_eq!(g.fleet[0].status, AircraftStatus::Maintenance);
+            let active = state(&g);
+            assert!(g.cancel_maintenance(1).is_err());
+            assert_eq!(state(&g), active);
+        }
+    }
+
+    #[test]
+    fn planned_cost_per_flight_spreads_one_regular_check_over_its_interval() {
+        let r = rules("atr72_600").unwrap();
+        let k = Wear::default().flights_until_due(r, flight());
+        let wear = Wear::default().added(k, flight()).unwrap();
+        let check = cost(&wear, r, false).unwrap();
+        let per = cost_per_flight("atr72_600", flight()).unwrap();
+        assert!(per > 0);
+        let k = k as i64;
+        assert!(per * k >= check && (per - 1) * k < check);
     }
 
     #[test]

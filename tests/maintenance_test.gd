@@ -68,6 +68,18 @@ func _run() -> void:
 		return
 	if not _check("Nach Landung" in main.fleet_tree.get_root().get_child(0).get_text(5) and main.maintenance_button.disabled, "Pending maintenance shown, no double booking"):
 		return
+	# Not started yet: the order can be withdrawn free of charge, then placed again.
+	if not _check(main.cancel_maintenance_button.visible and "beginnt nach der Landung" in sim.get_routes()[0]["maintenance_status"], "Pending order offers cancellation; route shows the order"):
+		return
+	await _click(main.cancel_maintenance_button)
+	plane = sim.get_fleet()[0]
+	if not _check(plane["maintenance_state"] == "none" and plane["status"] == "in_flight" and sim.get_airline_info()["capital_eur"] == balance and sim.get_routes()[0]["has_plan"] and sim.get_routes()[0]["maintenance_status"].is_empty(), "Cancellation keeps flying without any cost"):
+		return
+	if not _check(main.maintenance_status.text.begins_with("Wartungsauftrag storniert") and not main.cancel_maintenance_button.visible and not main.maintenance_button.disabled, "Fleet tab reflects the cancellation"):
+		return
+	await _click(main.maintenance_button)
+	if not _check(sim.get_fleet()[0]["maintenance_state"] == "pending", "Order placed again"):
+		return
 	var flights: int = sim.get_financial_summary()["flights"]
 	var profit: int = sim.get_financial_summary()["profit_eur"]
 	# Finish the journey (one large 16x frame), then hangar.
@@ -83,6 +95,17 @@ func _run() -> void:
 		return
 	if not _check(not sim.schedule_route(1, 1, 120).is_empty(), "Aircraft in maintenance cannot be scheduled"):
 		return
+	if not _check(not main.cancel_maintenance_button.visible and not sim.cancel_maintenance(1).is_empty() and sim.get_fleet()[0]["maintenance_state"] == "active", "Started maintenance cannot be cancelled"):
+		return
+	# Routes tab: no schedule activation while in the hangar, clear status instead.
+	await _click(main.navigation[2])
+	var panel = main.routes_panel
+	var route_row: TreeItem = panel.route_tree.get_root().get_child(0)
+	route_row.select(0)
+	panel.route_tree.item_selected.emit()
+	if not _check(panel.schedule_button.disabled and "Wartung" in panel.schedule_button.text and panel.maintenance_label.visible and panel.maintenance_label.text.begins_with("In Wartung bis") and "fortgesetzt" in panel.maintenance_label.text and "Wartung" in route_row.get_text(3), "Routes tab blocks the schedule and shows the maintenance status"):
+		return
+	await _click(main.navigation[1])
 	# Many frames inside the check: no departures at any frame size.
 	for i in range(20):
 		sim.advance(60.0 / 16.0)
@@ -117,6 +140,9 @@ func _verify_hangar_and_resume(sim) -> bool:
 	main._refresh_fleet()
 	plane = sim.get_fleet()[0]
 	if not _check(plane["checks"] == 1 and plane["condition_percent"] == 100.0 and plane["maintenance_state"] == "none" and sim.get_routes()[0]["has_plan"], "Check completes, condition restored, plan resumes"):
+		return false
+	main.routes_panel.refresh_operations()
+	if not _check(sim.get_routes()[0]["maintenance_status"].is_empty() and not main.routes_panel.maintenance_label.visible and main.routes_panel.schedule_button.text == "Flugplan aktivieren", "Routes tab clears the maintenance status after the check"):
 		return false
 	if not _check(sim.get_financial_summary()["flights"] == flights, "Resume starts at the next departure, no retroactive flights"):
 		return false

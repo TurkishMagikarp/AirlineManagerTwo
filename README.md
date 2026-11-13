@@ -119,6 +119,8 @@ geschätzte Kosten und Dauer jetzt sowie die Kosten bei Erreichen der Grenze ers
 - Flugzeuge in der Luft beenden ihren Flug (normale Landung und Abrechnung);
   die Wartung beginnt exakt bei der Landung.
 - Während der Wartung finden keine Abflüge statt, Flugplanaktivierung wird abgelehnt.
+  Im **Routen**-Tab ist „Flugplan aktivieren“ dann gesperrt; stattdessen steht der
+  Wartungsstatus (bis wann, ob der Flugplan danach fortgesetzt wird) bei der Route.
   Ein unterbrochener Flugplan wird eine Minute nach Wartungsende automatisch vom
   tatsächlichen Standort aus fortgesetzt (ggf. mit dem Rückflug); der Landungszähler
   läuft weiter. Gelöschte oder neu zugewiesene Routen werden nicht fortgesetzt.
@@ -126,6 +128,9 @@ geschätzte Kosten und Dauer jetzt sowie die Kosten bei Erreichen der Grenze ers
   abgebucht; dafür ist ausreichendes Guthaben nötig.
 - Wird die Grenze erreicht, wird das Flugzeug bei dieser Landung automatisch in eine
   **ungeplante Wartung** geschickt: standardmäßig 150 % Kosten und 150 % Dauer.
+- **Wartungsauftrag stornieren**: möglich, solange die Wartung noch nicht begonnen hat
+  (Flugzeug noch in der Luft). Kostenlos; der Flugplan läuft normal weiter. Eine
+  begonnene Wartung läuft regulär zu Ende.
 
 Kosten: `Grundpreis + Satz × Flugstunden seit Check + Satz × Zyklen seit Check`
 (volle EUR aufgerundet). Alle Werte stehen in `config/maintenance.json`
@@ -145,7 +150,10 @@ unverändert) und fließen in Kontostand und Kontoverlauf ein.
 KI-Airlines nutzen dieselben Regeln, Preise und Funktionen: Bei jeder Wochenprüfung
 beauftragen sie einen regulären Check für jedes Flugzeug, das sonst vor der nächsten
 Prüfung die Grenze erreichen würde. Ohne ausreichendes Guthaben folgt wie beim
-Spieler die ungeplante Wartung. Flugzeuge in Wartung bieten keine Sitze an; der
+Spieler die ungeplante Wartung. In alle Rentabilitätsentscheidungen der KI
+(Verlustprüfung je Strecke, Expansion inkl. Reservepuffer, Wiedereinstieg) fließt
+ein Wartungsanteil je Landung ein: die Kosten eines regulären Checks nach vollem
+Intervall, verteilt auf die Landungen dieses Intervalls. Flugzeuge in Wartung bieten keine Sitze an; der
 gemeinsame Markt verteilt sich in dieser Zeit auf die übrigen Angebote.
 
 Die Logik liegt in `rust/src/maintenance.rs`. Wartungsbeginn, -ende und erzwungene
