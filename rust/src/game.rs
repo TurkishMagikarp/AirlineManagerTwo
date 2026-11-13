@@ -144,6 +144,7 @@ impl Game {
             .checked_add(1)
             .ok_or_else(|| "Keine weitere Flugzeugkennung verfügbar.".to_string())?;
         let plane = Aircraft {
+            business_seats: 0,
             id: self.next_aircraft_id,
             model_id: model.id.clone(),
             location_icao: airline.home_airport_icao.clone(),
@@ -174,7 +175,7 @@ impl Game {
         let airports = airports::catalog()?;
         let mut ids = HashSet::new();
         for plane in &self.fleet {
-            aircraft::model(&plane.model_id)?;
+            crate::cabins::layout(plane)?;
             if plane.id == 0
                 || plane.id >= self.next_aircraft_id
                 || !ids.insert(plane.id)

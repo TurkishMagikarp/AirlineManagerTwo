@@ -42,6 +42,7 @@ pub struct Lease {
 #[serde(rename_all = "snake_case")]
 pub enum Kind {
     Sale,
+    Cabin,
     Deposit,
     Rent,
     Return,
@@ -62,7 +63,7 @@ pub fn lease_terms(model_id: &str) -> Result<(i64, i64), String> {
 }
 
 impl Game {
-    fn post_aircraft_cash(&mut self, cash: i64, kind: Kind) -> Result<(), String> {
+    pub(crate) fn post_aircraft_cash(&mut self, cash: i64, kind: Kind) -> Result<(), String> {
         let balance = self.cash().checked_add(cash).ok_or("Finanzüberlauf.")?;
         let a = self
             .airline
@@ -101,6 +102,7 @@ impl Game {
         let next_due = now.checked_add(period).ok_or("Zeitüberlauf.")?;
         self.post_aircraft_cash(-deposit, Kind::Deposit)?;
         self.fleet.push(Aircraft {
+            business_seats: 0,
             id: self.next_aircraft_id,
             model_id: model_id.into(),
             location_icao: home,
@@ -241,7 +243,7 @@ impl Game {
                     || e.time > now
                     || match e.kind {
                         Kind::Sale | Kind::Return => e.cash < 0,
-                        Kind::Deposit | Kind::Rent => e.cash >= 0,
+                        Kind::Deposit | Kind::Rent | Kind::Cabin => e.cash >= 0,
                     }
                 {
                     return Err("Ungültiges Flugzeugjournal.".into());

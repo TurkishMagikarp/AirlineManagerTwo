@@ -517,10 +517,11 @@ impl Game {
                         || f.destination != expected.destination
                         || !(0..=100_000).contains(&f.ticket_eur)
                         || t.flights != 1
-                        || t.seats != i64::from(aircraft::model(&plane.model_id)?.seats)
+                        || t.seats != i64::from(crate::cabins::offer(route, plane)?.seats)
+                        || t.business_seats != i64::from(plane.business_seats)
                         || t.passengers < 0
                         || t.passengers > t.seats
-                        || t.passengers.checked_mul(f.ticket_eur) != Some(t.revenue)
+                        || !t.valid_cabins(f.ticket_eur)
                         || [t.fuel, t.airport, t.crew, t.overhead]
                             .iter()
                             .any(|v| *v < 0)

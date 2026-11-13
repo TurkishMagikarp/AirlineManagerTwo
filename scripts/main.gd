@@ -57,6 +57,8 @@ var lease_button: Button
 var disposal_button: Button
 var disposal_details: Label
 var selected_aircraft: int = 0
+var cabin_input: SpinBox
+var cabin_button: Button
 var maintenance_box: VBoxContainer
 var maintenance_details: Label
 var maintenance_button: Button
@@ -379,6 +381,20 @@ func _build_fleet(content: VBoxContainer) -> void:
 	disposal_button = Button.new()
 	disposal_button.pressed.connect(_dispose_aircraft)
 	owned.add_child(disposal_button)
+	cabin_input = SpinBox.new()
+	cabin_input.min_value = 0
+	cabin_input.step = 1
+	owned.add_child(_label("Kabine: Business-Sitze festlegen · Economy nutzt die restliche Fläche", 15))
+	owned.add_child(cabin_input)
+	cabin_button = Button.new()
+	cabin_button.text = "Kabine umbauen"
+	cabin_button.pressed.connect(func():
+		var error: String = simulation.set_cabin_layout(selected_aircraft, int(cabin_input.value))
+		fleet_status.text = "Kabine geändert." if error.is_empty() else error
+		_refresh_fleet()
+		routes_panel.refresh()
+	)
+	owned.add_child(cabin_button)
 	_build_maintenance(owned)
 	# The operational register takes precedence over procurement.
 	grid.move_child(owned.get_parent(), 0)
@@ -448,7 +464,7 @@ func _refresh_fleet() -> void:
 		fleet_rows[plane["id"]] = plane
 		var row := fleet_tree.create_item(root_item)
 		row.set_text(0, plane["identifier"])
-		row.set_text(1, "%s · %s" % [plane["model_name"], plane["ownership"]])
+		row.set_text(1, "%s · %s · Y %d / J %d" % [plane["model_name"], plane["ownership"], plane["economy_seats"], plane["business_seats"]])
 		row.set_text(2, plane["location_icao"])
 		var phase: String = {"parked": "Geparkt", "in_flight": "Unterwegs", "ground": "Gelandet · Bodenzeit", "maintenance": "In Wartung"}.get(plane["status"], "Unbekannt")
 		row.set_text(3, "%s · Route #%d" % [phase, plane["route_id"]] if plane["route_id"] != 0 else phase)
@@ -515,7 +531,15 @@ func _build_maintenance(parent: VBoxContainer) -> void:
 func _refresh_maintenance() -> void:
 	var item := fleet_tree.get_selected()
 	selected_aircraft = item.get_metadata(0) if item != null else 0
+	var previous_cabin_id: int = cabin_input.get_meta("aircraft_id", -1)
 	var plane: Dictionary = fleet_rows.get(selected_aircraft, {})
+	cabin_button.disabled = plane.is_empty() or not plane.get("can_edit_cabin", false)
+	cabin_input.editable = not cabin_button.disabled
+	cabin_input.max_value = plane.get("max_business_seats", 0)
+	if previous_cabin_id != selected_aircraft:
+		cabin_input.value = plane.get("business_seats", 0)
+		cabin_input.set_meta("aircraft_id", selected_aircraft)
+	cabin_button.text = "Kabine umbauen · %s · Fläche J:Y %d:1" % [UI.money(plane.get("cabin_fee_eur", 0)), plane.get("cabin_space_ratio", 2)]
 	maintenance_button.disabled = plane.is_empty() or not plane.get("can_request_maintenance", false)
 	cancel_maintenance_button.visible = plane.get("can_cancel_maintenance", false)
 	disposal_button.disabled = plane.is_empty() or not String(plane.get("disposal_error", "")).is_empty()

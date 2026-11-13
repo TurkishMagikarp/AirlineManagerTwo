@@ -1,0 +1,8 @@
+{
+  "business_space_ratio": 2,
+  "layout_fee_eur": 500,
+  "business_price_multiplier": 2.0,
+  "business_preference": 3.0,
+  "ai_business_share_min": 0.4,
+  "ai_business_space_percent": 20
+}

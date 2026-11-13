@@ -123,6 +123,8 @@ fn fuel_steps_speeds_pause_restart_and_global_price() {
 #[test]
 fn fuel_migration_keeps_airborne_costs_and_starts_at_base() {
     let mut g = game();
+    // Historical pre-cabin fixture: AI cabin migration is covered in cabin_tests.
+    g.competitors.clear();
     assert!(g.advance((WEEK * 3 + 300) as f64));
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("old.json");

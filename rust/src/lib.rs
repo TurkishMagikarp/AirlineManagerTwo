@@ -1,5 +1,8 @@
 mod aircraft;
 mod airports;
+#[cfg(test)]
+mod cabin_tests;
+mod cabins;
 mod clock;
 mod competition;
 mod demand;
@@ -115,6 +118,8 @@ impl SimulationClock {
             .map(|(id, (a, b, active, t))| {
                 vdict! {
                     "route_id" => id, "origin" => a, "destination" => b, "active" => active,
+                    "business_revenue_eur" => t.business_revenue, "economy_revenue_eur" => t.revenue - t.business_revenue,
+                    "business_passengers" => t.business_passengers, "economy_passengers" => t.passengers - t.business_passengers,
                     "flights" => t.flights, "revenue_eur" => t.revenue, "costs_eur" => t.costs(),
                     "profit_eur" => t.profit(), "load_percent" => t.load_percent()
                 }
@@ -714,7 +719,7 @@ impl SimulationClock {
                     if service.plan.is_none() { continue; }
                     if let Some(plane) = self.game.fleet.iter().find(|p| Some(p.id) == service.aircraft_id)
                         && let Ok(model) = aircraft::model(&plane.model_id)
-                        && let Ok(e) = demand::estimate_at(service, model.seats, &supply, now) {
+                        && let Ok(e) = demand::estimate_at(service, cabins::offer(service, plane).map_or(model.seats, |o| o.seats), &supply, now) {
                         estimate.daily_passengers += e.daily_passengers;
                         estimate.daily_spill += e.daily_spill;
                         estimate.per_departure += e.per_departure;
@@ -734,7 +739,7 @@ impl SimulationClock {
                     "id" => r.id, "origin_icao" => r.origin_icao.as_str(),
                     "destination_icao" => r.destination_icao.as_str(),
                     "distance_km" => routes::distance_km(&r.origin_icao, &r.destination_icao).unwrap_or(0.0),
-                    "aircraft_id" => r.aircraft_id.unwrap_or(0), "aircraft_ids" => &aircraft_ids, "has_plan" => has_plan, "ticket_eur" => r.ticket_eur,
+                    "aircraft_id" => r.aircraft_id.unwrap_or(0), "aircraft_ids" => &aircraft_ids, "has_plan" => has_plan, "ticket_eur" => r.ticket_eur, "business_ticket_eur" => r.business_ticket_eur,
                     "season_business_factor" => season.business,
                     "season_leisure_factor" => season.leisure,
                     "daily_demand" => market.total().floor() as i64,
@@ -818,6 +823,7 @@ impl SimulationClock {
                     "time" => operations::display_time(e.time).as_str(),
                     "cash_eur" => e.cash,
                     "kind" => match e.kind {
+                        trading::Kind::Cabin => "Kabinenumbau",
                         trading::Kind::Sale => "Verkauf",
                         trading::Kind::Deposit => "Leasingkaution",
                         trading::Kind::Rent => "Leasingrate",
@@ -826,6 +832,26 @@ impl SimulationClock {
                 }
             })
             .collect()
+    }
+
+    #[func]
+    fn set_cabin_layout(&mut self, aircraft_id: u32, business_seats: u32) -> GString {
+        self.game
+            .set_cabin_layout(aircraft_id, business_seats)
+            .err()
+            .unwrap_or_default()
+            .as_str()
+            .into()
+    }
+
+    #[func]
+    fn set_business_ticket_price(&mut self, route_id: u32, price: i64) -> GString {
+        self.game
+            .set_business_ticket_price(route_id, price)
+            .err()
+            .unwrap_or_default()
+            .as_str()
+            .into()
     }
 
     #[func]
@@ -850,6 +876,12 @@ impl SimulationClock {
                 vdict! {
                     "id" => plane.id, "identifier" => plane.identifier().as_str(),
                     "model_id" => plane.model_id.as_str(), "model_name" => name,
+                    "economy_seats" => cabins::layout(plane).map_or(0, |c| c.0),
+                    "business_seats" => plane.business_seats,
+                    "max_business_seats" => aircraft::model(&plane.model_id).map_or(0, |m| m.seats / cabins::RULES.business_space_ratio),
+                    "cabin_space_ratio" => cabins::RULES.business_space_ratio,
+                    "cabin_fee_eur" => cabins::RULES.layout_fee_eur,
+                    "can_edit_cabin" => matches!(plane.status, aircraft::AircraftStatus::Parked | aircraft::AircraftStatus::Ground) && plane.maintenance.is_none(),
                     "location_icao" => plane.location_icao.as_str(),
                     "location_name" => location_name,
                     "status" => match plane.status { aircraft::AircraftStatus::Parked => "parked", aircraft::AircraftStatus::InFlight => "in_flight", aircraft::AircraftStatus::Ground => "ground", aircraft::AircraftStatus::Maintenance => "maintenance" },
@@ -1344,6 +1376,9 @@ fn flight_dictionary(f: &economy::FlightResult) -> VarDictionary {
     vdict! { "route_id" => f.route_id, "landing" => operations::display_time(f.landing).as_str(),
     "origin" => f.origin.as_str(), "destination" => f.destination.as_str(), "ticket_eur" => f.ticket_eur,
     "passengers" => t.passengers, "seats" => t.seats, "load_percent" => t.load_percent(),
+    "business_passengers" => t.business_passengers, "economy_passengers" => t.passengers - t.business_passengers,
+    "business_revenue_eur" => t.business_revenue, "economy_revenue_eur" => t.revenue - t.business_revenue,
+    "business_seats" => t.business_seats, "economy_seats" => t.seats - t.business_seats,
     "revenue_eur" => t.revenue, "fuel_eur" => t.fuel, "airport_eur" => t.airport,
     "crew_eur" => t.crew, "overhead_eur" => t.overhead, "costs_eur" => t.costs(), "profit_eur" => t.profit() }
 }

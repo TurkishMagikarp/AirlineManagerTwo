@@ -67,6 +67,8 @@ pub enum AircraftStatus {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Aircraft {
+    #[serde(default)]
+    pub business_seats: u32,
     pub id: u32,
     pub model_id: String,
     pub location_icao: String,
