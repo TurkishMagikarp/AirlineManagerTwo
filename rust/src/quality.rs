@@ -61,6 +61,13 @@ fn ten_year_scenarios_reconcile_and_survive_annual_restart() {
                     .iter()
                     .all(|c| !c.game.insolvent() && c.game.resolution.deadline.is_none())
             );
+            for c in &fast.competitors {
+                let t = &c.game.finance.totals;
+                assert!(
+                    t.service >= 0 && i128::from(t.service) * 5 <= i128::from(t.revenue),
+                    "service overwhelms AI revenue: year={year} price={price:?}"
+                );
+            }
             let path = dir.path().join("annual.json");
             crate::save::save(&path, &fast).unwrap();
             let bytes = std::fs::metadata(&path).unwrap().len();
@@ -74,10 +81,11 @@ fn ten_year_scenarios_reconcile_and_survive_annual_restart() {
                 for c in &fast.competitors {
                     let g = &c.game;
                     println!(
-                        "AUDIT price={price:?} year={year} airline={} cash={} profit={} fleet={} routes={} batches={} save_bytes={bytes}",
+                        "AUDIT price={price:?} year={year} airline={} cash={} profit={} service={} fleet={} routes={} batches={} save_bytes={bytes}",
                         g.airline.as_ref().unwrap().name,
                         g.airline.as_ref().unwrap().capital_eur,
                         g.finance.totals.profit(),
+                        g.finance.totals.service,
                         g.fleet.len(),
                         g.routes.len(),
                         g.history.as_ref().unwrap().batches.len()

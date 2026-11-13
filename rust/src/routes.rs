@@ -5,6 +5,7 @@ use std::collections::HashSet;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Route {
+    pub service_level: crate::service::Level,
     #[serde(default = "crate::cabins::default_business_fare")]
     pub business_ticket_eur: i64,
     pub id: u32,
@@ -99,6 +100,7 @@ impl Game {
             .checked_add(1)
             .ok_or_else(|| "Keine weitere Routenkennung verfügbar.".to_string())?;
         self.routes.push(Route {
+            service_level: Default::default(),
             business_ticket_eur: crate::cabins::default_business_fare(),
             id: self.next_route_id,
             origin_icao: origin.into(),
@@ -410,6 +412,7 @@ impl Game {
                     || root.destination_icao != route.destination_icao
                     || root.ticket_eur != route.ticket_eur
                     || root.business_ticket_eur != route.business_ticket_eur
+                    || root.service_level != route.service_level
                     || route.id <= parent
                 {
                     return Err("Widersprüchliche Routengruppe.".into());

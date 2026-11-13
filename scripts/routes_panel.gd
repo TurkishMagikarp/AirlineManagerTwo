@@ -23,6 +23,8 @@ var schedule_button: Button
 var stop_button: Button
 var maintenance_label: Label
 var operations_label: Label
+var service_select: OptionButton
+var service_cost: Label
 var business_input: SpinBox
 var business_button: Button
 var ticket_input: SpinBox
@@ -114,6 +116,17 @@ func _ready() -> void:
 			_feedback(simulation.set_business_ticket_price(route["id"], int(business_input.value)), "Business-Preis geändert.")
 	)
 	add_child(business_button)
+	service_select = _select("Bordservice · gilt ab dem nächsten Abflug")
+	for level in ["Basic", "Standard", "Premium"]:
+		service_select.add_item(level)
+		service_select.set_item_metadata(service_select.item_count - 1, level.to_lower())
+	service_select.item_selected.connect(func(index: int):
+		var route := _route()
+		if not route.is_empty():
+			_feedback(simulation.set_service_level(route["id"], service_select.get_item_metadata(index)), "Bordservice geändert.")
+	)
+	service_cost = _label("")
+	add_child(service_cost)
 	var rules := _label("Wirtschaftsregeln & Berechnung: Details im Tooltip")
 	rules.tooltip_text = simulation.get_economy_rules()
 	add_child(rules)
@@ -293,6 +306,7 @@ func refresh_operations() -> void:
 			elif not String(route["staff_status"]).is_empty():
 				row.set_tooltip_text(3, row.get_text(3) + "\n" + route["staff_status"])
 	_update_schedule_controls(metrics.get(_route().get("id", 0), {}))
+	_update_service_cost(metrics.get(_route().get("id", 0), {}))
 	var lines: PackedStringArray = ["Flugbetrieb · nächste Abflüge (sortiert)"]
 	for operation in simulation.get_operations():
 		lines.append("%s · Route #%d · Flug %d min · Boden %d min\n%s\nNächster Abflug: %s" % [operation["identifier"], operation["route_id"], ceili(operation["flight_seconds"] / 60.0), operation["ground_seconds"] / 60, operation["status_text"], operation["next_departure"]])
@@ -310,7 +324,7 @@ func refresh_operations() -> void:
 		var values := ["%s / #%d" % [result["landing"], result["route_id"]], "%s → %s" % [result["origin"], result["destination"]], "%d/%d · %.1f %%" % [result["passengers"], result["seats"], result["load_percent"]], UI.money(result["revenue_eur"]), UI.money(result["costs_eur"]), UI.money(result["profit_eur"])]
 		for i in range(values.size()):
 			row.set_text(i, values[i])
-			row.set_tooltip_text(i, "Ticket: %s\nTreibstoff: %s\nFlughäfen: %s\nPersonal: %s\nWartung / Verwaltung: %s" % [UI.money(result["ticket_eur"]), UI.money(result["fuel_eur"]), UI.money(result["airport_eur"]), UI.money(result["crew_eur"]), UI.money(result["overhead_eur"])])
+			row.set_tooltip_text(i, "Ticket: %s\nTreibstoff: %s\nFlughäfen: %s\nPersonal: %s\nWartung / Verwaltung: %s\nBordservice (± Standard): %s" % [UI.money(result["ticket_eur"]), UI.money(result["fuel_eur"]), UI.money(result["airport_eur"]), UI.money(result["crew_eur"]), UI.money(result["overhead_eur"]), UI.money(result["service_eur"])])
 		row.set_text(2, "Y %d/%d · J %d/%d" % [result["economy_passengers"], result["economy_seats"], result["business_passengers"], result["business_seats"]])
 		row.set_tooltip_text(3, "Economy: %s · Business: %s" % [UI.money(result["economy_revenue_eur"]), UI.money(result["business_revenue_eur"])])
 		row.set_custom_color(5, UI.POSITIVE if result["profit_eur"] >= 0 else UI.NEGATIVE)
@@ -334,6 +348,11 @@ func _selection_changed() -> void:
 		business_input.value = route.get("business_ticket_eur", 200)
 		business_button.disabled = route.is_empty()
 		business_input.editable = not route.is_empty()
+		service_select.disabled = route.is_empty()
+		for i in range(service_select.item_count):
+			if service_select.get_item_metadata(i) == route.get("service_level", "standard"):
+				service_select.select(i)
+		_update_service_cost(route)
 	if schedule_button != null:
 		_update_schedule_controls(route)
 	assignment.clear()
@@ -346,6 +365,10 @@ func _selection_changed() -> void:
 	delete_button.disabled = route.is_empty()
 	_assignment_preview()
 	_refresh_competition()
+
+
+func _update_service_cost(route: Dictionary) -> void:
+	service_cost.text = "" if route.is_empty() else "Bordservice gegenüber Standard: Y %s / J %s je Passagier · erwartet %s je Abflug (Ø aktive Flugzeuge) · bisher %s.\nStandard ist in den Grundkosten enthalten; Basic spart, Premium kostet zusätzlich. Laufende Flüge bleiben unverändert." % [UI.money(route["service_economy_eur"]), UI.money(route["service_business_eur"]), UI.money(route["estimated_service_eur"]), UI.money(route["actual_service_eur"])]
 
 
 # Maintenance starts and ends while time runs, so this follows live route data.

@@ -175,6 +175,7 @@ fn zero(value: &i64) -> bool {
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Totals {
+    pub service: i64,
     #[serde(default, skip_serializing_if = "zero")]
     pub business_passengers: i64,
     #[serde(default, skip_serializing_if = "zero")]
@@ -194,7 +195,8 @@ pub struct Totals {
 }
 impl Totals {
     pub fn valid_cabins(&self, economy_fare: i64) -> bool {
-        self.business_passengers >= 0
+        crate::service::valid(self)
+            && self.business_passengers >= 0
             && self.business_passengers <= self.passengers
             && self.business_seats >= self.business_passengers
             && self.business_seats <= self.seats
@@ -213,7 +215,7 @@ impl Totals {
                 == Some(self.revenue)
     }
     pub fn costs(&self) -> i64 {
-        self.fuel + self.airport + self.crew + self.overhead
+        self.fuel + self.airport + self.crew + self.overhead + self.service
     }
     pub fn profit(&self) -> i64 {
         self.revenue - self.costs()
@@ -237,14 +239,20 @@ impl Totals {
             airport,
             crew,
             overhead,
+            service,
             business_passengers,
             business_revenue,
             business_seats
         );
-        self.fuel
+        let costs = self
+            .fuel
             .checked_add(self.airport)?
             .checked_add(self.crew)?
-            .checked_add(self.overhead)?;
+            .checked_add(self.overhead)?
+            .checked_add(self.service)?;
+        if costs < 0 {
+            return None;
+        }
         Some(())
     }
 }
@@ -327,6 +335,7 @@ fn quote_with_time(
     let seconds = operations::timings(route, model_id)?.0 as i64;
     let rates = &c.models[model_id];
     Ok(Totals {
+        service: route.service_level.cost(passengers, demand.business),
         flights: 1,
         passengers,
         seats: seats.into(),
@@ -358,7 +367,8 @@ impl Game {
     }
     pub fn validate_finance(&self) -> Result<(), String> {
         let valid = |t: &Totals| {
-            t.business_passengers >= 0
+            crate::service::valid(t)
+                && t.business_passengers >= 0
                 && t.business_passengers <= t.passengers
                 && t.business_seats >= t.business_passengers
                 && t.business_seats <= t.seats
@@ -376,7 +386,8 @@ impl Game {
                     .checked_add(t.airport)
                     .and_then(|v| v.checked_add(t.crew))
                     .and_then(|v| v.checked_add(t.overhead))
-                    .is_some()
+                    .and_then(|v| v.checked_add(t.service))
+                    .is_some_and(|costs| costs >= 0)
         };
         if !valid(&self.finance.totals)
             || self.finance.recent.len() > HISTORY_LIMIT
@@ -690,6 +701,7 @@ mod tests {
                 prices.dedup();
                 for price in prices {
                     let route = Route {
+                        service_level: Default::default(),
                         business_ticket_eur: crate::cabins::default_business_fare(),
                         id: 1,
                         origin_icao: origin.into(),

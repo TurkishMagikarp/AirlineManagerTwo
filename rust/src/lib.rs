@@ -26,6 +26,9 @@ mod routes;
 mod save;
 #[cfg(test)]
 mod seasonal_tests;
+mod service;
+#[cfg(test)]
+mod service_tests;
 mod staff;
 #[cfg(test)]
 mod staff_tests;
@@ -120,7 +123,7 @@ impl SimulationClock {
                     "route_id" => id, "origin" => a, "destination" => b, "active" => active,
                     "business_revenue_eur" => t.business_revenue, "economy_revenue_eur" => t.revenue - t.business_revenue,
                     "business_passengers" => t.business_passengers, "economy_passengers" => t.passengers - t.business_passengers,
-                    "flights" => t.flights, "revenue_eur" => t.revenue, "costs_eur" => t.costs(),
+                    "service_eur" => t.service, "flights" => t.flights, "revenue_eur" => t.revenue, "costs_eur" => t.costs(),
                     "profit_eur" => t.profit(), "load_percent" => t.load_percent()
                 }
             })
@@ -291,7 +294,7 @@ impl SimulationClock {
         "maintenance_eur" => maintenance, "payroll_eur" => payroll,
         "rent_eur" => rent.min(i128::from(i64::MAX)) as i64,
         "aircraft_cash_eur" => aircraft_cash.clamp(i128::from(i64::MIN), i128::from(i64::MAX)) as i64,
-        "fuel_eur" => t.fuel, "airport_eur" => t.airport, "crew_eur" => t.crew, "overhead_eur" => t.overhead,
+        "fuel_eur" => t.fuel, "airport_eur" => t.airport, "crew_eur" => t.crew, "overhead_eur" => t.overhead, "service_eur" => t.service,
         "costs_eur" => costs.min(i128::from(i64::MAX)) as i64,
         "profit_eur" => profit.clamp(i128::from(i64::MIN), i128::from(i64::MAX)) as i64, "purchases_eur" => purchases,
         "load_percent" => t.load_percent() }
@@ -715,6 +718,7 @@ impl SimulationClock {
                 let aircraft_ids: Array<u32> = services.iter().filter_map(|s| s.aircraft_id).collect();
                 let has_plan = services.iter().any(|s| s.plan.is_some());
                 let mut estimate = demand::Estimate::default();
+                let mut service_cost = 0;
                 for service in &services {
                     if service.plan.is_none() { continue; }
                     if let Some(plane) = self.game.fleet.iter().find(|p| Some(p.id) == service.aircraft_id)
@@ -723,6 +727,7 @@ impl SimulationClock {
                         estimate.daily_passengers += e.daily_passengers;
                         estimate.daily_spill += e.daily_spill;
                         estimate.per_departure += e.per_departure;
+                        service_cost += service.service_level.cost(e.per_departure, e.business);
                     }
                 }
                 let maintenance = services.iter().map(|s| self.route_maintenance_status(s)).filter(|s| !s.is_empty()).collect::<Vec<_>>().join("\n");
@@ -740,6 +745,11 @@ impl SimulationClock {
                     "destination_icao" => r.destination_icao.as_str(),
                     "distance_km" => routes::distance_km(&r.origin_icao, &r.destination_icao).unwrap_or(0.0),
                     "aircraft_id" => r.aircraft_id.unwrap_or(0), "aircraft_ids" => &aircraft_ids, "has_plan" => has_plan, "ticket_eur" => r.ticket_eur, "business_ticket_eur" => r.business_ticket_eur,
+                    "service_level" => r.service_level.name(),
+                    "service_economy_eur" => r.service_level.rate().economy_eur,
+                    "service_business_eur" => r.service_level.rate().business_eur,
+                    "estimated_service_eur" => service_cost / active_count.max(1),
+                    "actual_service_eur" => actual.service,
                     "season_business_factor" => season.business,
                     "season_leisure_factor" => season.leisure,
                     "daily_demand" => market.total().floor() as i64,
@@ -838,6 +848,16 @@ impl SimulationClock {
     fn set_cabin_layout(&mut self, aircraft_id: u32, business_seats: u32) -> GString {
         self.game
             .set_cabin_layout(aircraft_id, business_seats)
+            .err()
+            .unwrap_or_default()
+            .as_str()
+            .into()
+    }
+
+    #[func]
+    fn set_service_level(&mut self, route_id: u32, level: GString) -> GString {
+        service::Level::parse(&level.to_string())
+            .and_then(|level| self.game.set_service_level(route_id, level))
             .err()
             .unwrap_or_default()
             .as_str()
@@ -1380,5 +1400,5 @@ fn flight_dictionary(f: &economy::FlightResult) -> VarDictionary {
     "business_revenue_eur" => t.business_revenue, "economy_revenue_eur" => t.revenue - t.business_revenue,
     "business_seats" => t.business_seats, "economy_seats" => t.seats - t.business_seats,
     "revenue_eur" => t.revenue, "fuel_eur" => t.fuel, "airport_eur" => t.airport,
-    "crew_eur" => t.crew, "overhead_eur" => t.overhead, "costs_eur" => t.costs(), "profit_eur" => t.profit() }
+    "crew_eur" => t.crew, "overhead_eur" => t.overhead, "service_eur" => t.service, "costs_eur" => t.costs(), "profit_eur" => t.profit() }
 }
