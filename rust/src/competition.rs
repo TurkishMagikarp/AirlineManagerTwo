@@ -202,6 +202,9 @@ impl Game {
                 .next_maintenance_event()
                 .is_none_or(|t| Duration::from_secs(t) > target.elapsed())
             && self
+                .next_rotation_event()
+                .is_none_or(|t| Duration::from_secs(t) > target.elapsed())
+            && self
                 .next_payroll_event()
                 .is_none_or(|t| Duration::from_secs(t) > target.elapsed())
         {
@@ -246,6 +249,7 @@ impl Game {
                 .unwrap_or(u64::MAX);
             // Maintenance starts, ends and forced groundings of every company.
             let maintenance = std::iter::once(staged.next_maintenance_event())
+                .chain(std::iter::once(staged.next_rotation_event()))
                 .chain(std::iter::once(staged.next_payroll_event()))
                 .chain(std::iter::once(staged.next_financing_event()))
                 .chain(staged.competitors.iter().flat_map(|c| {
@@ -323,7 +327,8 @@ impl Game {
                     }
                 }
             }
-            if staged.apply_maintenance().is_err()
+            if staged.apply_rotation_removals().is_err()
+                || staged.apply_maintenance().is_err()
                 || staged.apply_payroll().is_err()
                 || staged.apply_financing().is_err()
                 || staged.competitors.iter_mut().any(|c| {
@@ -732,6 +737,9 @@ impl Competitor {
                     origin_icao: origin.into(),
                     destination_icao: airport.icao.clone(),
                     aircraft_id: plane,
+                    parent_route_id: None,
+                    remove_at: None,
+                    rotation_phase: None,
                     ticket_eur: 0,
                     plan: None,
                 };
@@ -1555,7 +1563,7 @@ mod tests {
                 serde_json::json!(99),
             ),
             (
-                "/state/competitors/0/game/routes/0/aircraft_id",
+                "/state/competitors/0/game/routes/0/aircraft_ids/0",
                 serde_json::json!(99),
             ),
             ("/state/competitors/0/game/airline", serde_json::Value::Null),

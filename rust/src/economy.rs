@@ -160,7 +160,10 @@ impl Game {
         if !(0..=100_000).contains(&price) {
             return Err("Ticketpreis muss zwischen 0 und 100000 EUR liegen.".into());
         }
-        self.route_mut(id)?.ticket_eur = price;
+        self.route_mut(id)?;
+        for r in self.routes.iter_mut().filter(|r| r.public_id() == id) {
+            r.ticket_eur = price;
+        }
         Ok(())
     }
     pub fn validate_finance(&self) -> Result<(), String> {
@@ -449,6 +452,9 @@ mod tests {
                         origin_icao: origin.into(),
                         destination_icao: destination.into(),
                         aircraft_id: Some(1),
+                        parent_route_id: None,
+                        remove_at: None,
+                        rotation_phase: None,
                         ticket_eur: price,
                         plan: None,
                     };

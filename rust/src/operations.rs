@@ -143,7 +143,11 @@ pub fn movement(route: &Route, model: &str, now: u64) -> Result<Movement, String
 
 impl Game {
     pub fn require_no_plan(&self, id: u32) -> Result<(), String> {
-        if self.routes.iter().any(|r| r.id == id && r.plan.is_some()) {
+        if self
+            .routes
+            .iter()
+            .any(|r| r.public_id() == id && r.plan.is_some())
+        {
             return Err("Zuerst den Flugplan beenden.".into());
         }
         Ok(())
@@ -155,8 +159,40 @@ impl Game {
         delay_minutes: u32,
         interval_minutes: u32,
     ) -> Result<(), String> {
-        self.require_solvent()?;
         self.require_no_plan(id)?;
+        let services: Vec<_> = self
+            .routes
+            .iter()
+            .filter(|r| r.public_id() == id && r.aircraft_id.is_some())
+            .map(|r| r.id)
+            .collect();
+        if services.is_empty() {
+            return Err("Bitte ein Flugzeug zuweisen.".into());
+        }
+        let mut staged = self.clone();
+        for (slot, service) in services.iter().enumerate() {
+            staged.schedule_service(*service, delay_minutes, interval_minutes)?;
+            let plan = staged.route_mut(*service)?.plan.as_mut().unwrap();
+            plan.first_departure = plan
+                .first_departure
+                .checked_add(slot as u64 * u64::from(interval_minutes) * 60 / services.len() as u64)
+                .filter(|t| *t <= u64::MAX / 2)
+                .ok_or("Flugplan-Zeitüberlauf.")?;
+        }
+        *self = staged;
+        Ok(())
+    }
+
+    pub(crate) fn schedule_service(
+        &mut self,
+        id: u32,
+        delay_minutes: u32,
+        interval_minutes: u32,
+    ) -> Result<(), String> {
+        self.require_solvent()?;
+        if self.routes.iter().any(|r| r.id == id && r.plan.is_some()) {
+            return Err("Zuerst den Flugplan beenden.".into());
+        }
         let route = self
             .routes
             .iter()
@@ -209,6 +245,24 @@ impl Game {
     }
 
     pub fn stop_schedule(&mut self, id: u32) -> Result<(), String> {
+        let ids: Vec<_> = self
+            .routes
+            .iter()
+            .filter(|r| r.public_id() == id)
+            .map(|r| r.id)
+            .collect();
+        if ids.is_empty() {
+            return Err("Unbekannte Route.".into());
+        }
+        let mut staged = self.clone();
+        for service in ids {
+            staged.stop_service(service)?;
+        }
+        *self = staged;
+        Ok(())
+    }
+
+    pub(crate) fn stop_service(&mut self, id: u32) -> Result<(), String> {
         self.require_active()?;
         let route = self
             .routes
@@ -223,7 +277,10 @@ impl Game {
         {
             return Err("Flugplan erst nach Landung und Bodenzeit beenden.".into());
         }
-        self.route_mut(id)?.plan = None;
+        let route = self.route_mut(id)?;
+        route.plan = None;
+        route.rotation_phase = None;
+        route.remove_at = None;
         Ok(())
     }
 

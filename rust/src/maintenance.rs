@@ -168,6 +168,9 @@ pub struct Resume {
     pub interval_seconds: u64,
     /// Landings of the suspended plan, continued by the resumed counter.
     pub flights: u64,
+    /// Multi-aircraft service rejoins its original phase after the check.
+    #[serde(default)]
+    pub phase_seconds: Option<u64>,
 }
 
 /// A planned (start in the future, aircraft still airborne) or active check.
@@ -347,12 +350,25 @@ impl Game {
             visit.resume = Some(Resume {
                 route_id: self.routes[i].id,
                 interval_seconds: plan.interval_seconds,
+                phase_seconds: self.routes[i].rotation_phase.or_else(|| {
+                    self.routes
+                        .iter()
+                        .any(|r| {
+                            r.public_id() == self.routes[i].public_id() && r.id != self.routes[i].id
+                        })
+                        .then_some(plan.first_departure % plan.interval_seconds)
+                }),
                 flights: plan
                     .prior_flights
                     .checked_add(plan.completed_flights)
                     .ok_or("Landungszähler-Überlauf.")?,
             });
             self.routes[i].plan = None;
+            self.routes[i].rotation_phase = None;
+            if self.routes[i].remove_at.take().is_some() {
+                self.routes[i].aircraft_id = None;
+                visit.resume = None;
+            }
         }
         if let Some(h) = &mut self.history {
             h.maintenance.push(Purchase {
@@ -400,10 +416,18 @@ impl Game {
         if location != route.origin_icao && location != route.destination_icao {
             return Ok(());
         }
-        let first = visit
+        let mut first = visit
             .end
             .checked_add(RESUME_DELAY)
             .ok_or("Flugplan-Zeitüberlauf.")?;
+        if let Some(phase) = resume.phase_seconds {
+            first = first
+                .checked_add(
+                    (phase + resume.interval_seconds - first % resume.interval_seconds)
+                        % resume.interval_seconds,
+                )
+                .ok_or("Flugplan-Zeitüberlauf.")?;
+        }
         route.plan = Some(FlightPlan {
             first_departure: first,
             interval_seconds: resume.interval_seconds,
@@ -482,6 +506,8 @@ impl Game {
                         // The route may since have been deleted, but never be from the future.
                         if let Some(r) = &v.resume
                             && (r.interval_seconds == 0
+                                || r.phase_seconds
+                                    .is_some_and(|phase| phase >= r.interval_seconds)
                                 || r.route_id == 0
                                 || r.route_id >= self.next_route_id)
                         {

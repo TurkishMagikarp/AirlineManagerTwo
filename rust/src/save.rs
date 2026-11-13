@@ -8,7 +8,7 @@ use std::io::{Read, Write};
 use std::path::Path;
 use std::time::Duration;
 
-const VERSION: u32 = 14;
+const VERSION: u32 = 15;
 // Bounded input, but allow multi-year archives with frequent legitimate changes.
 const MAX_BYTES: u64 = 8 * 1024 * 1024;
 
@@ -39,6 +39,7 @@ struct GameState {
 
 #[derive(Serialize, Deserialize)]
 struct SavedRoutes {
+    #[serde(with = "crate::route_save")]
     routes: Vec<crate::routes::Route>,
     next_route_id: u32,
 }
@@ -131,7 +132,12 @@ pub fn load(path: &Path) -> Result<Game, String> {
     if bytes.len() as u64 > MAX_BYTES {
         return Err("Spielstand ist zu groß.".into());
     }
-    let data: SaveGame = serde_json::from_slice(&bytes)
+    let mut value: serde_json::Value = serde_json::from_slice(&bytes)
+        .map_err(|_| "Spielstand ist beschädigt oder unvollständig.".to_string())?;
+    if value["version"].as_u64().is_some_and(|v| v < 15) {
+        crate::route_save::migrate(&mut value["state"]);
+    }
+    let data: SaveGame = serde_json::from_value(value)
         .map_err(|_| "Spielstand ist beschädigt oder unvollständig.".to_string())?;
     if !(1..=VERSION).contains(&data.version) {
         return Err(format!(

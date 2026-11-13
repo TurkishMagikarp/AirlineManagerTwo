@@ -382,6 +382,8 @@ impl Game {
                         self.fleet[p].status = AircraftStatus::Parked;
                         self.fleet[p].location_icao = m.destination;
                         self.routes[i].plan = None;
+                        self.routes[i].rotation_phase = None;
+                        self.routes[i].remove_at = None;
                     }
                 }
             }
@@ -397,7 +399,7 @@ impl Game {
                 .map(|r| r.id)
                 .collect();
             for id in ids {
-                self.stop_schedule(id)?;
+                self.stop_service(id)?;
             }
         }
         self.apply_resolution();

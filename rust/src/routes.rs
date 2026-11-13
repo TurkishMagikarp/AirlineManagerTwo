@@ -9,6 +9,14 @@ pub struct Route {
     pub origin_icao: String,
     pub destination_icao: String,
     pub aircraft_id: Option<u32>,
+    /// Internal service belongs to this public route; roots have no parent.
+    #[serde(default)]
+    pub parent_route_id: Option<u32>,
+    /// Finish the current flight and turnaround before releasing this aircraft.
+    #[serde(default)]
+    pub remove_at: Option<u64>,
+    #[serde(default)]
+    pub rotation_phase: Option<u64>,
     #[serde(default = "crate::economy::default_ticket")]
     pub ticket_eur: i64,
     #[serde(default)]
@@ -34,6 +42,12 @@ pub fn distance_km(origin: &str, destination: &str) -> Result<f64, String> {
     let h = (lat / 2.0).sin().powi(2)
         + a.latitude.to_radians().cos() * b.latitude.to_radians().cos() * (lon / 2.0).sin().powi(2);
     Ok(6371.0088 * 2.0 * h.clamp(0.0, 1.0).sqrt().asin())
+}
+
+impl Route {
+    pub fn public_id(&self) -> u32 {
+        self.parent_route_id.unwrap_or(self.id)
+    }
 }
 
 impl Game {
@@ -87,6 +101,9 @@ impl Game {
             origin_icao: origin.into(),
             destination_icao: destination.into(),
             aircraft_id: Some(aircraft_id),
+            parent_route_id: None,
+            remove_at: None,
+            rotation_phase: None,
             ticket_eur: crate::economy::default_ticket(),
             plan: None,
         });
@@ -114,6 +131,212 @@ impl Game {
         Ok(())
     }
 
+    /// Add an independent service to a public route. Departure quotes are
+    /// immutable; future phases change only after flight and turnaround.
+    pub fn add_route_aircraft(&mut self, route_id: u32, aircraft_id: u32) -> Result<(), String> {
+        self.require_solvent()?;
+        let root = self
+            .routes
+            .iter()
+            .find(|r| r.id == route_id && r.parent_route_id.is_none())
+            .ok_or("Unbekannte Route.")?
+            .clone();
+        self.check_route(&root.origin_icao, &root.destination_icao, aircraft_id, None)?;
+        let mut staged = self.clone();
+        let id = staged.next_route_id;
+        staged.next_route_id = id
+            .checked_add(1)
+            .ok_or("Keine weitere Routenkennung verfügbar.")?;
+        let template = self
+            .routes
+            .iter()
+            .find(|r| r.public_id() == route_id && r.plan.is_some() && r.remove_at.is_none());
+        let mut service = root.clone();
+        service.id = id;
+        service.parent_route_id = Some(route_id);
+        service.aircraft_id = Some(aircraft_id);
+        service.plan = None;
+        service.remove_at = None;
+        service.rotation_phase = None;
+        staged.routes.push(service);
+        if let Some(h) = &mut staged.history {
+            h.route_groups.insert(id, route_id);
+        }
+        if let Some(template) = template {
+            let plan = template.plan.as_ref().unwrap();
+            let minutes = u32::try_from(plan.interval_seconds.div_ceil(60))
+                .map_err(|_| "Flugplan-Zeitüberlauf.")?;
+            staged.schedule_service(id, 1, minutes)?;
+            staged
+                .routes
+                .last_mut()
+                .unwrap()
+                .plan
+                .as_mut()
+                .unwrap()
+                .interval_seconds = plan.interval_seconds;
+            let new_plane = staged.fleet.iter().find(|p| p.id == aircraft_id).unwrap();
+            crate::operations::movement(
+                staged.routes.last().unwrap(),
+                &new_plane.model_id,
+                self.clock.elapsed().as_secs(),
+            )?;
+            let count = staged
+                .routes
+                .iter()
+                .filter(|r| r.public_id() == route_id && r.plan.is_some() && r.remove_at.is_none())
+                .count() as u64;
+            let phase = plan.first_departure % plan.interval_seconds;
+            for (slot, r) in staged
+                .routes
+                .iter_mut()
+                .filter(|r| r.public_id() == route_id && r.plan.is_some() && r.remove_at.is_none())
+                .enumerate()
+            {
+                r.rotation_phase = Some(
+                    (phase + slot as u64 * plan.interval_seconds / count) % plan.interval_seconds,
+                );
+                let p = r.plan.as_mut().unwrap();
+                if self.clock.elapsed().as_secs() < p.first_departure
+                    && self.clock.elapsed().as_secs() < plan.first_departure
+                {
+                    p.first_departure = plan.first_departure;
+                }
+            }
+            staged.apply_rotation_removals()?;
+        }
+        *self = staged;
+        Ok(())
+    }
+
+    pub fn remove_route_aircraft(&mut self, route_id: u32, aircraft_id: u32) -> Result<(), String> {
+        self.require_active()?;
+        let i = self
+            .routes
+            .iter()
+            .position(|r| r.public_id() == route_id && r.aircraft_id == Some(aircraft_id))
+            .ok_or("Flugzeug ist dieser Route nicht zugewiesen.")?;
+        let plane = self
+            .fleet
+            .iter()
+            .find(|p| p.id == aircraft_id)
+            .ok_or("Unbekanntes Flugzeug.")?;
+        if self.routes[i].remove_at.is_some() {
+            return Ok(());
+        }
+        if self.routes[i].plan.is_some() && plane.status != aircraft::AircraftStatus::Parked {
+            let state = crate::operations::movement(
+                &self.routes[i],
+                &plane.model_id,
+                self.clock.elapsed().as_secs(),
+            )?;
+            self.routes[i].remove_at = Some(state.ready);
+            self.routes[i].rotation_phase = None;
+        } else {
+            self.routes[i].plan = None;
+            self.routes[i].aircraft_id = None;
+            self.routes[i].rotation_phase = None;
+            if let Some(p) = self.fleet.iter_mut().find(|p| p.id == aircraft_id)
+                && let Some(v) = &mut p.maintenance
+            {
+                v.resume = None;
+            }
+        }
+        Ok(())
+    }
+
+    pub fn next_rotation_event(&self) -> Option<u64> {
+        self.routes
+            .iter()
+            .filter_map(|r| {
+                if r.remove_at.is_some() {
+                    return r.remove_at;
+                }
+                r.rotation_phase?;
+                let plane = self.fleet.iter().find(|p| Some(p.id) == r.aircraft_id)?;
+                let now = self.clock.elapsed().as_secs();
+                let state = crate::operations::movement(r, &plane.model_id, now).ok()?;
+                Some(if plane.status == aircraft::AircraftStatus::Parked {
+                    now
+                } else {
+                    state.ready
+                })
+            })
+            .min()
+    }
+
+    pub fn apply_rotation_removals(&mut self) -> Result<(), String> {
+        let now = self.clock.elapsed().as_secs();
+        for r in &mut self.routes {
+            if r.remove_at.is_some_and(|t| t <= now) {
+                let p = self
+                    .fleet
+                    .iter_mut()
+                    .find(|p| Some(p.id) == r.aircraft_id)
+                    .ok_or("Unbekanntes Flugzeug.")?;
+                if r.plan.is_some() {
+                    // The boundary can coincide with the next departure. Discard
+                    // that new snapshot; the completed landing is already settled.
+                    let state = crate::operations::movement(r, &p.model_id, now.saturating_sub(1))?;
+                    p.location_icao = state.destination;
+                }
+                p.status = aircraft::AircraftStatus::Parked;
+                if let Some(v) = &mut p.maintenance {
+                    v.resume = None;
+                }
+                r.plan = None;
+                r.aircraft_id = None;
+                r.remove_at = None;
+                r.rotation_phase = None;
+            } else if let Some(phase) = r.rotation_phase {
+                let p = self
+                    .fleet
+                    .iter_mut()
+                    .find(|p| Some(p.id) == r.aircraft_id)
+                    .ok_or("Unbekanntes Flugzeug.")?;
+                let Some(plan) = r.plan.as_ref() else {
+                    r.rotation_phase = None;
+                    continue;
+                };
+                let old = crate::operations::movement(r, &p.model_id, now.saturating_sub(1))?;
+                if p.status != aircraft::AircraftStatus::Parked && now < old.ready {
+                    continue;
+                }
+                let interval = plan.interval_seconds;
+                let started = now >= plan.first_departure;
+                let location = if started {
+                    old.destination
+                } else {
+                    p.location_icao.clone()
+                };
+                let earliest = if started {
+                    now.checked_add(1).ok_or("Flugplan-Zeitüberlauf.")?
+                } else {
+                    plan.first_departure
+                };
+                let first = earliest
+                    .checked_add((phase + interval - earliest % interval) % interval)
+                    .filter(|t| *t <= u64::MAX / 2)
+                    .ok_or("Flugplan-Zeitüberlauf.")?;
+                let prior = plan
+                    .prior_flights
+                    .checked_add(plan.completed_flights)
+                    .ok_or("Landungszähler-Überlauf.")?;
+                r.plan = Some(crate::operations::FlightPlan {
+                    first_departure: first,
+                    interval_seconds: interval,
+                    reversed: location == r.destination_icao,
+                    prior_flights: prior,
+                    ..Default::default()
+                });
+                r.rotation_phase = None;
+                p.status = aircraft::AircraftStatus::Parked;
+                p.location_icao = location;
+            }
+        }
+        Ok(())
+    }
+
     pub fn route_mut(&mut self, id: u32) -> Result<&mut Route, String> {
         self.require_active()?;
         self.routes
@@ -125,12 +348,12 @@ impl Game {
     pub fn delete_route(&mut self, route_id: u32) -> Result<(), String> {
         self.require_active()?;
         self.require_no_plan(route_id)?;
-        let index = self
+        let _index = self
             .routes
             .iter()
             .position(|r| r.id == route_id)
             .ok_or_else(|| "Unbekannte Route.".to_string())?;
-        self.routes.remove(index);
+        self.routes.retain(|r| r.public_id() != route_id);
         Ok(())
     }
 
@@ -145,6 +368,46 @@ impl Game {
             }
             if route.id == 0 || route.id >= self.next_route_id || !ids.insert(route.id) {
                 return Err("Ungültige Routenkennung im Spielstand.".into());
+            }
+            if let Some(t) = route.remove_at {
+                let plane = self
+                    .fleet
+                    .iter()
+                    .find(|p| Some(p.id) == route.aircraft_id)
+                    .ok_or("Ungültige Freigabe.")?;
+                let state = crate::operations::movement(
+                    route,
+                    &plane.model_id,
+                    self.clock.elapsed().as_secs(),
+                )?;
+                if t <= self.clock.elapsed().as_secs()
+                    || t != state.ready
+                    || route.rotation_phase.is_some()
+                {
+                    return Err("Ungültige Freigabezeit.".into());
+                }
+            }
+            if let Some(phase) = route.rotation_phase
+                && route
+                    .plan
+                    .as_ref()
+                    .is_none_or(|p| phase >= p.interval_seconds)
+            {
+                return Err("Ungültige Rotationsphase.".into());
+            }
+            if let Some(parent) = route.parent_route_id {
+                let root = self
+                    .routes
+                    .iter()
+                    .find(|r| r.id == parent && r.parent_route_id.is_none())
+                    .ok_or("Ungültige Routengruppe.")?;
+                if root.origin_icao != route.origin_icao
+                    || root.destination_icao != route.destination_icao
+                    || root.ticket_eur != route.ticket_eur
+                    || route.id <= parent
+                {
+                    return Err("Widersprüchliche Routengruppe.".into());
+                }
             }
             distance_km(&route.origin_icao, &route.destination_icao)?;
             if let Some(id) = route.aircraft_id {

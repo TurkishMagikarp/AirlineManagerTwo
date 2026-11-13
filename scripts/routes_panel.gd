@@ -70,7 +70,7 @@ func _ready() -> void:
 	var actions := HBoxContainer.new()
 	add_child(actions)
 	assign_button = Button.new()
-	assign_button.text = "Zuweisung übernehmen"
+	assign_button.text = "Flugzeug hinzufügen"
 	assign_button.pressed.connect(_assign)
 	actions.add_child(assign_button)
 	delete_button = Button.new()
@@ -103,7 +103,7 @@ func _ready() -> void:
 	delay_input.max_value = 10080
 	delay_input.value = 5
 	add_child(delay_input)
-	add_child(_label("Abstand zwischen Abflügen in Spielminuten (mindestens Flug + Bodenzeit)"))
+	add_child(_label("Abstand pro Flugzeug in Spielminuten (mindestens Flug + Bodenzeit); mehrere Flugzeuge starten versetzt"))
 	interval_input = SpinBox.new()
 	interval_input.min_value = 1
 	interval_input.max_value = 10080
@@ -230,10 +230,11 @@ func refresh() -> void:
 		row.set_text(0, "#%d" % route["id"])
 		row.set_text(1, "%s → %s" % [route["origin_icao"], route["destination_icao"]])
 		row.set_text(2, "%.1f km" % route["distance_km"])
-		row.set_text(3, "Nicht zugewiesen")
+		var assigned_names: PackedStringArray = []
 		for plane in fleet:
-			if plane["id"] == route["aircraft_id"]:
-				row.set_text(3, "%s · %s" % [plane["identifier"], plane["model_name"]])
+			if plane["id"] in route["aircraft_ids"]:
+				assigned_names.append("%s · %s" % [plane["identifier"], plane["model_name"]])
+		row.set_text(3, ", ".join(assigned_names) if not assigned_names.is_empty() else "Nicht zugewiesen")
 		if not String(route["maintenance_status"]).is_empty():
 			row.set_text(3, row.get_text(3) + " · Wartung")
 		for i in range(6):
@@ -256,8 +257,11 @@ func refresh_operations() -> void:
 			var route: Dictionary = metrics.get(row.get_metadata(0)["id"], {})
 			if route.is_empty():
 				continue
+			if route.get("aircraft_ids", []) != row.get_metadata(0).get("aircraft_ids", []):
+				refresh.call_deferred()
+				return
 			row.set_text(4, "%d / %d / %d" % [route["base_daily_market"], route["expected_daily_passengers"], route["daily_spill"]])
-			row.set_tooltip_text(4, "Pro Tag und Richtung: gemeinsamer Markt / erwartete eigene Passagiere / wegen Sitzmangel abgewiesen.\nAbgewiesen = eigener anfänglicher Anteil minus Beförderung vor Rundung; diese Reisenden können zur Konkurrenz wechseln.\nOhne eigenen Flugplan: keine Beförderung, kein Sitzmangel.\nErwartet pro Abflug: %d Pax" % route["estimated_passengers"])
+			row.set_tooltip_text(4, "Pro Tag und Richtung: gemeinsamer Markt / erwartete eigene Passagiere / wegen Sitzmangel abgewiesen.\nAbgewiesen = eigener anfänglicher Anteil minus Beförderung vor Rundung; diese Reisenden können zur Konkurrenz wechseln.\nOhne eigenen Flugplan: keine Beförderung, kein Sitzmangel.\nDurchschnitt pro Abflug: %d Pax" % route["estimated_passengers"])
 			row.set_text(5, "%.1f %%" % route["actual_load_percent"] if route["actual_flights"] > 0 else "Keine Flüge")
 			row.set_tooltip_text(5, "Tatsächlich beförderte Passagiere / angebotene Sitze aller archivierten Landungen dieser Route. Bei alten Spielständen ab Archivbeginn.")
 			if not String(route["maintenance_status"]).is_empty():
@@ -304,14 +308,11 @@ func _selection_changed() -> void:
 	if schedule_button != null:
 		_update_schedule_controls(route)
 	assignment.clear()
-	assignment.add_item("Keine Zuweisung (Flugzeug freigeben)")
-	assignment.set_item_metadata(0, 0)
 	for plane in simulation.get_fleet():
 		if plane["route_id"] == 0 or plane["route_id"] == route.get("id", -1):
-			assignment.add_item("%s · %s · %d km Reichweite" % [plane["identifier"], plane["model_name"], plane["range_km"]])
+			var assigned: bool = plane["id"] in route.get("aircraft_ids", [])
+			assignment.add_item("%s · %s · %s" % [plane["identifier"], plane["model_name"], "Entfernen" if assigned else "Hinzufügen"])
 			assignment.set_item_metadata(assignment.item_count - 1, plane["id"])
-			if plane["id"] == route.get("aircraft_id", 0):
-				assignment.select(assignment.item_count - 1)
 	assignment.disabled = route.is_empty()
 	delete_button.disabled = route.is_empty()
 	_assignment_preview()
@@ -357,8 +358,13 @@ func _refresh_competition() -> void:
 
 func _assignment_preview() -> void:
 	var route := _route()
-	assign_button.disabled = route.is_empty()
+	assign_button.disabled = route.is_empty() or assignment.item_count == 0
 	assign_button.tooltip_text = ""
+	var removing: bool = _selected_id(assignment) in route.get("aircraft_ids", [])
+	assign_button.text = "Flugzeug entfernen" if removing else "Flugzeug hinzufügen"
+	if removing:
+		assign_button.tooltip_text = "Laufender Flug und Bodenzeit werden beendet; andere Flugzeuge fliegen weiter."
+		return
 	if not route.is_empty() and _selected_id(assignment) != 0:
 		var result: Dictionary = simulation.preview_route(route["origin_icao"], route["destination_icao"], _selected_id(assignment), route["id"])
 		assign_button.disabled = not result["error"].is_empty()
@@ -383,7 +389,11 @@ func _create() -> void:
 func _assign() -> void:
 	var route := _route()
 	if not route.is_empty():
-		_feedback(simulation.assign_route(route["id"], _selected_id(assignment)), "Zuweisung geändert.")
+		var plane := _selected_id(assignment)
+		if plane in route.get("aircraft_ids", []):
+			_feedback(simulation.remove_route_aircraft(route["id"], plane), "Flugzeug freigegeben bzw. Freigabe nach Bodenzeit vorgemerkt.")
+		else:
+			_feedback(simulation.add_route_aircraft(route["id"], plane), "Flugzeug zur Rotation hinzugefügt.")
 
 
 func _delete() -> void:
