@@ -1,0 +1,6 @@
+{
+  "basic": { "economy_eur": -1, "business_eur": -4, "attractiveness": 0.94 },
+  "standard": { "economy_eur": 0, "business_eur": 0, "attractiveness": 1.0 },
+  "premium": { "economy_eur": 3, "business_eur": 14, "attractiveness": 1.08 },
+  "ai_business_premium_min_eur": 100
+}

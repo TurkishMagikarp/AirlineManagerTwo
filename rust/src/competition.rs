@@ -505,6 +505,7 @@ impl Competitor {
             }
         }
         self.game.review_cabins();
+        self.game.review_service();
         let mut updated_supply = other_supply.clone();
         updated_supply.extend(self.game.market_routes());
         let supply = updated_supply.as_slice();
@@ -990,6 +991,7 @@ impl Competitor {
                     continue;
                 }
                 let r = Route {
+                    service_level: Default::default(),
                     business_ticket_eur: crate::cabins::default_business_fare(),
                     id: g.next_route_id,
                     origin_icao: origin.into(),

@@ -150,6 +150,7 @@ func refresh(force: bool = false) -> void:
 	note.text = "Summen: gesamte erfasste Wirtschaft. Routenarchiv und Diagramme ab %s.\nBei älteren Spielständen fehlt frühere Detailhistorie; sie wird nicht nachberechnet. Flugzeugkäufe insgesamt: %s · Wartungschecks insgesamt: %s · Gehälter insgesamt: %s." % [info.get("since", "—"), UI.money(summary["purchases_eur"]), UI.money(summary["maintenance_eur"]), UI.money(summary["payroll_eur"])]
 	note.text += "\nTreibstoff weltweit: %.2f EUR/kg · %s%d Cent/kg gegenüber vor 30 Tagen (wöchentlich)." % [summary["fuel_cents_per_kg"] / 100.0, "↑ +" if summary["fuel_month_delta_cents"] > 0 else ("↓ " if summary["fuel_month_delta_cents"] < 0 else "→ "), summary["fuel_month_delta_cents"]]
 	note.text += "\nLeasingraten (in Kosten enthalten): %s · Flugzeugjournal netto inkl. Verkäufen, Kautionen, Raten und Rückgaben: %s." % [UI.money(summary["rent_eur"]), UI.money(summary["aircraft_cash_eur"])]
+	note.text += "\nBordservice (Kosten / Ersparnis gegenüber Standard, in Gesamtkosten enthalten): %s." % UI.money(summary["service_eur"])
 	aircraft_journal.clear()
 	var journal_root := aircraft_journal.create_item()
 	for entry in simulation.get_aircraft_cash_history():
@@ -202,6 +203,7 @@ func _select_route() -> void:
 	route_id = r["route_id"]
 	flight_count = r["flights"]
 	detail.text = "Route #%d · %s–%s · %d Landungen · %s\nFlugkosten ohne zentrale Gehälter und Wartungschecks; diese sind im Unternehmensergebnis enthalten. Historische Crewkosten bleiben erhalten. Kostenaufschlüsselung und Ticketpreis im Flug-Tooltip." % [route_id, r["origin"], r["destination"], flight_count, "Keine Flüge" if flight_count == 0 else "Gewinn" if r["profit_eur"] >= 0 else "Verlust"]
+	detail.text += "\nBordservice (Kosten / Ersparnis gegenüber Standard): %s." % UI.money(r["service_eur"])
 	load_chart.set_series(simulation.get_finance_series(route_id), "load", true)
 	_flights()
 
@@ -219,7 +221,7 @@ func _flights() -> void:
 		var values := [f["landing"], "%s → %s" % [f["origin"], f["destination"]], UI.money(f["ticket_eur"]), "%d / %d" % [f["passengers"], f["seats"]], "%.1f %%" % f["load_percent"], UI.money(f["revenue_eur"]), UI.money(f["costs_eur"]), UI.money(f["profit_eur"])]
 		for i in range(values.size()):
 			row.set_text(i, values[i])
-			row.set_tooltip_text(i, "Ticket: %s\nTreibstoff: %s\nFlughäfen: %s\nPersonal: %s\nWartung / Verwaltung: %s" % [UI.money(f["ticket_eur"]), UI.money(f["fuel_eur"]), UI.money(f["airport_eur"]), UI.money(f["crew_eur"]), UI.money(f["overhead_eur"])])
+			row.set_tooltip_text(i, "Ticket: %s\nTreibstoff: %s\nFlughäfen: %s\nPersonal: %s\nWartung / Verwaltung: %s\nBordservice (± Standard): %s" % [UI.money(f["ticket_eur"]), UI.money(f["fuel_eur"]), UI.money(f["airport_eur"]), UI.money(f["crew_eur"]), UI.money(f["overhead_eur"]), UI.money(f["service_eur"])])
 		row.set_custom_color(7, UI.POSITIVE if f["profit_eur"] >= 0 else UI.NEGATIVE)
 	page_label.text = "%d–%d von %d · neueste zuerst" % [offset + 1 if not rows.is_empty() else 0, offset + rows.size(), flight_count]
 	previous_button.disabled = offset == 0

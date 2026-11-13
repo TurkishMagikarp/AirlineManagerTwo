@@ -121,7 +121,7 @@ impl Offer {
     }
 }
 
-#[derive(Default)]
+#[derive(Debug, Default, PartialEq)]
 pub struct Estimate {
     pub business: i64,
     pub daily_passengers: f64,
@@ -142,6 +142,7 @@ pub(crate) fn same_offer(a: &Route, b: &Route) -> bool {
         && a.aircraft_id == b.aircraft_id
         && a.ticket_eur == b.ticket_eur
         && a.business_ticket_eur == b.business_ticket_eur
+        && a.service_level == b.service_level
         && a.plan.as_ref().map(|p| p.interval_seconds)
             == b.plan.as_ref().map(|p| p.interval_seconds)
 }
@@ -233,6 +234,7 @@ fn estimate_with_season(
             .then_with(|| frequency(&a.route).total_cmp(&frequency(&b.route)))
             .then(a.seats.cmp(&b.seats))
             .then(a.premium.cmp(&b.premium))
+            .then(a.route.service_level.cmp(&b.route.service_level))
     });
     let own_indices: Vec<_> = matching
         .iter()
@@ -273,7 +275,8 @@ fn estimate_with_season(
             if w > 0.0 && !o.premium {
                 frequency_sum[i] += f;
             }
-            weights[j][i] = f * w / (1.0 - w).max(1e-9)
+            weights[j][i] = o.route.service_level.rate().attractiveness * f * w
+                / (1.0 - w).max(1e-9)
                 * if o.premium {
                     crate::cabins::RULES.business_preference
                 } else {
