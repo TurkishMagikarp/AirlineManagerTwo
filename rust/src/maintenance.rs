@@ -368,6 +368,7 @@ impl Game {
     }
 
     fn finish_visit(&mut self, p: usize) -> Result<(), String> {
+        let distressed = self.distressed();
         let visit = self.fleet[p]
             .maintenance
             .take()
@@ -377,7 +378,7 @@ impl Game {
         plane.wear.check_seconds = 0;
         plane.wear.check_cycles = 0;
         plane.wear.checks = plane.wear.checks.saturating_add(1);
-        let Some(resume) = visit.resume else {
+        let Some(resume) = visit.resume.filter(|_| !distressed) else {
             return Ok(());
         };
         let (id, model, location) = (

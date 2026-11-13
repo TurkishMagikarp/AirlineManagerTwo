@@ -62,6 +62,8 @@ pub struct History {
     /// Additive (version 11): salaries paid at payroll boundaries and dismissals.
     #[serde(default)]
     pub payroll: Vec<Purchase>,
+    #[serde(default)]
+    pub financing: Vec<crate::financing::Entry>,
 }
 impl History {
     pub fn new(since: u64, opening_balance: i64) -> Self {
@@ -73,6 +75,7 @@ impl History {
             purchases: Vec::new(),
             maintenance: Vec::new(),
             payroll: Vec::new(),
+            financing: Vec::new(),
         }
     }
     pub fn record(&mut self, batch: Batch) {
@@ -125,7 +128,14 @@ impl History {
             .filter(|p| p.time <= time)
             .map(|p| i128::from(p.amount))
             .sum();
-        i128::from(self.opening_balance) + i128::from(profit)
+        i128::from(self.opening_balance)
+            + i128::from(profit)
+            + self
+                .financing
+                .iter()
+                .filter(|e| e.time <= time)
+                .map(|e| i128::from(e.cash))
+                .sum::<i128>()
             - purchases
             - self.maintenance_through(time)
             - self.payroll_through(time)
@@ -136,6 +146,13 @@ impl History {
             .iter()
             .filter(|p| p.time <= time)
             .map(|p| i128::from(p.amount))
+            .sum()
+    }
+    pub fn interest_through(&self, time: u64) -> i128 {
+        self.financing
+            .iter()
+            .filter(|e| e.time <= time)
+            .map(|e| i128::from(e.interest))
             .sum()
     }
     /// Maintenance spending up to and including `time`.

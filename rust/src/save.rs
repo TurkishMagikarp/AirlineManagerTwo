@@ -8,7 +8,7 @@ use std::io::{Read, Write};
 use std::path::Path;
 use std::time::Duration;
 
-const VERSION: u32 = 11;
+const VERSION: u32 = 12;
 // Bounded input, but allow multi-year archives with frequent legitimate changes.
 const MAX_BYTES: u64 = 8 * 1024 * 1024;
 
@@ -31,6 +31,8 @@ struct GameState {
     /// Additive (version 11); absent in older saves.
     #[serde(default)]
     staff: Option<crate::staff::Staff>,
+    #[serde(default)]
+    financing: Option<crate::financing::Financing>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -62,6 +64,7 @@ pub fn save(path: &Path, game: &Game) -> Result<(), String> {
     game.validate_operations()?;
     game.validate_maintenance()?;
     game.validate_staff()?;
+    game.validate_financing()?;
     game.validate_finance()?;
     game.validate_history()?;
     game.validate_competitors()?;
@@ -72,6 +75,7 @@ pub fn save(path: &Path, game: &Game) -> Result<(), String> {
             competitors: Some(game.competitors.clone()),
             history: game.history.clone(),
             staff: Some(game.staff.clone()),
+            financing: Some(game.financing.clone()),
             finance: Some(game.finance.clone()),
             airline: game.airline.clone(),
             routes: Some(SavedRoutes {
@@ -210,6 +214,11 @@ pub fn load(path: &Path) -> Result<Game, String> {
         routes: routes.routes,
         next_route_id: routes.next_route_id,
         staff: data.state.staff.unwrap_or_default(),
+        financing: if data.version >= 12 {
+            data.state.financing.ok_or("Kreditdaten fehlen.")?
+        } else {
+            Default::default()
+        },
     };
     game.validate_fleet()?;
     game.validate_routes()?;
@@ -257,6 +266,7 @@ pub fn load(path: &Path) -> Result<Game, String> {
     }
     game.validate_maintenance()?;
     game.validate_staff()?;
+    game.validate_financing()?;
     game.validate_finance()?;
     game.validate_history()?;
     game.validate_competitors()?;

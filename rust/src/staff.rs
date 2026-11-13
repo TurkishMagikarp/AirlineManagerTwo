@@ -335,6 +335,9 @@ impl Game {
     ) -> Result<(), String> {
         let c = config()?;
         let now = self.clock.elapsed().as_secs();
+        if check_funds {
+            self.require_solvent()?;
+        }
         let airline = self
             .airline
             .as_ref()
@@ -563,6 +566,16 @@ impl Game {
         (self.clock.elapsed().as_secs() / period)
             .checked_add(1)?
             .checked_mul(period)
+    }
+
+    pub fn next_payroll_amount(&self) -> Result<i64, String> {
+        let Some(due) = self.next_payroll_event() else {
+            return Ok(0);
+        };
+        self.staff.employees.iter().try_fold(0i64, |sum, e| {
+            sum.checked_add(Self::accrued(e, due)?)
+                .ok_or_else(|| "Finanzüberlauf.".into())
+        })
     }
 
     /// Settle all salaries up to the latest payroll boundary at or before now.

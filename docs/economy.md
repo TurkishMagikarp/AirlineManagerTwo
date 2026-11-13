@@ -95,8 +95,60 @@ Zeitgrenzen bleiben gültig. Persönliche Spielstände werden von Tests nicht be
 
 Zwei erste KI-Konkurrenten nutzen dieselben Kosten- und Nachfrageregeln wie der
 Spieler; Details: [README](../README.md#erste-ki-fluggesellschaften).
-Weiterhin keine Saisonalität, Wetter, Insolvenz oder Kosten für
+Weiterhin keine Saisonalität, Wetter, formale Insolvenz oder Kosten für
 geparkte Flugzeuge. Beide Richtungen sind symmetrisch; parallele Routen teilen
 jetzt den Tagesmarkt. Sehr billige Tickets können volle, aber verlustreiche Flüge
 ergeben. Noch keine harte Quote je Kalendertag und keine Umverteilung unverkaufter
 Marktanteile; weitere Grenzen: [Nachfrage](demand.md).
+
+## Kredite und Finanznot (Version 12)
+
+`config/financing.json` steuert alle Kreditstellwerte (nach Änderung neu bauen).
+Spieler und KI verwenden dieselben Rust-Methoden und dieselbe Simulationszeit:
+
+- Ein Kredit gleichzeitig, maximal 20 Mio. EUR. Keine automatische Überziehung,
+  keine Sicherheitenbewertung. Ein neuer Kredit ist erst nach vollständiger Tilgung
+  möglich. Ein bestehendes negatives Konto muss durch die Auszahlung mindestens
+  ausgeglichen werden; andernfalls wird der Antrag ohne Zustandsänderung abgelehnt.
+- 6 % Jahreszins auf die jeweilige Restschuld, Zahlung alle 30 Simulationstage.
+  Formel: `ceil(Restschuld × Jahreszins-Basispunkte × Periodentage / 3_650_000)`.
+  Ein Jahr hat hier 365 Tage; kein täglicher Zinseszins und keine untermonatige
+  Zinsabgrenzung. Beispiel: 1,2 Mio. EUR → 5.918 EUR Zins für die erste Periode.
+- 24 gleichmäßige Tilgungsraten: `ceil(Kreditbetrag / 24)`, letzte Rate höchstens
+  Restschuld. Erste Fälligkeit 30 Tage nach Auszahlung. Kostenlose Sondertilgung
+  jederzeit aus vorhandenem Guthaben; sie reduziert die Laufzeit, nicht die Rate.
+- Am Zahlungstermin werden zuerst Zinsen gebucht, dann fällige Tilgung soweit
+  Guthaben vorhanden ist. Fehlende Tilgung bleibt überfällig, ohne Strafzins.
+  Späteres Guthaben tilgt Rückstände an der nächsten Abrechnungsgrenze automatisch.
+  Künftige Zinsen fallen nur auf verbleibende Hauptschuld an.
+- Unter 1 Mio. EUR erfolgt eine Liquiditätswarnung. Negatives Konto **oder**
+  überfällige Tilgung bedeuten Finanznot: keine Flugzeugkäufe, Einstellungen,
+  neuen Routen oder Flugpläne. Bestehende Flüge landen samt Bodenzeit regulär,
+  danach wird der Flugplan ausgesetzt, auch bei lückenlosem Pendelbetrieb.
+  Wartung startet nach Finanznot keinen ausgesetzten Flugplan automatisch neu.
+- Negative Kontostände repräsentieren offene Betriebs-/Zinsverpflichtungen,
+  **kein** frei ausgebbares Kreditlimit. Bereits eingegangene Gehalts- und
+  Wartungsverpflichtungen werden weiter gebucht und können das Defizit erhöhen.
+  Personal abbauen und Dienste einstellen, einen zulässigen Kredit aufnehmen
+  oder laufende Einnahmen nutzen: sobald Konto und Tilgungsrückstände ausgeglichen
+  sind, entfällt die Sperre. Kein automatischer Neustart von Diensten.
+- Die KI nimmt nur für bestehende Verpflichtungen/Defizite einen Reservekredit
+  auf (Ziel: mindestens Warnschwelle oder zwei Gehaltsperioden). Kein Kredit
+  für Flugzeugexpansion; mit Restschuld pausiert ihre Flottenerweiterung.
+  Überschüsse oberhalb der doppelten Reserve werden sondergetilgt. Nicht rettbare
+  Gesellschaften pausieren Expansion und entlassen ungenutztes Personal.
+
+Finanzen zeigt Guthaben, verfügbare Liquidität (`max(Kontostand, 0)`, **ohne**
+Reservierung künftiger Kosten), Restschuld, gebuchte Zinsen, nächste Kreditrate,
+Gehaltsfälligkeit und Tilgungsrückstände. Warnungen stehen auch in der Übersicht.
+Kreditauszahlung und Tilgung ändern das Konto, nicht Gewinn oder Umsatz.
+Zinsen gehören zu den zentralen Unternehmenskosten, nicht zu Routenflugkosten.
+
+Das additive Kreditjournal hält Zeit, Kontobewegung, Hauptschuldänderung und
+Zinsen fest; Kontodiagramme und Gewinn-/Kostenreihen berücksichtigen es.
+Versionen 1–11 bleiben lesbar: keine erfundenen Altkredite, rückwirkenden Zinsen
+oder geänderten historischen Flüge/Gehälter. Negative Altkonten starten in
+Finanznot. Speichern prüft Restschuld gegen Journal und Konto gegen Historie.
+Alle Zahlungstermine, Landungen und Aussetzungen sind unabhängig von 1×/4×/16×
+und Schrittgröße. Noch keine Insolvenz, Liquidation, Umschuldung, Verkäufe,
+Steuern, Rating-/Sicherheitenmodelle oder ausgefeilte KI-Sanierung.

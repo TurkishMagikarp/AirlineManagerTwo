@@ -20,6 +20,8 @@ pub struct Game {
     pub competitors: Vec<crate::competition::Competitor>,
     #[serde(default)]
     pub staff: crate::staff::Staff,
+    #[serde(default)]
+    pub financing: crate::financing::Financing,
 }
 
 impl Default for Game {
@@ -35,6 +37,7 @@ impl Default for Game {
             history: None,
             competitors: Vec::new(),
             staff: crate::staff::Staff::default(),
+            financing: Default::default(),
         }
     }
 }
@@ -116,6 +119,7 @@ impl Game {
 
     /// All checks precede the single synchronous purchase: no debit or ID on failure.
     pub fn buy_aircraft(&mut self, model_id: &str) -> Result<(), String> {
+        self.require_solvent()?;
         let airline = self
             .airline
             .as_mut()
