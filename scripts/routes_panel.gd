@@ -311,8 +311,11 @@ func _refresh_competition() -> void:
 	if competition_label == null:
 		return
 	var route := _route()
+	var companies: PackedStringArray = ["KONKURRENZÜBERSICHT · alle Strecken und Flotten"]
+	for company in simulation.get_competitors():
+		companies.append("%s · Guthaben %d EUR · %d Flugzeuge\n%s\nFlotte:\n%s\nKäufe: %s\nEntscheidung: %s" % [company["airline"], company["balance"], company["fleet_size"], company["routes"], company["fleet"], company["purchases"], company["last_action"]])
 	if route.is_empty():
-		competition_label.text = "Route auswählen, um den gemeinsamen Passagiermarkt zu sehen."
+		competition_label.text = "\n\n".join(companies)
 		return
 	var live_route: Dictionary = route
 	for current in simulation.get_routes():
@@ -322,7 +325,7 @@ func _refresh_competition() -> void:
 	for offer in simulation.get_route_competition(route["id"]):
 		lines.append("%s · %s · %d Sitze · %d EUR\n%.1f Abflüge/Tag je Richtung → ca. %.0f Pax/Tag · %.1f %% der beförderten Pax%s\n%s" % [offer["airline"], offer["model"], offer["seats"], offer["ticket_eur"], offer["departures_per_day_per_direction"], offer["passengers_per_day"], offer["share_percent"], "" if offer["active"] else " · inaktiv", offer["last_action"]])
 	lines.append("Ein Markt für alle Airlines. Preis und Frequenz verteilen Nachfrage; Sitze begrenzen Buchungen. Nicht bediente Nachfrage verfällt. Schätzung, keine garantierten Buchungen. KI prüft wöchentlich Preise und Verluste.")
-	competition_label.text = "\n\n".join(lines)
+	competition_label.text = "\n\n".join(companies) + "\n\n" + "\n\n".join(lines)
 
 
 func _assignment_preview() -> void:

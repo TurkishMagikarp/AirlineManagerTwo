@@ -363,6 +363,59 @@ impl SimulationClock {
     }
 
     #[func]
+    fn get_competitors(&self) -> Array<VarDictionary> {
+        self.game
+            .competitors
+            .iter()
+            .map(|c| {
+                let g = &c.game;
+                let routes = g
+                    .routes
+                    .iter()
+                    .map(|r| {
+                        format!(
+                            "{} ↔ {} · {} EUR · {}",
+                            r.origin_icao,
+                            r.destination_icao,
+                            r.ticket_eur,
+                            if r.plan.is_some() { "aktiv" } else { "inaktiv" }
+                        )
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                let fleet = g
+                    .fleet
+                    .iter()
+                    .map(|p| {
+                        format!(
+                            "{} · {} · {} · Kauf {} EUR",
+                            p.identifier(),
+                            p.model_id,
+                            p.location_icao,
+                            p.purchase_price_eur
+                        )
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                let purchases = g
+                    .history
+                    .as_ref()
+                    .unwrap()
+                    .purchases
+                    .iter()
+                    .map(|p| format!("{}: {} EUR", operations::display_time(p.time), p.amount))
+                    .collect::<Vec<_>>()
+                    .join(" · ");
+                vdict! { "airline" => g.airline.as_ref().unwrap().name.as_str(),
+                "balance" => g.airline.as_ref().unwrap().capital_eur,
+                "fleet_size" => g.fleet.len() as i64, "routes" => routes.as_str(),
+                "fleet" => fleet.as_str(), "purchases" => purchases.as_str(),
+                "last_action" => c.last_action.as_str() }
+            })
+            .collect()
+    }
+
+    #[func]
     fn get_route_competition(&self, route_id: u32) -> Array<VarDictionary> {
         let Some(route) = self.game.routes.iter().find(|r| r.id == route_id) else {
             return Array::new();

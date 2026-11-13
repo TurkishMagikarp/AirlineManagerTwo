@@ -6,7 +6,7 @@ func _initialize() -> void:
 
 
 func _snapshot(sim: RefCounted) -> String:
-	return JSON.stringify([sim.get_elapsed_seconds(), sim.get_airline_info(), sim.get_financial_summary(), sim.get_flight_results(), sim.get_routes(), sim.get_route_competition(1)])
+	return JSON.stringify([sim.get_elapsed_seconds(), sim.get_airline_info(), sim.get_financial_summary(), sim.get_flight_results(), sim.get_routes(), sim.get_route_competition(1), sim.get_competitors()])
 
 
 func _run() -> void:
@@ -54,6 +54,8 @@ func _run() -> void:
 	main._show_page(2)
 	var panel = main.routes_panel
 	panel.refresh()
+	if not _check("Continental Sky" in panel.competition_label.text and "Käufe:" in panel.competition_label.text, "All rival fleets and purchases visible without route selection"):
+		return
 	panel.route_tree.get_root().get_child(0).select(0)
 	panel.route_tree.item_selected.emit()
 	if not _check("Regional Wings" in panel.competition_label.text and "Competition Air" in panel.competition_label.text and "Pax/Tag" in panel.competition_label.text, "Route UI shows real competitor and estimated split"):
@@ -76,6 +78,25 @@ func _run() -> void:
 	scroll.ensure_control_visible(panel.competition_label)
 	await process_frame
 	if not _check(main.size.x <= 680 and panel.competition_label.size.x <= 680, "Competition panel wraps in small window"):
+		return
+	# Separate viable-market fixture: the cheap high-frequency player above can
+	# legitimately prevent a rival from accumulating an expansion budget.
+	var expansion: RefCounted = ClassDB.instantiate("SimulationClock")
+	expansion.found_airline("Expansion Air", "DE", "EDDF")
+	expansion.buy_aircraft("atr72_600")
+	expansion.create_route("EDDF", "EDDM", 1)
+	expansion.set_ticket_price(1, 90)
+	expansion.schedule_route(1, 1, 360)
+	expansion.start()
+	if not _check(expansion.advance(52.0 * 7.0 * 86400.0), "One-year expansion through real DLL"):
+		return
+	var grew := false
+	for company in expansion.get_competitors():
+		grew = grew or company["fleet_size"] > 1
+	if not _check(grew, "Profitable rival buys aircraft and expands"):
+		return
+	var expanded_path := path + ".expanded"
+	if not _check(expansion.save_game(expanded_path).is_empty() and slow.load_game(expanded_path).is_empty() and _snapshot(expansion) == _snapshot(slow), "Expanded fleets, routes and purchase history survive save/load"):
 		return
 	main.queue_free()
 	await process_frame

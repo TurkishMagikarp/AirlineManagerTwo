@@ -231,19 +231,26 @@ passenden Angebote, auch umgekehrte Strecken, mit Airline, Flugzeug/Sitzen, Prei
 Abflügen/Tag und geschätzten Pax/Tag/Richtung. Prozentwerte beziehen sich auf die
 geschätzten **beförderten** Passagiere, nicht auf den gesamten Basismarkt.
 Inaktive Angebote werden als solche angezeigt. Die letzte KI-Entscheidung steht dabei.
-Karte, eigene Flotte und Finanzansichten bleiben spielerbezogen; KI-Angebote sind
-zunächst im Wettbewerbsbereich der Routen sichtbar.
+Karte, eigene Flotte und Finanzansichten bleiben spielerbezogen. Der Wettbewerbsbereich
+zeigt auch ohne ausgewählte eigene Route alle KI-Strecken, Flotten, Standorte,
+Kaufzeitpunkte, Guthaben und die letzte Entscheidung.
 
 Alle sieben Spieltage prüft jede KI drei Preise (bisheriger Preis und ±10 EUR)
-mit derselben Gewinnberechnung. Nach zwei aufeinanderfolgenden Verlustwochen
-wird der Flugplan beendet, sofern das Flugzeug geparkt ist; andernfalls wird dies
-bei der nächsten Prüfung erneut versucht. Nach vier weiteren Wochenprüfungen ohne
-Flugbetrieb prüft die KI den gemeinsamen Markt erneut (Preise 30–150 % des
-Referenzpreises, gleiche Gewinnberechnung) und nimmt die Verbindung zum
-gewinnstärksten Preis wieder auf, sofern ein Gewinn je Flug erwartet wird; sonst
-wartet sie weitere vier Wochen. Das Flugzeug startet dort, wo es geparkt ist.
-Keine automatische Erschließung neuer Strecken oder Flottenvergrößerung. Aktuell je KI nur eine Strecke;
-die Verlustprüfung verwendet deshalb ihr gesamtes Betriebsergebnis.
+mit derselben Gewinnberechnung. Zwei aufeinanderfolgende Verlustwochen **je Route**
+führen zur Schließung, sobald die Maschine geparkt ist. Flugzeug, Konto und
+Finanzarchiv bleiben erhalten; Gewinne anderer Strecken verdecken Verluste nicht.
+
+Alle vier Wochen sucht die KI höchstens eine neue Verbindung: freie geparkte
+Maschinen zuerst, sonst ein regulär gekauftes Flugzeug am Heimatflughafen.
+Start ist immer der tatsächliche Standort, Reichweite und Flug-/Bodenzeiten gelten
+wie beim Spieler. Keine doppelte eigene Verbindung im selben Markt. Kandidaten
+werden mit allen konkurrierenden Angeboten bei 30–150 % des Referenzpreises geprüft.
+Voraussetzungen: mindestens 5.000 EUR erwarteter Wochengewinn, Kaufamortisation
+innerhalb von 104 Wochen und nach dem Kauf mindestens 1 Mio. EUR bzw. vier Wochen
+Bruttobetriebskosten Reserve (der höhere Wert gilt). Maximal sechs Flugzeuge je KI.
+Nach einer Schließung beginnt die Expansionswartezeit erneut. Alte gespeicherte
+stillgelegte Flugpläne behalten ihre bisherige Wiedereinstiegsprüfung.
+Diese konservativen Grenzen sind vorläufiges Balancing, keine optimale Strategie.
 
 Vereinfachung: deterministischer Tagesdurchschnitt ohne Einzelbuchungen,
 Kapazitätsüberhänge werden nicht auf andere Angebote umverteilt. Wöchentliche
@@ -315,6 +322,8 @@ vorherige Finanzsummen, verlustfreie Flugblöcke und zeitgestempelte Käufe).
 Zusätzlich enthält `competitors` die vollständigen KI-Unternehmenszustände mit
 Flotte, Routen, Konten, Abflugergebnissen, Archiv und nächster Entscheidungszeit.
 Archivzeiten, Summen und Flugdaten werden beim Laden und Speichern validiert.
+Additive KI-Felder speichern Strecken-Verlustprüfungen und Expansionswartezeit;
+bisherige Version-9-Spielstände bleiben durch Standardwerte lesbar.
 Versionen **1–8** bleiben ladbar. Alte Airline-Spielstände erhalten die beiden
 KI-Unternehmen erst zum Ladezeitpunkt, ohne rückwirkende Flüge oder Änderungen
 am Spielerkonto; bereits gespeicherte Abflugergebnisse bleiben erhalten.
@@ -431,3 +440,13 @@ bleibt kompakt; tatsächliche KI-Marktänderungen erzeugen zusätzliche Archivbl
 KI-Wiedereinstieg verifiziert: **62 Rust-Tests** (inkl. Wiederaufnahme nach
 Stilllegung und Warten bei unrentablem Markt), Clippy ohne Warnungen, alle
 Godot-Tests und alle fünf Prozess-Neustarttests.
+
+KI-Expansion verifiziert: **66 Rust-Tests**, Clippy ohne Warnungen, elf Godot-Tests
+und alle fünf Prozess-Neustarttests. Neu geprüft: echte Käufe und Kontenabgleich,
+freie Maschinen statt Neukauf, begrenztes Budget, streckenbezogene Schließungen
+mit erhaltenem Archiv, gemeinsamer Passagiermarkt, Flottenlimit nach fünf Jahren,
+kompakter speicherbarer Langzeitstand und alte Version-9-KI-Felder. Der Godot-Test
+prüft zusätzlich Expansion über ein Jahr und das Laden vergrößerter Flotten.
+`START.bat --headless --quit-after 10` weiterhin erfolgreich. Noch keine Überführungen,
+Flugzeugverkäufe, Kredite, Insolvenz oder globale Netz-/Frequenzoptimierung;
+KI-Entscheidungen bleiben bewusst eine kleine deterministische Heuristik.

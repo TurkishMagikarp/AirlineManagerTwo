@@ -8,6 +8,15 @@ const REVIEW: u64 = 7 * 86400;
 const RETRY_AFTER: u32 = 4;
 /// Departure interval used by AI services, in minutes.
 const AI_INTERVAL_MINUTES: u32 = 360;
+const MAX_FLEET: usize = 6;
+const RESERVE: i64 = 1_000_000;
+
+#[derive(Clone, Default, Serialize, Deserialize)]
+pub struct RouteReview {
+    pub route_id: u32,
+    pub profit: i64,
+    pub losses: u32,
+}
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Competitor {
@@ -19,6 +28,10 @@ pub struct Competitor {
     /// Reviews since the last service was stopped; restart is checked at RETRY_AFTER.
     #[serde(default)]
     pub idle_reviews: u32,
+    #[serde(default)]
+    pub route_reviews: Vec<RouteReview>,
+    #[serde(default)]
+    pub growth_reviews: u32,
 }
 
 pub fn initial_competitors() -> Result<Vec<Competitor>, String> {
@@ -61,6 +74,8 @@ pub fn initial_competitors_at(now: Duration) -> Result<Vec<Competitor>, String> 
             last_profit: 0,
             last_action: "Flugbetrieb aufgenommen".into(),
             idle_reviews: 0,
+            route_reviews: Vec::new(),
+            growth_reviews: 0,
         });
     }
     Ok(companies)
@@ -90,6 +105,7 @@ impl Game {
                 || c.losing_reviews > 2
                 || c.idle_reviews > RETRY_AFTER
                 || c.last_action.len() > 200
+                || c.growth_reviews > RETRY_AFTER
             {
                 return Err("Widersprüchlicher KI-Zustand.".into());
             }
@@ -103,6 +119,15 @@ impl Game {
             g.validate_operations()?;
             g.validate_finance()?;
             g.validate_history()?;
+            let mut reviewed = std::collections::HashSet::new();
+            for r in &c.route_reviews {
+                if r.losses > 2
+                    || !reviewed.insert(r.route_id)
+                    || !g.routes.iter().any(|route| route.id == r.route_id)
+                {
+                    return Err("Ungültige KI-Streckenprüfung.".into());
+                }
+            }
             if g.history.is_none() {
                 return Err("KI-Finanzhistorie fehlt.".into());
             }
@@ -145,8 +170,9 @@ impl Game {
                 }
             }
             // All companies settle against the same immutable offer snapshot first.
-            let supply = staged.market_routes();
-            for c in &mut staged.competitors {
+            for i in 0..staged.competitors.len() {
+                let supply = staged.market_routes();
+                let c = &mut staged.competitors[i];
                 if c.next_review == end.as_secs() && !c.review(&supply) {
                     return false;
                 }
@@ -160,6 +186,12 @@ impl Game {
 
 impl Competitor {
     fn review(&mut self, supply: &[Route]) -> bool {
+        let mut other_supply = supply.to_vec();
+        for r in &self.game.routes {
+            if let Some(i) = other_supply.iter().position(|o| o == r) {
+                other_supply.remove(i);
+            }
+        }
         let profit = self.game.finance.totals.profit();
         let Some(period) = profit.checked_sub(self.last_profit) else {
             return false;
@@ -170,6 +202,7 @@ impl Competitor {
         } else {
             0
         };
+        let mut closed = Vec::new();
         for i in 0..self.game.routes.len() {
             let r = &self.game.routes[i];
             if r.plan.is_none() {
@@ -179,9 +212,35 @@ impl Competitor {
                 continue;
             }
             let id = r.id;
-            if self.losing_reviews >= 2 && self.game.stop_schedule(id).is_ok() {
+            let total = self
+                .game
+                .history
+                .as_ref()
+                .unwrap()
+                .totals(id, self.game.clock.elapsed().as_secs())
+                .profit();
+            let previous = self
+                .route_reviews
+                .iter()
+                .find(|s| s.route_id == id)
+                .cloned()
+                .unwrap_or_default();
+            let losses = if total < previous.profit {
+                (previous.losses + 1).min(2)
+            } else {
+                0
+            };
+            self.route_reviews.retain(|s| s.route_id != id);
+            self.route_reviews.push(RouteReview {
+                route_id: id,
+                profit: total,
+                losses,
+            });
+            if losses >= 2 && self.game.stop_schedule(id).is_ok() {
                 self.last_action = "Verlustverbindung nach zwei Verlustwochen eingestellt".into();
                 self.idle_reviews = 0;
+                self.growth_reviews = 0;
+                closed.push(id);
                 continue;
             }
             let r = &self.game.routes[i];
@@ -213,11 +272,153 @@ impl Competitor {
             }
             self.last_action = format!("Preisprüfung: {old} → {} EUR", best.1);
         }
+        for id in &closed {
+            if self.game.delete_route(*id).is_err() {
+                return false;
+            }
+            self.route_reviews.retain(|s| s.route_id != *id);
+        }
+        if !closed.is_empty() {
+            self.last_action = format!(
+                "{} Verluststrecke(n) nach zwei Verlustwochen geschlossen · Flugzeuge bleiben erhalten",
+                closed.len()
+            );
+        }
+        self.growth_reviews = (self.growth_reviews + 1).min(RETRY_AFTER);
+        if closed.is_empty() && self.growth_reviews >= RETRY_AFTER {
+            self.growth_reviews = 0;
+            if self.expand(&other_supply).is_err() {
+                return false;
+            }
+        }
         let Some(next) = self.next_review.checked_add(REVIEW) else {
             return false;
         };
         self.next_review = next;
         true
+    }
+
+    /// Bounded catalog search, no flight loop or separate economic model.
+    fn expand(&mut self, supply: &[Route]) -> Result<(), String> {
+        let g = &self.game;
+        let airline = g.airline.as_ref().ok_or("KI-Airline fehlt")?;
+        // Caller removed precisely our pre-review offers, including closed routes.
+        let mut offers = supply.to_vec();
+        offers.extend(g.routes.iter().cloned());
+        let mut committed_weekly_costs = 0;
+        for route in g.routes.iter().filter(|r| r.plan.is_some()) {
+            let plane = g
+                .fleet
+                .iter()
+                .find(|p| Some(p.id) == route.aircraft_id)
+                .ok_or("KI-Flugzeug fehlt")?;
+            let t = crate::economy::quote_shared(route, &plane.model_id, &offers)?;
+            committed_weekly_costs +=
+                t.costs() * (REVIEW / route.plan.as_ref().unwrap().interval_seconds) as i64;
+        }
+        let free: Vec<_> = g
+            .fleet
+            .iter()
+            .filter(|p| {
+                p.status == crate::aircraft::AircraftStatus::Parked
+                    && !g.routes.iter().any(|r| r.aircraft_id == Some(p.id))
+            })
+            .collect();
+        let mut options: Vec<_> = free
+            .iter()
+            .map(|p| (Some(p.id), p.model_id.as_str(), p.location_icao.as_str(), 0))
+            .collect();
+        if free.is_empty() && g.fleet.len() < MAX_FLEET {
+            for m in crate::aircraft::models()? {
+                if airline.capital_eur.saturating_sub(m.price_eur) >= RESERVE {
+                    options.push((None, &m.id, &airline.home_airport_icao, m.price_eur));
+                }
+            }
+        }
+        let mut best = None;
+        let mut best_week = 0;
+        for (plane, model, origin, cost) in options {
+            let m = crate::aircraft::model(model)?;
+            for airport in &crate::airports::catalog()?.airports {
+                if airport.icao == origin {
+                    continue;
+                }
+                let mut r = Route {
+                    id: g.next_route_id,
+                    origin_icao: origin.into(),
+                    destination_icao: airport.icao.clone(),
+                    aircraft_id: plane,
+                    ticket_eur: 0,
+                    plan: None,
+                };
+                if g.routes
+                    .iter()
+                    .any(|old| crate::demand::same_market(old, &r))
+                {
+                    continue;
+                }
+                let km = crate::routes::distance_km(origin, &airport.icao)?;
+                if km > f64::from(m.range_km) {
+                    continue;
+                }
+                let (flight, ground) = crate::operations::timings(&r, model)?;
+                let interval = u64::from(AI_INTERVAL_MINUTES).max((flight + ground).div_ceil(60));
+                r.plan = Some(crate::operations::FlightPlan {
+                    first_departure: g.clock.elapsed().as_secs() + 60,
+                    interval_seconds: interval * 60,
+                    completed_flights: 0,
+                    airborne: None,
+                });
+                for step in 3..=15 {
+                    r.ticket_eur = (crate::economy::reference_price(km) * f64::from(step) / 10.0)
+                        .round() as i64;
+                    let mut market = offers.clone();
+                    market.push(r.clone());
+                    let t = crate::economy::quote_shared(&r, model, &market)?;
+                    let week = t.profit() * (REVIEW / (interval * 60)) as i64;
+                    // Reserve also covers four weeks of gross operating costs.
+                    let buffer = ((committed_weekly_costs
+                        + t.costs() * (REVIEW / (interval * 60)) as i64)
+                        * 4)
+                    .max(RESERVE);
+                    if week > best_week
+                        && week >= 5_000
+                        && week * 104 >= cost
+                        && airline.capital_eur.saturating_sub(cost) >= buffer
+                    {
+                        best_week = week;
+                        best = Some((plane, model.to_string(), r.clone(), interval as u32));
+                    }
+                }
+            }
+        }
+        let Some((plane, model, route, interval)) = best else {
+            self.last_action =
+                "Expansion geprüft · Budget/Reserve oder Markt nicht rentabel".into();
+            return Ok(());
+        };
+        let plane = match plane {
+            Some(id) => id,
+            None => {
+                self.game.buy_aircraft(&model)?;
+                self.game.fleet.last().unwrap().id
+            }
+        };
+        self.game
+            .create_route(&route.origin_icao, &route.destination_icao, plane)?;
+        self.game.set_ticket_price(route.id, route.ticket_eur)?;
+        self.game.schedule(route.id, 1, interval)?;
+        self.last_action = format!(
+            "{}–{} eröffnet · {} · erwartet {best_week} EUR/Woche",
+            route.origin_icao,
+            route.destination_icao,
+            if route.aircraft_id.is_some() {
+                "freie Maschine"
+            } else {
+                "Flugzeug gekauft"
+            }
+        );
+        Ok(())
     }
 
     /// A stopped service waits RETRY_AFTER reviews, then restarts at the most
@@ -301,6 +502,113 @@ mod tests {
 
     fn state(g: &Game) -> serde_json::Value {
         serde_json::to_value(g).unwrap()
+    }
+
+    #[test]
+    fn previous_v9_saves_default_new_review_fields_and_reject_corruption() {
+        let g = game();
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("previous-v9.json");
+        crate::save::save(&path, &g).unwrap();
+        let mut value: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        for c in value["state"]["competitors"].as_array_mut().unwrap() {
+            c.as_object_mut().unwrap().remove("route_reviews");
+            c.as_object_mut().unwrap().remove("growth_reviews");
+        }
+        std::fs::write(&path, serde_json::to_vec(&value).unwrap()).unwrap();
+        assert_eq!(state(&g), state(&crate::save::load(&path).unwrap()));
+        value["state"]["competitors"][0]["route_reviews"] = serde_json::json!([
+            {"route_id": 999, "profit": 0, "losses": 2}
+        ]);
+        std::fs::write(&path, serde_json::to_vec(&value).unwrap()).unwrap();
+        assert!(crate::save::load(&path).is_err());
+    }
+
+    #[test]
+    fn expansion_reuses_parked_aircraft_and_competes_for_existing_market() {
+        let mut c = initial_competitors().unwrap().remove(0);
+        c.game.stop_schedule(1).unwrap();
+        c.game.delete_route(1).unwrap();
+        let before = c.game.airline.as_ref().unwrap().capital_eur;
+        let mut rival = game().routes[0].clone();
+        rival.ticket_eur = 90;
+        c.expand(&[rival.clone()]).unwrap();
+        assert_eq!(c.game.fleet.len(), 1);
+        assert_eq!(c.game.airline.as_ref().unwrap().capital_eur, before);
+        assert_eq!(c.game.routes.len(), 1);
+        let r = &c.game.routes[0];
+        assert_eq!(r.origin_icao, c.game.fleet[0].location_icao);
+        let isolated = crate::demand::passengers(r, std::slice::from_ref(r)).unwrap();
+        let shared = crate::demand::passengers(r, &[r.clone(), rival.clone()]).unwrap();
+        assert!(shared < isolated);
+        let base = crate::demand::market(r, 0).unwrap().total();
+        let combined =
+            (shared + crate::demand::passengers(&rival, &[r.clone(), rival.clone()]).unwrap()) * 2;
+        assert!(combined as f64 <= base);
+    }
+
+    #[test]
+    fn expansion_spends_real_cash_and_obeys_budget_range_and_fleet_limit() {
+        let mut g = game();
+        assert!(g.advance(52.0 * REVIEW as f64));
+        let c = g
+            .competitors
+            .iter()
+            .find(|c| c.game.fleet.len() > 1)
+            .expect("a profitable airline should eventually expand");
+        assert!(c.game.routes.len() > 1);
+        assert!(c.game.airline.as_ref().unwrap().capital_eur >= RESERVE);
+        assert_eq!(
+            c.game
+                .history
+                .as_ref()
+                .unwrap()
+                .balance(c.game.clock.elapsed().as_secs()),
+            c.game.airline.as_ref().unwrap().capital_eur
+        );
+        g.validate_competitors().unwrap();
+        let mut poor = initial_competitors().unwrap().remove(0);
+        poor.game.airline.as_mut().unwrap().capital_eur = 100;
+        let fleet = poor.game.fleet.clone();
+        poor.expand(&[]).unwrap();
+        assert_eq!(poor.game.fleet, fleet);
+        assert_eq!(poor.game.airline.as_ref().unwrap().capital_eur, 100);
+        assert!(g.advance(365.0 * 86400.0 * 5.0));
+        for c in &g.competitors {
+            assert!(c.game.fleet.len() <= MAX_FLEET);
+            c.game.validate_routes().unwrap();
+            assert!(c.game.history.as_ref().unwrap().batches.len() < 5000);
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("expanded.json");
+        crate::save::save(&path, &g).unwrap();
+        assert_eq!(state(&g), state(&crate::save::load(&path).unwrap()));
+    }
+
+    #[test]
+    fn losses_are_measured_per_route_not_hidden_by_profitable_routes() {
+        let mut g = game();
+        let c = &mut g.competitors[0];
+        c.game.buy_aircraft("atr72_600").unwrap();
+        c.game.create_route("EDDF", "EDDM", 2).unwrap();
+        c.game.schedule(2, 1, 360).unwrap();
+        c.game.routes[0].ticket_eur = 100_000;
+        assert!(g.advance(2.0 * REVIEW as f64));
+        let c = &g.competitors[0];
+        assert!(!c.game.routes.iter().any(|r| r.id == 1));
+        assert!(c.game.routes.iter().any(|r| r.id == 2 && r.plan.is_some()));
+        assert_eq!(c.game.fleet.len(), 2);
+        assert!(
+            c.game
+                .history
+                .as_ref()
+                .unwrap()
+                .totals(1, 2 * REVIEW)
+                .flights
+                > 0
+        );
+        g.validate_competitors().unwrap();
     }
 
     #[test]
@@ -413,7 +721,7 @@ mod tests {
         g.competitors[0].game.routes[0].ticket_eur = 100_000;
         assert!(g.advance(2.0 * REVIEW as f64));
         let c = &g.competitors[0];
-        assert!(c.game.routes[0].plan.is_none());
+        assert!(c.game.routes.is_empty());
         assert_eq!(c.game.fleet.len(), 1);
         assert!(c.game.finance.totals.profit() < 0);
         assert_eq!(c.game.finance.totals.passengers, 0);
@@ -444,7 +752,7 @@ mod tests {
         let mut g = game();
         g.competitors[0].game.routes[0].ticket_eur = 100_000;
         assert!(g.advance(2.0 * REVIEW as f64));
-        assert!(g.competitors[0].game.routes[0].plan.is_none());
+        assert!(g.competitors[0].game.routes.is_empty());
         // Make every fare unprofitable by flooding the market with free seats.
         for _ in 0..3 {
             g.airline.as_mut().unwrap().capital_eur += 200_000_000;
@@ -456,9 +764,14 @@ mod tests {
             g.set_ticket_price(route, 0).unwrap();
             g.schedule(route, 1, 180).unwrap();
         }
+        // No budget for a different market either; free seats block the old market.
+        let c = &mut g.competitors[0];
+        c.game.airline.as_mut().unwrap().capital_eur = 0;
+        let h = c.game.history.as_mut().unwrap();
+        h.opening_balance -= h.balance(c.game.clock.elapsed().as_secs());
         assert!(g.advance(f64::from(RETRY_AFTER) * REVIEW as f64));
         let c = &g.competitors[0];
-        assert!(c.game.routes[0].plan.is_none());
+        assert!(c.game.routes.is_empty());
         assert!(
             c.last_action.contains("nicht rentabel"),
             "{}",
