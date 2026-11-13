@@ -111,3 +111,15 @@ Auswirkungen: Jede Wartungsunterbrechung beginnt einen neuen Archivblock, ebenso
 Marktänderungen durch KI-Flugzeuge in Wartung. Normale Zehnjahresstände benötigen
 jetzt ca. 92–243 KB (vorher 47–68 KB); der Extremtest mit rund zwei Millionen Flügen
 über ca. 228 Spieljahre ca. 4,9 MB (Limit 8 MiB).
+
+## Wartung: KI-Kosten, Routen-Tab, Stornierung (13.11.2026)
+
+**83 Rust-Tests**, Clippy ohne Warnungen, alle Godot-Testskripte und alle sechs
+Prozess-Neustarttests; `START.bat --headless --quit-after 10` endet mit Code 0.
+Neu geprüft: KI-Streckenprüfung zählt eine Woche als Verlust, wenn der Betriebsgewinn
+den Wartungsanteil der Landungen nicht deckt (ältere Spielstände ohne Landungszähler
+werden in der ersten Woche wie bisher bewertet); Stornierung eines noch nicht
+begonnenen Auftrags nach Speichern/Laden bei 1×/4×/16× ergibt exakt denselben Zustand
+wie ohne Auftrag, keine Abbuchung; laufende Wartung nicht stornierbar; Routen-Tab
+sperrt „Flugplan aktivieren“ während der Wartung und zeigt den Status, der nach
+Wartungsende wieder verschwindet. Spielstandversion unverändert (10), neues Feld additiv.

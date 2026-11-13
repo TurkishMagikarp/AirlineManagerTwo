@@ -563,7 +563,9 @@ impl SimulationClock {
                     "daily_business" => market.business.floor() as i64,
                     "daily_leisure" => market.leisure.floor() as i64,
                     "estimated_passengers" => if r.plan.is_some() { demand::passengers(r, &supply).unwrap_or(0) } else { 0 },
-                    "actual_flights" => actual.flights, "actual_load_percent" => actual.load_percent()
+                    "actual_flights" => actual.flights, "actual_load_percent" => actual.load_percent(),
+                    "maintenance_status" => self.route_maintenance_status(r).as_str(),
+                    "can_schedule" => r.plan.is_none() && r.aircraft_id.is_some() && self.route_maintenance_status(r).is_empty()
                 })
             })
             .collect()
@@ -631,6 +633,17 @@ impl SimulationClock {
     fn request_maintenance(&mut self, aircraft_id: u32) -> GString {
         self.game
             .request_maintenance(aircraft_id)
+            .err()
+            .unwrap_or_default()
+            .as_str()
+            .into()
+    }
+
+    /// Empty string means success. Only orders that have not started yet.
+    #[func]
+    fn cancel_maintenance(&mut self, aircraft_id: u32) -> GString {
+        self.game
+            .cancel_maintenance(aircraft_id)
             .err()
             .unwrap_or_default()
             .as_str()
@@ -785,6 +798,44 @@ impl SimulationClock {
 }
 
 impl SimulationClock {
+    /// Why the route's aircraft cannot start a new flight plan; empty if it can.
+    fn route_maintenance_status(&self, route: &routes::Route) -> String {
+        let Some(plane) = self
+            .game
+            .fleet
+            .iter()
+            .find(|p| Some(p.id) == route.aircraft_id)
+        else {
+            return String::new();
+        };
+        match &plane.maintenance {
+            Some(v) if plane.status == aircraft::AircraftStatus::Maintenance => format!(
+                "{} bis {}{}",
+                if v.unscheduled {
+                    "In Pflichtwartung"
+                } else {
+                    "In Wartung"
+                },
+                operations::display_time(v.end),
+                if v.resume.as_ref().is_some_and(|r| r.route_id == route.id) {
+                    " · Flugplan wird danach automatisch fortgesetzt"
+                } else {
+                    ""
+                }
+            ),
+            Some(v) => format!(
+                "Wartung beauftragt · beginnt nach der Landung {}",
+                operations::display_time(v.start)
+            ),
+            None if route.plan.is_none()
+                && maintenance::rules(&plane.model_id).is_ok_and(|r| plane.wear.is_due(r)) =>
+            {
+                "Wartung erforderlich (Zustand 0 %) · im Flotte-Tab warten".into()
+            }
+            None => String::new(),
+        }
+    }
+
     fn maintenance_info(&self, p: usize, plane: &aircraft::Aircraft) -> VarDictionary {
         let Ok(r) = maintenance::rules(&plane.model_id) else {
             return VarDictionary::new();
@@ -818,6 +869,7 @@ impl SimulationClock {
             "unscheduled_hours" => maintenance::duration(r, true).unwrap_or(0) as f64 / 3600.0,
             "due_time" => due.map(operations::display_time).unwrap_or_default().as_str(),
             "can_request_maintenance" => quote.is_ok(),
+            "can_cancel_maintenance" => state == "pending" && !visit.is_some_and(|v| v.unscheduled),
             "maintenance_hint" => quote.err().unwrap_or_default().as_str()
         }
     }

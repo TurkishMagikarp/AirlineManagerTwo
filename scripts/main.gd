@@ -55,6 +55,7 @@ var selected_aircraft: int = 0
 var maintenance_box: VBoxContainer
 var maintenance_details: Label
 var maintenance_button: Button
+var cancel_maintenance_button: Button
 var maintenance_status: Label
 var routes_panel: VBoxContainer
 var map_panel: VBoxContainer
@@ -452,6 +453,13 @@ func _build_maintenance(parent: VBoxContainer) -> void:
 	maintenance_button.tooltip_text = "Schickt das Flugzeug in die Wartung. Flugzeuge in der Luft beenden zuerst ihren Flug; während der Wartung finden keine Abflüge statt."
 	maintenance_button.pressed.connect(_request_maintenance)
 	maintenance_box.add_child(maintenance_button)
+	cancel_maintenance_button = Button.new()
+	cancel_maintenance_button.text = "Wartungsauftrag stornieren"
+	cancel_maintenance_button.theme_type_variation = "DangerButton"
+	cancel_maintenance_button.tooltip_text = "Nur solange die Wartung noch nicht begonnen hat (Flugzeug noch in der Luft). Es fallen keine Kosten an; der Flugplan läuft weiter."
+	cancel_maintenance_button.visible = false
+	cancel_maintenance_button.pressed.connect(_cancel_maintenance)
+	maintenance_box.add_child(cancel_maintenance_button)
 	maintenance_status = _label("", 15)
 	maintenance_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	maintenance_box.add_child(maintenance_status)
@@ -462,6 +470,7 @@ func _refresh_maintenance() -> void:
 	selected_aircraft = item.get_metadata(0) if item != null else 0
 	var plane: Dictionary = fleet_rows.get(selected_aircraft, {})
 	maintenance_button.disabled = plane.is_empty() or not plane.get("can_request_maintenance", false)
+	cancel_maintenance_button.visible = plane.get("can_cancel_maintenance", false)
 	if plane.is_empty():
 		maintenance_details.text = "Flugzeug in der Tabelle auswählen."
 		return
@@ -495,6 +504,17 @@ func _request_maintenance() -> void:
 	maintenance_status.add_theme_color_override("font_color", UI.POSITIVE if error.is_empty() else UI.NEGATIVE)
 	if error.is_empty():
 		save_status.text = "Wartung beauftragt · bitte Spielstand speichern."
+	_refresh_fleet()
+
+
+func _cancel_maintenance() -> void:
+	if selected_aircraft == 0:
+		return
+	var error: String = simulation.cancel_maintenance(selected_aircraft)
+	maintenance_status.text = "Wartungsauftrag storniert. Bitte speichern." if error.is_empty() else error
+	maintenance_status.add_theme_color_override("font_color", UI.POSITIVE if error.is_empty() else UI.NEGATIVE)
+	if error.is_empty():
+		save_status.text = "Wartungsauftrag storniert · bitte Spielstand speichern."
 	_refresh_fleet()
 
 

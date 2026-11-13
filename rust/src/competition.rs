@@ -16,6 +16,17 @@ pub struct RouteReview {
     pub route_id: u32,
     pub profit: i64,
     pub losses: u32,
+    /// Landings at the last review; the weekly result is charged the planned
+    /// maintenance share of the landings since. `None` in older saves: that
+    /// first week is judged without it.
+    #[serde(default)]
+    pub flights: Option<u64>,
+}
+
+/// Planned check cost per landing on `route`, part of every AI profit estimate.
+fn maintenance_per_flight(route: &Route, model: &str) -> Result<i64, String> {
+    let (flight, _) = crate::operations::timings(route, model)?;
+    crate::maintenance::cost_per_flight(model, flight)
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -328,7 +339,13 @@ impl Competitor {
                 other_supply.remove(i);
             }
         }
-        let profit = self.game.finance.totals.profit();
+        let maintenance = self.game.history.as_ref().map_or(0, |h| {
+            h.maintenance_through(self.game.clock.elapsed().as_secs())
+                .clamp(0, i128::from(i64::MAX)) as i64
+        });
+        let Some(profit) = self.game.finance.totals.profit().checked_sub(maintenance) else {
+            return false;
+        };
         let Some(period) = profit.checked_sub(self.last_profit) else {
             return false;
         };
@@ -357,20 +374,33 @@ impl Competitor {
                 continue;
             }
             let id = r.id;
-            let total = self
+            let Some(plane) = self.game.fleet.iter().find(|p| Some(p.id) == r.aircraft_id) else {
+                return false;
+            };
+            let Ok(maintenance) = maintenance_per_flight(r, &plane.model_id) else {
+                return false;
+            };
+            let totals = self
                 .game
                 .history
                 .as_ref()
                 .unwrap()
-                .totals(id, self.game.clock.elapsed().as_secs())
-                .profit();
+                .totals(id, self.game.clock.elapsed().as_secs());
+            let (total, flights) = (totals.profit(), totals.flights.max(0) as u64);
             let previous = self
                 .route_reviews
                 .iter()
                 .find(|s| s.route_id == id)
                 .cloned()
-                .unwrap_or_default();
-            let losses = if total < previous.profit {
+                .unwrap_or(RouteReview {
+                    flights: Some(0),
+                    ..Default::default()
+                });
+            let landed = previous.flights.map_or(0, |f| flights.saturating_sub(f));
+            let week = i128::from(total)
+                - i128::from(previous.profit)
+                - i128::from(landed) * i128::from(maintenance);
+            let losses = if week < 0 {
                 (previous.losses + 1).min(2)
             } else {
                 0
@@ -380,6 +410,7 @@ impl Competitor {
                 route_id: id,
                 profit: total,
                 losses,
+                flights: Some(flights),
             });
             if losses >= 2 && self.game.stop_schedule(id).is_ok() {
                 self.last_action = "Verlustverbindung nach zwei Verlustwochen eingestellt".into();
@@ -474,8 +505,8 @@ impl Competitor {
                 .find(|p| Some(p.id) == route.aircraft_id)
                 .ok_or("KI-Flugzeug fehlt")?;
             let t = crate::economy::quote_shared(route, &plane.model_id, &offers)?;
-            committed_weekly_costs +=
-                t.costs() * (REVIEW / route.plan.as_ref().unwrap().interval_seconds) as i64;
+            committed_weekly_costs += (t.costs() + maintenance_per_flight(route, &plane.model_id)?)
+                * (REVIEW / route.plan.as_ref().unwrap().interval_seconds) as i64;
         }
         let free: Vec<_> = g
             .fleet
@@ -525,6 +556,7 @@ impl Competitor {
                     continue;
                 }
                 let (flight, ground) = crate::operations::timings(&r, model)?;
+                let maintenance = crate::maintenance::cost_per_flight(model, flight)?;
                 let interval = u64::from(AI_INTERVAL_MINUTES).max((flight + ground).div_ceil(60));
                 r.plan = Some(crate::operations::FlightPlan {
                     first_departure: g.clock.elapsed().as_secs() + 60,
@@ -537,10 +569,10 @@ impl Competitor {
                     let mut market = offers.clone();
                     market.push(r.clone());
                     let t = crate::economy::quote_shared(&r, model, &market)?;
-                    let week = t.profit() * (REVIEW / (interval * 60)) as i64;
+                    let week = (t.profit() - maintenance) * (REVIEW / (interval * 60)) as i64;
                     // Reserve also covers four weeks of gross operating costs.
                     let buffer = ((committed_weekly_costs
-                        + t.costs() * (REVIEW / (interval * 60)) as i64)
+                        + (t.costs() + maintenance) * (REVIEW / (interval * 60)) as i64)
                         * 4)
                     .max(RESERVE);
                     if week > best_week
@@ -613,6 +645,9 @@ impl Competitor {
             interval_seconds: u64::from(AI_INTERVAL_MINUTES) * 60,
             ..Default::default()
         });
+        let Ok(maintenance) = maintenance_per_flight(&candidate, &model) else {
+            return false;
+        };
         let mut best: Option<(i64, i64)> = None;
         for step in 3..=15 {
             let price = ((reference * f64::from(step) / 10.0).round() as i64).clamp(0, 100_000);
@@ -622,8 +657,9 @@ impl Competitor {
             let Ok(t) = crate::economy::quote_shared(&candidate, &model, &offers) else {
                 return false;
             };
-            if best.is_none_or(|(profit, _)| t.profit() > profit) {
-                best = Some((t.profit(), price));
+            let profit = t.profit() - maintenance;
+            if best.is_none_or(|(best, _)| profit > best) {
+                best = Some((profit, price));
             }
         }
         let Some((profit, price)) = best.filter(|(profit, _)| *profit > 0) else {
@@ -710,6 +746,7 @@ mod tests {
             route_id: 1,
             profit: 0,
             losses: 2,
+            flights: None,
         }];
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("legacy-pending.json");
@@ -846,6 +883,48 @@ mod tests {
         }
         assert!(forced, "unfunded aircraft are grounded at the limit");
         g.validate_competitors().unwrap();
+    }
+
+    #[test]
+    fn route_reviews_charge_the_planned_maintenance_share_per_landing() {
+        let mut g = game();
+        g.competitors.truncate(1);
+        assert!(g.advance(3.0 * 86400.0));
+        let supply = g.market_routes();
+        let base = g.competitors[0].clone();
+        let route = base.game.routes[0].clone();
+        let maintenance = maintenance_per_flight(&route, &base.game.fleet[0].model_id).unwrap();
+        assert!(maintenance > 1);
+        let t = base
+            .game
+            .history
+            .as_ref()
+            .unwrap()
+            .totals(route.id, 3 * 86400);
+        assert!(t.flights > 1);
+        let losses = |gain: i64, flights: Option<u64>| {
+            let mut c = base.clone();
+            c.route_reviews = vec![RouteReview {
+                route_id: route.id,
+                profit: t.profit() - gain,
+                losses: 0,
+                flights,
+            }];
+            assert!(c.review(&supply));
+            let r = c
+                .route_reviews
+                .iter()
+                .find(|r| r.route_id == route.id)
+                .unwrap();
+            assert_eq!(r.flights, Some(t.flights as u64));
+            r.losses
+        };
+        let since = Some(t.flights as u64 - 1);
+        // One landing earned less than its maintenance share: a losing week.
+        assert_eq!(losses(maintenance - 1, since), 1);
+        assert_eq!(losses(maintenance, since), 0);
+        // Older saves without a landing count judge that first week as before.
+        assert_eq!(losses(1, None), 0);
     }
 
     #[test]
