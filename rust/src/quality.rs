@@ -146,7 +146,15 @@ fn mixed_three_company_markets_remain_bounded_on_every_airport_pair() {
                 let daily: f64 = routes
                     .iter()
                     .map(|r| {
-                        let q = crate::economy::quote_shared(r, "atr72_600", &routes).unwrap();
+                        let q = crate::economy::quote_shared(
+                            r,
+                            "atr72_600",
+                            &routes
+                                .iter()
+                                .map(|r| crate::demand::Offer::new(r, 72))
+                                .collect::<Vec<_>>(),
+                        )
+                        .unwrap();
                         assert!((0..=q.seats).contains(&q.passengers));
                         q.passengers as f64 * 43200.0
                             / r.plan.as_ref().unwrap().interval_seconds as f64

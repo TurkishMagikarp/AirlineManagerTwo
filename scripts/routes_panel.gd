@@ -61,9 +61,9 @@ func _ready() -> void:
 	route_tree.column_titles_visible = true
 	route_tree.custom_minimum_size.y = 180
 	for i in range(6):
-		route_tree.set_column_title(i, ["Route", "Strecke", "Entfernung", "Flugzeug", "Nachfrage/Tag →", "Auslastung"][i])
+		route_tree.set_column_title(i, ["Route", "Strecke", "Entfernung", "Flugzeug", "Markt / Wir / Abgewiesen →", "Auslastung"][i])
 		route_tree.set_column_expand(i, i == 1 or i == 3)
-		route_tree.set_column_custom_minimum_width(i, [65, 140, 110, 170, 125, 100][i])
+		route_tree.set_column_custom_minimum_width(i, [65, 140, 110, 170, 220, 100][i])
 	route_tree.item_selected.connect(_selection_changed)
 	add_child(route_tree)
 	assignment = _select("Ausgewählte Route: Flugzeugzuweisung")
@@ -256,8 +256,8 @@ func refresh_operations() -> void:
 			var route: Dictionary = metrics.get(row.get_metadata(0)["id"], {})
 			if route.is_empty():
 				continue
-			row.set_text(4, "%d Pax" % route["daily_demand"])
-			row.set_tooltip_text(4, "Nachfrage bei eigenem Preis ohne Preiswettbewerb, NICHT pro Flug oder Route.\nGeschäft: ca. %d · Urlaub/Privat: ca. %d\nGeteilter Anteil pro Abflug vor Sitzlimit: %d Pax%s\nDie gemeinsame Marktaufteilung steht im Wettbewerbsbereich." % [route["daily_business"], route["daily_leisure"], route["estimated_passengers"], "" if route["has_plan"] else " (ohne eigenen Flugplan)"])
+			row.set_text(4, "%d / %d / %d" % [route["base_daily_market"], route["expected_daily_passengers"], route["daily_spill"]])
+			row.set_tooltip_text(4, "Pro Tag und Richtung: gemeinsamer Markt / erwartete eigene Passagiere / wegen Sitzmangel abgewiesen.\nAbgewiesen = eigener anfänglicher Anteil minus Beförderung vor Rundung; diese Reisenden können zur Konkurrenz wechseln.\nOhne eigenen Flugplan: keine Beförderung, kein Sitzmangel.\nErwartet pro Abflug: %d Pax" % route["estimated_passengers"])
 			row.set_text(5, "%.1f %%" % route["actual_load_percent"] if route["actual_flights"] > 0 else "Keine Flüge")
 			row.set_tooltip_text(5, "Tatsächlich beförderte Passagiere / angebotene Sitze aller archivierten Landungen dieser Route. Bei alten Spielständen ab Archivbeginn.")
 			if not String(route["maintenance_status"]).is_empty():

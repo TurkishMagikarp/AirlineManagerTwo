@@ -609,7 +609,8 @@ impl SimulationClock {
                     .as_ref()
                     .map(|p| 43200.0 / p.interval_seconds as f64)
                     .unwrap_or(0.0);
-                let passengers = demand::passengers(r, &supply)
+                let passengers = demand::estimate(r, model.seats, &supply)
+                    .map(|e| e.per_departure)
                     .unwrap_or(0)
                     .min(i64::from(model.seats)) as f64
                     * frequency;
@@ -649,6 +650,10 @@ impl SimulationClock {
             .filter_map(|r| {
                 let market = demand::market(r, r.ticket_eur).ok()?;
                 let base = demand::market(r, 0).ok()?;
+                let estimate = r.plan.as_ref().and_then(|_| {
+                    let plane = self.game.fleet.iter().find(|p| Some(p.id) == r.aircraft_id)?;
+                    demand::estimate(r, aircraft::model(&plane.model_id).ok()?.seats, &supply).ok()
+                }).unwrap_or_default();
                 let actual = self
                     .game
                     .history
@@ -664,7 +669,9 @@ impl SimulationClock {
                     "base_daily_market" => base.total().floor() as i64,
                     "daily_business" => market.business.floor() as i64,
                     "daily_leisure" => market.leisure.floor() as i64,
-                    "estimated_passengers" => if r.plan.is_some() { demand::passengers(r, &supply).unwrap_or(0) } else { 0 },
+                    "estimated_passengers" => estimate.per_departure,
+                    "expected_daily_passengers" => estimate.daily_passengers.floor() as i64,
+                    "daily_spill" => estimate.daily_spill.floor() as i64,
                     "actual_flights" => actual.flights, "actual_load_percent" => actual.load_percent(),
                     "maintenance_status" => self.route_maintenance_status(r).as_str(),
                     "staff_status" => self.route_staff_status(r).as_str(),
