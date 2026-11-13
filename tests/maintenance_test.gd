@@ -48,6 +48,7 @@ func _run() -> void:
 	var row: TreeItem = main.fleet_tree.get_root().get_child(0)
 	if not _check(row.get_text(4) == "100 %" and "FH" in row.get_text(5) and main.maintenance_button.disabled, "Fleet table shows condition and upcoming maintenance"):
 		return
+	sim.hire_missing_staff()
 	if not _check(sim.create_route("EDDF", "EDDM", 1).is_empty() and sim.schedule_route(1, 1, 120).is_empty(), "Shuttle scheduled"):
 		return
 	await _click(main.start_button)
@@ -93,6 +94,7 @@ func _run() -> void:
 		return
 	if not _check(main.fleet_tree.get_root().get_child(0).get_text(3).begins_with("In Wartung") and "In Wartung bis" in sim.get_operations()[0]["status_text"], "Fleet and routes show the hangar state"):
 		return
+	sim.hire_missing_staff()
 	if not _check(not sim.schedule_route(1, 1, 120).is_empty(), "Aircraft in maintenance cannot be scheduled"):
 		return
 	if not _check(not main.cancel_maintenance_button.visible and not sim.cancel_maintenance(1).is_empty() and sim.get_fleet()[0]["maintenance_state"] == "active", "Started maintenance cannot be cancelled"):

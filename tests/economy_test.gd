@@ -26,6 +26,7 @@ func _run() -> void:
 		simulation.buy_aircraft("atr72_600")
 		simulation.create_route("EDDF", "EDDM", 1)
 		simulation.set_ticket_price(1, 0)
+		simulation.hire_missing_staff()
 		simulation.schedule_route(1, 1, 120)
 		simulation.set_speed(16)
 		simulation.start()
@@ -39,6 +40,7 @@ func _run() -> void:
 		if not _check(simulation.stop_schedule(1).is_empty(), "Stop after returning home"):
 			return
 		simulation.set_ticket_price(1, 100000)
+		simulation.hire_missing_staff()
 		simulation.schedule_route(1, 1, 120)
 		simulation.advance((60.0 + flight) / 16.0)
 		simulation.pause()

@@ -13,11 +13,11 @@ func _run() -> void:
 	main.name_input.text = "Navigation Air"
 	main.found_button.pressed.emit()
 	await process_frame
-	if not _check(main.navigation.size() == 5, "Five navigation buttons including finances"):
+	if not _check(main.navigation.size() == 6, "Six navigation buttons including finances and staff"):
 		return
 	if not _check(main.navigation[0].has_focus(), "Initial keyboard focus"):
 		return
-	for index in range(5):
+	for index in range(6):
 		if index > 0:
 			var tab := InputEventKey.new()
 			tab.keycode = KEY_TAB
@@ -44,7 +44,7 @@ func _run() -> void:
 			return
 		if not _check(main.page_title.text == main.PAGES[index]["title"], "Visible page title"):
 			return
-		for other in range(5):
+		for other in range(6):
 			if not _check(main.navigation[other].button_pressed == (other == index), "Exclusive selected state"):
 				return
 		if not await _capture("page-%d.png" % index):

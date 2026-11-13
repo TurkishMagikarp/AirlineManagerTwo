@@ -20,6 +20,7 @@ func _run() -> void:
 		assert(sim.buy_aircraft("atr72_600").is_empty())
 	assert(sim.create_route("EDDF", "EDDM", 1).is_empty())
 	assert(sim.set_ticket_price(1, 71).is_empty())
+	sim.hire_missing_staff()
 	assert(sim.schedule_route(1, 1, 120).is_empty())
 	sim.set_speed(16)
 	sim.start()

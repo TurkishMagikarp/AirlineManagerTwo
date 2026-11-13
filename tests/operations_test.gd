@@ -45,6 +45,8 @@ func _run() -> void:
 		await _click(main.routes_panel.ticket_button)
 		if not _check(main.simulation.get_routes()[0]["ticket_eur"] == 100, "Ticket price set through actual UI"):
 			return
+		main.simulation.hire_missing_staff()
+		main.routes_panel.refresh_operations()
 		main.routes_panel.delay_input.value = 1
 		root.size = Vector2i(680, 520)
 		main.routes_panel.interval_input.value = 1

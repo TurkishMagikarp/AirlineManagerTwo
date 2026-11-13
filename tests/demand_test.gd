@@ -21,6 +21,7 @@ func _run() -> void:
 			sim.buy_aircraft("atr72_600")
 			sim.create_route("EDDF", "EDDM", id)
 			sim.set_ticket_price(id, 100)
+			sim.hire_missing_staff()
 			sim.schedule_route(id, 1, 120)
 		var routes: Array = sim.get_routes()
 		if not _check(routes[0]["daily_demand"] == routes[1]["daily_demand"] and routes[0]["estimated_passengers"] == routes[1]["estimated_passengers"], "Same daily market, shared equally"):
@@ -57,6 +58,7 @@ func _run() -> void:
 	await process_frame
 	if not _check(panel.route_tree.columns == 6 and main.size.x <= 680, "Demand table keeps small-window layout"):
 		return
+	sim.hire_missing_staff()
 	sim.schedule_route(1, 1, 120)
 	sim.start()
 	sim.advance(7200.0 / 16.0)

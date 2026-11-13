@@ -224,6 +224,7 @@ mod tests {
         g.found("Economy Air", "DE", "EDDF").unwrap();
         g.competitors.clear();
         g.buy_aircraft("atr72_600").unwrap();
+        g.staff_up();
         g.create_route("EDDF", "EDDM", 1).unwrap();
         g.set_ticket_price(1, price).unwrap();
         g.schedule(1, 1, 120).unwrap();
@@ -298,6 +299,7 @@ mod tests {
         let mut small = game(150);
         for g in [&mut large, &mut small] {
             g.buy_aircraft("atr72_600").unwrap();
+            g.staff_up();
             g.create_route("EDDF", "EDDM", 2).unwrap();
             g.set_ticket_price(2, 100000).unwrap();
             g.schedule(2, 1, 120).unwrap();
@@ -464,6 +466,7 @@ mod tests {
                     g.found("Calibration Air", country, origin).unwrap();
                     g.competitors.clear();
                     g.buy_aircraft(&model.id).unwrap();
+                    g.staff_up();
                     g.create_route(origin, destination, 1).unwrap();
                     g.set_ticket_price(1, price).unwrap();
                     let (flight, ground) = operations::timings(&g.routes[0], &model.id).unwrap();

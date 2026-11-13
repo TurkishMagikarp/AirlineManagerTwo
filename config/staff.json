@@ -1,0 +1,17 @@
+{
+  "payroll_period_days": 30,
+  "max_employees": 600,
+  "max_hire_batch": 50,
+  "salary_eur_per_period": {
+    "pilot": 6500,
+    "cabin_crew": 3200,
+    "technician": 4200
+  },
+  "models": {
+    "a320_200": { "pilots": 4, "cabin_crew": 6, "technicians": 6 },
+    "b737_800": { "pilots": 4, "cabin_crew": 7, "technicians": 6 },
+    "atr72_600": { "pilots": 4, "cabin_crew": 3, "technicians": 3 }
+  },
+  "first_names": ["Anna", "Mehmet", "Lukas", "Elif", "Jonas", "Sofia", "Emre", "Clara", "Felix", "Leyla", "Noah", "Mira", "Can", "Hanna", "Paul", "Selin", "Ben", "Ida", "Deniz", "Marta"],
+  "last_names": ["Schmidt", "Yilmaz", "Weber", "Demir", "Fischer", "Kaya", "Wagner", "Aydin", "Becker", "Celik", "Hoffmann", "Arslan", "Koch", "Sahin", "Richter", "Polat", "Klein", "Aksoy", "Wolf", "Ozturk"]
+}

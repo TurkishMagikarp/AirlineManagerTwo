@@ -32,6 +32,7 @@ func _run() -> void:
 	check(sim.found_airline("Map Test Air", "DE", "EDDF").is_empty(), "Found airline")
 	check(sim.buy_aircraft("atr72_600").is_empty(), "Buy real aircraft")
 	check(sim.create_route("EDDF", "EDDM", 1).is_empty(), "Create real route")
+	sim.hire_missing_staff()
 	check(sim.schedule_route(1, 1, 120).is_empty(), "Schedule real flight")
 	main._sync_view()
 	await process_frame

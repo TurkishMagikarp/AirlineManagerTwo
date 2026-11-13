@@ -4,6 +4,7 @@ extends Control
 const RoutesPanel = preload("res://scripts/routes_panel.gd")
 const MapPanel = preload("res://scripts/map_panel.gd")
 const FinancesPanel = preload("res://scripts/finances_panel.gd")
+const StaffPanel = preload("res://scripts/staff_panel.gd")
 const UI = preload("res://scripts/ui/components.gd")
 
 const PAGES: Array[Dictionary] = [
@@ -14,6 +15,7 @@ const PAGES: Array[Dictionary] = [
 	"body": "Verbindungen planen und Flugzeuge zuweisen."},
 	{"title": "Karte", "heading": "Live-Flugkarte", "body": "Dein Routennetz · Positionen zur simulierten Spielzeit"},
 	{"title": "Finanzen", "heading": "Finanzen & Routencontrolling", "body": "Echte Buchungen · Abrechnung bei Landung · ganze EUR"},
+	{"title": "Personal", "heading": "Personalverwaltung", "body": "Piloten, Flugbegleiter und Techniker · Gehälter werden regelmäßig gezahlt"},
 ]
 
 var navigation: Array[Button] = []
@@ -60,6 +62,7 @@ var maintenance_status: Label
 var routes_panel: VBoxContainer
 var map_panel: VBoxContainer
 var finances_panel: VBoxContainer
+var staff_panel: VBoxContainer
 var last_operation_second: int = -1
 var finance_panel: VBoxContainer
 var metrics: Dictionary = {}
@@ -87,15 +90,15 @@ func _ready() -> void:
 	brand.add_child(wordmark)
 	brand.add_child(_label("OPERATIONS CENTER", 12, UI.ACCENT))
 	var nav := GridContainer.new()
-	nav.columns = 6
+	nav.columns = 7
 	nav.add_theme_constant_override("h_separation", 8)
 	nav.add_theme_constant_override("v_separation", 8)
-	nav.resized.connect(func(): nav.columns = 6 if nav.size.x >= 900 else 3)
+	nav.resized.connect(func(): nav.columns = 7 if nav.size.x >= 1000 else 4)
 	column.add_child(nav)
 	for index in range(PAGES.size()):
 		var button := Button.new()
 		button.text = PAGES[index]["title"]
-		button.icon = load("res://resources/icons/%s.svg" % ["overview", "fleet", "routes", "map", "finance"][index])
+		button.icon = load("res://resources/icons/%s.svg" % ["overview", "fleet", "routes", "map", "finance", "staff"][index])
 		button.custom_minimum_size = Vector2(85, 42)
 		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		button.toggle_mode = true
@@ -133,6 +136,10 @@ func _ready() -> void:
 	finances_panel = FinancesPanel.new()
 	finances_panel.simulation = simulation
 	content.add_child(finances_panel)
+	staff_panel = StaffPanel.new()
+	staff_panel.simulation = simulation
+	staff_panel.changed.connect(func(): save_status.text = "Personal geändert · bitte Spielstand speichern.")
+	content.add_child(staff_panel)
 	_add_time_controls(column)
 	_build_founding()
 	_sync_view()
@@ -270,6 +277,9 @@ func _show_page(index: int) -> void:
 	routes_panel.visible = index == 2
 	map_panel.visible = index == 3
 	finances_panel.visible = index == 4
+	staff_panel.visible = index == 5
+	if index == 5:
+		staff_panel.refresh(true)
 	if index == 4:
 		finances_panel.refresh(true)
 	if index == 3:

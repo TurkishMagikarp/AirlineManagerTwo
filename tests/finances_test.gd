@@ -27,6 +27,7 @@ func _run() -> void:
 			sim.buy_aircraft("atr72_600")
 			sim.create_route("EDDF", "EDDM", id)
 			sim.set_ticket_price(id, 71 if id == 1 else 134)
+			sim.hire_missing_staff()
 			sim.schedule_route(id, 1, 120)
 		sim.start()
 		sim.advance(60.0 + 7200.0 * 1_000_000)

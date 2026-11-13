@@ -105,6 +105,7 @@ mod tests {
             let mut g = Game::default();
             g.found("Map Air", "DE", "EDDF").unwrap();
             g.buy_aircraft("atr72_600").unwrap();
+            g.staff_up();
             g.create_route("EDDF", "EDDM", 1).unwrap();
             g.schedule(1, 1, 120).unwrap();
             assert!(flights(&g).is_empty());

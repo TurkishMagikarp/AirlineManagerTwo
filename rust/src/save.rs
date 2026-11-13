@@ -8,7 +8,7 @@ use std::io::{Read, Write};
 use std::path::Path;
 use std::time::Duration;
 
-const VERSION: u32 = 10;
+const VERSION: u32 = 11;
 // Bounded input, but allow multi-year archives with frequent legitimate changes.
 const MAX_BYTES: u64 = 8 * 1024 * 1024;
 
@@ -28,6 +28,9 @@ struct GameState {
     routes: Option<SavedRoutes>,
     finance: Option<crate::economy::Finance>,
     history: Option<crate::history::History>,
+    /// Additive (version 11); absent in older saves.
+    #[serde(default)]
+    staff: Option<crate::staff::Staff>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -58,6 +61,7 @@ pub fn save(path: &Path, game: &Game) -> Result<(), String> {
     game.validate_routes()?;
     game.validate_operations()?;
     game.validate_maintenance()?;
+    game.validate_staff()?;
     game.validate_finance()?;
     game.validate_history()?;
     game.validate_competitors()?;
@@ -67,6 +71,7 @@ pub fn save(path: &Path, game: &Game) -> Result<(), String> {
         state: GameState {
             competitors: Some(game.competitors.clone()),
             history: game.history.clone(),
+            staff: Some(game.staff.clone()),
             finance: Some(game.finance.clone()),
             airline: game.airline.clone(),
             routes: Some(SavedRoutes {
@@ -204,6 +209,7 @@ pub fn load(path: &Path) -> Result<Game, String> {
         next_aircraft_id: fleet.next_aircraft_id,
         routes: routes.routes,
         next_route_id: routes.next_route_id,
+        staff: data.state.staff.unwrap_or_default(),
     };
     game.validate_fleet()?;
     game.validate_routes()?;
@@ -241,7 +247,16 @@ pub fn load(path: &Path) -> Result<Game, String> {
         }
     }
     game.validate_operations()?;
+    if data.version < 11 {
+        // Staff did not exist: employ the minimum for what already operates.
+        // Hired at the load instant and paid from then on, never retroactively.
+        game.grandfather_staff()?;
+        for c in &mut game.competitors {
+            c.game.grandfather_staff()?;
+        }
+    }
     game.validate_maintenance()?;
+    game.validate_staff()?;
     game.validate_finance()?;
     game.validate_history()?;
     game.validate_competitors()?;
@@ -262,7 +277,9 @@ mod tests {
         let mut game = Game::default();
         game.found("Route Save", "DE", "EDDF").unwrap();
         game.buy_aircraft("atr72_600").unwrap();
+        game.staff_up();
         game.buy_aircraft("atr72_600").unwrap();
+        game.staff_up();
         game.create_route("EDDF", "EDDM", 1).unwrap();
         game.create_route("LTFM", "LTFJ", 2).unwrap();
         save(&path, &game).unwrap();
@@ -430,7 +447,9 @@ mod tests {
         game.airline.as_mut().unwrap().capital_eur = price * 3;
         game.history.as_mut().unwrap().opening_balance = price * 3;
         game.buy_aircraft("atr72_600").unwrap();
+        game.staff_up();
         game.buy_aircraft("atr72_600").unwrap();
+        game.staff_up();
         // A historical purchase price need not equal the current catalog price.
         game.fleet[0].purchase_price_eur = 123;
         save(&path, &game).unwrap();
@@ -439,6 +458,7 @@ mod tests {
         assert_eq!(restored.airline, game.airline);
         assert_eq!(restored.next_aircraft_id, 3);
         restored.buy_aircraft("atr72_600").unwrap();
+        restored.staff_up();
         assert_eq!(restored.fleet[2].identifier(), "AM-000003");
         assert_eq!(restored.airline.as_ref().unwrap().capital_eur, 0);
     }
@@ -471,7 +491,9 @@ mod tests {
         game.airline.as_mut().unwrap().capital_eur = price * 2;
         game.history.as_mut().unwrap().opening_balance = price * 2;
         game.buy_aircraft("atr72_600").unwrap();
+        game.staff_up();
         game.buy_aircraft("atr72_600").unwrap();
+        game.staff_up();
         save(&path, &game).unwrap();
         let valid: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
         for (field, value) in [
