@@ -64,36 +64,36 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 391 fn close_loss_route(
 414 fn review(&mut self, supply: &[crate::demand::Offer]) -> bool
 687 fn review_rotations(&mut self, supply: &[crate::demand::Offer]) -> Result<Vec<u32>, String>
-839 fn plan_maintenance(&mut self, next_review: u64)
-852 fn expand(&mut self, supply: &[crate::demand::Offer]) -> Result<(), String>
-1163 fn retry(&mut self, i: usize, supply: &[crate::demand::Offer]) -> bool
-1248 mod tests
-1249 fn frequency_ai() -> Competitor
-1261 fn seasonal_ai_growth_uses_annual_view_and_weak_weeks_keep_viable_rotations()
-1318 fn frequency_growth_uses_shared_assignment_and_respects_cap()
-1352 fn frequency_growth_can_buy_or_lease_and_weak_loads_reduce_service()
-1404 fn frequency_review_keeps_a_service_during_maintenance()
-1424 fn frequency_growth_skips_maintenance_wrong_location_and_weak_market()
-1445 fn frequency_weak_airborne_service_retires_once_across_steps_speeds_and_restart()
-1516 fn trading_ai_leases_only_affordable_profitable_growth_and_sells_in_distress()
-1567 fn trading_ai_lease_economy_is_bounded_and_deterministic_over_two_years()
-1609 fn game() -> Game
-1621 fn state(g: &Game) -> serde_json::Value
-1626 fn airborne_loss_reviews_close_after_ground_time_even_across_restart()
-1682 fn previous_v9_saves_default_new_review_fields_and_reject_corruption()
-1703 fn expansion_reuses_parked_aircraft_and_competes_for_existing_market()
-1742 fn expansion_spends_real_cash_and_obeys_budget_range_and_fleet_limit()
-1780 fn ai_airlines_pay_for_regular_checks_before_reaching_the_limit()
-1836 fn route_reviews_charge_the_planned_maintenance_share_per_landing()
-1883 fn losses_are_measured_per_route_not_hidden_by_profitable_routes()
-1909 fn common_market_price_frequency_capacity_and_separate_ledgers()
-1963 fn mixed_fares_and_frequencies_never_duplicate_the_base_market()
-1997 fn speed_steps_reviews_and_restart_produce_identical_results()
-2026 fn losses_close_service_without_erasing_aircraft_or_finances()
-2059 fn unprofitable_markets_keep_rivals_idle_until_the_next_retry()
-2093 fn old_saves_keep_departure_snapshot_and_start_rivals_only_at_load_time()
-2124 fn price_reviews_preserve_airborne_quotes_for_both_owners()
-2151 fn invalid_ai_saves_and_overflow_cannot_partially_commit()
+828 fn plan_maintenance(&mut self, next_review: u64)
+841 fn expand(&mut self, supply: &[crate::demand::Offer]) -> Result<(), String>
+1152 fn retry(&mut self, i: usize, supply: &[crate::demand::Offer]) -> bool
+1237 mod tests
+1238 fn frequency_ai() -> Competitor
+1250 fn seasonal_ai_growth_uses_annual_view_and_weak_weeks_keep_viable_rotations()
+1307 fn frequency_growth_uses_shared_assignment_and_respects_cap()
+1341 fn frequency_growth_can_buy_or_lease_and_weak_loads_reduce_service()
+1393 fn frequency_review_keeps_a_service_during_maintenance()
+1413 fn frequency_growth_skips_maintenance_wrong_location_and_weak_market()
+1434 fn frequency_weak_airborne_service_retires_once_across_steps_speeds_and_restart()
+1505 fn trading_ai_leases_only_affordable_profitable_growth_and_sells_in_distress()
+1556 fn trading_ai_lease_economy_is_bounded_and_deterministic_over_two_years()
+1598 fn game() -> Game
+1610 fn state(g: &Game) -> serde_json::Value
+1615 fn airborne_loss_reviews_close_after_ground_time_even_across_restart()
+1671 fn previous_v9_saves_default_new_review_fields_and_reject_corruption()
+1692 fn expansion_reuses_parked_aircraft_and_competes_for_existing_market()
+1731 fn expansion_spends_real_cash_and_obeys_budget_range_and_fleet_limit()
+1769 fn ai_airlines_pay_for_regular_checks_before_reaching_the_limit()
+1825 fn route_reviews_charge_the_planned_maintenance_share_per_landing()
+1872 fn losses_are_measured_per_route_not_hidden_by_profitable_routes()
+1898 fn common_market_price_frequency_capacity_and_separate_ledgers()
+1952 fn mixed_fares_and_frequencies_never_duplicate_the_base_market()
+1986 fn speed_steps_reviews_and_restart_produce_identical_results()
+2015 fn losses_close_service_without_erasing_aircraft_or_finances()
+2048 fn unprofitable_markets_keep_rivals_idle_until_the_next_retry()
+2082 fn old_saves_keep_departure_snapshot_and_start_rivals_only_at_load_time()
+2113 fn price_reviews_preserve_airborne_quotes_for_both_owners()
+2140 fn invalid_ai_saves_and_overflow_cannot_partially_commit()
 
 ## rust/src/demand.rs
 7 struct Config
@@ -137,41 +137,46 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 19 fn default() -> Self
 26 impl FuelMarket
 27 pub fn price_at(&self, time: u64) -> i64
-50 pub fn max_price(&self) -> i64
-54 pub fn next_change(&self, time: u64) -> u64
-61 pub const HISTORY_LIMIT: usize = 100;
-63 pub struct Config
-78 struct Rates
-85 static CONFIG: LazyLock<Config> = LazyLock::new(||
-117 pub fn default_ticket() -> i64
-121 pub fn rules_text() -> String
-125 pub fn reference_price(km: f64) -> f64
-130 pub struct Totals
-142 impl Totals
-143 pub fn costs(&self) -> i64
-146 pub fn profit(&self) -> i64
-149 pub fn load_percent(&self) -> f64
-156 pub fn add(&mut self, other: &Self, count: u64) -> Option<()>
-170 pub struct FlightResult
-179 pub struct Finance
-185 pub fn quote(route: &Route, model_id: &str) -> Result<Totals, String>
-197 pub fn quote_shared(
-206 pub fn quote_at_price(
-215 pub fn quote_at_time(
-225 fn quote_with_time(
-258 impl Game
-259 pub fn set_ticket_price(&mut self, id: u32, price: i64) -> Result<(), String>
-269 pub fn validate_finance(&self) -> Result<(), String>
-331 mod tests
-333 fn game(price: i64) -> Game
-346 fn prices_distance_capacity_and_costs_are_predictable()
-373 fn landing_debits_once_empty_flights_can_create_debt_and_prices_validate()
-409 fn frame_sizes_16x_save_load_and_history_are_identical()
-447 fn v5_migration_never_charges_past_landings_and_new_saves_reject_bad_finance()
-489 fn financial_overflow_rolls_back_clock_flights_and_balance()
-501 fn deleting_routes_preserves_results_and_new_game_resets_finances()
-523 fn calibrated_route_matrix_and_price_sensitivity()
-648 fn historical_v6_costs_and_active_flight_survive_rebalancing()
+54 pub fn max_price(&self) -> i64
+58 pub fn next_change(&self, time: u64) -> u64
+68 const FUEL_CHECKPOINT_WEEKS: u64 = 64;
+69 struct FuelTimeline
+74 impl FuelTimeline
+75 fn price_at(&mut self, week: u64) -> i64
+104 pub const HISTORY_LIMIT: usize = 100;
+106 pub struct Config
+121 struct Rates
+128 static CONFIG: LazyLock<Config> = LazyLock::new(||
+160 pub fn default_ticket() -> i64
+164 pub fn rules_text() -> String
+168 pub fn reference_price(km: f64) -> f64
+173 pub struct Totals
+185 impl Totals
+186 pub fn costs(&self) -> i64
+189 pub fn profit(&self) -> i64
+192 pub fn load_percent(&self) -> f64
+199 pub fn add(&mut self, other: &Self, count: u64) -> Option<()>
+213 pub struct FlightResult
+222 pub struct Finance
+228 pub fn quote(route: &Route, model_id: &str) -> Result<Totals, String>
+240 pub fn quote_shared(
+249 pub fn quote_at_price(
+258 pub fn quote_at_time(
+268 fn quote_with_time(
+301 impl Game
+302 pub fn set_ticket_price(&mut self, id: u32, price: i64) -> Result<(), String>
+312 pub fn validate_finance(&self) -> Result<(), String>
+374 mod tests
+377 fn fuel_checkpoints_match_original_replay_in_any_query_order()
+419 fn game(price: i64) -> Game
+432 fn prices_distance_capacity_and_costs_are_predictable()
+459 fn landing_debits_once_empty_flights_can_create_debt_and_prices_validate()
+495 fn frame_sizes_16x_save_load_and_history_are_identical()
+533 fn v5_migration_never_charges_past_landings_and_new_saves_reject_bad_finance()
+575 fn financial_overflow_rolls_back_clock_flights_and_balance()
+587 fn deleting_routes_preserves_results_and_new_game_resets_finances()
+609 fn calibrated_route_matrix_and_price_sensitivity()
+734 fn historical_v6_costs_and_active_flight_survive_rebalancing()
 
 ## rust/src/financing.rs
 6 const DAY: u64 = 86400;
@@ -259,29 +264,39 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 35 pub fn through(&self, time: u64) -> u64
 47 pub struct Purchase
 53 pub struct History
-73 impl History
-74 pub fn new(since: u64, opening_balance: i64) -> Self
-88 pub fn record(&mut self, batch: Batch)
-118 pub fn public_route(&self, service: u32) -> u32
-122 pub fn totals(&self, route: u32, through: u64) -> Totals
-134 pub fn balance(&self, time: u64) -> i64
-137 fn balance_wide(&self, time: u64) -> i128
-158 pub fn aircraft_cash_through(&self, time: u64) -> i128
-165 pub fn rent_through(&self, time: u64) -> i128
-173 pub fn payroll_through(&self, time: u64) -> i128
-180 pub fn interest_through(&self, time: u64) -> i128
-188 pub fn maintenance_through(&self, time: u64) -> i128
-196 pub fn page(&self, route: u32, offset: u64, limit: usize) -> Vec<FlightResult>
-237 impl Game
-238 pub fn validate_history(&self) -> Result<(), String>
-323 mod tests
-325 fn game() -> Game
-338 fn interleaved_route_batches_have_canonical_order_and_still_merge()
-365 fn million_flights_are_lossless_compact_and_random_access()
-400 fn frame_partitioning_and_simultaneous_routes_match_archive()
-425 fn price_changes_preserve_old_load_costs_and_deleted_routes()
-446 fn legacy_migration_starts_at_known_balance_without_fabricating_flights()
-472 fn corrupt_archive_is_rejected_and_overflow_leaves_it_unchanged()
+79 struct SettledCache(std::cell::RefCell<Option<SettledTotals>>);
+80 impl PartialEq for SettledCache
+81 fn eq(&self, _: &Self) -> bool
+86 struct SettledTotals
+90 impl SettledTotals
+91 fn record(&mut self, batch: &Batch)
+102 impl History
+103 pub fn new(since: u64, opening_balance: i64) -> Self
+118 pub fn record(&mut self, batch: Batch)
+155 pub fn public_route(&self, service: u32) -> u32
+159 fn with_settled<T>(&self, f: impl FnOnce(&SettledTotals) -> T) -> T
+171 pub(crate) fn settled_service_totals(&self, service: u32) -> Totals
+175 pub fn totals(&self, route: u32, through: u64) -> Totals
+200 pub fn balance(&self, time: u64) -> i64
+203 fn balance_wide(&self, time: u64) -> i128
+224 pub fn aircraft_cash_through(&self, time: u64) -> i128
+231 pub fn rent_through(&self, time: u64) -> i128
+239 pub fn payroll_through(&self, time: u64) -> i128
+246 pub fn interest_through(&self, time: u64) -> i128
+254 pub fn maintenance_through(&self, time: u64) -> i128
+262 pub fn page(&self, route: u32, offset: u64, limit: usize) -> Vec<FlightResult>
+303 impl Game
+304 pub fn validate_history(&self) -> Result<(), String>
+389 mod tests
+391 fn game() -> Game
+404 fn interleaved_route_batches_have_canonical_order_and_still_merge()
+431 fn settled_cache_matches_scans_after_merges_groups_and_reload()
+478 fn million_flights_are_lossless_compact_and_random_access()
+513 fn million_flight_finance_scenario_stays_within_budget()
+570 fn frame_partitioning_and_simultaneous_routes_match_archive()
+595 fn price_changes_preserve_old_load_costs_and_deleted_routes()
+616 fn legacy_migration_starts_at_known_balance_without_fabricating_flights()
+642 fn corrupt_archive_is_rejected_and_overflow_leaves_it_unchanged()
 
 ## rust/src/lib.rs
 1 mod aircraft;
@@ -522,25 +537,25 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 
 ## rust/src/save.rs
 11 const VERSION: u32 = 16;
-13 const MAX_BYTES: u64 = 8 * 1024 * 1024;
-16 struct SaveGame
-23 struct GameState
-43 struct SavedRoutes
-50 struct SavedFleet
-56 struct SavedClock
-63 pub fn save(path: &Path, game: &Game) -> Result<(), String>
-132 pub fn load(path: &Path) -> Result<Game, String>
-342 mod tests
-346 fn routes_roundtrip_migration_and_rejecting_corrupt_assignments()
-413 fn exact_roundtrip_and_overwrite_for_all_clock_states()
-438 fn rejects_missing_corrupt_truncated_invalid_and_future_saves()
-468 fn rejects_oversized_saves_and_write_errors()
-479 fn migrates_clock_only_v1_without_fabricating_a_company()
-493 fn rejects_invalid_company_data()
-513 fn fleet_and_balance_roundtrip_and_identifiers_continue_after_load()
-539 fn v2_company_migrates_without_buying_aircraft_or_changing_balance()
-557 fn rejects_corrupt_fleet_instead_of_silently_losing_aircraft()
-599 fn oversized_archive_cannot_overwrite_a_loadable_save()
+14 const MAX_BYTES: u64 = 64 * 1024 * 1024;
+17 struct SaveGame
+24 struct GameState
+44 struct SavedRoutes
+51 struct SavedFleet
+57 struct SavedClock
+64 pub fn save(path: &Path, game: &Game) -> Result<(), String>
+133 pub fn load(path: &Path) -> Result<Game, String>
+343 mod tests
+347 fn routes_roundtrip_migration_and_rejecting_corrupt_assignments()
+414 fn exact_roundtrip_and_overwrite_for_all_clock_states()
+439 fn rejects_missing_corrupt_truncated_invalid_and_future_saves()
+469 fn rejects_oversized_saves_and_write_errors()
+480 fn migrates_clock_only_v1_without_fabricating_a_company()
+494 fn rejects_invalid_company_data()
+514 fn fleet_and_balance_roundtrip_and_identifiers_continue_after_load()
+540 fn v2_company_migrates_without_buying_aircraft_or_changing_balance()
+558 fn rejects_corrupt_fleet_instead_of_silently_losing_aircraft()
+600 fn oversized_archive_cannot_overwrite_a_loadable_save()
 
 ## rust/src/seasonal_tests.rs
 3 const DAY: u64 = 86400;

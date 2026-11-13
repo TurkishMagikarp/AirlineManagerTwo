@@ -29,22 +29,26 @@ impl FuelMarket {
         if HIGH_FUEL.with(|enabled| enabled.get()) {
             return CONFIG.fuel_max_cents_per_kg;
         }
-        let c = &*CONFIG;
-        let mut price = c.fuel_cents_per_kg;
-        let mut rng = self.seed;
-        for _ in 0..time.saturating_sub(self.started_at) / c.fuel_cadence_seconds {
-            // SplitMix64, explicitly wrapping and independent of platform RNGs.
-            rng = rng.wrapping_add(0x9e3779b97f4a7c15);
-            let mut z = rng;
-            z = (z ^ (z >> 30)).wrapping_mul(0xbf58476d1ce4e5b9);
-            z = (z ^ (z >> 27)).wrapping_mul(0x94d049bb133111eb);
-            z ^= z >> 31;
-            let shock =
-                (z % (2 * c.fuel_volatility_cents + 1) as u64) as i64 - c.fuel_volatility_cents;
-            price = (price + shock + (c.fuel_cents_per_kg - price) / c.fuel_mean_reversion_divisor)
-                .clamp(c.fuel_min_cents_per_kg, c.fuel_max_cents_per_kg);
-        }
-        price
+        let week = time.saturating_sub(self.started_at) / CONFIG.fuel_cadence_seconds;
+        FUEL_TIMELINES.with(|timelines| {
+            let mut timelines = timelines.borrow_mut();
+            let index = match timelines.iter().position(|t| t.seed == self.seed) {
+                Some(index) => index,
+                None => {
+                    // A few world seeds can coexist (e.g. opening another save).
+                    // Derived checkpoints are disposable and never saved.
+                    if timelines.len() == 4 {
+                        timelines.remove(0);
+                    }
+                    timelines.push(FuelTimeline {
+                        seed: self.seed,
+                        checkpoints: vec![CONFIG.fuel_cents_per_kg],
+                    });
+                    timelines.len() - 1
+                }
+            };
+            timelines[index].price_at(week)
+        })
     }
 
     pub fn max_price(&self) -> i64 {
@@ -55,6 +59,45 @@ impl FuelMarket {
         let c = CONFIG.fuel_cadence_seconds;
         self.started_at
             .saturating_add((time.saturating_sub(self.started_at) / c + 1).saturating_mul(c))
+    }
+}
+
+// Checkpoint every 64 weeks, shared by companies on this thread. Random access
+// replays at most 63 shocks after a checkpoint, rather than the entire market
+// lifetime on every quote. No game state, RNG state or save format changes.
+const FUEL_CHECKPOINT_WEEKS: u64 = 64;
+struct FuelTimeline {
+    seed: u64,
+    checkpoints: Vec<i64>,
+}
+thread_local! { static FUEL_TIMELINES: std::cell::RefCell<Vec<FuelTimeline>> = const { std::cell::RefCell::new(Vec::new()) }; }
+impl FuelTimeline {
+    fn price_at(&mut self, week: u64) -> i64 {
+        let checkpoint = (week / FUEL_CHECKPOINT_WEEKS).min((self.checkpoints.len() - 1) as u64);
+        let mut step = checkpoint * FUEL_CHECKPOINT_WEEKS;
+        let mut price = self.checkpoints[checkpoint as usize];
+        let c = &*CONFIG;
+        while step < week {
+            step += 1;
+            // SplitMix64's input is directly addressable; the price recurrence
+            // still runs in exactly its original order with integer arithmetic.
+            let mut z = self
+                .seed
+                .wrapping_add(step.wrapping_mul(0x9e3779b97f4a7c15));
+            z = (z ^ (z >> 30)).wrapping_mul(0xbf58476d1ce4e5b9);
+            z = (z ^ (z >> 27)).wrapping_mul(0x94d049bb133111eb);
+            z ^= z >> 31;
+            let shock =
+                (z % (2 * c.fuel_volatility_cents + 1) as u64) as i64 - c.fuel_volatility_cents;
+            price = (price + shock + (c.fuel_cents_per_kg - price) / c.fuel_mean_reversion_divisor)
+                .clamp(c.fuel_min_cents_per_kg, c.fuel_max_cents_per_kg);
+            if step.is_multiple_of(FUEL_CHECKPOINT_WEEKS)
+                && step / FUEL_CHECKPOINT_WEEKS == self.checkpoints.len() as u64
+            {
+                self.checkpoints.push(price);
+            }
+        }
+        price
     }
 }
 
@@ -330,6 +373,49 @@ impl Game {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn fuel_checkpoints_match_original_replay_in_any_query_order() {
+        let c = &*CONFIG;
+        for seed in [0, u64::MAX, 0x4149524c494e45, 17, 42, 99] {
+            let mut price = c.fuel_cents_per_kg;
+            let mut rng = seed;
+            let mut expected = vec![price];
+            for _ in 0..16_384 {
+                rng = rng.wrapping_add(0x9e3779b97f4a7c15);
+                let mut z = rng;
+                z = (z ^ (z >> 30)).wrapping_mul(0xbf58476d1ce4e5b9);
+                z = (z ^ (z >> 27)).wrapping_mul(0x94d049bb133111eb);
+                z ^= z >> 31;
+                let shock =
+                    (z % (2 * c.fuel_volatility_cents + 1) as u64) as i64 - c.fuel_volatility_cents;
+                price =
+                    (price + shock + (c.fuel_cents_per_kg - price) / c.fuel_mean_reversion_divisor)
+                        .clamp(c.fuel_min_cents_per_kg, c.fuel_max_cents_per_kg);
+                expected.push(price);
+            }
+            let market = FuelMarket {
+                seed,
+                started_at: 123_456,
+            };
+            // Cold late query builds checkpoints; reverse queries must be exact
+            // too, including migrated start times and an evicted cache.
+            for week in (0..=16_384).rev() {
+                let time = market.started_at + week * c.fuel_cadence_seconds;
+                assert_eq!(market.price_at(time), expected[week as usize]);
+                assert_eq!(
+                    market.price_at(time + c.fuel_cadence_seconds - 1),
+                    expected[week as usize]
+                );
+            }
+            FUEL_TIMELINES.with(|t| t.borrow_mut().clear());
+            assert_eq!(
+                market.price_at(market.started_at + 16_384 * c.fuel_cadence_seconds),
+                expected[16_384]
+            );
+            assert_eq!(market.price_at(0), c.fuel_cents_per_kg);
+        }
+    }
+
     fn game(price: i64) -> Game {
         let mut g = Game::default();
         g.found("Economy Air", "DE", "EDDF").unwrap();

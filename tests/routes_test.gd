@@ -44,15 +44,20 @@ func _run() -> void:
 	var row: TreeItem = panel.route_tree.get_root().get_child(0)
 	row.select(0)
 	panel.route_tree.item_selected.emit()
-	_choose(panel.assignment, 2)
+	_choose(panel.assignment, 1)
 	await _click(panel.assign_button)
-	if not _check(main.simulation.get_routes()[0]["aircraft_id"] == 2 and panel.aircraft.get_item_metadata(0) == 1, "Reassignment releases previous aircraft"):
+	row = panel.route_tree.get_root().get_child(0)
+	if not _check(main.simulation.get_routes()[0]["aircraft_ids"] == [1, 2] and panel.aircraft.item_count == 0 and "AM-000001" in row.get_text(3) and "AM-000002" in row.get_text(3), "Adding a second aircraft keeps both assignments and displays both in one route row"):
 		return
 	_choose(panel.assignment, 0)
 	await _click(panel.assign_button)
-	if not _check(main.simulation.get_routes()[0]["aircraft_id"] == 0 and panel.aircraft.item_count == 2, "Unassigning releases aircraft but keeps route"):
+	if not _check(main.simulation.get_routes()[0]["aircraft_ids"] == [2] and panel.aircraft.get_item_metadata(0) == 1, "Removing one aircraft keeps the other rotation assigned"):
 		return
 	_choose(panel.assignment, 1)
+	await _click(panel.assign_button)
+	if not _check(main.simulation.get_routes()[0]["aircraft_ids"].is_empty() and panel.aircraft.item_count == 2, "Removing the last aircraft keeps the empty route"):
+		return
+	_choose(panel.assignment, 0)
 	await _click(panel.assign_button)
 	root.size = Vector2i(680, 520)
 	await process_frame
@@ -63,11 +68,11 @@ func _run() -> void:
 	if not _check(main.simulation.get_routes().is_empty() and panel.empty_label.visible and panel.aircraft.item_count == 2, "Deleting releases assignment and updates empty list"):
 		return
 	await _click(panel.create_button)
-	if not _check(main.simulation.get_routes()[0]["id"] == 2, "Deleted IDs are not reused"):
+	if not _check(main.simulation.get_routes()[0]["id"] == 4, "Deleted route and internal rotation IDs are not reused"):
 		return
 	await _click(main.navigation[1])
 	var assigned_id: int = main.simulation.get_routes()[0]["aircraft_id"]
-	if not _check("Route #2" in main.fleet_tree.get_root().get_child(assigned_id - 1).get_text(3), "Fleet displays reserved route"):
+	if not _check("Route #4" in main.fleet_tree.get_root().get_child(assigned_id - 1).get_text(3), "Fleet displays reserved route"):
 		return
 	await _click(main.new_game_button)
 	main.name_input.text = "Fresh Routes"
@@ -75,7 +80,7 @@ func _run() -> void:
 	await _click(main.navigation[2])
 	if not _check(main.simulation.get_routes().is_empty() and panel.empty_label.visible and panel.create_button.disabled, "New game clears routes and stale assignments"):
 		return
-	print("PASS: route UI, distances, range, exclusive assignments, reassign, unassign, delete, small window and new game")
+	print("PASS: route UI, distances, range, multiple aircraft, add/remove assignments, delete, small window and new game")
 	main.queue_free()
 	await process_frame
 	quit(0)
