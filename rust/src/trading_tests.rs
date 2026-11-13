@@ -264,7 +264,14 @@ fn trading_overflow_cannot_remove_aircraft_or_partially_post() {
     assert_eq!(state(&g), before);
     let mut g = fresh();
     g.lease_aircraft("atr72_600").unwrap();
-    cash(&mut g, i64::MIN + 40_000_000); // Leave room in fixture opening balance.
+    // Trigger overflow on the first rent, before the insolvency deadline can
+    // terminate this company. Use a wide fixture calculation to avoid overflow
+    // in the test helper's intermediate opening-balance subtraction.
+    let balance = i64::MIN + 1;
+    let opening = i128::from(g.history.as_ref().unwrap().opening_balance) + i128::from(balance)
+        - i128::from(g.cash());
+    g.history.as_mut().unwrap().opening_balance = opening.try_into().unwrap();
+    g.airline.as_mut().unwrap().capital_eur = balance;
     g.clock.set_running(true);
     let before = state(&g);
     assert!(!g.advance(50000.0 * DAY));

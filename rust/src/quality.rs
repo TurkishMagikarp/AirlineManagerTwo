@@ -33,6 +33,16 @@ fn ten_year_scenarios_reconcile_and_survive_annual_restart() {
             assert_eq!(first_diff(&a, &b, ""), None, "year={year} price={price:?}");
             fast.validate_history().unwrap();
             fast.validate_competitors().unwrap();
+            assert_eq!(
+                fast.competitors.len(),
+                2,
+                "healthy AI exited: year={year} price={price:?}"
+            );
+            assert!(
+                fast.competitors
+                    .iter()
+                    .all(|c| !c.game.insolvent() && c.game.resolution.deadline.is_none())
+            );
             let path = dir.path().join("annual.json");
             crate::save::save(&path, &fast).unwrap();
             let bytes = std::fs::metadata(&path).unwrap().len();

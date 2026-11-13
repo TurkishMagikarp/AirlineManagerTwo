@@ -3,5 +3,9 @@
   "annual_interest_bps": 600,
   "repayment_period_days": 30,
   "term_periods": 24,
-  "low_cash_warning_eur": 1000000
+  "low_cash_warning_eur": 1000000,
+  "distress_grace_days": 30,
+  "restructuring_days": 60,
+  "reschedule_term_periods": 48,
+  "reschedule_fee_bps": 200
 }

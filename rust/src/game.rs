@@ -22,6 +22,8 @@ pub struct Game {
     pub staff: crate::staff::Staff,
     #[serde(default)]
     pub financing: crate::financing::Financing,
+    #[serde(default)]
+    pub resolution: crate::financing::Resolution,
 }
 
 impl Default for Game {
@@ -38,6 +40,7 @@ impl Default for Game {
             competitors: Vec::new(),
             staff: crate::staff::Staff::default(),
             financing: Default::default(),
+            resolution: Default::default(),
         }
     }
 }
@@ -100,6 +103,7 @@ impl Airline {
 impl Game {
     /// Build and validate everything before replacing the existing game.
     pub fn found(&mut self, name: &str, country: &str, airport: &str) -> Result<(), String> {
+        self.require_active()?;
         let airline = Airline {
             name: name.trim().to_string(),
             country_code: country.to_string(),

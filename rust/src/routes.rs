@@ -95,6 +95,7 @@ impl Game {
     }
 
     pub fn assign_route(&mut self, route_id: u32, aircraft_id: Option<u32>) -> Result<(), String> {
+        self.require_active()?;
         self.require_no_plan(route_id)?;
         let route = self
             .routes
@@ -114,6 +115,7 @@ impl Game {
     }
 
     pub fn route_mut(&mut self, id: u32) -> Result<&mut Route, String> {
+        self.require_active()?;
         self.routes
             .iter_mut()
             .find(|r| r.id == id)
@@ -121,6 +123,7 @@ impl Game {
     }
 
     pub fn delete_route(&mut self, route_id: u32) -> Result<(), String> {
+        self.require_active()?;
         self.require_no_plan(route_id)?;
         let index = self
             .routes

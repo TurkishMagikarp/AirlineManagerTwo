@@ -466,6 +466,7 @@ impl Game {
 
     /// Dismiss one employee immediately; the salary accrued so far is paid.
     pub fn dismiss_staff(&mut self, id: u32) -> Result<(), String> {
+        self.require_active()?;
         if self.airline.is_none() {
             return Err("Bitte zuerst eine Airline gründen.".into());
         }
@@ -506,11 +507,13 @@ impl Game {
         self.airline.as_mut().unwrap().capital_eur = balance;
         self.record_payroll(now, pay);
         self.staff.employees.remove(i);
+        self.observe_distress();
         Ok(())
     }
 
     /// AI housekeeping: let go of free staff beyond the current needs.
     pub fn dismiss_surplus(&mut self) -> Result<(), String> {
+        self.require_active()?;
         for role in Role::ALL {
             let keep = match role {
                 Role::Technician => self.technician_target().max(self.busy_technicians()),
