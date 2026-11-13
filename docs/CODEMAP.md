@@ -48,42 +48,51 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 10 const AI_INTERVAL_MINUTES: u32 = 360;
 11 const MAX_FLEET: usize = 6;
 12 const RESERVE: i64 = 1_000_000;
-15 pub struct RouteReview
-27 fn maintenance_per_flight(route: &Route, model: &str) -> Result<i64, String>
-34 fn staffing_per_week(game: &Game, model: &str) -> Result<i64, String>
-51 pub struct Competitor
-66 pub fn initial_competitors() -> Result<Vec<Competitor>, String>
-70 pub fn initial_competitors_at(now: Duration) -> Result<Vec<Competitor>, String>
-114 impl Game
-115 pub fn market_routes(&self) -> Vec<crate::demand::Offer>
-128 pub fn validate_competitors(&self) -> Result<(), String>
-176 pub fn advance(&mut self, seconds: f64) -> bool
-365 impl Competitor
-366 fn close_loss_route(
-389 fn review(&mut self, supply: &[crate::demand::Offer]) -> bool
-635 fn plan_maintenance(&mut self, next_review: u64)
-648 fn expand(&mut self, supply: &[crate::demand::Offer]) -> Result<(), String>
-834 fn retry(&mut self, i: usize, supply: &[crate::demand::Offer]) -> bool
-912 mod tests
-914 fn trading_ai_leases_only_affordable_profitable_growth_and_sells_in_distress()
-965 fn trading_ai_lease_economy_is_bounded_and_deterministic_over_two_years()
-1007 fn game() -> Game
-1019 fn state(g: &Game) -> serde_json::Value
-1024 fn airborne_loss_reviews_close_after_ground_time_even_across_restart()
-1080 fn previous_v9_saves_default_new_review_fields_and_reject_corruption()
-1101 fn expansion_reuses_parked_aircraft_and_competes_for_existing_market()
-1140 fn expansion_spends_real_cash_and_obeys_budget_range_and_fleet_limit()
-1178 fn ai_airlines_pay_for_regular_checks_before_reaching_the_limit()
-1234 fn route_reviews_charge_the_planned_maintenance_share_per_landing()
-1276 fn losses_are_measured_per_route_not_hidden_by_profitable_routes()
-1302 fn common_market_price_frequency_capacity_and_separate_ledgers()
-1356 fn mixed_fares_and_frequencies_never_duplicate_the_base_market()
-1390 fn speed_steps_reviews_and_restart_produce_identical_results()
-1419 fn losses_close_service_without_erasing_aircraft_or_finances()
-1452 fn unprofitable_markets_keep_rivals_idle_until_the_next_retry()
-1486 fn old_saves_keep_departure_snapshot_and_start_rivals_only_at_load_time()
-1517 fn price_reviews_preserve_airborne_quotes_for_both_owners()
-1544 fn invalid_ai_saves_and_overflow_cannot_partially_commit()
+15 struct FrequencyRules
+20 static FREQUENCY: LazyLock<FrequencyRules> = LazyLock::new(||
+29 pub struct RouteReview
+41 fn maintenance_per_flight(route: &Route, model: &str) -> Result<i64, String>
+48 fn staffing_per_week(game: &Game, model: &str) -> Result<i64, String>
+65 pub struct Competitor
+80 pub fn initial_competitors() -> Result<Vec<Competitor>, String>
+84 pub fn initial_competitors_at(now: Duration) -> Result<Vec<Competitor>, String>
+128 impl Game
+129 pub fn market_routes(&self) -> Vec<crate::demand::Offer>
+142 pub fn validate_competitors(&self) -> Result<(), String>
+190 pub fn advance(&mut self, seconds: f64) -> bool
+389 impl Competitor
+390 fn close_loss_route(
+413 fn review(&mut self, supply: &[crate::demand::Offer]) -> bool
+665 fn review_rotations(&mut self, supply: &[crate::demand::Offer]) -> Result<Vec<u32>, String>
+799 fn plan_maintenance(&mut self, next_review: u64)
+812 fn expand(&mut self, supply: &[crate::demand::Offer]) -> Result<(), String>
+1088 fn retry(&mut self, i: usize, supply: &[crate::demand::Offer]) -> bool
+1166 mod tests
+1167 fn frequency_ai() -> Competitor
+1179 fn frequency_growth_uses_shared_assignment_and_respects_cap()
+1213 fn frequency_growth_can_buy_or_lease_and_weak_loads_reduce_service()
+1265 fn frequency_review_keeps_a_service_during_maintenance()
+1285 fn frequency_growth_skips_maintenance_wrong_location_and_weak_market()
+1306 fn frequency_weak_airborne_service_retires_once_across_steps_speeds_and_restart()
+1377 fn trading_ai_leases_only_affordable_profitable_growth_and_sells_in_distress()
+1428 fn trading_ai_lease_economy_is_bounded_and_deterministic_over_two_years()
+1470 fn game() -> Game
+1482 fn state(g: &Game) -> serde_json::Value
+1487 fn airborne_loss_reviews_close_after_ground_time_even_across_restart()
+1543 fn previous_v9_saves_default_new_review_fields_and_reject_corruption()
+1564 fn expansion_reuses_parked_aircraft_and_competes_for_existing_market()
+1603 fn expansion_spends_real_cash_and_obeys_budget_range_and_fleet_limit()
+1641 fn ai_airlines_pay_for_regular_checks_before_reaching_the_limit()
+1697 fn route_reviews_charge_the_planned_maintenance_share_per_landing()
+1739 fn losses_are_measured_per_route_not_hidden_by_profitable_routes()
+1765 fn common_market_price_frequency_capacity_and_separate_ledgers()
+1819 fn mixed_fares_and_frequencies_never_duplicate_the_base_market()
+1853 fn speed_steps_reviews_and_restart_produce_identical_results()
+1882 fn losses_close_service_without_erasing_aircraft_or_finances()
+1915 fn unprofitable_markets_keep_rivals_idle_until_the_next_retry()
+1949 fn old_saves_keep_departure_snapshot_and_start_rivals_only_at_load_time()
+1980 fn price_reviews_preserve_airborne_quotes_for_both_owners()
+2007 fn invalid_ai_saves_and_overflow_cannot_partially_commit()
 
 ## rust/src/demand.rs
 7 struct Config
@@ -427,10 +436,10 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 ## rust/src/quality.rs
 5 fn scenario(price: Option<i64>) -> Game
 20 fn ten_year_scenarios_reconcile_and_survive_annual_restart()
-85 fn ten_years_of_daily_fare_changes_remain_saveable_and_lossless()
-129 fn mixed_three_company_markets_remain_bounded_on_every_airport_pair()
-175 fn subsecond_frames_match_single_step_at_every_speed()
-197 fn first_diff(a: &serde_json::Value, b: &serde_json::Value, path: &str) -> Option<String>
+103 fn ten_years_of_daily_fare_changes_remain_saveable_and_lossless()
+147 fn mixed_three_company_markets_remain_bounded_on_every_airport_pair()
+193 fn subsecond_frames_match_single_step_at_every_speed()
+215 fn first_diff(a: &serde_json::Value, b: &serde_json::Value, path: &str) -> Option<String>
 
 ## rust/src/rotation_tests.rs
 3 fn game(planes: u32) -> Game

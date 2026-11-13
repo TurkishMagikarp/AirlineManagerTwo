@@ -23,10 +23,28 @@ fn ten_year_scenarios_reconcile_and_survive_annual_restart() {
         let start = Instant::now();
         let mut fast = scenario(price);
         let mut daily = fast.clone();
+        let mut peak_route_aircraft = 0;
+        let mut peak_fleet = 0;
+        let mut multi_aircraft_days = 0;
         for year in 1..=10 {
             assert!(fast.advance(365.0 * 86400.0));
             for _ in 0..365 {
                 assert!(daily.advance(86400.0));
+                let mut multi = false;
+                for c in &daily.competitors {
+                    peak_fleet = peak_fleet.max(c.game.fleet.len());
+                    for root in c.game.routes.iter().filter(|r| r.parent_route_id.is_none()) {
+                        let count = c
+                            .game
+                            .routes
+                            .iter()
+                            .filter(|r| r.public_id() == root.id && r.aircraft_id.is_some())
+                            .count();
+                        peak_route_aircraft = peak_route_aircraft.max(count);
+                        multi |= count > 1;
+                    }
+                }
+                multi_aircraft_days += usize::from(multi);
             }
             let a = serde_json::to_value(&fast).unwrap();
             let b = serde_json::to_value(&daily).unwrap();
@@ -68,7 +86,7 @@ fn ten_year_scenarios_reconcile_and_survive_annual_restart() {
             }
         }
         println!(
-            "AUDIT scenario={price:?} elapsed_ms={}",
+            "AUDIT scenario={price:?} peak_route_aircraft={peak_route_aircraft} peak_fleet={peak_fleet} multi_aircraft_days={multi_aircraft_days} elapsed_ms={}",
             start.elapsed().as_millis()
         );
         let before = serde_json::to_value(&fast).unwrap();

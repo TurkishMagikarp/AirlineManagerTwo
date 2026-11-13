@@ -36,6 +36,17 @@ Versionen bis 14 werden beim Laden explizit von `aircraft_id` auf eine Liste mit
 null oder einem Flugzeug migriert; das gilt auch für KI-Airlines. Historische
 Flugangebote und Finanzbuchungen werden dabei nicht neu berechnet.
 
-Noch keine individuellen Tages-/Wochentage, Überführungen oder KI-Mehrfachrotationen.
+KI-Airlines vergleichen bei ihrer bisherigen Expansionsprüfung neue Märkte mit
+zusätzlichen Maschinen auf starken Bestandsrouten. `config/competition.json` setzt
+die Obergrenze auf zwei Flugzeuge je Route und die Auslastungsschwelle auf 85 %.
+Auch nach der Erweiterung muss die erwartete Auslastung die Schwelle erreichen;
+der zusätzliche Wochengewinn berücksichtigt Nachfrageverlust der eigenen Dienste,
+Wartung, Personal, Leasing, Kaufpreis und die bestehende Liquiditätsreserve.
+Zwei schwache Wochenprüfungen (Verlust oder geringe Auslastung) geben zunächst nur
+eine Maschine über die gemeinsame Rust-Entfernung frei. Wartung und ausstehende
+Freigaben pausieren die Gruppenprüfung. Die letzte Maschine kann später ebenfalls
+freigegeben werden. Es gibt keinen neuen Spielstandzustand oder KI-Flugbetrieb.
+
+Noch keine individuellen Tages-/Wochentage oder Überführungen.
 Godot-Oberfläche, START.bat und Windows-Neustarttests müssen auf einem passenden
 Rechner geprüft werden; Rust-Tests belegen keine visuelle Darstellung.
