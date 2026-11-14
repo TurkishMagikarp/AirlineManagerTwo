@@ -108,6 +108,7 @@ pub struct Offer {
     pub route: Route,
     pub seats: u32,
     pub business_seats: u32,
+    pub cargo_model: Option<String>,
     premium: bool,
     pub awareness: i64,
     pub owner: String,
@@ -118,6 +119,7 @@ impl Offer {
             route: route.clone(),
             seats,
             business_seats: 0,
+            cargo_model: None,
             premium: false,
             awareness: 0,
             owner: String::new(),
@@ -146,6 +148,7 @@ pub(crate) fn same_offer(a: &Route, b: &Route) -> bool {
         && a.aircraft_id == b.aircraft_id
         && a.ticket_eur == b.ticket_eur
         && a.business_ticket_eur == b.business_ticket_eur
+        && a.cargo_rate_cents == b.cargo_rate_cents
         && a.service_level == b.service_level
         && a.plan.as_ref().map(|p| p.interval_seconds)
             == b.plan.as_ref().map(|p| p.interval_seconds)
@@ -153,8 +156,9 @@ pub(crate) fn same_offer(a: &Route, b: &Route) -> bool {
 
 /// Daily rates per direction. Redistribute only seat spill, preserving the outside
 /// option and each segment's willingness ceiling. No booking state or randomness.
+#[cfg(test)]
 pub fn estimate(route: &Route, seats: u32, routes: &[Offer]) -> Result<Estimate, String> {
-    estimate_with_season(route, seats, routes, None)
+    estimate_with_season(route, seats, routes, None, None)
 }
 
 pub fn estimate_at(
@@ -163,7 +167,41 @@ pub fn estimate_at(
     routes: &[Offer],
     time: u64,
 ) -> Result<Estimate, String> {
-    estimate_with_season(route, seats, routes, Some(time))
+    estimate_with_season(route, seats, routes, Some(time), None)
+}
+
+/// One allocation supplies the flight quote and every cargo payload limit.
+pub fn estimate_with_loads(
+    route: &Route,
+    seats: u32,
+    routes: &[Offer],
+    time: Option<u64>,
+) -> Result<(Estimate, Vec<i64>), String> {
+    let mut loads = Vec::new();
+    let estimate = estimate_with_season(route, seats, routes, time, Some(&mut loads))?;
+    Ok((estimate, loads))
+}
+
+#[cfg(test)]
+/// Passenger loads for each active offer in one city pair, in input order.
+/// Shares the exact cabin allocator and rounding with individual flight quotes.
+pub fn market_passengers(routes: &[Offer], time: Option<u64>) -> Result<Vec<i64>, String> {
+    let Some(first) = routes.first() else {
+        return Ok(Vec::new());
+    };
+    let mut loads = Vec::new();
+    estimate_with_season(&first.route, first.seats, routes, time, Some(&mut loads))?;
+    Ok(loads)
+}
+
+fn rounded_passengers(daily: f64, offer: &Offer) -> i64 {
+    let per_flight = daily / frequency(&offer.route);
+    let cap = f64::from(offer.seats);
+    if (per_flight - cap).abs() < 1e-9 {
+        cap as i64
+    } else {
+        per_flight.floor().min(cap) as i64
+    }
 }
 
 fn estimate_with_season(
@@ -171,6 +209,7 @@ fn estimate_with_season(
     seats: u32,
     routes: &[Offer],
     time: Option<u64>,
+    loads: Option<&mut Vec<i64>>,
 ) -> Result<Estimate, String> {
     let mut matching: Vec<_> = routes
         .iter()
@@ -199,6 +238,8 @@ fn estimate_with_season(
     // Both cabins participate in this same segmented allocator and spill loop.
     // Premium has no leisure weight; unsatisfied business can spill to economy.
     let mut own_indices = Vec::new();
+    let service_count = matching.len();
+    let mut service_indices = Vec::new();
     let mut cabins = Vec::new();
     let own_index = matching
         .iter()
@@ -211,6 +252,7 @@ fn estimate_with_season(
         if is_own {
             own_indices.push(cabins.len());
         }
+        service_indices.push(index);
         cabins.push(economy);
         if o.business_seats > 0 {
             let mut business = o;
@@ -220,6 +262,7 @@ fn estimate_with_season(
             if is_own {
                 own_indices.push(cabins.len());
             }
+            service_indices.push(index);
             cabins.push(business);
         }
     }
@@ -227,11 +270,11 @@ fn estimate_with_season(
     let mut matching: Vec<_> = cabins
         .into_iter()
         .enumerate()
-        .map(|(i, o)| (o, own_indices.contains(&i)))
+        .map(|(i, o)| (o, own_indices.contains(&i), service_indices[i]))
         .collect();
     // Economic keys give a canonical floating-point reduction order even when
     // owner order, route IDs or direction differ. Equal keys are interchangeable.
-    matching.sort_by(|(a, _), (b, _)| {
+    matching.sort_by(|(a, _, _), (b, _, _)| {
         a.route
             .ticket_eur
             .cmp(&b.route.ticket_eur)
@@ -244,9 +287,10 @@ fn estimate_with_season(
     let own_indices: Vec<_> = matching
         .iter()
         .enumerate()
-        .filter_map(|(i, (_, own))| own.then_some(i))
+        .filter_map(|(i, (_, own, _))| own.then_some(i))
         .collect();
-    let matching: Vec<_> = matching.into_iter().map(|(o, _)| o).collect();
+    let service_indices: Vec<_> = matching.iter().map(|(_, _, index)| *index).collect();
+    let matching: Vec<_> = matching.into_iter().map(|(o, _, _)| o).collect();
     let at = |route: &Route, price| match time {
         Some(time) => market_at(route, price, time),
         None => market(route, price),
@@ -366,16 +410,16 @@ fn estimate_with_season(
     let mut business = 0;
     let mut per_departure = 0;
     for &j in &own_indices {
-        let per_flight = allocated[j].iter().sum::<f64>() / frequency(route);
-        let cap = f64::from(matching[j].seats);
-        let n = if (per_flight - cap).abs() < 1e-9 {
-            cap as i64
-        } else {
-            per_flight.floor().min(cap) as i64
-        };
+        let n = rounded_passengers(allocated[j].iter().sum(), &matching[j]);
         per_departure += n;
         if matching[j].premium {
             business += n;
+        }
+    }
+    if let Some(loads) = loads {
+        loads.resize(service_count, 0);
+        for (j, offer) in matching.iter().enumerate() {
+            loads[service_indices[j]] += rounded_passengers(allocated[j].iter().sum(), offer);
         }
     }
     Ok(Estimate {
@@ -596,7 +640,7 @@ mod tests {
                 let t = &g.finance.totals;
                 assert_eq!(t.flights, 12);
                 assert!(t.passengers <= previous && t.passengers <= t.seats);
-                assert_eq!(t.revenue, t.passengers * price);
+                assert_eq!(t.revenue - t.cargo_revenue, t.passengers * price);
                 previous = t.passengers;
                 if price == 0 {
                     free_passengers.push(t.passengers);

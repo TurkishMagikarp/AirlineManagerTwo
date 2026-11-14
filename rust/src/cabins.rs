@@ -59,6 +59,7 @@ pub fn offer(route: &Route, plane: &Aircraft) -> Result<Offer, String> {
     let (economy, business) = layout(plane)?;
     let mut o = Offer::new(route, economy + business);
     o.business_seats = business;
+    o.cargo_model = Some(plane.model_id.clone());
     Ok(o)
 }
 

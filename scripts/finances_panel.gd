@@ -48,7 +48,7 @@ func _ready() -> void:
 	grid.add_theme_constant_override("v_separation", 12)
 	add_child(grid)
 	grid.resized.connect(func(): grid.columns = 4 if grid.size.x >= 1150 else 2)
-	for item in [["balance", "KONTOSTAND"], ["revenue", "TICKETUMSÄTZE"], ["costs", "GESAMTKOSTEN"], ["profit", "GEWINN / VERLUST"]]:
+	for item in [["balance", "KONTOSTAND"], ["revenue", "TICKETUMSÄTZE"], ["cargo", "FRACHTUMSÄTZE"], ["costs", "GESAMTKOSTEN"], ["profit", "GEWINN / VERLUST"]]:
 		metrics[item[0]] = UI.metric(grid, item[1])
 	note = UI.label("", 13, UI.MUTED)
 	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -144,7 +144,7 @@ func _ready() -> void:
 	aircraft.add_child(aircraft_journal)
 	var company := UI.panel(self, "WIRTSCHAFTLICHE ENTWICKLUNG")
 	chart_select = OptionButton.new()
-	for title in ["Kontostand · EUR", "Ticketeinnahmen · EUR je Zeitabschnitt", "Kosten inkl. Zinsen, Gebühren, Leasing und Steuern · EUR je Zeitabschnitt", "Ergebnis · EUR je Zeitabschnitt", "Ertragsteuer · EUR je Zeitabschnitt"]:
+	for title in ["Kontostand · EUR", "Ticket- und Frachteinnahmen · EUR je Zeitabschnitt", "Kosten inkl. Zinsen, Gebühren, Leasing und Steuern · EUR je Zeitabschnitt", "Ergebnis · EUR je Zeitabschnitt", "Ertragsteuer · EUR je Zeitabschnitt"]:
 		chart_select.add_item(title)
 	chart_select.item_selected.connect(func(_i: int): _chart())
 	company.add_child(chart_select)
@@ -154,7 +154,7 @@ func _ready() -> void:
 	chart_range.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	company.add_child(chart_range)
 	var routes := UI.panel(self, "ROUTENCONTROLLING  /  ROUTE ANKLICKEN")
-	route_tree = UI.table(["Route / Strecke", "Flüge", "Umsatz", "Kosten", "Ergebnis", "Auslastung"], [190, 65, 115, 115, 115, 95], 210)
+	route_tree = UI.table(["Route / Strecke", "Flüge", "Tickets", "Kosten", "Ergebnis", "Auslastung", "Fracht kg / EUR"], [190, 65, 115, 115, 115, 95, 150], 210)
 	route_tree.item_selected.connect(_select_route)
 	routes.add_child(route_tree)
 	var history := UI.panel(self, "ROUTENDETAILS  /  FLUGARCHIV")
@@ -164,7 +164,7 @@ func _ready() -> void:
 	load_chart = Chart.new()
 	history.add_child(load_chart)
 	history.add_child(UI.label("Auslastung je Zeitabschnitt · Lücken = keine Landungen · nach Sitzplätzen gewichtet", 13, UI.MUTED))
-	flights_tree = UI.table(["Landung", "Richtung", "Ticket", "Pax / Sitze", "Auslastung", "Umsatz", "Kosten", "Ergebnis"], [170, 140, 90, 95, 90, 110, 110, 110], 250)
+	flights_tree = UI.table(["Landung", "Richtung", "Ticket", "Pax / Sitze", "Auslastung", "Tickets", "Kosten", "Ergebnis", "Fracht kg / EUR"], [170, 140, 90, 95, 90, 110, 110, 110, 150], 250)
 	history.add_child(flights_tree)
 	var paging := HBoxContainer.new()
 	history.add_child(paging)
@@ -228,9 +228,12 @@ func refresh(force: bool = false) -> void:
 	metrics["balance"].text = UI.money(airline.get("capital_eur", 0))
 	for field in ["revenue", "costs", "profit"]:
 		metrics[field].text = UI.money(summary[field + "_eur"])
+	metrics["revenue"].text = UI.money(summary["ticket_revenue_eur"])
+	metrics["cargo"].text = UI.money(summary["cargo_revenue_eur"])
 	metrics["profit"].add_theme_color_override("font_color", UI.POSITIVE if summary["profit_eur"] >= 0 else UI.NEGATIVE)
 	var info: Dictionary = simulation.get_finance_history_info()
 	note.text = "Summen: gesamte erfasste Wirtschaft. Routenarchiv und Diagramme ab %s.\nBei älteren Spielständen fehlt frühere Detailhistorie; sie wird nicht nachberechnet. Flugzeugkäufe insgesamt: %s · Wartungschecks insgesamt: %s · Gehälter insgesamt: %s." % [info.get("since", "—"), UI.money(summary["purchases_eur"]), UI.money(summary["maintenance_eur"]), UI.money(summary["payroll_eur"])]
+	note.text += "\nBauchfracht: %d kg · %s Umsatz (im Ergebnis und in der Ertragsteuer enthalten)." % [summary["cargo_kg"], UI.money(summary["cargo_revenue_eur"])]
 	note.text += "\nTreibstoff weltweit: %.2f EUR/kg · %s%d Cent/kg gegenüber vor 30 Tagen (wöchentlich)." % [summary["fuel_cents_per_kg"] / 100.0, "↑ +" if summary["fuel_month_delta_cents"] > 0 else ("↓ " if summary["fuel_month_delta_cents"] < 0 else "→ "), summary["fuel_month_delta_cents"]]
 	note.text += "\nLeasingraten (in Kosten enthalten): %s · Flugzeugjournal netto inkl. Verkäufen, Kautionen, Raten und Rückgaben: %s." % [UI.money(summary["rent_eur"]), UI.money(summary["aircraft_cash_eur"])]
 	note.text += "\nBordservice (Kosten / Ersparnis gegenüber Standard, in Gesamtkosten enthalten): %s." % UI.money(summary["service_eur"])
@@ -264,6 +267,8 @@ func refresh(force: bool = false) -> void:
 		row.set_tooltip_text(2, "Economy: %s (%d Pax) · Business: %s (%d Pax)" % [UI.money(r["economy_revenue_eur"]), r["economy_passengers"], UI.money(r["business_revenue_eur"]), r["business_passengers"]])
 		for pair in [[2, "revenue_eur"], [3, "costs_eur"], [4, "profit_eur"]]:
 			row.set_text(pair[0], UI.money(r[pair[1]]))
+		row.set_text(2, UI.money(r["ticket_revenue_eur"]))
+		row.set_text(6, "%d kg / %s" % [r["cargo_kg"], UI.money(r["cargo_revenue_eur"])])
 		row.set_text(5, "%.1f %%" % r["load_percent"] if r["flights"] > 0 else "Keine Flüge")
 		row.set_custom_color(4, UI.MUTED if r["flights"] == 0 else UI.POSITIVE if r["profit_eur"] >= 0 else UI.NEGATIVE)
 		if r["route_id"] == route_id:
@@ -309,7 +314,7 @@ func _flights() -> void:
 	var rows: Array = simulation.get_route_flight_page(route_id, offset)
 	for f in rows:
 		var row := flights_tree.create_item(root)
-		var values := [f["landing"], "%s → %s" % [f["origin"], f["destination"]], UI.money(f["ticket_eur"]), "%d / %d" % [f["passengers"], f["seats"]], "%.1f %%" % f["load_percent"], UI.money(f["revenue_eur"]), UI.money(f["costs_eur"]), UI.money(f["profit_eur"])]
+		var values := [f["landing"], "%s → %s" % [f["origin"], f["destination"]], UI.money(f["ticket_eur"]), "%d / %d" % [f["passengers"], f["seats"]], "%.1f %%" % f["load_percent"], UI.money(f["ticket_revenue_eur"]), UI.money(f["costs_eur"]), UI.money(f["profit_eur"]), "%d kg / %s" % [f["cargo_kg"], UI.money(f["cargo_revenue_eur"])]]
 		for i in range(values.size()):
 			row.set_text(i, values[i])
 			row.set_tooltip_text(i, "Ticket: %s\nTreibstoff: %s\nFlughäfen: %s\nPersonal: %s\nWartung / Verwaltung: %s\nBordservice (± Standard): %s" % [UI.money(f["ticket_eur"]), UI.money(f["fuel_eur"]), UI.money(f["airport_eur"]), UI.money(f["crew_eur"]), UI.money(f["overhead_eur"]), UI.money(f["service_eur"])])

@@ -536,6 +536,11 @@ impl Game {
                         || t.business_seats != i64::from(plane.business_seats)
                         || t.passengers < 0
                         || t.passengers > t.seats
+                        || t.cargo_kg
+                            > crate::cargo::capacity(
+                                aircraft::model(&plane.model_id)?,
+                                t.passengers,
+                            )
                         || !t.valid_cabins(f.ticket_eur)
                         || [t.fuel, t.airport, t.crew, t.overhead]
                             .iter()

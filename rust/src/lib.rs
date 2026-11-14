@@ -3,6 +3,9 @@ mod airports;
 #[cfg(test)]
 mod cabin_tests;
 mod cabins;
+mod cargo;
+#[cfg(test)]
+mod cargo_tests;
 mod clock;
 mod competition;
 mod demand;
@@ -149,9 +152,10 @@ impl SimulationClock {
             .map(|(id, (a, b, active, t))| {
                 vdict! {
                     "route_id" => id, "origin" => a, "destination" => b, "active" => active,
-                    "business_revenue_eur" => t.business_revenue, "economy_revenue_eur" => t.revenue - t.business_revenue,
+                    "business_revenue_eur" => t.business_revenue, "economy_revenue_eur" => t.revenue - t.business_revenue - t.cargo_revenue,
                     "business_passengers" => t.business_passengers, "economy_passengers" => t.passengers - t.business_passengers,
-                    "service_eur" => t.service, "flights" => t.flights, "revenue_eur" => t.revenue, "costs_eur" => t.costs(),
+                    "service_eur" => t.service, "flights" => t.flights, "cargo_kg" => t.cargo_kg, "cargo_revenue_eur" => t.cargo_revenue, "ticket_revenue_eur" => t.revenue - t.cargo_revenue,
+                    "revenue_eur" => t.revenue, "costs_eur" => t.costs(),
                     "profit_eur" => t.profit(), "load_percent" => t.load_percent()
                 }
             })
@@ -392,7 +396,8 @@ impl SimulationClock {
         let profit = i128::from(t.revenue) - costs;
         vdict! { "fuel_cents_per_kg" => self.game.fuel_market.price_at(self.game.clock.elapsed().as_secs()),
         "fuel_month_delta_cents" => self.game.fuel_market.price_at(self.game.clock.elapsed().as_secs()) - self.game.fuel_market.price_at(self.game.clock.elapsed().as_secs().saturating_sub(30 * 86400)),
-        "flights" => t.flights, "passengers" => t.passengers, "revenue_eur" => t.revenue,
+        "flights" => t.flights, "passengers" => t.passengers, "cargo_kg" => t.cargo_kg, "cargo_revenue_eur" => t.cargo_revenue, "ticket_revenue_eur" => t.revenue - t.cargo_revenue,
+                    "revenue_eur" => t.revenue,
         "marketing_eur" => marketing.min(i128::from(i64::MAX)) as i64,
         "tax_eur" => tax.min(i128::from(i64::MAX)) as i64,
         "tax_year_eur" => last_tax.map_or(0, |a| a.amount),
@@ -853,6 +858,9 @@ impl SimulationClock {
                     "destination_icao" => r.destination_icao.as_str(),
                     "distance_km" => routes::distance_km(&r.origin_icao, &r.destination_icao).unwrap_or(0.0),
                     "aircraft_id" => r.aircraft_id.unwrap_or(0), "aircraft_ids" => &aircraft_ids, "has_plan" => has_plan, "ticket_eur" => r.ticket_eur, "business_ticket_eur" => r.business_ticket_eur,
+                    "cargo_daily_demand_kg" => cargo::daily_demand(r).unwrap_or(0.0).floor() as i64,
+                    "cargo_rate_cents" => r.cargo_rate_cents, "cargo_max_rate_cents" => cargo::RULES.maximum_rate_cents,
+                    "actual_cargo_kg" => actual.cargo_kg, "actual_cargo_revenue_eur" => actual.cargo_revenue,
                     "service_level" => r.service_level.name(),
                     "service_economy_eur" => r.service_level.rate().economy_eur,
                     "service_business_eur" => r.service_level.rate().business_eur,
@@ -883,6 +891,7 @@ impl SimulationClock {
         };
         models.iter().map(|model| vdict! {
             "id" => model.id.as_str(), "name" => model.name.as_str(),
+            "belly_cargo_kg" => model.belly_cargo_kg, "payload_kg" => model.payload_kg,
             "seats" => model.seats, "range_km" => model.range_km, "price_eur" => model.price_eur,
             "lease_deposit_eur" => trading::lease_terms(&model.id).map(|t| t.0).unwrap_or(0),
             "lease_monthly_eur" => trading::lease_terms(&model.id).map(|t| t.1).unwrap_or(0),
@@ -956,6 +965,16 @@ impl SimulationClock {
     fn set_cabin_layout(&mut self, aircraft_id: u32, business_seats: u32) -> GString {
         self.game
             .set_cabin_layout(aircraft_id, business_seats)
+            .err()
+            .unwrap_or_default()
+            .as_str()
+            .into()
+    }
+
+    #[func]
+    fn set_cargo_rate(&mut self, route_id: u32, cents: i64) -> GString {
+        self.game
+            .set_cargo_rate(route_id, cents)
             .err()
             .unwrap_or_default()
             .as_str()
@@ -1505,8 +1524,9 @@ fn flight_dictionary(f: &economy::FlightResult) -> VarDictionary {
     "origin" => f.origin.as_str(), "destination" => f.destination.as_str(), "ticket_eur" => f.ticket_eur,
     "passengers" => t.passengers, "seats" => t.seats, "load_percent" => t.load_percent(),
     "business_passengers" => t.business_passengers, "economy_passengers" => t.passengers - t.business_passengers,
-    "business_revenue_eur" => t.business_revenue, "economy_revenue_eur" => t.revenue - t.business_revenue,
+    "business_revenue_eur" => t.business_revenue, "economy_revenue_eur" => t.revenue - t.business_revenue - t.cargo_revenue,
     "business_seats" => t.business_seats, "economy_seats" => t.seats - t.business_seats,
-    "revenue_eur" => t.revenue, "fuel_eur" => t.fuel, "airport_eur" => t.airport,
+    "cargo_kg" => t.cargo_kg, "cargo_revenue_eur" => t.cargo_revenue, "ticket_revenue_eur" => t.revenue - t.cargo_revenue,
+                    "revenue_eur" => t.revenue, "fuel_eur" => t.fuel, "airport_eur" => t.airport,
     "crew_eur" => t.crew, "overhead_eur" => t.overhead, "service_eur" => t.service, "costs_eur" => t.costs(), "profit_eur" => t.profit() }
 }

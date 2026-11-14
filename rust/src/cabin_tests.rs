@@ -81,7 +81,10 @@ fn cabins_shared_spill_overflow_price_limits_and_frozen_results() {
     };
     assert!(business_only.passengers <= 179);
     assert!(quote.passengers > quote.business_passengers);
-    assert_eq!(quote.revenue, (quote.passengers - 1) * 100 + 220);
+    assert_eq!(
+        quote.revenue - quote.cargo_revenue,
+        (quote.passengers - 1) * 100 + 220
+    );
     assert_eq!(quote.seats, 179);
     g.set_business_ticket_price(1, 100_000).unwrap();
     let expensive = economy::quote_shared(&g.routes[0], "a320_200", &g.market_routes()).unwrap();
