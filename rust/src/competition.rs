@@ -175,6 +175,7 @@ impl Game {
             g.validate_staff()?;
             g.validate_financing()?;
             g.validate_tax()?;
+            g.validate_fuel_contract()?;
             g.validate_finance()?;
             g.validate_history()?;
             let mut reviewed = std::collections::HashSet::new();
@@ -431,6 +432,7 @@ impl Competitor {
     fn review(&mut self, supply: &[crate::demand::Offer]) -> bool {
         let owned_supply = self.game.prioritize_market(supply);
         let supply = owned_supply.as_slice();
+        self.game.review_fuel_contract();
         if self.game.review_marketing().is_err() {
             return false;
         }

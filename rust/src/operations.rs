@@ -386,7 +386,7 @@ impl Game {
                             fuel_until = self.fuel_market.next_change(departure);
                         }
                         let count = 1;
-                        let Ok(f) = departure_quote_at_price(
+                        let Ok(mut f) = departure_quote_at_price(
                             route,
                             &self.fleet[p].model_id,
                             index,
@@ -395,6 +395,12 @@ impl Game {
                         ) else {
                             return false;
                         };
+                        if self
+                            .apply_fuel_contract(&mut f, &self.fleet[p].model_id, departure)
+                            .is_err()
+                        {
+                            return false;
+                        }
                         batches.push((count, f));
                         index += count;
                     }
@@ -444,7 +450,7 @@ impl Game {
                 if count == 0 && plan.airborne.is_some() {
                     plan.airborne.clone()
                 } else {
-                    let Ok(f) = departure_quote_in_market(
+                    let Ok(mut f) = departure_quote_in_market(
                         route,
                         &self.fleet[p].model_id,
                         state.completed,
@@ -453,6 +459,13 @@ impl Game {
                     ) else {
                         return false;
                     };
+                    let departure = plan.first_departure + state.completed * plan.interval_seconds;
+                    if self
+                        .apply_fuel_contract(&mut f, &self.fleet[p].model_id, departure)
+                        .is_err()
+                    {
+                        return false;
+                    }
                     Some(f)
                 }
             } else {

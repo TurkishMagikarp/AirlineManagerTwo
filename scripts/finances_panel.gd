@@ -34,6 +34,11 @@ var marketing_budget: SpinBox
 var marketing_apply: Button
 var marketing_status: Label
 var marketing_result: Label
+var fuel_status: Label
+var fuel_share: OptionButton
+var fuel_term: OptionButton
+var fuel_start: Button
+var fuel_result: Label
 var marketing_history: Tree
 
 func _ready() -> void:
@@ -48,6 +53,31 @@ func _ready() -> void:
 	note = UI.label("", 13, UI.MUTED)
 	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	add_child(note)
+	var fuel := UI.panel(self, "TREIBSTOFF / LIEFERVERTRAG")
+	fuel_status = UI.label("")
+	fuel_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	fuel.add_child(fuel_status)
+	var fuel_actions := HFlowContainer.new()
+	fuel.add_child(fuel_actions)
+	fuel_share = OptionButton.new()
+	fuel_term = OptionButton.new()
+	var fuel_rules: Dictionary = simulation.get_fuel_contract()
+	for share in fuel_rules["shares"]:
+		fuel_share.add_item("%d %%" % share, share)
+	for months in fuel_rules["terms"]:
+		fuel_term.add_item("%d Monate" % months, months)
+	fuel_actions.add_child(fuel_share)
+	fuel_actions.add_child(fuel_term)
+	fuel_start = Button.new()
+	fuel_start.text = "Preis sichern"
+	fuel_start.pressed.connect(func():
+		var error: String = simulation.start_fuel_contract(fuel_share.get_selected_id(), fuel_term.get_selected_id())
+		fuel_result.text = error if not error.is_empty() else "Treibstoffvertrag abgeschlossen."
+		refresh(true))
+	fuel_actions.add_child(fuel_start)
+	fuel_result = UI.label("")
+	fuel_result.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	fuel.add_child(fuel_result)
 	var marketing := UI.panel(self, "MARKETING / MARKENBEKANNTHEIT")
 	marketing_status = UI.label("")
 	marketing_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -163,10 +193,17 @@ func refresh(force: bool = false) -> void:
 	var airline: Dictionary = simulation.get_airline_info()
 	var financing: Dictionary = simulation.get_financing()
 	var marketing: Dictionary = simulation.get_marketing()
-	var key := "%s/%s/%s/%s" % [summary, airline, financing, marketing]
+	var fuel: Dictionary = simulation.get_fuel_contract()
+	var key := "%s/%s/%s/%s/%s" % [summary, airline, financing, marketing, fuel]
 	if key == signature and not force:
 		return
 	signature = key
+	fuel_status.text = "Markt: %d ct/kg · Aufschlag: %.2f %% · Monat: %d Tage · Vertragseffekt seit Gründung: %s (positiv = Mehrkosten, negativ = Ersparnis)." % [fuel["market_cents"], fuel["premium_bps"] / 100.0, fuel["month_days"], UI.money(fuel["effect_eur"])]
+	if fuel["active"]:
+		fuel_status.text += "\nAktiv: %d %% zu %d ct/kg · Rest: %d Sekunden. Keine vorzeitige Kündigung." % [fuel["share"], fuel["locked_cents"], fuel["remaining_seconds"]]
+	else:
+		fuel_status.text += "\nKein aktiver Vertrag. In Notlage / Restrukturierung kein Neuabschluss."
+	fuel_start.disabled = not fuel["can_start"]
 	marketing_budget.max_value = marketing["max_budget_eur"]
 	if not marketing_budget.get_line_edit().has_focus():
 		marketing_budget.value = marketing["budget_eur"]

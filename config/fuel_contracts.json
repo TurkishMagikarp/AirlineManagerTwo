@@ -1,0 +1,9 @@
+{
+  "premium_bps": 200,
+  "shares_percent": [25, 50, 75],
+  "terms_months": [3, 6, 12],
+  "month_days": 30,
+  "ai_share_percent": 25,
+  "ai_term_months": 3,
+  "ai_reserve_eur": 2000000
+}

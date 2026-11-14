@@ -11,6 +11,9 @@ mod financing;
 #[cfg(test)]
 mod financing_tests;
 #[cfg(test)]
+mod fuel_contract_tests;
+mod fuel_contracts;
+#[cfg(test)]
 mod fuel_tests;
 mod game;
 mod history;
@@ -285,6 +288,32 @@ impl SimulationClock {
             .unwrap_or_default()
             .as_str()
             .into()
+    }
+
+    #[func]
+    fn start_fuel_contract(&mut self, share: u32, months: u32) -> GString {
+        self.game
+            .start_fuel_contract(share, months)
+            .err()
+            .unwrap_or_default()
+            .as_str()
+            .into()
+    }
+
+    #[func]
+    fn get_fuel_contract(&self) -> VarDictionary {
+        let now = self.game.clock.elapsed().as_secs();
+        let c = self.game.active_fuel_contract();
+        let r = &*fuel_contracts::RULES;
+        vdict! { "market_cents" => self.game.fuel_market.price_at(now),
+        "premium_bps" => r.premium_bps, "month_days" => r.month_days as i64,
+        "shares" => &r.shares_percent.iter().map(|s| *s as i64).collect::<PackedInt64Array>().to_variant(),
+        "terms" => &r.terms_months.iter().map(|s| *s as i64).collect::<PackedInt64Array>().to_variant(),
+        "active" => c.is_some(), "share" => c.map_or(0, |c| c.share_percent as i64),
+        "locked_cents" => c.map_or(0, |c| c.locked_cents),
+        "remaining_seconds" => c.map_or(0, |c| (c.ends_at - now) as i64),
+        "effect_eur" => self.game.finance.totals.fuel_contract_effect,
+        "can_start" => self.game.airline.is_some() && !self.game.insolvent() && !self.game.distressed() && self.game.resolution.deadline.is_none() && c.is_none() }
     }
 
     #[func]
