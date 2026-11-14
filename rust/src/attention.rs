@@ -14,6 +14,7 @@ static RULES: LazyLock<Rules> = LazyLock::new(|| {
     for key in [
         "negative_cash",
         "crew",
+        "delay",
         "technicians",
         "salary_reserve",
         "idle",
@@ -78,6 +79,27 @@ impl Game {
             );
         }
         for p in &self.fleet {
+            if let Some(i) = self.planned_route(p.id)
+                && let Ok(state) = operations::movement(
+                    &self.routes[i],
+                    &p.model_id,
+                    self.clock.elapsed().as_secs(),
+                )
+                && state.delay_seconds > crate::disruptions::RULES.attention_threshold_seconds
+            {
+                add(
+                    "delay",
+                    format!(
+                        "{} · {} Minuten Verspätung",
+                        p.identifier(),
+                        state.delay_seconds.div_ceil(60)
+                    ),
+                    "fleet",
+                    self.routes[i].public_id(),
+                    p.id,
+                    0,
+                );
+            }
             if p.status == AircraftStatus::Maintenance
                 && p.maintenance.as_ref().is_some_and(|v| !v.staffed)
             {

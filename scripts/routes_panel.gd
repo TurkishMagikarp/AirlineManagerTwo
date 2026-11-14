@@ -318,6 +318,7 @@ func refresh_operations() -> void:
 				refresh.call_deferred()
 				return
 			row.set_text(4, "%d / %d / %d" % [route["base_daily_market"], route["expected_daily_passengers"], route["daily_spill"]])
+			row.set_tooltip_text(0, "Pünktlichkeit: %s · %d erfasste Flüge" % ["—" if route["punctuality_percent"] < 0 else "%.1f %%" % route["punctuality_percent"], route["punctuality_flights"]])
 			row.set_tooltip_text(4, "Pro Tag und Richtung: gemeinsamer Markt / erwartete eigene Passagiere / wegen Sitzmangel abgewiesen.\nAbgewiesen = eigener anfänglicher Anteil minus Beförderung vor Rundung; diese Reisenden können zur Konkurrenz wechseln.\nOhne eigenen Flugplan: keine Beförderung, kein Sitzmangel.\nDurchschnitt pro Abflug: %d Pax" % route["estimated_passengers"])
 			row.set_text(5, "%.1f %%" % route["actual_load_percent"] if route["actual_flights"] > 0 else "Keine Flüge")
 			row.set_tooltip_text(5, "Tatsächlich beförderte Passagiere / angebotene Sitze aller archivierten Landungen dieser Route. Bei alten Spielständen ab Archivbeginn.")
@@ -328,6 +329,8 @@ func refresh_operations() -> void:
 	_update_schedule_controls(metrics.get(_route().get("id", 0), {}))
 	_update_service_cost(metrics.get(_route().get("id", 0), {}))
 	var lines: PackedStringArray = ["Flugbetrieb · nächste Abflüge (sortiert)"]
+	for route in metrics.values():
+		lines.append("Route #%d · Pünktlichkeit: %s · %d erfasste Flüge" % [route["id"], "—" if route["punctuality_percent"] < 0 else "%.1f %%" % route["punctuality_percent"], route["punctuality_flights"]])
 	for operation in simulation.get_operations():
 		lines.append("%s · Route #%d · Flug %d min · Boden %d min\n%s\nNächster Abflug: %s" % [operation["identifier"], operation["route_id"], ceili(operation["flight_seconds"] / 60.0), operation["ground_seconds"] / 60, operation["status_text"], operation["next_departure"]])
 	operations_label.text = "\n\n".join(lines)
@@ -345,6 +348,7 @@ func refresh_operations() -> void:
 		for i in range(values.size()):
 			row.set_text(i, values[i])
 			row.set_tooltip_text(i, "Ticket: %s\nTreibstoff: %s\nFlughäfen: %s\nPersonal: %s\nWartung / Verwaltung: %s\nBordservice (± Standard): %s" % [UI.money(result["ticket_eur"]), UI.money(result["fuel_eur"]), UI.money(result["airport_eur"]), UI.money(result["crew_eur"]), UI.money(result["overhead_eur"]), UI.money(result["service_eur"])])
+			row.set_tooltip_text(i, row.get_tooltip_text(i) + "\nBetreuung / Entschädigung: %s" % UI.money(result["care_eur"]))
 		row.set_text(2, "Y %d/%d · J %d/%d" % [result["economy_passengers"], result["economy_seats"], result["business_passengers"], result["business_seats"]])
 		row.set_tooltip_text(3, "Economy: %s · Business: %s" % [UI.money(result["economy_revenue_eur"]), UI.money(result["business_revenue_eur"])])
 		row.set_text(6, "%d kg / %s" % [result["cargo_kg"], UI.money(result["cargo_revenue_eur"])])

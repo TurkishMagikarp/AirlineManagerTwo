@@ -220,6 +220,10 @@ impl Game {
         }
         if self.competitors.is_empty()
             && self
+                .routes
+                .iter()
+                .all(|r| r.plan.as_ref().is_none_or(|p| p.disruption.is_some()))
+            && self
                 .next_insurance_event()
                 .is_none_or(|t| Duration::from_secs(t) > target.elapsed())
             && self
@@ -249,6 +253,14 @@ impl Game {
         // Transactional across all companies: no partial time or cash updates.
         let mut staged = self.clone();
         while staged.clock.elapsed() < target.elapsed() {
+            if staged.initialize_disruptions().is_err()
+                || staged
+                    .competitors
+                    .iter_mut()
+                    .any(|c| c.game.initialize_disruptions().is_err())
+            {
+                return false;
+            }
             // Older saves may already be parked after a deferred loss review.
             // Close these at the current instant, never move the clock backward.
             for c in &mut staged.competitors {

@@ -227,6 +227,14 @@ fn zero(value: &i64) -> bool {
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Totals {
     #[serde(default, skip_serializing_if = "zero")]
+    pub care: i64,
+    #[serde(default, skip_serializing_if = "zero")]
+    pub punctuality_flights: i64,
+    #[serde(default, skip_serializing_if = "zero")]
+    pub on_time_flights: i64,
+    #[serde(default, skip_serializing_if = "zero")]
+    pub delay_seconds: i64,
+    #[serde(default, skip_serializing_if = "zero")]
     pub cargo_kg: i64,
     #[serde(default, skip_serializing_if = "zero")]
     pub cargo_revenue: i64,
@@ -253,7 +261,8 @@ pub struct Totals {
 }
 impl Totals {
     pub fn valid_cabins(&self, economy_fare: i64) -> bool {
-        crate::cargo::valid(self)
+        crate::disruptions::valid(self)
+            && crate::cargo::valid(self)
             && crate::service::valid(self)
             && self
                 .fuel
@@ -279,7 +288,7 @@ impl Totals {
                 == Some(self.revenue)
     }
     pub fn costs(&self) -> i64 {
-        self.fuel + self.airport + self.crew + self.overhead + self.service
+        self.fuel + self.airport + self.crew + self.overhead + self.service + self.care
     }
     pub fn profit(&self) -> i64 {
         self.revenue - self.costs()
@@ -309,14 +318,19 @@ impl Totals {
             business_revenue,
             business_seats,
             cargo_kg,
-            cargo_revenue
+            cargo_revenue,
+            care,
+            punctuality_flights,
+            on_time_flights,
+            delay_seconds
         );
         let costs = self
             .fuel
             .checked_add(self.airport)?
             .checked_add(self.crew)?
             .checked_add(self.overhead)?
-            .checked_add(self.service)?;
+            .checked_add(self.service)?
+            .checked_add(self.care)?;
         if costs < 0 {
             return None;
         }
@@ -444,6 +458,10 @@ pub(crate) fn quote_prepared(
     let seconds = market.flight_seconds as i64;
     let rates = market.rates;
     Ok(Totals {
+        care: 0,
+        punctuality_flights: 0,
+        on_time_flights: 0,
+        delay_seconds: 0,
         cargo_kg,
         cargo_revenue,
         fuel_contract_effect: 0,
@@ -522,7 +540,8 @@ impl Game {
     pub fn validate_finance(&self) -> Result<(), String> {
         self.validate_insurance()?;
         let valid = |t: &Totals| {
-            crate::cargo::valid(t)
+            crate::disruptions::valid(t)
+                && crate::cargo::valid(t)
                 && crate::service::valid(t)
                 && t.fuel
                     .checked_sub(t.fuel_contract_effect)
@@ -546,6 +565,7 @@ impl Game {
                     .and_then(|v| v.checked_add(t.crew))
                     .and_then(|v| v.checked_add(t.overhead))
                     .and_then(|v| v.checked_add(t.service))
+                    .and_then(|v| v.checked_add(t.care))
                     .is_some_and(|costs| costs >= 0)
         };
         if !valid(&self.finance.totals)
@@ -578,7 +598,11 @@ impl Game {
         if t.flights <= HISTORY_LIMIT as i64 && sum != *t {
             return Err("Unvollständige Finanzsummen.".into());
         }
-        if sum.cargo_kg > t.cargo_kg
+        if sum.care > t.care
+            || sum.punctuality_flights > t.punctuality_flights
+            || sum.on_time_flights > t.on_time_flights
+            || sum.delay_seconds > t.delay_seconds
+            || sum.cargo_kg > t.cargo_kg
             || sum.cargo_revenue > t.cargo_revenue
             || sum.business_passengers > t.business_passengers
             || sum.business_seats > t.business_seats
@@ -921,8 +945,11 @@ mod tests {
                     let balance = g.airline.as_ref().unwrap().capital_eur;
                     g.clock.set_running(true);
                     assert!(g.advance((60 + flight) as f64));
-                    assert_eq!(g.finance.totals, t);
-                    assert_eq!(g.finance.recent[0].totals, t);
+                    let mut operated = t.clone();
+                    operated.punctuality_flights = 1;
+                    operated.on_time_flights = 1;
+                    assert_eq!(g.finance.totals, operated);
+                    assert_eq!(g.finance.recent[0].totals, operated);
                     assert_eq!(
                         g.airline.as_ref().unwrap().capital_eur,
                         balance + t.profit()

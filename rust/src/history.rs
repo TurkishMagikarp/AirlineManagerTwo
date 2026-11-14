@@ -493,13 +493,20 @@ mod tests {
         g.advance(60.0 + 7200.0 * 1_000_000.0);
         let h = g.history.as_ref().unwrap();
         let n = g.finance.totals.flights as u64;
-        // New blocks are bounded by mandatory checks plus weekly fuel changes;
-        // storage grows by economic events rather than individual flights.
+        // Blocks split at checks, fuel changes and disruptions; regular
+        // on-time stretches still compress instead of storing every flight.
         let checks = g.fleet[0].wear.checks + u64::from(g.fleet[0].maintenance.is_some());
         assert!(n > 900_000 && checks > 1000);
         let weeks = g.clock.elapsed().as_secs() / (7 * 86400);
         assert!(h.batches.len() as u64 > checks);
-        assert!(h.batches.len() as u64 <= checks + weeks + 1);
+        let delayed: u64 = h
+            .batches
+            .iter()
+            .filter(|b| b.totals.delay_seconds > 0)
+            .map(|b| b.count)
+            .sum();
+        assert!(h.batches.len() as u64 <= checks + weeks + delayed * 2 + 1);
+        assert!(h.batches.len() as u64 * 5 < n);
         assert_eq!(h.maintenance.len() as u64, checks);
         assert_eq!(h.totals(1, g.clock.elapsed().as_secs()), g.finance.totals);
         assert_eq!(
@@ -515,7 +522,13 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("million.json");
         crate::save::save(&path, &g).unwrap();
-        assert!(std::fs::metadata(&path).unwrap().len() < 5_000_000);
+        let bytes = std::fs::metadata(&path).unwrap().len();
+        eprintln!(
+            "Million-flight compact archive: {} batches, {bytes} bytes",
+            h.batches.len()
+        );
+        // Delay details introduce more event boundaries than fuel/checks alone.
+        assert!(bytes < 32 * 1024 * 1024);
         let mut loaded = crate::save::load(&path).unwrap();
         assert_eq!(loaded.history, g.history);
         g.advance(7200.0);

@@ -8,6 +8,8 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct FlightPlan {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub disruption: Option<crate::disruptions::Cursor>,
     pub first_departure: u64,
     pub interval_seconds: u64,
     pub completed_flights: u64,
@@ -54,11 +56,44 @@ pub fn departure_quote_in_market(
     market: &crate::economy::FuelMarket,
 ) -> Result<crate::economy::FlightResult, String> {
     let plan = route.plan.as_ref().ok_or("Kein Flugplan.")?;
-    let departure = index
-        .checked_mul(plan.interval_seconds)
-        .and_then(|t| t.checked_add(plan.first_departure))
-        .ok_or("Flugplan-Zeitüberlauf.")?;
-    departure_quote_at_price(route, model, index, routes, market.price_at(departure))
+    if index == plan.completed_flights
+        && let Some(f) = &plan.airborne
+    {
+        return Ok(f.clone());
+    }
+    let landing = crate::disruptions::landing_at(route, model, index)?;
+    let departure = landing
+        .checked_sub(timings(route, model)?.0)
+        .ok_or("Zeitüberlauf.")?;
+    let mut f = departure_quote_at_price(
+        route,
+        model,
+        index,
+        routes,
+        market.price_at(departure),
+        departure,
+    )?;
+    if plan.disruption.is_some() {
+        let scheduled = plan
+            .first_departure
+            .checked_add(
+                index
+                    .checked_mul(plan.interval_seconds)
+                    .ok_or("Zeitüberlauf.")?,
+            )
+            .ok_or("Zeitüberlauf.")?;
+        crate::disruptions::apply(
+            &mut f.totals,
+            &crate::disruptions::Leg {
+                index,
+                scheduled,
+                departure,
+                landing,
+                ready: landing,
+            },
+        )?;
+    }
+    Ok(f)
 }
 
 fn departure_quote_at_price(
@@ -67,9 +102,18 @@ fn departure_quote_at_price(
     index: u64,
     routes: &[crate::demand::Offer],
     fuel_cents: i64,
+    departure: u64,
 ) -> Result<crate::economy::FlightResult, String> {
     let mut market = crate::economy::QuoteMarket::new(route, model, routes)?;
-    departure_quote_prepared(route, model, index, routes, fuel_cents, &mut market)
+    departure_quote_prepared(
+        route,
+        model,
+        index,
+        routes,
+        fuel_cents,
+        departure,
+        &mut market,
+    )
 }
 
 fn departure_quote_prepared(
@@ -78,6 +122,7 @@ fn departure_quote_prepared(
     index: u64,
     routes: &[crate::demand::Offer],
     fuel_cents: i64,
+    departure: u64,
     market: &mut crate::economy::QuoteMarket,
 ) -> Result<crate::economy::FlightResult, String> {
     let plan = route.plan.as_ref().ok_or("Kein Flugplan.")?;
@@ -90,10 +135,8 @@ fn departure_quote_prepared(
         (&route.origin_icao, &route.destination_icao)
     };
     let flight = market.flight_seconds;
-    let landing = index
-        .checked_mul(plan.interval_seconds)
-        .and_then(|t| t.checked_add(plan.first_departure))
-        .and_then(|t| t.checked_add(flight))
+    let landing = departure
+        .checked_add(flight)
         .ok_or("Flugplan-Zeitüberlauf.")?;
     Ok(crate::economy::FlightResult {
         route_id: route.id,
@@ -113,6 +156,7 @@ fn departure_quote_prepared(
 }
 
 pub struct Movement {
+    pub delay_seconds: u64,
     pub status: AircraftStatus,
     pub location: String,
     pub origin: String,
@@ -144,6 +188,9 @@ pub fn timings(route: &Route, model_id: &str) -> Result<(u64, u64), String> {
 
 pub fn movement(route: &Route, model: &str, now: u64) -> Result<Movement, String> {
     let plan = route.plan.as_ref().ok_or("Kein Flugplan.")?;
+    if plan.disruption.is_some() {
+        return crate::disruptions::project(route, model, now).map(|p| p.state);
+    }
     let (flight, ground) = timings(route, model)?;
     if plan.interval_seconds < flight + ground || plan.first_departure > u64::MAX / 2 {
         return Err(
@@ -173,6 +220,7 @@ pub fn movement(route: &Route, model: &str, now: u64) -> Result<Movement, String
     };
     let landed = started && now >= landing;
     Ok(Movement {
+        delay_seconds: 0,
         status: if !started || now >= ready {
             AircraftStatus::Parked
         } else if landed {
@@ -296,6 +344,7 @@ impl Game {
             interval_seconds: interval,
             ..FlightPlan::default()
         });
+        self.initialize_disruptions()?;
         Ok(())
     }
 
@@ -347,7 +396,7 @@ impl Game {
         let owned_supply = self.prioritize_market(supply);
         let supply = owned_supply.as_slice();
         let mut updates = Vec::new();
-        let mut finance = None;
+        let mut finance = self.finance.clone();
         let mut delta = 0i64;
         let mut archive = Vec::new();
         for (i, route) in self
@@ -363,138 +412,86 @@ impl Game {
             else {
                 return false;
             };
-            let Ok(state) = movement(route, &self.fleet[p].model_id, clock.elapsed().as_secs())
+            let plane = &self.fleet[p];
+            let Ok(projection) =
+                crate::disruptions::project(route, &plane.model_id, clock.elapsed().as_secs())
             else {
                 return false;
             };
             let plan = route.plan.as_ref().unwrap();
-            let Some(count) = state.completed.checked_sub(plan.completed_flights) else {
+            let Ok((flight, _)) = timings(route, &plane.model_id) else {
                 return false;
             };
-            // No user actions occur inside an advance. Batch only departures with
-            // the same offer snapshot; seasonality varies at every departure.
-            // Preserve the immutable existing flight, then quote each departure.
-            let wear = if count > 0 {
-                let Ok((flight, _)) = timings(route, &self.fleet[p].model_id) else {
-                    return false;
-                };
-                let Some(wear) = self.fleet[p].wear.added(count, flight) else {
-                    return false;
-                };
-                Some(wear)
-            } else {
-                None
+            let Some(wear) = plane.wear.added(projection.landed.len() as u64, flight) else {
+                return false;
             };
-            let mut batches = Vec::new();
-            let mut index = plan.completed_flights;
-            if count > 0 {
-                if let Some(f) = &plan.airborne {
-                    batches.push((1, f.clone()));
-                    index += 1;
+            let mut market = None;
+            let (mut fuel_until, mut fuel_cents) = (0, 0);
+            let mut quote = |leg: &crate::disruptions::Leg,
+                             market: &mut Option<crate::economy::QuoteMarket>|
+             -> Result<crate::economy::FlightResult, String> {
+                if leg.index == plan.completed_flights
+                    && let Some(f) = &plan.airborne
+                {
+                    return Ok(f.clone());
                 }
-                if index < state.completed {
-                    // Fuel is constant within its configured week. Reuse the
-                    // offer workspace, but evaluate demand at each departure.
-                    let (mut fuel_until, mut fuel_cents) = (0, 0);
-                    let Ok(mut market) =
-                        crate::economy::QuoteMarket::new(route, &self.fleet[p].model_id, supply)
-                    else {
-                        return false;
-                    };
-                    while index < state.completed {
-                        let departure = plan.first_departure + index * plan.interval_seconds;
-                        if departure >= fuel_until {
-                            fuel_cents = self.fuel_market.price_at(departure);
-                            fuel_until = self.fuel_market.next_change(departure);
-                        }
-                        let count = 1;
-                        let Ok(mut f) = departure_quote_prepared(
-                            route,
-                            &self.fleet[p].model_id,
-                            index,
-                            supply,
-                            fuel_cents,
-                            &mut market,
-                        ) else {
-                            return false;
-                        };
-                        if self
-                            .apply_fuel_contract(&mut f, &self.fleet[p].model_id, departure)
-                            .is_err()
-                        {
-                            return false;
-                        }
-                        batches.push((count, f));
-                        index += count;
-                    }
+                if market.is_none() {
+                    *market = Some(crate::economy::QuoteMarket::new(
+                        route,
+                        &plane.model_id,
+                        supply,
+                    )?);
                 }
-            }
-            for (count, result) in batches {
-                let finance = finance.get_or_insert_with(|| self.finance.clone());
-                let totals = result.totals;
-                if finance.totals.add(&totals, count).is_none() {
+                // Quote the actual departure time: seasonal demand, fuel prices
+                // and contracts are frozen at dispatch, never at landing.
+                if leg.departure >= fuel_until {
+                    fuel_cents = self.fuel_market.price_at(leg.departure);
+                    fuel_until = self.fuel_market.next_change(leg.departure);
+                }
+                let mut f = departure_quote_prepared(
+                    route,
+                    &plane.model_id,
+                    leg.index,
+                    supply,
+                    fuel_cents,
+                    leg.departure,
+                    market.as_mut().unwrap(),
+                )?;
+                self.apply_fuel_contract(&mut f, &plane.model_id, leg.departure)?;
+                crate::disruptions::apply(&mut f.totals, leg)?;
+                Ok(f)
+            };
+            for leg in &projection.landed {
+                let Ok(f) = quote(leg, &mut market) else {
+                    return false;
+                };
+                if finance.totals.add(&f.totals, 1).is_none() {
                     return false;
                 }
-                let Some(change) = i64::try_from(count)
-                    .ok()
-                    .and_then(|n| totals.profit().checked_mul(n))
-                    .and_then(|n| delta.checked_add(n))
-                else {
+                let Some(change) = delta.checked_add(f.totals.profit()) else {
                     return false;
                 };
                 delta = change;
                 archive.push(crate::history::Batch {
                     route_id: route.id,
-                    first: result.landing,
+                    first: f.landing,
                     interval: plan.interval_seconds,
-                    count,
-                    origin: result.origin.clone(),
-                    destination: result.destination.clone(),
-                    ticket_eur: result.ticket_eur,
-                    totals: totals.clone(),
+                    count: 1,
+                    origin: f.origin.clone(),
+                    destination: f.destination.clone(),
+                    ticket_eur: f.ticket_eur,
+                    totals: f.totals.clone(),
                 });
-                for offset in count.saturating_sub(crate::economy::HISTORY_LIMIT as u64)..count {
-                    let (a, b) = if offset % 2 == 0 {
-                        (&result.origin, &result.destination)
-                    } else {
-                        (&result.destination, &result.origin)
-                    };
-                    finance.recent.push(crate::economy::FlightResult {
-                        route_id: route.id,
-                        landing: result.landing + offset * plan.interval_seconds,
-                        origin: a.clone(),
-                        destination: b.clone(),
-                        ticket_eur: result.ticket_eur,
-                        totals: totals.clone(),
-                    });
-                }
+                finance.recent.push(f);
             }
-            let airborne = if state.status == AircraftStatus::InFlight {
-                if count == 0 && plan.airborne.is_some() {
-                    plan.airborne.clone()
-                } else {
-                    let Ok(mut f) = departure_quote_in_market(
-                        route,
-                        &self.fleet[p].model_id,
-                        state.completed,
-                        supply,
-                        &self.fuel_market,
-                    ) else {
-                        return false;
-                    };
-                    let departure = plan.first_departure + state.completed * plan.interval_seconds;
-                    if self
-                        .apply_fuel_contract(&mut f, &self.fleet[p].model_id, departure)
-                        .is_err()
-                    {
-                        return false;
-                    }
-                    Some(f)
-                }
-            } else {
-                None
+            let airborne = match &projection.active {
+                Some(leg) => match quote(leg, &mut market) {
+                    Ok(f) => Some(f),
+                    Err(_) => return false,
+                },
+                None => None,
             };
-            updates.push((i, p, state, airborne, wear));
+            updates.push((i, p, projection, airborne, wear));
         }
         let balance = match &self.airline {
             Some(a) => match a.capital_eur.checked_add(delta) {
@@ -504,15 +501,13 @@ impl Game {
             None if delta == 0 => None,
             None => return false,
         };
-        if let Some(mut finance) = finance {
-            finance.recent.sort_by_key(|f| (f.landing, f.route_id));
-            let excess = finance
-                .recent
-                .len()
-                .saturating_sub(crate::economy::HISTORY_LIMIT);
-            finance.recent.drain(..excess);
-            self.finance = finance;
-        }
+        finance.recent.sort_by_key(|f| (f.landing, f.route_id));
+        let excess = finance
+            .recent
+            .len()
+            .saturating_sub(crate::economy::HISTORY_LIMIT);
+        finance.recent.drain(..excess);
+        self.finance = finance;
         if let Some(h) = &mut self.history {
             for batch in archive {
                 h.record(batch);
@@ -523,14 +518,14 @@ impl Game {
         }
         self.clock = clock;
         self.complete_training();
-        for (r, p, state, airborne, wear) in updates {
-            if let Some(wear) = wear {
-                self.fleet[p].wear = wear;
-            }
-            self.fleet[p].status = state.status;
-            self.fleet[p].location_icao = state.location;
-            self.routes[r].plan.as_mut().unwrap().completed_flights = state.completed;
-            self.routes[r].plan.as_mut().unwrap().airborne = airborne;
+        for (r, p, projection, airborne, wear) in updates {
+            self.fleet[p].wear = wear;
+            self.fleet[p].status = projection.state.status;
+            self.fleet[p].location_icao = projection.state.location;
+            let plan = self.routes[r].plan.as_mut().unwrap();
+            plan.completed_flights = projection.state.completed;
+            plan.airborne = airborne;
+            plan.disruption = Some(projection.cursor);
         }
         true
     }
@@ -542,6 +537,12 @@ impl Game {
                 .iter()
                 .find(|r| r.aircraft_id == Some(plane.id) && r.plan.is_some())
             {
+                let plan = route.plan.as_ref().unwrap();
+                let (flight, ground) = timings(route, &plane.model_id)?;
+                if plan.interval_seconds < flight + ground || plan.first_departure > u64::MAX / 2 {
+                    return Err("Ungültiger Flugplan im Spielstand.".into());
+                }
+                crate::disruptions::validate(route, plane)?;
                 let expected = movement(route, &plane.model_id, self.clock.elapsed().as_secs())?;
                 let airborne = &route.plan.as_ref().unwrap().airborne;
                 if (expected.status == AircraftStatus::InFlight) != airborne.is_some() {

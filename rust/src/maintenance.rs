@@ -79,7 +79,7 @@ pub fn rules(model_id: &str) -> Result<&'static Rules, String> {
 }
 
 /// Lifetime operating data and wear since the last completed check.
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Wear {
     pub flight_seconds: u64,
     pub cycles: u64,
@@ -215,11 +215,12 @@ impl Game {
         if k == 0 && plane.status != AircraftStatus::InFlight {
             return Some(self.clock.elapsed().as_secs());
         }
-        plan.completed_flights
-            .checked_add(k.saturating_sub(1))?
-            .checked_mul(plan.interval_seconds)?
-            .checked_add(plan.first_departure)?
-            .checked_add(flight)
+        crate::disruptions::landing_at(
+            route,
+            &plane.model_id,
+            plan.completed_flights.checked_add(k.saturating_sub(1))?,
+        )
+        .ok()
     }
 
     /// Next whole-second instant at which any check starts, ends or is forced.

@@ -256,6 +256,7 @@ func refresh(force: bool = false) -> void:
 	metrics["profit"].add_theme_color_override("font_color", UI.POSITIVE if summary["profit_eur"] >= 0 else UI.NEGATIVE)
 	var info: Dictionary = simulation.get_finance_history_info()
 	note.text = "Summen: gesamte erfasste Wirtschaft. Routenarchiv und Diagramme ab %s.\nBei älteren Spielständen fehlt frühere Detailhistorie; sie wird nicht nachberechnet. Flugzeugkäufe insgesamt: %s · Wartungschecks insgesamt: %s · Personalaufwand (Gehälter + Umschulung) insgesamt: %s." % [info.get("since", "—"), UI.money(summary["purchases_eur"]), UI.money(summary["maintenance_eur"]), UI.money(summary["payroll_eur"])]
+	note.text += "\nPassagierbetreuung / Entschädigung (in Kosten und Steuerbasis enthalten): %s." % UI.money(summary["care_eur"])
 	note.text += "\nBauchfracht: %d kg · %s Umsatz (im Ergebnis und in der Ertragsteuer enthalten)." % [summary["cargo_kg"], UI.money(summary["cargo_revenue_eur"])]
 	note.text += "\nTreibstoff weltweit: %.2f EUR/kg · %s%d Cent/kg gegenüber vor 30 Tagen (wöchentlich)." % [summary["fuel_cents_per_kg"] / 100.0, "↑ +" if summary["fuel_month_delta_cents"] > 0 else ("↓ " if summary["fuel_month_delta_cents"] < 0 else "→ "), summary["fuel_month_delta_cents"]]
 	note.text += "\nLeasingraten (in Kosten enthalten): %s · Flugzeugjournal netto inkl. Verkäufen, Kautionen, Raten und Rückgaben: %s." % [UI.money(summary["rent_eur"]), UI.money(summary["aircraft_cash_eur"])]

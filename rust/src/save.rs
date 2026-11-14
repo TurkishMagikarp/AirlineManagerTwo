@@ -12,7 +12,8 @@ use std::time::Duration;
 // v24: airport-specific tariffs apply only to new departure quotes.
 // Identity migration: keep all stored money, history and airborne quotes verbatim;
 // no new saved fields are needed because tariffs belong to the world catalog.
-const VERSION: u32 = 25;
+// v26: deterministic delay cursors and punctuality/care totals.
+const VERSION: u32 = 26;
 // Bounded input, including centuries of fuel/seasonal quotes for the player
 // and both AI airlines in the million-flight finance restart scenario.
 // Version 17 retains per-class quotes, which also split more archive batches.
@@ -177,6 +178,10 @@ pub fn load(path: &Path) -> Result<Game, String> {
     if value["version"].as_u64().is_some_and(|v| v < 23) {
         crate::insurance::migrate(&mut value["state"]);
     }
+    // v26 is an additive migration: absent cursors and punctuality/care
+    // fields deserialize to None/zero for every owner and archived result.
+    // Initialize a cursor only when play advances; an existing airborne quote
+    // is then frozen through its original landing, without replaying history.
     let data: SaveGame = serde_json::from_value(value)
         .map_err(|_| "Spielstand ist beschädigt oder unvollständig.".to_string())?;
     if !(1..=VERSION).contains(&data.version) {

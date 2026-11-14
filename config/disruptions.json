@@ -1,0 +1,14 @@
+{
+  "base_probability_per_million": 2000,
+  "worn_probability_per_million": 18000,
+  "age_probability_per_year_per_million": 500,
+  "maximum_age_years": 20,
+  "minimum_seconds": 300,
+  "maximum_seconds": 1800,
+  "worn_extra_seconds": 1800,
+  "age_extra_seconds_per_year": 60,
+  "on_time_threshold_seconds": 900,
+  "care_threshold_seconds": 1800,
+  "care_eur_per_passenger": 12,
+  "attention_threshold_seconds": 3600
+}
