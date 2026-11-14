@@ -81,11 +81,15 @@ fn departure_quote_prepared(
     market: &mut crate::economy::QuoteMarket,
 ) -> Result<crate::economy::FlightResult, String> {
     let plan = route.plan.as_ref().ok_or("Kein Flugplan.")?;
-    let mut directed = route.clone();
-    if plan.is_return(index) {
-        std::mem::swap(&mut directed.origin_icao, &mut directed.destination_icao);
-    }
-    let (flight, _) = timings(route, model)?;
+    // The shared market, timings and endpoint bill are symmetric. Only the
+    // displayed endpoints reverse; avoid cloning the plan and frozen quote on
+    // every departure. Timings are fixed for this prepared route/model pair.
+    let (origin, destination) = if plan.is_return(index) {
+        (&route.destination_icao, &route.origin_icao)
+    } else {
+        (&route.origin_icao, &route.destination_icao)
+    };
+    let flight = market.flight_seconds;
     let landing = index
         .checked_mul(plan.interval_seconds)
         .and_then(|t| t.checked_add(plan.first_departure))
@@ -94,11 +98,11 @@ fn departure_quote_prepared(
     Ok(crate::economy::FlightResult {
         route_id: route.id,
         landing,
-        origin: directed.origin_icao.clone(),
-        destination: directed.destination_icao.clone(),
+        origin: origin.clone(),
+        destination: destination.clone(),
         ticket_eur: route.ticket_eur,
         totals: crate::economy::quote_prepared(
-            &directed,
+            route,
             model,
             routes,
             fuel_cents,

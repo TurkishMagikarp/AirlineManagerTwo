@@ -45,9 +45,20 @@ Das Spielergebnis ist weiterhin kein vollständiger Unternehmens-Nettogewinn.
   120 kg (ATR) je Flug für Start/Steigflug/Rollen als **Mehrverbrauch gegenüber
   der reinen Reisezeitformel**. Keine mitberechnete, unverbrauchte Reserve.
   Fuelpreis jetzt in Cent/kg, nicht mehr auf volle EUR/kg eingeschränkt.
-- Flughäfen einschließlich vereinfachter Abfertigung beider Endpunkte zusammen:
-  Jets 1.400, ATR 600 EUR je Einzelflug plus 25 EUR je Passagier; bisher einheitlich
-  400 + 12 EUR. Keine nochmalige Verdoppelung für beide Endpunkte.
+- Flughäfen: Jeder Endpunkt berechnet `ceil((Modellbasis + 25 × Pax) × charge_percent / 100)` EUR.
+  Modellbasis aus `config/economy.json`: Jets 1.400, ATR 600 EUR. Start und Ziel
+  werden einzeln aufgerundet und addiert, auch auf dem Rückflug. Leerflüge zahlen
+  weiterhin die Modellbasis anteilig. `charge_percent` in `data/airports.json`
+  ist eine vereinfachte Spielkalibrierung, kein realer Flughafentarif: FRA 60,
+  MUC 55, IST/JFK/LAX 65, SAW 45, PAD 25, HHN 30 Prozent. So liegen große Hubs
+  etwa doppelt so hoch wie Regionalflughäfen. 50 % je Endpunkt entspräche dem
+  früheren Gesamttarif. Beispiel ATR mit 40 Pax: FRA–MUC 1.840 EUR, PAD–HHN 880 EUR.
+  Godot zeigt die Stufe in der Flughafenauswahl, eine Kostenvorschau vor Erstellung
+  (Jahresmittel, Standardpreise, ein Abflug täglich je Richtung) und erwartete
+  Gebühren je Abflug der aktiven Dienste. Rust berechnet alle Beträge.
+  Save-Version 24 ist eine Identitätsmigration: keine neuen Zustandsfelder,
+  Geld, Historie und gespeicherte Abflugangebote aller Eigentümer bleiben exakt
+  erhalten. Neue Tarife gelten erst für neue Abflüge; keine Nachbelastung.
 - Personal: ausschließlich die Mitarbeitergehälter nach `config/staff.json`
   (siehe [Personal](staff.md)). Keine zusätzliche Crewpauschale je neuem Flug.
   Historische Crewkosten und bereits gespeicherte Abflugangebote bleiben erhalten.
@@ -283,3 +294,30 @@ KI prüft beim bestehenden wöchentlichen Review: unter dem langfristigen Mittel
 Save-Version 21: alte Spielstände erhalten für alle Airlines keinen Vertrag, bestehende Flugkosten bleiben erhalten. Abgelaufene Vertragsdaten bleiben bis zum nächsten Abschluss gespeichert, haben aber keine Preiswirkung. Der Vertrag verwendet ausschließlich die Rust-Spielzeit; Pausen, Geschwindigkeit und Frame-Größe ändern seine Laufzeit nicht.
 
 Rust-Vergleichstest über zehn Jahre, tägliche Schritte und jährliches Save/Load: beide KI-Airlines bleiben ohne Zahlungsnot / Restrukturierung. Jede Jahresprobe bleibt innerhalb 5 % der Kasse des Kontrolllaufs ohne KI-Verträge. Im zehnten Jahr: Regional Wings 166.657.714 EUR mit Vertragspolitik gegenüber 170.261.977 EUR ohne; Continental Sky 172.315.707 gegenüber 177.245.265 EUR. Dies ist ein reproduzierbarer Szenariovergleich, keine Garantie für jede Weltkonfiguration.
+
+## Flughafenentgelte: Vergleich AIR-65
+
+Zehn Jahre mit identischer ATR-Spielerroute FRA–MUC, gleicher Welt und KI-Regeln,
+jährlichem Save/Load des neuen Laufs. Kontrolllauf nutzt ausschließlich den alten
+flachen Tarif; keine andere Regel ist geändert. Beide KI-Airlines bleiben bei
+allen Jahresproben liquide, ohne Zahlungsnot, und fliegen weiter. Jahr 10:
+Regional Wings 166.538.470 statt 242.665.558 EUR (−31,4 %), Continental Sky
+122.567.904 statt 140.425.485 EUR (−12,7 %). Jede Jahresprobe liegt zwischen 50 %
+und 150 % der Kontrollkasse. Die KI reagiert auch mit anderen Routen/Flotten;
+dieser Vergleich misst daher die Gesamtwirkung einschließlich ihrer Entscheidungen.
+Keine zusätzliche KI-Subvention oder Tarifsonderregel nötig. Der vorhandene
+Vier-Szenarien-Zehnjahrestest besteht ebenfalls mit Jahres-/Tagesschritten und
+jährlichem Neustart. Kein Nachweis für beliebige Konfigurationen.
+
+Serverprüfung: Rust-Tests einschließlich Tarifrundung/Leerflug/Rückflug, alter
+Abflugangebote aller Eigentümer und Pause/1×/4×/16×/Save-Load. Godot, GUI/Screenshots
+bei den relevanten Fenstergrößen, START.bat und Windows-Prozessneustarts können
+hier nicht ausgeführt werden. Der ergänzte Godot-Routen-UI-Test bleibt ungetestet.
+
+Der abschließende isolierte Million-Flüge-Test besteht: 293,7 s für den Advance
+bei unverändertem 300-s-Limit; Save 111.396.587 Bytes, einschließlich Laden und
+Fortsetzung 366,2 s. Die übrigen 201 Rust-Tests sowie Build/Clippy bestehen separat.
+Vorherige Gesamtläufe überschritten das Zeitlimit (310/335 s). Der vorbereitete
+Quote-Kontext hält deshalb feste Flughafensätze, Flugzeit, Kabine und Modellraten;
+Rückflüge klonen nicht mehr den ganzen Flugplan samt altem Abflugangebot.
+Zeitabhängige Nachfrage, Nutzlast und Treibstoff bleiben je Abflug berechnet.

@@ -170,6 +170,44 @@ pub fn fuel_bill(route: &Route, model: &str, price: i64) -> Result<i64, String> 
         .map_err(|_| "Treibstoffüberlauf.".into())
 }
 
+#[cfg(test)]
+thread_local! { pub(crate) static LEGACY_AIRPORT_CHARGES: std::cell::Cell<bool> = const { std::cell::Cell::new(false) }; }
+
+/// Both endpoints charge the same model/passenger tariff at their own level.
+/// Round each endpoint up to whole EUR; empty flights still pay landing charges.
+pub fn airport_bill(route: &Route, model: &str, passengers: i64) -> Result<i64, String> {
+    let rates = CONFIG
+        .models
+        .get(model)
+        .ok_or("Unbekanntes Flugzeugmodell.")?;
+    if !(0..=i64::from(aircraft::model(model)?.seats)).contains(&passengers) {
+        return Err("Ungültige Passagierzahl.".into());
+    }
+    let tariff = rates.airport_base_eur + CONFIG.airport_eur_per_passenger * passengers;
+    Ok(endpoint_bill(tariff, airport_levels(route)?))
+}
+
+fn airport_levels(route: &Route) -> Result<[i64; 2], String> {
+    let catalog = crate::airports::catalog()?;
+    let level = |icao: &str| {
+        catalog
+            .airports
+            .iter()
+            .find(|a| a.icao == icao)
+            .map(|a| i64::from(a.charge_percent))
+            .ok_or_else(|| "Unbekannter Flughafen.".to_string())
+    };
+    Ok([level(&route.origin_icao)?, level(&route.destination_icao)?])
+}
+
+fn endpoint_bill(tariff: i64, levels: [i64; 2]) -> i64 {
+    #[cfg(test)]
+    if LEGACY_AIRPORT_CHARGES.with(|enabled| enabled.get()) {
+        return tariff;
+    }
+    (tariff * levels[0] + 99) / 100 + (tariff * levels[1] + 99) / 100
+}
+
 pub fn default_ticket() -> i64 {
     CONFIG.default_ticket_eur
 }
@@ -353,7 +391,14 @@ fn quote_with_time(
     quote_prepared(route, model_id, routes, fuel_cents, departure, &mut market)
 }
 
+/// Bound to one route/model/offer snapshot; rebuild when that snapshot changes.
 pub(crate) struct QuoteMarket {
+    // Catalog lookups happen once per prepared market, including return legs.
+    airport_levels: [i64; 2],
+    pub(crate) flight_seconds: u64,
+    seats: u32,
+    business_seats: u32,
+    rates: &'static Rates,
     cargo: crate::cargo::Market,
     passengers: crate::demand::Prepared,
 }
@@ -363,11 +408,17 @@ impl QuoteMarket {
         model_id: &str,
         routes: &[crate::demand::Offer],
     ) -> Result<Self, String> {
-        let seats = routes
+        let offer = routes
             .iter()
-            .find(|o| crate::demand::same_offer(route, &o.route))
-            .map_or(aircraft::model(model_id)?.seats, |o| o.seats);
+            .find(|o| crate::demand::same_offer(route, &o.route));
+        let seats = offer.map_or(aircraft::model(model_id)?.seats, |o| o.seats);
+        let business_seats = offer.map_or(0, |o| o.business_seats);
         Ok(Self {
+            seats,
+            business_seats,
+            rates: &CONFIG.models[model_id],
+            airport_levels: airport_levels(route)?,
+            flight_seconds: operations::timings(route, model_id)?.0,
             cargo: crate::cargo::Market::new(route, model_id, routes)?,
             passengers: crate::demand::Prepared::new(route, seats, routes)?,
         })
@@ -376,26 +427,22 @@ impl QuoteMarket {
 
 pub(crate) fn quote_prepared(
     route: &Route,
-    model_id: &str,
-    routes: &[crate::demand::Offer],
+    _model_id: &str,
+    _routes: &[crate::demand::Offer],
     fuel_cents: i64,
     departure: Option<u64>,
     market: &mut QuoteMarket,
 ) -> Result<Totals, String> {
     let c = &*CONFIG;
-    let model = aircraft::model(model_id)?;
-    let offer = routes
-        .iter()
-        .find(|o| crate::demand::same_offer(route, &o.route));
-    let seats = offer.map_or(model.seats, |o| o.seats);
-    let business_seats = offer.map_or(0, |o| o.business_seats);
+    let seats = market.seats;
+    let business_seats = market.business_seats;
     let (demand, passenger_loads) = market.passengers.estimate(departure);
     let passengers = demand.per_departure;
     let business_revenue = demand.business * route.business_ticket_eur;
     let cargo_kg = market.cargo.estimate(passenger_loads);
     let cargo_revenue = crate::cargo::revenue(cargo_kg, route.cargo_rate_cents);
-    let seconds = operations::timings(route, model_id)?.0 as i64;
-    let rates = &c.models[model_id];
+    let seconds = market.flight_seconds as i64;
+    let rates = market.rates;
     Ok(Totals {
         cargo_kg,
         cargo_revenue,
@@ -413,7 +460,10 @@ pub(crate) fn quote_prepared(
         fuel: ((seconds * rates.fuel_kg_per_hour + rates.fuel_cycle_kg * 3600) * fuel_cents
             + 359999)
             / 360000,
-        airport: rates.airport_base_eur + c.airport_eur_per_passenger * passengers,
+        airport: endpoint_bill(
+            rates.airport_base_eur + c.airport_eur_per_passenger * passengers,
+            market.airport_levels,
+        ),
         // Personnel is paid through payroll. Keep Totals::crew for immutable
         // historical results and departure snapshots from existing saves.
         crew: 0,
@@ -422,6 +472,43 @@ pub(crate) fn quote_prepared(
 }
 
 impl Game {
+    /// Planning preview before creating a route: annual demand, one departure per
+    /// day and direction, default fares, selected cabin, and existing competition.
+    pub fn planning_quote(
+        &self,
+        origin: &str,
+        destination: &str,
+        aircraft_id: u32,
+    ) -> Result<Totals, String> {
+        self.check_route(origin, destination, aircraft_id, None)?;
+        let plane = self
+            .fleet
+            .iter()
+            .find(|p| p.id == aircraft_id)
+            .ok_or("Flugzeug fehlt.")?;
+        let route = Route {
+            id: self.next_route_id,
+            origin_icao: origin.into(),
+            destination_icao: destination.into(),
+            aircraft_id: Some(aircraft_id),
+            parent_route_id: None,
+            remove_at: None,
+            rotation_phase: None,
+            plan: None,
+            ticket_eur: default_ticket(),
+            business_ticket_eur: crate::cabins::default_business_fare(),
+            cargo_rate_cents: crate::cargo::default_rate(),
+            service_level: crate::service::Level::Standard,
+        };
+        let mut supply = self.market_routes();
+        supply.push(crate::cabins::offer(&route, plane)?);
+        quote_at_price(
+            &route,
+            &plane.model_id,
+            &supply,
+            self.fuel_market.price_at(self.clock.elapsed().as_secs()),
+        )
+    }
     pub fn set_ticket_price(&mut self, id: u32, price: i64) -> Result<(), String> {
         if !(0..=100_000).contains(&price) {
             return Err("Ticketpreis muss zwischen 0 und 100000 EUR liegen.".into());

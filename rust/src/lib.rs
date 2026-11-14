@@ -1,4 +1,6 @@
 mod aircraft;
+#[cfg(test)]
+mod airport_charge_tests;
 mod airports;
 #[cfg(test)]
 mod cabin_tests;
@@ -673,7 +675,12 @@ impl SimulationClock {
             .check_route(&a, &b, aircraft_id, (route_id != 0).then_some(route_id))
             .err()
             .unwrap_or_default();
-        vdict! { "distance_km" => distance, "error" => error.as_str() }
+        let quote = self.game.planning_quote(&a, &b, aircraft_id).ok();
+        vdict! { "distance_km" => distance, "error" => error.as_str(),
+        "has_cost_estimate" => quote.is_some(),
+        "estimated_airport_eur" => quote.as_ref().map_or(0, |q| q.airport),
+        "estimated_costs_eur" => quote.as_ref().map_or(0, |q| q.costs()),
+        "estimated_passengers" => quote.as_ref().map_or(0, |q| q.passengers) }
     }
 
     #[func]
@@ -889,6 +896,7 @@ impl SimulationClock {
                 let has_plan = services.iter().any(|s| s.plan.is_some());
                 let mut estimate = demand::Estimate::default();
                 let mut service_cost = 0;
+                let mut airport_cost = 0;
                 for service in &services {
                     if service.plan.is_none() { continue; }
                     if let Some(plane) = self.game.fleet.iter().find(|p| Some(p.id) == service.aircraft_id)
@@ -898,6 +906,7 @@ impl SimulationClock {
                         estimate.daily_spill += e.daily_spill;
                         estimate.per_departure += e.per_departure;
                         service_cost += service.service_level.cost(e.per_departure, e.business);
+                        airport_cost += economy::airport_bill(service, &plane.model_id, e.per_departure).unwrap_or(0);
                     }
                 }
                 let maintenance = services.iter().map(|s| self.route_maintenance_status(s)).filter(|s| !s.is_empty()).collect::<Vec<_>>().join("\n");
@@ -922,6 +931,7 @@ impl SimulationClock {
                     "service_economy_eur" => r.service_level.rate().economy_eur,
                     "service_business_eur" => r.service_level.rate().business_eur,
                     "estimated_service_eur" => service_cost / active_count.max(1),
+                    "estimated_airport_eur" => airport_cost / active_count.max(1),
                     "actual_service_eur" => actual.service,
                     "season_business_factor" => season.business,
                     "season_leisure_factor" => season.leisure,
@@ -1337,7 +1347,8 @@ impl SimulationClock {
                 vdict! {
                     "icao" => airport.icao.as_str(),
                     "name" => airport.name.as_str(),
-                    "iata" => airport.iata.as_deref().unwrap_or("")
+                    "iata" => airport.iata.as_deref().unwrap_or(""),
+                    "charge_percent" => airport.charge_percent
                 }
             })
             .collect()
