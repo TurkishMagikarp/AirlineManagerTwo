@@ -78,7 +78,7 @@ func _ready() -> void:
 	count_spin.max_value = 50
 	count_spin.value = 1
 	count_spin.suffix = "Personen"
-	UI.field(hire_row, "Einstellen", count_spin, "", "Personen")
+	UI.field(hire_row, "Personen", count_spin, "", "Personen")
 	hire_button = Button.new()
 	hire_button.text = "Einstellen"
 	hire_button.pressed.connect(_hire)
@@ -274,7 +274,8 @@ func _selection_changed() -> void:
 	dismiss_button.disabled = not employee["can_dismiss"]
 	dismiss_button.tooltip_text = "" if employee["can_dismiss"] else "Im Einsatz: erst Flugplan beenden bzw. Wartung abwarten."
 
-func _report(error: String, success: String) -> void:
+func _report(error: String, success: String, field: Control = null) -> void:
+	if field != null: UI.field_error(field, error)
 	for status in [action_status, dismiss_status]:
 		status.text = success if error.is_empty() else error
 		status.add_theme_color_override("font_color", UI.POSITIVE if error.is_empty() else UI.NEGATIVE)
@@ -287,7 +288,7 @@ func _hire() -> void:
 	var role: String = role_keys[role_select.selected]
 	var count := int(count_spin.value)
 	var error: String = simulation.hire_pilots(rating_select.get_item_text(rating_select.selected), count) if role == "pilot" else simulation.hire_staff(role, count)
-	_report(error, "%d Mitarbeiter eingestellt. Bitte Spielstand speichern." % count)
+	_report(error, "%d Mitarbeiter eingestellt. Bitte Spielstand speichern." % count, count_spin)
 
 func _hire_missing() -> void:
 	_report(simulation.hire_missing_staff(), "Fehlendes Personal eingestellt. Bitte Spielstand speichern.")

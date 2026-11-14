@@ -28,6 +28,19 @@ func _run() -> void:
 	assert(sim.get_routes()[0]["staff_status"] in row.get_text(3))
 	assert(routes.results_empty.visible and not routes.results_tree.visible)
 	assert(sim.hire_missing_staff().is_empty())
+	routes.refresh()
+	row = routes.route_tree.get_root().get_first_child()
+	row.select(0)
+	routes._selection_changed()
+	var before: Array = sim.get_routes().duplicate(true)
+	routes.interval_input.value = 1
+	routes.schedule_button.pressed.emit()
+	assert(sim.get_routes() == before, "Rejected schedule cannot change the route")
+	var error: Label = routes.interval_input.get_meta("field_help")
+	assert(error.visible and not error.text.is_empty() and error.text == routes.status.text)
+	assert(routes.interval_input.get_line_edit().get_theme_stylebox("normal").border_color == Tokens.STOP)
+	routes.interval_input.value = 120
+	assert(routes.interval_input.get_line_edit().get_theme_stylebox("normal").border_color == Tokens.LINE_STRONG)
 	assert(sim.hire_pilots("ATR 72", 1).is_empty())
 	var pilot: int = sim.get_staff()[-1]["id"]
 	assert(sim.train_pilot(pilot, "737").is_empty())

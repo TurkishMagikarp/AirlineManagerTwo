@@ -98,7 +98,7 @@ static func cell_text(item: TreeItem, column: int, text: String) -> void:
 		"Flüge", "Tickets", "Kosten", "Ergebnis", "Auslastung", "Fracht kg / EUR",
 		"Beschäftigt", "Im Einsatz", "Verfügbar", "Fehlt", "Berechtigt", "Piloten",
 		"Flugbegleiter", "Techniker (Wartung)", "Gehalt / Monat", "Kosten / Monat",
-		"Gehalt je Person / Monat", "Pax / Sitze", "Pax / Auslastung"
+		"Gehalt je Person / Monat", "Pax / Sitze", "Pax / Auslastung", "Eingestellt"
 	]
 	var code := not text.is_empty() and (_code.search(text) != null and (not numeric or text.begins_with("#")) or item.get_tree().get_column_title(column) in ["Muster", "Kennung", "Kennzeichen", "Route", "Route / Strecke", "Strecke", "Richtung"])
 	var style: Dictionary = ThemeTokens.CODE if code else ThemeTokens.DATA if numeric else ThemeTokens.BODY
@@ -365,6 +365,7 @@ static func money(value: int) -> String:
 static func table(titles: Array, widths: Array, height: int = 200) -> Tree:
 	var result := BreakdownTable.new()
 	result.tooltip_builder = breakdown_tooltip
+	result.result_formatter = signed_money
 	result.columns = titles.size()
 	result.hide_root = true
 	result.select_mode = Tree.SELECT_ROW
@@ -583,10 +584,16 @@ static func field(parent: Node, title: String, control: Control, help: String = 
 		control.suffix = unit
 		control.get_line_edit().theme_type_variation = "NumericInput"
 		control.get_line_edit().alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	if not help.is_empty():
-		var sentence := label(help, ThemeTokens.SMALL, MUTED)
-		sentence.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		column.add_child(sentence)
+	var sentence := label(help, ThemeTokens.SMALL, MUTED)
+	sentence.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	sentence.visible = not help.is_empty()
+	column.add_child(sentence)
+	control.set_meta("field_help", sentence)
+	control.set_meta("field_help_text", help)
+	var well: Control = control.get_line_edit() if control is SpinBox else control
+	control.set_meta("field_normal", well.get_theme_stylebox("normal"))
+	if control is SpinBox:
+		control.value_changed.connect(func(_value: float): field_error(control, ""))
 	return column
 
 static func field_from_label(control: Control, unit: String = "", help: String = "") -> void:
@@ -607,6 +614,16 @@ static func field_from_label(control: Control, unit: String = "", help: String =
 	caption.queue_free()
 
 class BreakdownTable extends Tree:
+	var result_formatter: Callable
+	func _draw_result(item: TreeItem, rect: Rect2) -> void:
+		var amount: int = item.get_meta("result_amount")
+		var display: String = result_formatter.call(amount)
+		var font := ThemeTokens.font_for(ThemeTokens.DATA)
+		var font_size: int = ThemeTokens.DATA["size"]
+		var width := font.get_string_size(display, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
+		var baseline := rect.position.y + (rect.size.y - font.get_height(font_size)) / 2.0 + font.get_ascent(font_size)
+		draw_string(font, Vector2(rect.end.x - ThemeTokens.SPACE_3 - width, baseline), display, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, ThemeTokens.GO if amount >= 0 else ThemeTokens.STOP)
+
 	var tooltip_builder: Callable
 	func _make_custom_tooltip(for_text: String) -> Object:
 		var breakdowns: Dictionary = get_meta("breakdowns", {})
@@ -634,3 +651,31 @@ static func breakdown_tooltip(parts: Array) -> Control:
 
 static func signed_money(amount: int) -> String:
 	return "+" + money(amount) if amount >= 0 else money(amount)
+
+## Rust owns validation; fields only present its error and restore existing help.
+static func field_error(control: Control, error: String) -> void:
+	if not control.has_meta("field_help"): return
+	var sentence: Label = control.get_meta("field_help")
+	sentence.text = error if not error.is_empty() else control.get_meta("field_help_text")
+	sentence.visible = not sentence.text.is_empty()
+	sentence.add_theme_color_override("font_color", MUTED if error.is_empty() else NEGATIVE)
+	var well: Control = control.get_line_edit() if control is SpinBox else control
+	var normal: StyleBoxFlat = control.get_meta("field_normal")
+	if not error.is_empty():
+		normal = normal.duplicate()
+		normal.border_color = NEGATIVE
+	well.add_theme_stylebox_override("normal", normal)
+
+## Retain canonical money text for existing table consumers; paint the sign.
+static func cell_result(item: TreeItem, column: int, amount: int) -> void:
+	item.set_cell_mode(column, TreeItem.CELL_MODE_CUSTOM)
+	cell_text(item, column, money(amount))
+	item.set_custom_color(column, POSITIVE if amount >= 0 else NEGATIVE)
+	var tree := item.get_tree()
+	var minimums: Dictionary = tree.get_meta("column_minimums", {})
+	var width := ThemeTokens.font_for(ThemeTokens.DATA).get_string_size(signed_money(amount), HORIZONTAL_ALIGNMENT_LEFT, -1, ThemeTokens.DATA["size"]).x
+	minimums[column] = maxi(minimums.get(column, 0), ceili(width) + ThemeTokens.SPACE_3 * 2)
+	tree.set_meta("column_minimums", minimums)
+	tree.set_column_custom_minimum_width(column, minimums[column])
+	item.set_meta("result_amount", amount)
+	item.set_custom_draw_callback(column, Callable(item.get_tree(), "_draw_result"))

@@ -103,7 +103,7 @@ func _ready() -> void:
 	ticket_button.pressed.connect(func():
 		var route := _route()
 		if not route.is_empty():
-			_feedback(simulation.set_ticket_price(route["id"], int(ticket_input.value)), "Ticketpreis geändert.")
+			_feedback(simulation.set_ticket_price(route["id"], int(ticket_input.value)), "Ticketpreis geändert.", ticket_input)
 	)
 	add_child(ticket_button)
 	add_child(_label("Business-Preis · EUR pro Passagier und Einzelflug"))
@@ -119,7 +119,7 @@ func _ready() -> void:
 	business_button.pressed.connect(func():
 		var route := _route()
 		if not route.is_empty():
-			_feedback(simulation.set_business_ticket_price(route["id"], int(business_input.value)), "Business-Preis geändert.")
+			_feedback(simulation.set_business_ticket_price(route["id"], int(business_input.value)), "Business-Preis geändert.", business_input)
 	)
 	add_child(business_button)
 	add_child(_label("Bauchfracht · EUR pro kg · gilt ab dem nächsten Abflug"))
@@ -135,7 +135,7 @@ func _ready() -> void:
 		var route := _route()
 		if not route.is_empty():
 			cargo_input.apply()
-			_feedback(simulation.set_cargo_rate(route["id"], roundi(cargo_input.value * 100.0)), "Frachtpreis geändert.")
+			_feedback(simulation.set_cargo_rate(route["id"], roundi(cargo_input.value * 100.0)), "Frachtpreis geändert.", cargo_input)
 	)
 	add_child(cargo_button)
 	cargo_status = _label("")
@@ -175,7 +175,7 @@ func _ready() -> void:
 	schedule_button.pressed.connect(func():
 		var route := _route()
 		if not route.is_empty():
-			_feedback(simulation.schedule_route(route["id"], int(delay_input.value), int(interval_input.value)), "Flugplan aktiviert.")
+			_feedback(simulation.schedule_route(route["id"], int(delay_input.value), int(interval_input.value)), "Flugplan aktiviert.", interval_input)
 	)
 	add_child(schedule_button)
 	stop_button = Button.new()
@@ -367,7 +367,7 @@ func refresh_operations() -> void:
 	results_tree.set_meta("breakdowns", {})
 	for result in results:
 		var row := results_tree.create_item(root_item)
-		var values := ["%s / #%d" % [result["landing"], result["route_id"]], "%s–%s" % [result["origin"], result["destination"]], "%d/%d · %.1f %%" % [result["passengers"], result["seats"], result["load_percent"]], UI.money(result["ticket_revenue_eur"]), UI.money(result["costs_eur"]), UI.signed_money(result["profit_eur"])]
+		var values := ["%s / #%d" % [result["landing"], result["route_id"]], "%s–%s" % [result["origin"], result["destination"]], "%d/%d · %.1f %%" % [result["passengers"], result["seats"], result["load_percent"]], UI.money(result["ticket_revenue_eur"]), UI.money(result["costs_eur"]), UI.money(result["profit_eur"])]
 		for i in range(values.size()):
 			UI.cell_text(row, i, values[i])
 			row.set_tooltip_text(i, "Ticket: %s\nTreibstoff: %s\nFlughäfen: %s\nPersonal: %s\nWartung / Verwaltung: %s\nBordservice (± Standard): %s" % [UI.money(result["ticket_eur"]), UI.money(result["fuel_eur"]), UI.money(result["airport_eur"]), UI.money(result["crew_eur"]), UI.money(result["overhead_eur"]), UI.money(result["service_eur"])])
@@ -381,7 +381,7 @@ func refresh_operations() -> void:
 		UI.cell_text(row, 2, "Y %d/%d · J %d/%d" % [result["economy_passengers"], result["economy_seats"], result["business_passengers"], result["business_seats"]])
 		row.set_tooltip_text(3, "Economy: %s · Business: %s" % [UI.money(result["economy_revenue_eur"]), UI.money(result["business_revenue_eur"])])
 		UI.cell_text(row, 6, "%d kg / %s" % [result["cargo_kg"], UI.money(result["cargo_revenue_eur"])])
-		row.set_custom_color(5, UI.POSITIVE if result["profit_eur"] >= 0 else UI.NEGATIVE)
+		UI.cell_result(row, 5, result["profit_eur"])
 
 
 func _preview() -> void:
@@ -390,6 +390,7 @@ func _preview() -> void:
 	preview.text += "\n%s · %s" % [result["origin_slots"], result["destination_slots"]]
 	if result["has_cost_estimate"]:
 		preview.text += "\nPlanung: %d Pax · Kosten %s, davon Flughäfen Start + Ziel %s je Abflug.\nJahresmittel, Standardpreise, 1 Abflug/Tag/Richtung; Personal und Wartungschecks separat." % [result["estimated_passengers"], UI.money(result["estimated_costs_eur"]), UI.money(result["estimated_airport_eur"])]
+	UI.field_error(aircraft, result["error"])
 	create_button.disabled = not result["error"].is_empty()
 	if aircraft.item_count == 0:
 		preview.text += "\nKein freies Flugzeug. Im Flotte-Tab kaufen oder eine Zuweisung lösen."
@@ -486,8 +487,9 @@ func _assignment_preview() -> void:
 		status.text = result["error"]
 
 
-func _feedback(error: String, success: String) -> void:
+func _feedback(error: String, success: String, field: Control = null) -> void:
 	refresh()
+	if field != null: UI.field_error(field, error)
 	status.text = success + " Bitte speichern." if error.is_empty() else error
 	if error.is_empty():
 		changed.emit()

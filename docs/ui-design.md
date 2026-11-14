@@ -38,7 +38,9 @@ Landekosten mit gedämpften Bezeichnungen, rechtsbündigen Werten und Summe auf.
 Leere Register und Landungslisten bieten eine Aktion zur Planung.
 
 Planungs-, Preis-, Flugplan- und Einstellfelder zeigen die Beschriftung über dem
-Feld. Einheiten stehen im Zahlenfeld, bestehende Hilfesätze darunter. Die
+Feld. Einheiten stehen im Zahlenfeld, bestehende Hilfesätze darunter. Vorhandene
+Rust-Fehler ersetzen die Feldhilfe und färben den Feldrand `stop`; bei einer
+Eingabeänderung kehrt die Hilfe zurück. Die
 Personalübersicht behält alle Aktionen; Musterberechtigungen und Umschulungen
 erscheinen als Chips, laufende Umschulungen zusätzlich als Fortschrittsbalken.
 Die bestehende Rust-API liefert den Endtermin nur im deutschen Statussatz:

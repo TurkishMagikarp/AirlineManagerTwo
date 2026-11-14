@@ -147,6 +147,17 @@ func _run() -> void:
 				if not capture_dir.is_empty():
 					await RenderingServer.frame_post_draw
 					assert(root.get_texture().get_image().save_png(capture_dir.path_join("route-controls-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
+					var interval: SpinBox = main.routes_panel.interval_input
+					var previous := interval.value
+					interval.value = 1
+					var error: String = sim.schedule_route(1, 1, 1)
+					assert(not error.is_empty())
+					UI.field_error(interval, error)
+					scroll.ensure_control_visible(interval.get_parent())
+					for frame in range(5): await process_frame
+					await RenderingServer.frame_post_draw
+					assert(root.get_texture().get_image().save_png(capture_dir.path_join("route-field-error-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
+					interval.value = previous
 				scroll.ensure_control_visible(main.routes_panel.results_tree)
 				for frame in range(3):
 					await process_frame
