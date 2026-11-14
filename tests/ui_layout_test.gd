@@ -46,6 +46,8 @@ func _run() -> void:
 	assert(sim.sell_aircraft(2).is_empty())
 	assert(sim.lease_aircraft("atr72_600").is_empty())
 	assert(sim.return_aircraft(4).is_empty())
+	assert(sim.hire_pilots("ATR 72", 1).is_empty())
+	assert(sim.train_pilot(sim.get_staff()[-1]["id"], "737").is_empty())
 	main._sync_view()
 	var unchanged: Dictionary = sim.get_financial_summary().duplicate(true)
 	for dimensions in [Vector2i(1440, 1000), Vector2i(1100, 720), Vector2i(680, 520)]:
@@ -128,6 +130,14 @@ func _run() -> void:
 					if not capture_dir.is_empty():
 						await RenderingServer.frame_post_draw
 						assert(root.get_texture().get_image().save_png(capture_dir.path_join("used-market-buy-%d-%dx%d.png" % [card.get_index(), dimensions.x, dimensions.y])) == OK)
+			if page == 5:
+				for target in [main.staff_panel.hire_button, main.staff_panel.staff_tree, main.staff_panel.training_rows, main.staff_panel.train_button]:
+					scroll.ensure_control_visible(target)
+					for frame in range(5): await process_frame
+					assert(root.get_visible_rect().encloses(target.get_global_rect()))
+					if not capture_dir.is_empty():
+						await RenderingServer.frame_post_draw
+						assert(root.get_texture().get_image().save_png(capture_dir.path_join("staff-detail-%d-%dx%d.png" % [target.get_index(), dimensions.x, dimensions.y])) == OK)
 			if page == 2:
 				# Verify deep controls stay reachable through the page scroll.
 				scroll.ensure_control_visible(main.routes_panel.schedule_button)
@@ -144,6 +154,19 @@ func _run() -> void:
 				if not capture_dir.is_empty():
 					await RenderingServer.frame_post_draw
 					assert(root.get_texture().get_image().save_png(capture_dir.path_join("route-results-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
+					var table: Tree = main.routes_panel.results_tree
+					var text := table.get_root().get_first_child().get_tooltip_text(4)
+					var tooltip: Control = table._make_custom_tooltip(text)
+					var layer := CanvasLayer.new()
+					root.add_child(layer)
+					layer.add_child(tooltip)
+					tooltip.position = Vector2(main.rail.size.x + 24, main.time_label.get_parent().get_parent().size.y + 24)
+					for frame in range(5): await process_frame
+					assert(root.get_visible_rect().encloses(tooltip.get_global_rect()))
+					await RenderingServer.frame_post_draw
+					assert(root.get_texture().get_image().save_png(capture_dir.path_join("route-cost-tooltip-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
+					layer.queue_free()
+					await process_frame
 		main._open_founding()
 		for frame in range(5):
 			await process_frame

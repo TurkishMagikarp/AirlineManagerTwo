@@ -1247,46 +1247,48 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 ## scripts/routes_panel.gd
 1 extends VBoxContainer
 4 signal changed
-5 const UI = preload("res://scripts/ui/components.gd")
-39 func _ready() -> void:
-198 func _arrange_workspace() -> void:
-240 func _label(text: String) -> Label:
-247 func _select(title: String) -> OptionButton:
-257 func _selected_id(select: OptionButton) -> int:
-261 func _route() -> Dictionary:
-266 func refresh() -> void:
-305 func refresh_operations() -> void:
-362 func _preview() -> void:
-373 func _selection_changed() -> void:
-406 func _update_service_cost(route: Dictionary) -> void:
-412 func _update_schedule_controls(route: Dictionary) -> void:
-427 func _refresh_competition() -> void:
-448 func _assignment_preview() -> void:
-464 func _feedback(error: String, success: String) -> void:
-474 func _create() -> void:
-478 func _assign() -> void:
-488 func _delete() -> void:
-494 func focus_route(id: int) -> void:
+5 const ThemeTokens = preload("res://scripts/ui/operations_theme.gd")
+6 const UI = preload("res://scripts/ui/components.gd")
+41 func _ready() -> void:
+207 func _arrange_workspace() -> void:
+253 func _label(text: String) -> Label:
+259 func _select(title: String) -> OptionButton:
+269 func _selected_id(select: OptionButton) -> int:
+273 func _route() -> Dictionary:
+278 func refresh() -> void:
+317 func refresh_operations() -> void:
+387 func _preview() -> void:
+398 func _selection_changed() -> void:
+431 func _update_service_cost(route: Dictionary) -> void:
+437 func _update_schedule_controls(route: Dictionary) -> void:
+452 func _refresh_competition() -> void:
+473 func _assignment_preview() -> void:
+489 func _feedback(error: String, success: String) -> void:
+499 func _create() -> void:
+503 func _assign() -> void:
+513 func _delete() -> void:
+519 func focus_route(id: int) -> void:
 
 ## scripts/staff_panel.gd
 1 extends VBoxContainer
 2 const ThemeTokens = preload("res://scripts/ui/operations_theme.gd")
 5 const UI = preload("res://scripts/ui/components.gd")
 6 signal changed
-29 func _ready() -> void:
-112 func _process(delta: float) -> void:
-120 func refresh(force: bool = false) -> void:
-154 func _roles(overview: Dictionary) -> void:
-169 func _aircraft(overview: Dictionary) -> void:
-198 func _staff(staff: Array) -> void:
-221 func _shortage(overview: Dictionary) -> void:
-239 func _selection_changed() -> void:
-252 func _report(error: String, success: String) -> void:
-260 func _hire() -> void:
-267 func _hire_missing() -> void:
-270 func _dismiss() -> void:
-275 func _train() -> void:
-279 func focus_employee(id: int) -> void:
+32 func _ready() -> void:
+130 func _process(delta: float) -> void:
+138 func refresh(force: bool = false) -> void:
+174 func _roles(overview: Dictionary) -> void:
+189 func _aircraft(overview: Dictionary) -> void:
+220 func _staff(staff: Array) -> void:
+246 func _shortage(overview: Dictionary) -> void:
+264 func _selection_changed() -> void:
+277 func _report(error: String, success: String) -> void:
+285 func _hire() -> void:
+292 func _hire_missing() -> void:
+295 func _dismiss() -> void:
+300 func _train() -> void:
+304 func focus_employee(id: int) -> void:
+318 func _training(staff: Array, duration_days: int) -> void:
 
 ## scripts/ui/components.gd
 1 extends RefCounted
@@ -1305,10 +1307,11 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 58 class LegTrack extends Control:
 69 class EmptyFrame extends PanelContainer:
 319 class DecisionDialog extends ColorRect:
-390 const CASH_STYLE = {"family": "mono", "size": 18, "height": 20, "weight": 500, "tracking": 0.0}
-391 const FLAP_STYLE = {"family": "mono", "size": 18, "height": 32, "weight": 500, "tracking": 0.0}
-393 class FlapReadout extends Label:
-526 const AIRCRAFT_PRICE = {"family": "mono", "size": 20, "height": 24, "weight": 500, "tracking": 0.0}
+391 const CASH_STYLE = {"family": "mono", "size": 18, "height": 20, "weight": 500, "tracking": 0.0}
+392 const FLAP_STYLE = {"family": "mono", "size": 18, "height": 32, "weight": 500, "tracking": 0.0}
+394 class FlapReadout extends Label:
+527 const AIRCRAFT_PRICE = {"family": "mono", "size": 20, "height": 24, "weight": 500, "tracking": 0.0}
+609 class BreakdownTable extends Tree:
 
 ## scripts/ui/operations_theme.gd
 1 extends Theme

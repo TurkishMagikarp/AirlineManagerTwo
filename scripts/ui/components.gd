@@ -363,7 +363,8 @@ static func money(value: int) -> String:
 	return ("−" if value < 0 else "") + result + " EUR"
 
 static func table(titles: Array, widths: Array, height: int = 200) -> Tree:
-	var result := Tree.new()
+	var result := BreakdownTable.new()
+	result.tooltip_builder = breakdown_tooltip
 	result.columns = titles.size()
 	result.hide_root = true
 	result.select_mode = Tree.SELECT_ROW
@@ -564,3 +565,72 @@ static func aircraft_facts(body: VBoxContainer, model: Dictionary) -> void:
 	for fact in [["Sitze", str(model["seats"])], ["Reichweite", "%d km" % model["range_km"]], ["Reisegeschwindigkeit", "%d km/h" % model["cruise_kmh"]], ["Besatzung", "%d Piloten · %d Kabine" % [model["pilots"], model["cabin_crew"]]]]:
 		body.add_child(label(fact[0], ThemeTokens.LABEL, MUTED))
 		body.add_child(label(fact[1], ThemeTokens.DATA))
+
+## Field structure keeps the original control and its input behaviour.
+static func field(parent: Node, title: String, control: Control, help: String = "", unit: String = "") -> VBoxContainer:
+	var column := VBoxContainer.new()
+	column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	column.add_theme_constant_override("separation", ThemeTokens.SPACE_2)
+	parent.add_child(column)
+	var caption := label(title, ThemeTokens.LABEL, MUTED)
+	caption.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	column.add_child(caption)
+	if control.get_parent() != null: control.reparent(column)
+	else: column.add_child(control)
+	control.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	control.custom_minimum_size.y = ThemeTokens.CONTROL_HEIGHT
+	if control is SpinBox:
+		control.suffix = unit
+		control.get_line_edit().theme_type_variation = "NumericInput"
+		control.get_line_edit().alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	if not help.is_empty():
+		var sentence := label(help, ThemeTokens.SMALL, MUTED)
+		sentence.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		column.add_child(sentence)
+	return column
+
+static func field_from_label(control: Control, unit: String = "", help: String = "") -> void:
+	var parent := control.get_parent()
+	var index := control.get_index()
+	var caption := parent.get_child(index - 1) as Label
+	var title := caption.text
+	var parts := title.split(" · ", true, 1)
+	if parts.size() > 1:
+		title = parts[0]
+		help = parts[1] + ("\n" + help if not help.is_empty() else "")
+	elif title.begins_with("Abstand pro Flugzeug"):
+		title = "Abstand pro Flugzeug"
+		help = caption.text.trim_prefix(title).strip_edges()
+	var column := field(parent, title, control, help, unit)
+	parent.move_child(column, index - 1)
+	parent.remove_child(caption)
+	caption.queue_free()
+
+class BreakdownTable extends Tree:
+	var tooltip_builder: Callable
+	func _make_custom_tooltip(for_text: String) -> Object:
+		var breakdowns: Dictionary = get_meta("breakdowns", {})
+		if not breakdowns.has(for_text): return null
+		return tooltip_builder.call(breakdowns[for_text])
+
+static func breakdown_tooltip(parts: Array) -> Control:
+	var card := PanelContainer.new()
+	card.add_theme_stylebox_override("panel", ThemeTokens.new().floating_box(ThemeTokens.RADIUS_MD, ThemeTokens.SPACE_3))
+	var column := VBoxContainer.new()
+	column.add_theme_constant_override("separation", ThemeTokens.SPACE_2)
+	card.add_child(column)
+	for i in range(parts.size()):
+		if i == parts.size() - 1: column.add_child(HSeparator.new())
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", ThemeTokens.SPACE_4)
+		column.add_child(row)
+		var caption := label(parts[i][0], ThemeTokens.SMALL, ThemeTokens.INK if i == parts.size() - 1 else MUTED)
+		caption.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(caption)
+		var value := label(parts[i][1], ThemeTokens.DATA)
+		value.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		row.add_child(value)
+	return card
+
+static func signed_money(amount: int) -> String:
+	return "+" + money(amount) if amount >= 0 else money(amount)
