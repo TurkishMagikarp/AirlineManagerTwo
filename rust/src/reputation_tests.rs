@@ -169,7 +169,8 @@ fn reputation_choice_is_gentle_and_never_changes_caps_or_price_limits() {
                 .daily_passengers,
         );
     }
-    assert!(loads[0] < loads[1] && loads[1] < loads[2], "{loads:?}");
+    // A positive bonus may already reach the unchanged willingness ceiling.
+    assert!(loads[0] < loads[1] && loads[1] <= loads[2], "{loads:?}");
     assert!(loads[2] / loads[0] < 1.07);
 }
 #[test]

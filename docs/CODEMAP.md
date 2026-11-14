@@ -243,12 +243,12 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 207 fn disruptions_sale_and_lease_return_clear_pending_delay()
 241 fn disruptions_v25_migrates_all_owners_empty_and_keeps_airborne_times()
 249 fn strip(v: &mut serde_json::Value)
-295 fn disruptions_wear_age_and_corrupt_cursor_validation()
-330 fn disruptions_care_settles_once_reduces_tax_base_and_attention_is_read_only()
-407 fn disruptions_long_delay_cash_runway_never_reuses_a_past_arrival()
-421 fn disruptions_godot_fixture_has_care_backlog_and_natural_recovery()
-461 fn disruptions_godot_restart_families_match_all_owners_after_100_days()
-475 fn strip(v: &mut serde_json::Value)
+302 fn disruptions_wear_age_and_corrupt_cursor_validation()
+337 fn disruptions_care_settles_once_reduces_tax_base_and_attention_is_read_only()
+414 fn disruptions_long_delay_cash_runway_never_reuses_a_past_arrival()
+428 fn disruptions_godot_fixture_has_care_backlog_and_natural_recovery()
+468 fn disruptions_godot_restart_families_match_all_owners_after_100_days()
+482 fn strip(v: &mut serde_json::Value)
 
 ## rust/src/disruptions.rs
 15 pub struct Rules
@@ -815,11 +815,11 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 63 fn reputation_v27_neutral_migration_preserves_airborne_and_all_other_state()
 89 fn reputation_steps_speeds_pause_restart_and_ai_parity()
 136 fn reputation_choice_is_gentle_and_never_changes_caps_or_price_limits()
-176 fn reputation_ten_year_ai_revenue_comparison_is_modest()
-177 struct Reset;
-178 impl Drop for Reset
-179 fn drop(&mut self)
-211 fn reputation_attention_only_when_low_and_falling()
+177 fn reputation_ten_year_ai_revenue_comparison_is_modest()
+178 struct Reset;
+179 impl Drop for Reset
+180 fn drop(&mut self)
+212 fn reputation_attention_only_when_low_and_falling()
 
 ## rust/src/rotation_tests.rs
 3 fn game(planes: u32) -> Game

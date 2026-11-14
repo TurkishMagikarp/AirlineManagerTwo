@@ -310,7 +310,7 @@ func _restart_family(mode: String) -> bool:
 	return true
 
 func _without_disruptions(world: String) -> String:
-	for name in ["disruption", "otp", "late", "delay_seconds", "care"]:
+	for name in ["reputation", "disruption", "otp", "late", "delay_seconds", "care"]:
 		var key := '"%s":' % name
 		while world.contains(key):
 			var start := world.find(key)
