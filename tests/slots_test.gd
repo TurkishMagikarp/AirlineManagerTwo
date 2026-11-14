@@ -28,7 +28,7 @@ func _run() -> void:
 		if not _slot_fixture():
 			return
 		var original: String = _snapshot()[0]
-		var saved := original.replace('"version":28', '"version":26') if mode.ends_with("v26") else original
+		var saved := original.replace('"version":29', '"version":26') if mode.ends_with("v26") else original
 		_write(slot_path, saved)
 		if not _check(main.simulation.load_game(slot_path).is_empty() and _snapshot()[0] == original, "v26/v27 identity load preserves all player/AI schedules, money and seeds"):
 			return

@@ -6,7 +6,7 @@ if (-not $Godot) {
 $project = Split-Path $PSScriptRoot -Parent
 $directory = Join-Path $env:LOCALAPPDATA ('Temp\opencode\airline-reputation-' + [guid]::NewGuid())
 New-Item -ItemType Directory -Path $directory | Out-Null
-foreach ($version in @('v27', 'v28')) {
+foreach ($version in @('v27', 'v29')) {
     $save = Join-Path $directory ($version + '.json')
     foreach ($action in @('write', 'read')) {
         $mode = $action + '-' + $version
@@ -14,4 +14,4 @@ foreach ($version in @('v27', 'v28')) {
         if ($LASTEXITCODE -ne 0) { throw "Reputation restart failed: $mode" }
     }
 }
-Write-Output "PASS: v27 neutral migration and v28 reputation continuation, full player/AI worlds and APIs after load and seven days in four separate processes; files: $directory"
+Write-Output "PASS: v27 neutral migration and v29 reputation continuation, full player/AI worlds and APIs after load and seven days in four separate processes; files: $directory"

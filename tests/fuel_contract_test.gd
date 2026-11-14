@@ -58,7 +58,7 @@ func _run() -> void:
 				return
 			# Pre-contract world: all effects are zero. Strip additive fields with
 			# text edits to preserve Rust u64/nanosecond encodings exactly.
-			var fixture := _strip_fields(original).replace('"version":28', '"version":20')
+			var fixture := _strip_fields(original).replace('"version":29', '"version":20')
 			if not _check(JSON.parse_string(fixture)["version"] == 20 and not '"fuel_contract' in fixture, "True v20 fixture for every owner and historical quote"):
 				return
 			_write(path, fixture)
@@ -84,7 +84,7 @@ func _run() -> void:
 	elif mode.begins_with("read-"):
 		if not _check(_snapshot() == FileAccess.open(path + ".expected", FileAccess.READ).get_var(), "Restart continuation equals uninterrupted world, active terms, AI, cumulative effect and frozen quotes"):
 			return
-		if not _check(sim.save_game(path).is_empty() and JSON.parse_string(FileAccess.get_file_as_string(path))["version"] == 28, "Resave as v28"):
+		if not _check(sim.save_game(path).is_empty() and JSON.parse_string(FileAccess.get_file_as_string(path))["version"] == 29, "Resave as v29"):
 			return
 	if not await _layouts("expired"):
 		return
