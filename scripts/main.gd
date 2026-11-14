@@ -50,6 +50,8 @@ var cancel_founding_button: Button
 var founding_status: Label
 var founding_capital: Label
 var new_game_button: Button
+var used_rows: VBoxContainer
+var used_signature := ""
 var fleet_panel: VBoxContainer
 var model_select: OptionButton
 var model_details: Label
@@ -373,6 +375,9 @@ func _build_fleet(content: VBoxContainer) -> void:
 	var hint := _label("Vorläufige Kaufpreise · Sitzkonfiguration und Reichweite sind vereinfachte Modellangaben.", 14, Color("b0becf"))
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	shop.add_child(hint)
+	var used := UI.panel(grid, "USED MARKET / GEBRAUCHTFLUGZEUGE")
+	used_rows = VBoxContainer.new()
+	used.add_child(used_rows)
 	var owned := UI.panel(grid, "FLOTTENREGISTER  /  EIGENTUM & LEASING")
 	empty_fleet = _label("Noch keine Flugzeuge beschafft.", 17, Color("c2cedc"))
 	owned.add_child(empty_fleet)
@@ -461,7 +466,39 @@ func _buy_aircraft() -> void:
 		scroll.ensure_control_visible(fleet_status)
 
 
+func _refresh_used_market() -> void:
+	var listings: Array = simulation.get_used_market()
+	var signature := str(listings)
+	if signature == used_signature:
+		return
+	used_signature = signature
+	for child in used_rows.get_children():
+		used_rows.remove_child(child)
+		child.queue_free()
+	if listings.is_empty():
+		used_rows.add_child(_label("Keine Angebote vorhanden.", 16))
+	for listing in listings:
+		var row := HBoxContainer.new()
+		used_rows.add_child(row)
+		var details := _label("%s · %d Tage · %.0f %% · %s\n%.1f FH / %d Zyklen · %s" % [listing["model"], listing["age_days"], listing["condition_percent"], UI.money(listing["price_eur"]), listing["flight_hours"], listing["cycles"], listing["seller"]], 16)
+		details.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		details.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		row.add_child(details)
+		var button := Button.new()
+		button.text = "Kaufen"
+		button.pressed.connect(_buy_used_aircraft.bind(listing["id"]))
+		row.add_child(button)
+
+
+func _buy_used_aircraft(listing_id: int) -> void:
+	var error: String = simulation.buy_used_aircraft(listing_id)
+	fleet_status.text = "Gebrauchtflugzeug gekauft. Bitte speichern." if error.is_empty() else error
+	_refresh_fleet()
+	save_status.text = "Flotte geändert · bitte Spielstand speichern."
+
+
 func _refresh_fleet() -> void:
+	_refresh_used_market()
 	var fleet: Array = simulation.get_fleet()
 	var airline: Dictionary = simulation.get_airline_info()
 	if current_page == 1:

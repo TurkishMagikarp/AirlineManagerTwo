@@ -1015,6 +1015,47 @@ impl SimulationClock {
     }
 
     #[func]
+    fn get_used_market(&self) -> Array<VarDictionary> {
+        let mut rows = Array::new();
+        for listing in &self.game.used_market.listings {
+            let p = &listing.aircraft;
+            let mut row = VarDictionary::new();
+            row.set("id", listing.id as i64);
+            row.set(
+                "model",
+                aircraft::model(&p.model_id).map_or("?", |m| m.name.as_str()),
+            );
+            row.set("seller", listing.seller.as_str());
+            row.set(
+                "age_days",
+                ((self.game.clock.elapsed().as_secs() - p.acquired_at.unwrap_or(0)) / 86400) as i64,
+            );
+            row.set("flight_hours", p.wear.flight_seconds as f64 / 3600.0);
+            row.set("cycles", p.wear.cycles as i64);
+            row.set(
+                "condition_percent",
+                p.wear
+                    .condition_permille(crate::maintenance::rules(&p.model_id).unwrap())
+                    as f64
+                    / 10.0,
+            );
+            row.set("price_eur", self.game.used_price(listing).unwrap_or(0));
+            rows.push(&row);
+        }
+        rows
+    }
+
+    #[func]
+    fn buy_used_aircraft(&mut self, listing_id: i64) -> GString {
+        self.game
+            .buy_used_aircraft(listing_id as u64)
+            .err()
+            .unwrap_or_default()
+            .as_str()
+            .into()
+    }
+
+    #[func]
     fn lease_aircraft(&mut self, model_id: GString) -> GString {
         self.game
             .lease_aircraft(&model_id.to_string())

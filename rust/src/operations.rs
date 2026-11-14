@@ -523,6 +523,7 @@ impl Game {
         }
         let previous_time = self.clock.elapsed();
         self.clock = clock;
+        self.prune_used_market();
         if previous_time < self.clock.elapsed()
             && self
                 .clock
