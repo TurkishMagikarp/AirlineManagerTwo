@@ -31,12 +31,12 @@ func _draw() -> void:
 	var viewport := Rect2(Vector2.ZERO, camera.size)
 	var scale: float = camera.scale_factor()
 	draw_rect(viewport, ThemeTokens.MAP_WATER)
-	for lon in range(-180, 181, 30):
+	for lon in range(-180, 181, 4):
 		for copy in range(-1, 2):
 			var x := lon + copy * 360
-			draw_line(camera.project(Vector2(x, -90)), camera.project(Vector2(x, 90)), ThemeTokens.LINE)
-	for lat in range(-60, 61, 30):
-		draw_line(Vector2(0, camera.project(Vector2(0, lat)).y), Vector2(camera.size.x, camera.project(Vector2(0, lat)).y), ThemeTokens.LINE)
+			_dotted(camera.project(Vector2(x, -90)), camera.project(Vector2(x, 90)))
+	for lat in range(-90, 91, 2):
+		_dotted(Vector2(0, camera.project(Vector2(0, lat)).y), Vector2(camera.size.x, camera.project(Vector2(0, lat)).y))
 	for copy in range(-1, 2):
 		var translation: Vector2 = camera.size / 2 + camera.offset + Vector2(copy * 360 * scale, 0)
 		draw_set_transform(translation, 0, Vector2(scale, scale))
@@ -44,4 +44,16 @@ func _draw() -> void:
 			var bounds: Rect2 = shape["bounds"]
 			if not viewport.intersects(Rect2(translation + bounds.position * scale, bounds.size * scale)): continue
 			draw_mesh(shape["mesh"], null, Transform2D.IDENTITY, ThemeTokens.MAP_LAND)
-			draw_polyline(shape["ring"], ThemeTokens.LINE, 1.0 / scale, true)
+			draw_polyline(shape["ring"], ThemeTokens.LINE_STRONG, 0.75 / scale, true)
+
+func _dotted(a: Vector2, b: Vector2) -> void:
+	# Clip before drawing to keep the retained grid inexpensive at high zoom.
+	var area: Vector2 = get_parent().size
+	if a.x == b.x and (a.x < 0 or a.x > area.x): return
+	if a.y == b.y and (a.y < 0 or a.y > area.y): return
+	a = a.clamp(Vector2.ZERO, get_parent().size)
+	b = b.clamp(Vector2.ZERO, get_parent().size)
+	var direction := a.direction_to(b)
+	for distance in range(0, int(a.distance_to(b)), 8):
+		var start := a + direction * distance
+		draw_line(start, start + direction * 2, ThemeTokens.LINE)

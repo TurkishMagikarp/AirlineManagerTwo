@@ -145,6 +145,58 @@ func _run() -> void:
 	check(canvas.size.x <= 640, "Map fits narrow window")
 	check(main.navigation[3].get_global_rect().end.x <= 680, "Navigation fits narrow window")
 	check(main.save_button.get_global_rect().end.x <= 680, "Save remains reachable")
+	canvas.reset_view()
+	# Route geometry uses the same seam-aware projection as rendering.
+	var route_point: Vector2 = canvas.project(canvas.routes[0]["points"][90])
+	canvas.show_airports = false
+	canvas.show_flights = false
+	check(canvas.hit_test(route_point) == 0 and canvas.selected_route == 1, "Own route arc can be selected")
+	panel.selected_id = 0
+	panel.refresh_flights()
+	await process_frame
+	await process_frame
+	check(panel.card.visible, "Route selection opens card")
+	check(Rect2(Vector2.ZERO, canvas.size).encloses(panel.card.get_rect()), "Route card clamped at narrow width: %s / %s" % [panel.card.get_rect(), canvas.size])
+	var escape := InputEventKey.new()
+	escape.keycode = KEY_ESCAPE
+	escape.pressed = true
+	Input.parse_input_event(escape)
+	await process_frame
+	check(not panel.card.visible and canvas.selected_route == 0, "Escape closes selection card")
+	canvas.show_routes = false
+	canvas.hit_test(route_point)
+	check(canvas.selected_route == 0, "Hidden routes cannot be selected")
+	canvas.show_airports = true
+	canvas.show_flights = true
+	canvas.show_routes = true
+	canvas.center_base()
+	var base: Vector2
+	for airport in canvas.airports:
+		if airport["icao"] == "EDDF": base = canvas.project(airport["position"])
+	check(absf(base.x - canvas.size.x / 2) < 0.1, "Base centering uses real airline airport")
+	for i in range(canvas.airports.size()):
+		if canvas.airports[i]["icao"] == "EDDM": panel.selected_id = -i - 1
+	panel.refresh_flights()
+	await process_frame
+	await process_frame
+	var create_action: Button = panel.card_body.get_child(panel.card_body.get_child_count() - 2)
+	create_action.pressed.emit()
+	await process_frame
+	check(main.current_page == 2, "Airport action opens route creation")
+	var destination: OptionButton = main.routes_panel.destination
+	check(destination.get_item_metadata(destination.selected) == "EDDM", "Airport action preselects real destination")
+	main._show_page(3)
+	panel.selected_id = 0
+	canvas.selected_route = 1
+	panel.refresh_flights()
+	await process_frame
+	await process_frame
+	var schedule_action: Button = panel.card_body.get_child(panel.card_body.get_child_count() - 1)
+	schedule_action.pressed.emit()
+	await process_frame
+	check(main.current_page == 2 and main.routes_panel.route_tree.get_selected().get_metadata(0)["id"] == 1, "Route action opens selected schedule")
+
+
 	main.queue_free()
 	await process_frame
 	if not failed: print("PASS: map positions, pause, 1/4/16x, click, zoom, pan, dateline, save/load and narrow layout")

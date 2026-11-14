@@ -260,3 +260,20 @@ Auf dem Linux-Server sind Godot-UI-Tests, START.bat, echte Screenshots und
 Windows-Neustarttests nicht ausführbar. Die drei Fenstergrößen müssen auf
 Windows mit `ui_layout_test.gd -- --capture-dir` geprüft werden; Rust-Checks
 belegen weder die Darstellung noch die Erreichbarkeit der UI-Aktionen.
+
+### Karte – UI kit (Nacht)
+
+Die Karte verwendet map-water/map-land, eine punktierte Gradnetzlinie und die
+line-strong-Küste mit unveränderten Natural-Earth-Daten und Projektion. Die Basis
+ist ein bernsteinfarbenes Quadrat mit ICAO-Tag; weitere Flughäfen sind Ringe.
+Eigene Routen sind 2 px breit, ausgewählt 3 px; fliegende Flugzeuge sind helle
+Pfeilspitzen. Ebenen und Zoom schweben mit shadow-pop über der Karte. Die
+Zentrierung richtet die Ansicht auf die Basis, der Maßstab gibt die äquatoriale
+Entfernung der vorhandenen Projektion an.
+
+Flughafen-, Routen- und Flugauswahl öffnen eine an die Kartenfläche begrenzte
+Karte. Escape oder ein Klick auf freie Kartenfläche schließt sie. Die Routentabelle
+und die Karte teilen die Auswahl; „Flugplan bearbeiten“ öffnet die vorhandene
+Routenverwaltung. Fakten stammen ausschließlich aus den Rust-Snapshots.
+Konkurrenzgeometrie steht über die bestehende Karten-API nicht zur Verfügung;
+deshalb gibt es nur Ebenen für eigene Routen, Flughäfen und Flugzeuge.
