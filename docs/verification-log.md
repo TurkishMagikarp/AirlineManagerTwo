@@ -324,3 +324,21 @@ Wartungsende wieder verschwindet. Spielstandversion unverändert (10), neues Fel
   rust/Cargo.toml` bestand ohne Warnungen; der Locked-Build bestand ebenfalls.
   Determinismus, alte Speicherstände und langfristige KI-Prüfungen unverändert.
   Keine Gameplay-, Economy-, Konfigurations- oder Rust-Änderung erforderlich.
+
+### 2026-11-14 — AIR-69 Flughafengebühren in Godot
+
+- Alle 27 Godot-Tests, Hauptszene, Editor-Import und sämtliche bisherigen
+  Neustartfamilien sequenziell bestanden. Neue v23/v24-Schreiber-/Leserpaare
+  bewahren eingefrorene Start-/Zielgebühren von Spieler und beiden KIs und
+  stimmen unmittelbar sowie nach 100 Tagen exakt mit der Referenz überein.
+- Sechs echte Xvfb-Aufnahmen in 1440×1000, 1100×720 und 680×520 geprüft und
+  an AIR-69 angehängt. Maus-/Tastatureingaben und exakte API-Anzeigen geprüft.
+- Veraltete Versionsköpfe der Godot-Migrationsfixtures auf v24 aktualisiert;
+  Marketingassertion erlaubt gültige ganze KI-EUR, hält aber den nichtleeren
+  Spieler-Bruchteil und verlustfreie Spieler-/KI-Neustartvergleiche fest.
+- Locked-Build, alle 202 Rust-Tests und Clippy bestanden: 201 Tests im
+  vollständigen Lauf, Millionenflugtest isoliert mit 243.88 s Fortschreibung
+  unter unverändert 300 s. Ein zuvor unterbrochener Rust-Runner zählt nicht.
+  Kein Gameplay-/Rust-Code geändert. Details: airport-charges-verification.md.
+- Native Windows-DLLs/Prozesse, START.bat, tatsächliche PowerShell-Wrapper und
+  Windows-Darstellung/-Skalierung bleiben Besitzerprüfungen.
