@@ -84,7 +84,7 @@ func _draw() -> void:
 			else:
 				draw_circle(p, 5, ThemeTokens.MAP_LAND)
 				draw_circle(p, 5, ThemeTokens.INK, false, 2, true)
-			if Rect2(Vector2.ZERO, size).has_point(p):
+			if (zoom >= 2 or base) and Rect2(Vector2.ZERO, size).has_point(p):
 				var label_position := p + (Vector2(-54, 25) if base else Vector2(12, -6))
 				label_position.x = clampf(label_position.x, 8, maxf(8, size.x - 50))
 				label_position.y = clampf(label_position.y, 16, size.y - 8)

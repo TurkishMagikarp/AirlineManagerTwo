@@ -174,6 +174,28 @@ func _run() -> void:
 	for airport in canvas.airports:
 		if airport["icao"] == "EDDF": base = canvas.project(airport["position"])
 	check(absf(base.x - canvas.size.x / 2) < 0.1, "Base centering uses real airline airport")
+	for i in range(canvas.airports.size()):
+		if canvas.airports[i]["icao"] == "EDDM": panel.selected_id = -i - 1
+	panel.refresh_flights()
+	await process_frame
+	await process_frame
+	var create_action: Button = panel.card_body.get_child(panel.card_body.get_child_count() - 2)
+	create_action.pressed.emit()
+	await process_frame
+	check(main.current_page == 2, "Airport action opens route creation")
+	var destination: OptionButton = main.routes_panel.destination
+	check(destination.get_item_metadata(destination.selected) == "EDDM", "Airport action preselects real destination")
+	main._show_page(3)
+	panel.selected_id = 0
+	canvas.selected_route = 1
+	panel.refresh_flights()
+	await process_frame
+	await process_frame
+	var schedule_action: Button = panel.card_body.get_child(panel.card_body.get_child_count() - 1)
+	schedule_action.pressed.emit()
+	await process_frame
+	check(main.current_page == 2 and main.routes_panel.route_tree.get_selected().get_metadata(0)["id"] == 1, "Route action opens selected schedule")
+
 
 	main.queue_free()
 	await process_frame
