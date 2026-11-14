@@ -93,6 +93,8 @@ func _ready() -> void:
 	assignment.item_selected.connect(func(_index: int): _assignment_preview())
 	add_child(_label("Economy-Preis der ausgewählten Route · EUR pro Passagier und Einzelflug (vorläufig)"))
 	ticket_input = SpinBox.new()
+	ticket_input.get_line_edit().theme_type_variation = "NumericInput"
+	ticket_input.get_line_edit().alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	ticket_input.min_value = 0
 	ticket_input.max_value = 100000
 	ticket_input.step = 1
@@ -108,6 +110,8 @@ func _ready() -> void:
 	add_child(ticket_button)
 	add_child(_label("Business-Preis · EUR pro Passagier und Einzelflug"))
 	business_input = SpinBox.new()
+	business_input.get_line_edit().theme_type_variation = "NumericInput"
+	business_input.get_line_edit().alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	business_input.min_value = 0
 	business_input.max_value = 100000
 	business_input.step = 1
@@ -122,6 +126,8 @@ func _ready() -> void:
 	add_child(business_button)
 	add_child(_label("Bauchfracht · EUR pro kg · gilt ab dem nächsten Abflug"))
 	cargo_input = SpinBox.new()
+	cargo_input.get_line_edit().theme_type_variation = "NumericInput"
+	cargo_input.get_line_edit().alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	cargo_input.min_value = 0
 	cargo_input.step = 0.01
 	add_child(cargo_input)
@@ -152,12 +158,16 @@ func _ready() -> void:
 	add_child(rules)
 	add_child(_label("Flugplan für ausgewählte Route · erster Abflug in Spielminuten"))
 	delay_input = SpinBox.new()
+	delay_input.get_line_edit().theme_type_variation = "NumericInput"
+	delay_input.get_line_edit().alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	delay_input.min_value = 1
 	delay_input.max_value = 10080
 	delay_input.value = 5
 	add_child(delay_input)
 	add_child(_label("Abstand pro Flugzeug in Spielminuten (mindestens Flug + Bodenzeit); mehrere Flugzeuge starten versetzt"))
 	interval_input = SpinBox.new()
+	interval_input.get_line_edit().theme_type_variation = "NumericInput"
+	interval_input.get_line_edit().alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	interval_input.min_value = 1
 	interval_input.max_value = 10080
 	interval_input.value = 120
@@ -280,16 +290,16 @@ func refresh() -> void:
 	for route in routes:
 		var row := route_tree.create_item(root_item)
 		row.set_metadata(0, route)
-		row.set_text(0, "#%d" % route["id"])
-		row.set_text(1, "%s → %s" % [route["origin_icao"], route["destination_icao"]])
-		row.set_text(2, "%.1f km" % route["distance_km"])
+		UI.cell_text(row, 0, "#%d" % route["id"])
+		UI.cell_text(row, 1, "%s → %s" % [route["origin_icao"], route["destination_icao"]])
+		UI.cell_text(row, 2, "%.1f km" % route["distance_km"])
 		var assigned_names: PackedStringArray = []
 		for plane in fleet:
 			if plane["id"] in route["aircraft_ids"]:
 				assigned_names.append("%s · %s" % [plane["identifier"], plane["model_name"]])
-		row.set_text(3, ", ".join(assigned_names) if not assigned_names.is_empty() else "Nicht zugewiesen")
+		UI.cell_text(row, 3, ", ".join(assigned_names) if not assigned_names.is_empty() else "Nicht zugewiesen")
 		if not String(route["maintenance_status"]).is_empty():
-			row.set_text(3, row.get_text(3) + " · Wartung")
+			UI.cell_text(row, 3, row.get_text(3) + " · Wartung")
 		for i in range(6):
 			row.set_tooltip_text(i, row.get_text(i))
 		if route["id"] == selected_route:
@@ -317,10 +327,10 @@ func refresh_operations() -> void:
 			if route.get("aircraft_ids", []) != row.get_metadata(0).get("aircraft_ids", []):
 				refresh.call_deferred()
 				return
-			row.set_text(4, "%d / %d / %d" % [route["base_daily_market"], route["expected_daily_passengers"], route["daily_spill"]])
+			UI.cell_text(row, 4, "%d / %d / %d" % [route["base_daily_market"], route["expected_daily_passengers"], route["daily_spill"]])
 			row.set_tooltip_text(0, "Pünktlichkeit: %s · %d erfasste Flüge" % ["—" if route["punctuality_percent"] < 0 else "%.1f %%" % route["punctuality_percent"], route["punctuality_flights"]])
 			row.set_tooltip_text(4, "Pro Tag und Richtung: gemeinsamer Markt / erwartete eigene Passagiere / wegen Sitzmangel abgewiesen.\nAbgewiesen = eigener anfänglicher Anteil minus Beförderung vor Rundung; diese Reisenden können zur Konkurrenz wechseln.\nOhne eigenen Flugplan: keine Beförderung, kein Sitzmangel.\nDurchschnitt pro Abflug: %d Pax" % route["estimated_passengers"])
-			row.set_text(5, "%.1f %%" % route["actual_load_percent"] if route["actual_flights"] > 0 else "Keine Flüge")
+			UI.cell_text(row, 5, "%.1f %%" % route["actual_load_percent"] if route["actual_flights"] > 0 else "Keine Flüge")
 			row.set_tooltip_text(5, "Tatsächlich beförderte Passagiere / angebotene Sitze aller archivierten Landungen dieser Route. Bei alten Spielständen ab Archivbeginn.")
 			if not String(route["maintenance_status"]).is_empty():
 				row.set_tooltip_text(3, row.get_text(3) + "\n" + route["maintenance_status"])
@@ -340,18 +350,18 @@ func refresh_operations() -> void:
 	var results: Array = simulation.get_flight_results()
 	if results.is_empty():
 		var empty := results_tree.create_item(root_item)
-		empty.set_text(0, "Noch keine Landungen")
+		UI.cell_text(empty, 0, "Noch keine Landungen")
 		empty.set_selectable(0, false)
 	for result in results:
 		var row := results_tree.create_item(root_item)
 		var values := ["%s / #%d" % [result["landing"], result["route_id"]], "%s → %s" % [result["origin"], result["destination"]], "%d/%d · %.1f %%" % [result["passengers"], result["seats"], result["load_percent"]], UI.money(result["ticket_revenue_eur"]), UI.money(result["costs_eur"]), UI.money(result["profit_eur"])]
 		for i in range(values.size()):
-			row.set_text(i, values[i])
+			UI.cell_text(row, i, values[i])
 			row.set_tooltip_text(i, "Ticket: %s\nTreibstoff: %s\nFlughäfen: %s\nPersonal: %s\nWartung / Verwaltung: %s\nBordservice (± Standard): %s" % [UI.money(result["ticket_eur"]), UI.money(result["fuel_eur"]), UI.money(result["airport_eur"]), UI.money(result["crew_eur"]), UI.money(result["overhead_eur"]), UI.money(result["service_eur"])])
 			row.set_tooltip_text(i, row.get_tooltip_text(i) + "\nBetreuung / Entschädigung: %s" % UI.money(result["care_eur"]))
-		row.set_text(2, "Y %d/%d · J %d/%d" % [result["economy_passengers"], result["economy_seats"], result["business_passengers"], result["business_seats"]])
+		UI.cell_text(row, 2, "Y %d/%d · J %d/%d" % [result["economy_passengers"], result["economy_seats"], result["business_passengers"], result["business_seats"]])
 		row.set_tooltip_text(3, "Economy: %s · Business: %s" % [UI.money(result["economy_revenue_eur"]), UI.money(result["business_revenue_eur"])])
-		row.set_text(6, "%d kg / %s" % [result["cargo_kg"], UI.money(result["cargo_revenue_eur"])])
+		UI.cell_text(row, 6, "%d kg / %s" % [result["cargo_kg"], UI.money(result["cargo_revenue_eur"])])
 		row.set_custom_color(5, UI.POSITIVE if result["profit_eur"] >= 0 else UI.NEGATIVE)
 
 

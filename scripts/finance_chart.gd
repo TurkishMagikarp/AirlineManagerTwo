@@ -1,4 +1,5 @@
 extends Control
+const ThemeTokens = preload("res://scripts/ui/operations_theme.gd")
 ## Bounded presentation of Rust samples. No economic calculations here.
 const UI = preload("res://scripts/ui/components.gd")
 var samples: Array = []
@@ -34,11 +35,11 @@ func _draw() -> void:
 		low = minf(low, row[field])
 		high = maxf(high, row[field])
 	var area := Rect2(8, 26, maxf(size.x - 16, 1), maxf(size.y - 52, 1))
-	var font := get_theme_default_font()
-	draw_string(font, Vector2(8, 17), "%.1f %%" % high if percent else UI.money(int(high)), HORIZONTAL_ALIGNMENT_LEFT, -1, 12, UI.MUTED)
-	draw_string(font, Vector2(8, size.y - 4), "%.1f %%" % low if percent else UI.money(int(low)), HORIZONTAL_ALIGNMENT_LEFT, -1, 12, UI.MUTED)
+	var font := ThemeTokens.font_for(ThemeTokens.CODE)
+	draw_string(font, Vector2(8, 17), "%.1f %%" % high if percent else UI.money(int(high)), HORIZONTAL_ALIGNMENT_LEFT, -1, ThemeTokens.CODE["size"], UI.MUTED)
+	draw_string(font, Vector2(8, size.y - 4), "%.1f %%" % low if percent else UI.money(int(low)), HORIZONTAL_ALIGNMENT_LEFT, -1, ThemeTokens.CODE["size"], UI.MUTED)
 	var zero_y := area.end.y - (0 - low) / (high - low) * area.size.y
-	draw_line(Vector2(area.position.x, zero_y), Vector2(area.end.x, zero_y), UI.MUTED * Color(1, 1, 1, 0.4))
+	draw_line(Vector2(area.position.x, zero_y), Vector2(area.end.x, zero_y), ThemeTokens.LINE)
 	var previous := Vector2.ZERO
 	var connected := false
 	for i in range(samples.size()):

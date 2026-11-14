@@ -1,17 +1,38 @@
 extends RefCounted
 ## Small composable UI primitives; never reads or changes simulation state.
 
-const MUTED = Color("91a3b9")
-const ACCENT = Color("83cbd2")
-const POSITIVE = Color("8fd5b5")
-const NEGATIVE = Color("f1a6ad")
+const ThemeTokens = preload("res://scripts/ui/operations_theme.gd")
+const MUTED = ThemeTokens.INK_MUTED
+const ACCENT = ThemeTokens.ACCENT_TEXT
+const POSITIVE = ThemeTokens.GO
+const NEGATIVE = ThemeTokens.STOP
+static var _numeric: RegEx
+static var _code: RegEx
 
-static func label(text: String, size: int = 15, color: Color = Color("e2eaf4")) -> Label:
+static func label(text: String, style: Dictionary = ThemeTokens.BODY, color: Color = ThemeTokens.INK) -> Label:
 	var result := Label.new()
 	result.text = text
-	result.add_theme_font_size_override("font_size", size)
+	result.add_theme_font_override("font", ThemeTokens.font_for(style))
+	result.add_theme_font_size_override("font_size", style["size"])
+	result.add_theme_constant_override("line_spacing", 0)
 	result.add_theme_color_override("font_color", color)
 	return result
+
+## Classify rendered table text only; values and units still come from Rust.
+static func cell_text(item: TreeItem, column: int, text: String) -> void:
+	item.set_text(column, text)
+	item.custom_minimum_height = ThemeTokens.TABLE_ROW_HEIGHT
+	if _numeric == null:
+		_numeric = RegEx.new()
+		_numeric.compile("^[−+0-9]|[0-9] (EUR|%|km|kg)$")
+		_code = RegEx.new()
+		_code.compile("^[A-Z0-9#– →-]+$")
+	var numeric := _numeric.search(text) != null
+	var code := not text.is_empty() and _code.search(text) != null and (not numeric or text.begins_with("#"))
+	var style: Dictionary = ThemeTokens.CODE if code else ThemeTokens.DATA if numeric else ThemeTokens.BODY
+	item.set_custom_font(column, ThemeTokens.font_for(style))
+	item.set_custom_font_size(column, style["size"])
+	item.set_text_alignment(column, HORIZONTAL_ALIGNMENT_RIGHT if numeric and not code else HORIZONTAL_ALIGNMENT_LEFT)
 
 static func panel(parent: Node, title: String) -> VBoxContainer:
 	var shell := PanelContainer.new()
@@ -19,16 +40,16 @@ static func panel(parent: Node, title: String) -> VBoxContainer:
 	parent.add_child(shell)
 	var column := VBoxContainer.new()
 	column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	column.add_theme_constant_override("separation", 12)
+	column.add_theme_constant_override("separation", ThemeTokens.SPACE_3)
 	shell.add_child(column)
 	if not title.is_empty():
-		column.add_child(label(title, 13, ACCENT))
+		column.add_child(label(title, ThemeTokens.PANEL_TITLE, ThemeTokens.INK))
 	return column
 
 static func metric(parent: Node, title: String) -> Label:
 	var column := panel(parent, title)
 	column.custom_minimum_size.x = 220
-	var value := label("—", 27)
+	var value := label("—", ThemeTokens.FIGURE)
 	column.add_child(value)
 	return value
 

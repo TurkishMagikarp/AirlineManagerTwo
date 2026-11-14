@@ -1,4 +1,4 @@
-# Operations Center UI
+# Airline Manager UI
 
 ## Zielbild: UI Kit
 
@@ -17,19 +17,28 @@ Abstände, Eingabefelder, Tabellen, Menüs und Scrollbars. `scenes/main.tscn`
 setzt es am Wurzel-Control; alle darunter eingefügten Bildschirme erben es
 automatisch. Eigenständig gestartete Szenen erhalten dieselbe Theme-Ressource.
 
-- Navy-Flächen, zurückhaltendes Cyan für Auswahl und primäre Aktionen.
-- Grün für positive Ergebnisse/geparkte Flugzeuge, Rosé für Verluste und
-  Löschaktionen, Sand für Bodenzeit. Status bleibt zusätzlich ausgeschrieben.
-- Tastaturfokus hat eine sichtbare Kontur; deaktivierte Aktionen bleiben erkennbar.
-- Keine Animationen, externen Schriftarten oder zusätzlichen Asset-Abhängigkeiten.
-- Kleine eigene SVG-Icons liegen in `resources/icons/`.
+- Night-Theme aus `docs/ui-kit/tokens.json`: warme dunkle Flächen, Amber für
+  Auswahl und primäre Aktionen; `go`, `stop` und `sky` für Zustände.
+- Alle Farb-, Abstands-, Radius- und zehn Textstil-Tokens sind benannte Konstanten
+  in `operations_theme.gd`; Karten und Diagramme lesen dieselben Werte.
+- Outfit (variable) für Titel und Spaltenköpfe, Nunito (variable) für Text und
+  Buttonbeschriftungen; DM Mono Regular/Medium für Zahlen und Codes. Die Originale
+  aus google/fonts samt OFL liegen unter `resources/fonts/`.
+- Buttons, Eingabefelder, Select-Menüs, Tabellen, Tabs, Panels, Scrollbars und
+  Tooltips erben die neuen Zustände. Fokus: 2px `focus`-Ring mit 2px Abstand.
+- Die sechs weißen SVG-Navigationsicons erhalten pro Buttonzustand die Textfarbe.
+  Bildschirmaufbau, Aktionen und deutsche Texte bleiben erhalten.
+- Keine neue Spiellogik, Save-Version, Wirtschaftswerte oder zweite Uhr.
 
 ## Wiederverwendbare Bausteine
 
 `scripts/ui/components.gd` bietet `panel`, `metric`, `table`, `label` sowie
 `money` zur Darstellung ganzer EUR mit Tausenderpunkten. Die Hilfen lesen und
 verändern keinen Spielzustand. Buttons verwenden bei Bedarf die Theme-Varianten
-`PrimaryButton` und `DangerButton`.
+`PrimaryButton`, `DangerButton`, `DangerSolidButton` und `GhostButton`.
+`UI.label` erwartet einen benannten Textstil statt einer freien Schriftgröße;
+Tabellenzellen erhalten über `UI.cell_text` Text-, Daten- oder Code-Schrift.
+Numerische SpinBox-Felder verwenden `NumericInput`.
 
 Für neue Seiten ein Control unter dem bestehenden Root einfügen, Panels mit
 `UI.panel(parent, title)` aufbauen und Standard-Controls verwenden. Keine lokalen
@@ -102,3 +111,15 @@ Godot-Mauseingabe: `Godot --headless --path . --script res://tests/attention_tes
 Der Godot-Test sowie GUI, Screenshots, START.bat und Windows-Neustarts wurden auf
 dem Linux-Implementierungsserver nicht ausgeführt; Rust-Tests sind kein visueller
 Layoutnachweis.
+
+## UI Kit Schritt 1 (AIR-117)
+
+Die Umstellung betrifft die gemeinsamen Schrift- und Theme-Grundlagen. Weitere
+Kit-Bausteine und Bildschirmumbauten sowie Tag-Theme und Lokalisierung folgen
+in späteren Tickets. Die 40px-Tabellenzeilen und 36px-Controls orientieren sich
+an `bundle.css`; bestehende größere Mindestmaße bleiben erhalten.
+
+Auf dem Linux-Server sind Godot-UI-Tests, START.bat, echte Screenshots und
+Windows-Neustarttests nicht ausführbar. Die drei Fenstergrößen müssen auf
+Windows mit `ui_layout_test.gd -- --capture-dir` geprüft werden; Rust-Checks
+belegen weder die Darstellung noch die Erreichbarkeit der UI-Aktionen.
