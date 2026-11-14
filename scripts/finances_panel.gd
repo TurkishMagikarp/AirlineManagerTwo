@@ -166,6 +166,7 @@ func _ready() -> void:
 	aircraft.add_child(aircraft_journal)
 	var company := UI.panel(self, "WIRTSCHAFTLICHE ENTWICKLUNG")
 	chart_select = OptionButton.new()
+	chart_select.fit_to_longest_item = false
 	for title in ["Kontostand · EUR", "Ticket- und Frachteinnahmen · EUR je Zeitabschnitt", "Kosten inkl. Zinsen, Gebühren, Leasing und Steuern · EUR je Zeitabschnitt", "Ergebnis · EUR je Zeitabschnitt", "Ertragsteuer · EUR je Zeitabschnitt"]:
 		chart_select.add_item(title)
 	chart_select.item_selected.connect(func(_i: int): _chart())

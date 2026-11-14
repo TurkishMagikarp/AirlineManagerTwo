@@ -1134,13 +1134,13 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 4 const UI = preload("res://scripts/ui/components.gd")
 5 const Chart = preload("res://scripts/finance_chart.gd")
 48 func _ready() -> void:
-205 func _process(delta: float) -> void:
-213 func refresh(force: bool = false) -> void:
-315 func _chart() -> void:
-318 func _loan_action(borrowing: bool) -> void:
-323 func _select_route() -> void:
-337 func _reset_flights() -> void:
-342 func _flights() -> void:
+206 func _process(delta: float) -> void:
+214 func refresh(force: bool = false) -> void:
+316 func _chart() -> void:
+319 func _loan_action(borrowing: bool) -> void:
+324 func _select_route() -> void:
+338 func _reset_flights() -> void:
+343 func _flights() -> void:
 
 ## scripts/main.gd
 1 extends Control
@@ -1151,38 +1151,39 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 8 const StaffPanel = preload("res://scripts/staff_panel.gd")
 9 const UI = preload("res://scripts/ui/components.gd")
 11 const PAGES: Array[Dictionary] = [
-90 func _ready() -> void:
-165 func _add_time_controls(column: VBoxContainer) -> void:
-220 func _save_game() -> void:
-226 func _load_game() -> void:
-239 func _set_speed(speed: int) -> void:
-246 func _process(delta: float) -> void:
-272 func _refresh_time() -> void:
-286 func _show_page(index: int) -> void:
-318 func _refresh_finance() -> void:
-338 func _build_fleet(content: VBoxContainer) -> void:
-415 func _model_selected(index: int) -> void:
-426 func _lease_aircraft() -> void:
-436 func _dispose_aircraft() -> void:
-446 func _buy_aircraft() -> void:
-462 func _refresh_fleet() -> void:
-507 func _maintenance_summary(plane: Dictionary) -> String:
-520 func _build_maintenance(parent: VBoxContainer) -> void:
-556 func _refresh_base_action() -> void:
-568 func _change_maintenance_base() -> void:
-575 func _refresh_maintenance() -> void:
-634 func _request_maintenance() -> void:
-645 func _cancel_maintenance() -> void:
-656 func _build_founding() -> void:
-730 func _country_changed(index: int) -> void:
-744 func _found_airline() -> void:
-756 func _sync_view() -> void:
-773 func _open_founding() -> void:
-782 func _label(text: String, style: Dictionary, color: Color = ThemeTokens.INK) -> Label:
-786 func _build_finance(content: VBoxContainer) -> void:
-813 func _build_attention(parent: VBoxContainer) -> void:
-830 func _refresh_attention() -> void:
-852 func _open_attention(entry: Dictionary) -> void:
+96 func _ready() -> void:
+184 func _add_time_controls(column: VBoxContainer) -> void:
+243 func _save_game() -> void:
+249 func _load_game() -> void:
+262 func _set_speed(speed: int) -> void:
+269 func _process(delta: float) -> void:
+295 func _refresh_time() -> void:
+313 func _show_page(index: int) -> void:
+345 func _refresh_finance() -> void:
+365 func _build_fleet(content: VBoxContainer) -> void:
+442 func _model_selected(index: int) -> void:
+453 func _lease_aircraft() -> void:
+463 func _dispose_aircraft() -> void:
+473 func _buy_aircraft() -> void:
+489 func _refresh_fleet() -> void:
+534 func _maintenance_summary(plane: Dictionary) -> String:
+547 func _build_maintenance(parent: VBoxContainer) -> void:
+583 func _refresh_base_action() -> void:
+595 func _change_maintenance_base() -> void:
+602 func _refresh_maintenance() -> void:
+661 func _request_maintenance() -> void:
+672 func _cancel_maintenance() -> void:
+683 func _build_founding() -> void:
+757 func _country_changed(index: int) -> void:
+771 func _found_airline() -> void:
+783 func _sync_view() -> void:
+803 func _open_founding() -> void:
+812 func _label(text: String, style: Dictionary, color: Color = ThemeTokens.INK) -> Label:
+816 func _build_finance(content: VBoxContainer) -> void:
+843 func _build_attention(parent: VBoxContainer) -> void:
+866 func _refresh_attention() -> void:
+891 func _resize_frame() -> void:
+903 func _open_attention(entry: Dictionary) -> void:
 
 ## scripts/map_background.gd
 1 extends Control
@@ -1276,6 +1277,9 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 58 class LegTrack extends Control:
 69 class EmptyFrame extends PanelContainer:
 319 class DecisionDialog extends ColorRect:
+390 const CASH_STYLE = {"family": "mono", "size": 18, "height": 20, "weight": 500, "tracking": 0.0}
+391 const FLAP_STYLE = {"family": "mono", "size": 18, "height": 32, "weight": 500, "tracking": 0.0}
+393 class FlapReadout extends Label:
 
 ## scripts/ui/operations_theme.gd
 1 extends Theme

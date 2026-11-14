@@ -30,6 +30,30 @@ automatisch. Eigenständig gestartete Szenen erhalten dieselbe Theme-Ressource.
   Bildschirmaufbau, Aktionen und deutsche Texte bleiben erhalten.
 - Keine neue Spiellogik, Save-Version, Wirtschaftswerte oder zweite Uhr.
 
+## Fester Bildschirmrahmen
+
+Die Navigation steht links mit 208px Breite; unter 900px Fensterbreite wird sie
+56px breit und zeigt die sechs Icons mit deutschen Tooltips. Airline-Name und
+Basis kommen aus `get_airline_info()`. Einen Airline-Code liefert die Simulation
+noch nicht: dafür steht ein Gedankenstrich statt erfundener Daten. Badges zählen
+nur die Einträge des vorhandenen Aufmerksamkeitssnapshots je Zielseite.
+
+Die ClockBar bleibt oben außerhalb des vertikalen Inhalts-Scrollbereichs. Jede
+Stelle der unveränderten Rust-Anzeige „Tag N · HH:MM:SS“ hat eine dunkle 22×32px
+Split-Flap-Zelle mit DM Mono und Naht, ohne Animation. Kalenderdatum/Wochentag
+liefert die bestehende Uhr nicht; es gibt keine erfundene Epoche oder zweite Uhr.
+Pause und Geschwindigkeiten bilden ein Segmentfeld. Start und die bisherige
+Semantik (Geschwindigkeitswechsel hebt Pause nicht auf) bleiben erhalten.
+Guthaben kommt aus der Airline und wird unter null `stop`. Speichern/Laden und
+Statusmeldungen bleiben erreichbar; auf schmalen Fenstern umbrechen die Gruppen.
+
+Über dem Seiteninhalt stehen die einklappbaren Hinweise in unveränderter
+Rust-Reihenfolge. Jede 44px-Zeile zeigt einen Statuschip, einen hervorgehobenen
+Satzanfang und das Ziel. Lange Sätze werden im vorhandenen Tooltip vollständig
+angezeigt; bei schmaler Breite steht dort auch das Klickziel. Nach vier Zeilen
+scrollt die Liste in ihrem eigenen Bereich, mit sichtbarem Tastaturfokus.
+Alle sechs Seiten sind bereits in der Screenshot-Liste des Layouttests enthalten.
+
 ## Wiederverwendbare Bausteine
 
 `scripts/ui/components.gd` bietet `panel`, `metric`, `table`, `label` sowie
