@@ -23,6 +23,10 @@ const RESUME_DELAY: u64 = 60;
 struct Config {
     unscheduled_cost_percent: i64,
     unscheduled_duration_percent: u64,
+    outstation_cost_percent: i64,
+    outstation_duration_percent: u64,
+    base_setup_cost_eur: i64,
+    base_recurring_fee_eur: i64,
     models: HashMap<String, Rules>,
 }
 
@@ -40,7 +44,11 @@ static CONFIG: LazyLock<Result<Config, String>> = LazyLock::new(|| {
     let c: Config = serde_json::from_str(include_str!("../../config/maintenance.json"))
         .map_err(|_| "Wartungskonfiguration ist ungültig.".to_string())?;
     let invalid = || "Wartungskonfiguration enthält ungültige Werte.".to_string();
-    if !(100..=1000).contains(&c.unscheduled_cost_percent)
+    if c.base_setup_cost_eur < 0
+        || c.base_recurring_fee_eur < 0
+        || !(100..=1000).contains(&c.outstation_cost_percent)
+        || !(100..=1000).contains(&c.outstation_duration_percent)
+        || !(100..=1000).contains(&c.unscheduled_cost_percent)
         || !(100..=1000).contains(&c.unscheduled_duration_percent)
     {
         return Err(invalid());
@@ -178,7 +186,7 @@ pub struct Resume {
 pub struct Visit {
     pub start: u64,
     pub end: u64,
-    /// Fixed when planned, debited exactly once at the start.
+    /// Estimated when ordered, fixed and debited exactly once at the start.
     pub cost_eur: i64,
     pub unscheduled: bool,
     #[serde(default)]
@@ -191,6 +199,181 @@ pub struct Visit {
 
 fn staffed_default() -> bool {
     true
+}
+
+/// Home bases are implicit and free; only paid extra bases need saved cursors.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Base {
+    pub icao: String,
+    pub next_fee: u64,
+}
+
+pub const BASE_PERIOD: u64 = 30 * 86400;
+
+impl Game {
+    pub fn is_maintenance_base(&self, icao: &str) -> bool {
+        self.airline
+            .as_ref()
+            .is_some_and(|a| a.home_airport_icao == icao)
+            || self.maintenance_bases.iter().any(|b| b.icao == icao)
+    }
+
+    pub fn base_prices(&self) -> Result<(i64, i64), String> {
+        let c = config()?;
+        Ok((c.base_setup_cost_eur, c.base_recurring_fee_eur))
+    }
+
+    /// Read-only validation shared by actions and the UI's enabled state.
+    pub fn validate_base_action(&self, icao: &str, open: bool) -> Result<(), String> {
+        self.require_active()?;
+        if open {
+            self.require_solvent()?;
+            let airline = self.airline.as_ref().ok_or("Airline fehlt.")?;
+            if !crate::airports::catalog()?
+                .airports
+                .iter()
+                .any(|a| a.icao == icao)
+            {
+                return Err("Unbekannter Flughafen.".into());
+            }
+            if self.is_maintenance_base(icao) {
+                return Err("Bereits Wartungsbasis.".into());
+            }
+            self.clock
+                .elapsed()
+                .as_secs()
+                .checked_add(BASE_PERIOD)
+                .ok_or("Zeitüberlauf.")?;
+            if airline.capital_eur < config()?.base_setup_cost_eur {
+                return Err("Nicht genügend Guthaben für Wartungsbasis.".into());
+            }
+        } else {
+            if self
+                .airline
+                .as_ref()
+                .is_some_and(|a| a.home_airport_icao == icao)
+            {
+                return Err("Heimatbasis kann nicht geschlossen werden.".into());
+            }
+            if !self.maintenance_bases.iter().any(|b| b.icao == icao) {
+                return Err("Keine Wartungsbasis.".into());
+            }
+            if self
+                .fleet
+                .iter()
+                .any(|p| p.location_icao == icao && p.status == AircraftStatus::Maintenance)
+            {
+                return Err("Wartung läuft hier noch.".into());
+            }
+        }
+        Ok(())
+    }
+
+    pub fn open_maintenance_base(&mut self, icao: &str) -> Result<(), String> {
+        self.validate_base_action(icao, true)?;
+        let now = self.clock.elapsed().as_secs();
+        let next_fee = now.checked_add(BASE_PERIOD).ok_or("Zeitüberlauf.")?;
+        self.book_base_cost(now, config()?.base_setup_cost_eur)?;
+        self.maintenance_bases.push(Base {
+            icao: icao.into(),
+            next_fee,
+        });
+        self.maintenance_bases.sort_by(|a, b| a.icao.cmp(&b.icao));
+        Ok(())
+    }
+
+    pub fn close_maintenance_base(&mut self, icao: &str) -> Result<(), String> {
+        self.validate_base_action(icao, false)?;
+        self.maintenance_bases.retain(|b| b.icao != icao);
+        Ok(())
+    }
+
+    fn book_base_cost(&mut self, time: u64, amount: i64) -> Result<(), String> {
+        let a = self.airline.as_mut().ok_or("Airline fehlt.")?;
+        let balance = a.capital_eur.checked_sub(amount).ok_or("Finanzüberlauf.")?;
+        if let Some(h) = &mut self.history {
+            h.maintenance.push(Purchase { time, amount });
+        }
+        a.capital_eur = balance;
+        Ok(())
+    }
+
+    fn pay_base_fees(&mut self, now: u64) -> Result<(), String> {
+        // Time first, then ICAO, also when directly settling several periods.
+        while let Some((index, time)) = self
+            .maintenance_bases
+            .iter()
+            .enumerate()
+            .filter(|(_, b)| b.next_fee <= now)
+            .map(|(i, b)| (i, b.next_fee))
+            .min_by_key(|(i, t)| (*t, *i))
+        {
+            let next = time.checked_add(BASE_PERIOD).ok_or("Zeitüberlauf.")?;
+            self.book_base_cost(time, config()?.base_recurring_fee_eur)?;
+            self.maintenance_bases[index].next_fee = next;
+        }
+        Ok(())
+    }
+
+    fn validate_bases(&self) -> Result<(), String> {
+        let mut seen = std::collections::HashSet::new();
+        for b in &self.maintenance_bases {
+            if self
+                .airline
+                .as_ref()
+                .is_none_or(|a| a.home_airport_icao == b.icao)
+                || b.next_fee <= self.clock.elapsed().as_secs()
+                || b.next_fee > self.clock.elapsed().as_secs().saturating_add(BASE_PERIOD)
+                || !seen.insert(&b.icao)
+                || !crate::airports::catalog()?
+                    .airports
+                    .iter()
+                    .any(|a| a.icao == b.icao)
+            {
+                return Err("Ungültige Wartungsbasis.".into());
+            }
+        }
+        Ok(())
+    }
+
+    /// Actual landing airport for airborne orders, otherwise current parking.
+    pub fn maintenance_location(&self, id: u32) -> Result<String, String> {
+        let p = self
+            .fleet
+            .iter()
+            .find(|p| p.id == id)
+            .ok_or("Unbekanntes Flugzeug.")?;
+        if p.status == AircraftStatus::InFlight {
+            let r = &self.routes[self.planned_route(id).ok_or("Flugplan fehlt.")?];
+            let state = operations::movement(r, &p.model_id, self.clock.elapsed().as_secs())?;
+            Ok(state.destination)
+        } else {
+            Ok(p.location_icao.clone())
+        }
+    }
+
+    pub fn check_at(
+        &self,
+        location: &str,
+        wear: &Wear,
+        r: &Rules,
+        unscheduled: bool,
+    ) -> Result<(i64, u64), String> {
+        let price = cost(wear, r, unscheduled)?;
+        let seconds = duration(r, unscheduled)?;
+        if self.is_maintenance_base(location) {
+            return Ok((price, seconds));
+        }
+        let c = config()?;
+        let price =
+            i64::try_from((i128::from(price) * i128::from(c.outstation_cost_percent) + 99) / 100)
+                .map_err(|_| "Finanzüberlauf.")?;
+        let seconds = seconds
+            .checked_mul(c.outstation_duration_percent)
+            .ok_or("Zeitüberlauf.")?
+            .div_ceil(100);
+        Ok((price, seconds))
+    }
 }
 
 impl Game {
@@ -234,6 +417,7 @@ impl Game {
                 Some(v) => Some(v.start),
                 None => self.due_landing(p),
             })
+            .chain(self.maintenance_bases.iter().map(|b| b.next_fee))
             .min()
     }
 
@@ -272,12 +456,12 @@ impl Game {
             return Err("Frisch gewartet · seit dem letzten Check noch keine Abnutzung.".into());
         }
         let r = rules(&plane.model_id)?;
+        let location = self.maintenance_location(aircraft_id)?;
+        let (price, seconds) = self.check_at(&location, &wear, r, false)?;
         let visit = Visit {
             start,
-            end: start
-                .checked_add(duration(r, false)?)
-                .ok_or("Wartungs-Zeitüberlauf.")?,
-            cost_eur: cost(&wear, r, false)?,
+            end: start.checked_add(seconds).ok_or("Wartungs-Zeitüberlauf.")?,
+            cost_eur: price,
             unscheduled: false,
             resume: None,
             staffed: true,
@@ -335,6 +519,18 @@ impl Game {
             return Err("Flugzeug ist noch in der Luft.".into());
         }
         let mut visit = plane.maintenance.clone().ok_or("Keine Wartung geplant.")?;
+        // Freeze the location premium at actual start, including airborne orders.
+        let (price, seconds) = self.check_at(
+            &plane.location_icao,
+            &plane.wear,
+            rules(&plane.model_id)?,
+            visit.unscheduled,
+        )?;
+        visit.cost_eur = price;
+        visit.end = visit
+            .start
+            .checked_add(seconds)
+            .ok_or("Wartungs-Zeitüberlauf.")?;
         let balance = self
             .airline
             .as_ref()
@@ -446,6 +642,7 @@ impl Game {
     /// Process every maintenance event at or before the current second.
     pub(crate) fn apply_maintenance(&mut self) -> Result<(), String> {
         let now = self.clock.elapsed().as_secs();
+        self.pay_base_fees(now)?;
         for p in 0..self.fleet.len() {
             let plane = &self.fleet[p];
             match &plane.maintenance {
@@ -484,6 +681,7 @@ impl Game {
     }
 
     pub fn validate_maintenance(&self) -> Result<(), String> {
+        self.validate_bases()?;
         let now = self.clock.elapsed().as_secs();
         let invalid = || "Ungültige Wartungsdaten im Spielstand.".to_string();
         for plane in &self.fleet {
@@ -567,6 +765,227 @@ mod tests {
     }
 
     #[test]
+    fn bases_prices_actions_freeze_and_ai_parity() {
+        let mut g = game();
+        let r = rules("atr72_600").unwrap();
+        let w = Wear::default().added(2, 3600).unwrap();
+        let normal = g.check_at("EDDF", &w, r, false).unwrap();
+        let away = g.check_at("EDDM", &w, r, false).unwrap();
+        assert_eq!(
+            normal,
+            (cost(&w, r, false).unwrap(), duration(r, false).unwrap())
+        );
+        assert_eq!(
+            away,
+            ((normal.0 * 125 + 99) / 100, (normal.1 * 125).div_ceil(100))
+        );
+        assert!(g.close_maintenance_base("EDDF").is_err());
+        let before = state(&g);
+        assert!(g.open_maintenance_base("XXXX").is_err());
+        assert_eq!(state(&g), before);
+        assert!(g.advance(61.0));
+        assert_eq!(g.maintenance_location(1).unwrap(), "EDDM");
+        g.request_maintenance(1).unwrap();
+        // Open between order and landing: the actual start uses the new base.
+        g.open_maintenance_base("EDDM").unwrap();
+        assert!(g.open_maintenance_base("EDDM").is_err());
+        let landing = g.fleet[0].maintenance.as_ref().unwrap().start;
+        assert!(g.advance((landing - 61) as f64));
+        let visit = g.fleet[0].maintenance.clone().unwrap();
+        assert_eq!(visit.end - visit.start, duration(r, false).unwrap());
+        assert!(g.close_maintenance_base("EDDM").is_err());
+        g.open_maintenance_base("EDLP").unwrap();
+        g.close_maintenance_base("EDLP").unwrap();
+        assert_eq!(g.fleet[0].maintenance.as_ref(), Some(&visit));
+        g.validate_history().unwrap();
+        let mut poor = Game::default();
+        poor.found("Poor", "DE", "EDDF").unwrap();
+        poor.competitors.clear();
+        poor.airline.as_mut().unwrap().capital_eur = 1;
+        let before = state(&poor);
+        assert!(poor.open_maintenance_base("EDDM").is_err());
+        assert_eq!(state(&poor), before);
+        let mut owner = Game::default();
+        owner.found("Parity", "DE", "EDDF").unwrap();
+        for c in &owner.competitors {
+            let home = &c.game.airline.as_ref().unwrap().home_airport_icao;
+            assert!(c.game.is_maintenance_base(home));
+            assert!(c.game.maintenance_bases.is_empty());
+            assert_eq!(c.game.check_at(home, &w, r, false).unwrap(), normal);
+            let away_icao = if home == "EDDM" { "EDLP" } else { "EDDM" };
+            assert_eq!(c.game.check_at(away_icao, &w, r, false).unwrap(), away);
+        }
+    }
+
+    #[test]
+    fn bases_unscheduled_away_and_running_price_stays_fixed() {
+        let mut g = game();
+        let r = rules("atr72_600").unwrap();
+        let w = &mut g.fleet[0].wear;
+        w.cycles = r.interval_cycles - 1;
+        w.check_cycles = w.cycles;
+        assert!(g.advance(60.0 + flight() as f64));
+        assert_eq!(g.fleet[0].location_icao, "EDDM");
+        let v = g.fleet[0].maintenance.clone().unwrap();
+        assert!(v.unscheduled);
+        let expected = g.check_at("EDDM", &g.fleet[0].wear, r, true).unwrap();
+        assert_eq!((v.cost_eur, v.end - v.start), expected);
+        g.open_maintenance_base("EDDM").unwrap();
+        assert_eq!(g.fleet[0].maintenance.as_ref(), Some(&v));
+        assert!(g.close_maintenance_base("EDDM").is_err());
+        assert!(g.advance((v.end - v.start) as f64));
+        let cash = g.airline.as_ref().unwrap().capital_eur;
+        g.close_maintenance_base("EDDM").unwrap();
+        assert_eq!(g.airline.as_ref().unwrap().capital_eur, cash);
+        g.validate_history().unwrap();
+    }
+
+    fn bases_idle() -> Game {
+        let mut g = Game::default();
+        g.found("Bases", "DE", "EDDF").unwrap();
+        g.competitors.clear();
+        g.open_maintenance_base("EDDM").unwrap();
+        g.open_maintenance_base("EDLP").unwrap();
+        g.clock.set_running(true);
+        g
+    }
+
+    #[test]
+    fn bases_fees_speeds_steps_pause_restart_and_migration() {
+        let mut g = bases_idle();
+        let cash = g.airline.as_ref().unwrap().capital_eur;
+        let seconds = BASE_PERIOD * 4 + 123;
+        let mut paused = g.clone();
+        paused.clock.set_running(false);
+        let before = state(&paused);
+        assert!(paused.advance(seconds as f64));
+        assert_eq!(state(&paused), before);
+        assert!(g.advance(seconds as f64));
+        assert_eq!(
+            g.airline.as_ref().unwrap().capital_eur,
+            cash - 8 * config().unwrap().base_recurring_fee_eur
+        );
+        g.validate_history().unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        for speed in [1, 4, 16] {
+            let mut stepped = bases_idle();
+            stepped.clock.set_speed(speed);
+            for _ in 0..4 {
+                assert!(stepped.advance(BASE_PERIOD as f64 / speed as f64));
+                let path = dir.path().join("roundtrip.json");
+                crate::save::save(&path, &stepped).unwrap();
+                stepped = crate::save::load(&path).unwrap();
+            }
+            assert!(stepped.advance(123.0 / speed as f64));
+            stepped.clock.set_speed(1);
+            assert_eq!(state(&g), state(&stepped));
+        }
+        let cash = g.airline.as_ref().unwrap().capital_eur;
+        g.close_maintenance_base("EDLP").unwrap();
+        assert!(g.advance((BASE_PERIOD * 2) as f64));
+        assert_eq!(
+            g.airline.as_ref().unwrap().capital_eur,
+            cash - 2 * config().unwrap().base_recurring_fee_eur
+        );
+        // v28 running outstation check was priced without any location premium.
+        let mut legacy = game();
+        legacy.competitors = crate::competition::initial_competitors().unwrap();
+        assert!(legacy.advance(60.0 + flight() as f64));
+        legacy.request_maintenance(1).unwrap();
+        legacy.competitors[0].game.request_maintenance(1).unwrap();
+        let v = legacy.fleet[0].maintenance.as_mut().unwrap();
+        let old_price = v.cost_eur;
+        v.cost_eur = 42;
+        v.end = v.start + 12345;
+        let delta = old_price - v.cost_eur;
+        legacy.airline.as_mut().unwrap().capital_eur += delta;
+        legacy
+            .history
+            .as_mut()
+            .unwrap()
+            .maintenance
+            .last_mut()
+            .unwrap()
+            .amount = 42;
+        let path = dir.path().join("legacy.json");
+        crate::save::save(&path, &legacy).unwrap();
+        let mut data: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        data["version"] = 28.into();
+        data["state"]
+            .as_object_mut()
+            .unwrap()
+            .remove("maintenance_bases");
+        for owner in data["state"]["competitors"].as_array_mut().unwrap() {
+            owner["game"]
+                .as_object_mut()
+                .unwrap()
+                .remove("maintenance_bases");
+        }
+        std::fs::write(&path, serde_json::to_vec(&data).unwrap()).unwrap();
+        let loaded = crate::save::load(&path).unwrap();
+        assert_eq!(state(&legacy), state(&loaded));
+        assert!(loaded.is_maintenance_base("EDDF"));
+        assert!(!loaded.is_maintenance_base("EDDM"));
+        for owner in &loaded.competitors {
+            assert!(owner.game.maintenance_bases.is_empty());
+            assert!(
+                owner
+                    .game
+                    .is_maintenance_base(&owner.game.airline.as_ref().unwrap().home_airport_icao)
+            );
+        }
+    }
+
+    #[test]
+    fn bases_v29_process_restart() {
+        if let Ok(mode) = std::env::var("AIR_BASE_RESTART_MODE") {
+            let root = std::path::PathBuf::from(std::env::var("AIR_BASE_RESTART_DIR").unwrap());
+            let path = root.join("v29.json");
+            if mode == "writer" {
+                let mut g = bases_idle();
+                g.buy_aircraft("atr72_600").unwrap();
+                g.staff_up();
+                g.create_route("EDDF", "EDDM", 1).unwrap();
+                g.schedule(1, 1, 120).unwrap();
+                assert!(g.advance(60.0 + flight() as f64));
+                g.request_maintenance(1).unwrap();
+                crate::save::save(&path, &g).unwrap();
+                assert!(g.advance((BASE_PERIOD * 2) as f64));
+                std::fs::write(root.join("expected.json"), serde_json::to_vec(&g).unwrap())
+                    .unwrap();
+            } else {
+                let mut g = crate::save::load(&path).unwrap();
+                assert!(g.advance((BASE_PERIOD * 2) as f64));
+                let expected: serde_json::Value =
+                    serde_json::from_slice(&std::fs::read(root.join("expected.json")).unwrap())
+                        .unwrap();
+                assert_eq!(state(&g), expected);
+                g.validate_history().unwrap();
+            }
+            return;
+        }
+        let dir = tempfile::tempdir().unwrap();
+        for mode in ["writer", "reader"] {
+            let result = std::process::Command::new(std::env::current_exe().unwrap())
+                .args([
+                    "--exact",
+                    "maintenance::tests::bases_v29_process_restart",
+                    "--nocapture",
+                ])
+                .env("AIR_BASE_RESTART_MODE", mode)
+                .env("AIR_BASE_RESTART_DIR", dir.path())
+                .output()
+                .unwrap();
+            assert!(
+                result.status.success(),
+                "{}",
+                String::from_utf8_lossy(&result.stdout)
+            );
+        }
+    }
+
+    #[test]
     fn landings_accumulate_exact_flight_time_and_cycles() {
         let mut g = game();
         assert!(g.advance(60.0 + 7200.0 * 10.0));
@@ -590,8 +1009,14 @@ mod tests {
         let before = g.airline.as_ref().unwrap().capital_eur;
         let quote = g.quote_maintenance(1).unwrap();
         let r = rules("atr72_600").unwrap();
-        assert_eq!(quote.cost_eur, cost(&g.fleet[0].wear, r, false).unwrap());
-        assert_eq!(quote.end - quote.start, r.duration_hours * 3600);
+        assert_eq!(
+            quote.cost_eur,
+            g.check_at("EDDM", &g.fleet[0].wear, r, false).unwrap().0
+        );
+        assert_eq!(
+            quote.end - quote.start,
+            g.check_at("EDDM", &g.fleet[0].wear, r, false).unwrap().1
+        );
         g.request_maintenance(1).unwrap();
         assert_eq!(g.fleet[0].status, AircraftStatus::Maintenance);
         assert!(g.routes[0].plan.is_none());

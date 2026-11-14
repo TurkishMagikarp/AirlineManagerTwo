@@ -69,6 +69,10 @@ var maintenance_details: Label
 var maintenance_button: Button
 var cancel_maintenance_button: Button
 var maintenance_status: Label
+var base_airports: OptionButton
+var base_details: Label
+var base_action: Button
+var base_rows: Array[Dictionary] = []
 var routes_panel: VBoxContainer
 var map_panel: VBoxContainer
 var finances_panel: VBoxContainer
@@ -538,9 +542,46 @@ func _build_maintenance(parent: VBoxContainer) -> void:
 	maintenance_status = _label("", 15)
 	maintenance_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	maintenance_box.add_child(maintenance_status)
+	maintenance_box.add_child(_label("WARTUNGSBASEN", 13, UI.ACCENT))
+	base_airports = OptionButton.new()
+	base_airports.item_selected.connect(func(_index: int) -> void: _refresh_base_action())
+	maintenance_box.add_child(base_airports)
+	base_details = _label("", 15)
+	base_details.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	maintenance_box.add_child(base_details)
+	base_action = Button.new()
+	base_action.pressed.connect(_change_maintenance_base)
+	maintenance_box.add_child(base_action)
+
+
+func _refresh_base_action() -> void:
+	if base_airports.selected < 0 or base_rows.is_empty():
+		base_action.disabled = true
+		return
+	var row: Dictionary = base_rows[base_airports.selected]
+	base_action.text = "Basis schließen (keine Erstattung)" if row["is_base"] else "Basis eröffnen · %s" % UI.money(row["setup_eur"])
+	base_action.disabled = not String(row["action_error"]).is_empty()
+	base_details.text = "Heimatbasis · dauerhaft, gebührenfrei" if row["is_home"] else "Einrichtung %s · alle 30 Spieltage %s%s" % [UI.money(row["setup_eur"]), UI.money(row["fee_eur"]), " · nächste Gebühr " + row["next_fee"] if row["is_base"] else ""]
+	if not String(row["action_error"]).is_empty():
+		base_details.text += "\n" + row["action_error"]
+
+
+func _change_maintenance_base() -> void:
+	var row: Dictionary = base_rows[base_airports.selected]
+	var error: String = simulation.set_maintenance_base(row["icao"], not row["is_base"])
+	maintenance_status.text = "Wartungsbasis geändert. Bitte speichern." if error.is_empty() else error
+	_refresh_fleet()
 
 
 func _refresh_maintenance() -> void:
+	var previous_base := base_airports.selected
+	base_rows.assign(simulation.get_maintenance_airports())
+	base_airports.clear()
+	for row in base_rows:
+		base_airports.add_item("%s · %s%s" % [row["icao"], row["name"], " · Heimatbasis" if row["is_home"] else (" · Wartungsbasis" if row["is_base"] else "")])
+	if not base_rows.is_empty():
+		base_airports.select(clampi(previous_base, 0, base_rows.size() - 1))
+	_refresh_base_action()
 	var item := fleet_tree.get_selected()
 	selected_aircraft = item.get_metadata(0) if item != null else 0
 	var previous_cabin_id: int = cabin_input.get_meta("aircraft_id", -1)
@@ -573,11 +614,12 @@ func _refresh_maintenance() -> void:
 		"Betriebszeit %.1f FH · %d Zyklen · %d abgeschlossene Checks" % [plane["flight_hours"], plane["cycles"], plane["checks"]],
 		"Seit letztem Check: %.1f / %d FH · %d / %d Zyklen (was zuerst erreicht wird)" % [plane["check_flight_hours"], plane["interval_flight_hours"], plane["check_cycles"], plane["interval_cycles"]],
 	]
+	lines.append("Hier / nächster Landeort: %s · %s" % [plane["maintenance_location"], plane["maintenance_location_kind"]])
 	match plane["maintenance_state"]:
 		"active":
 			lines.append("%s läuft: %s – %s · %s" % ["Ungeplante Wartung" if plane["maintenance_unscheduled"] else "Wartung", plane["maintenance_start"], plane["maintenance_end"], UI.money(plane["maintenance_cost_eur"])])
 		"pending":
-			lines.append("Wartung beauftragt: beginnt nach der Landung %s, Ende %s · %s" % [plane["maintenance_start"], plane["maintenance_end"], UI.money(plane["maintenance_cost_eur"])])
+			lines.append("Wartung beauftragt: beginnt nach der Landung %s, vorauss. Ende %s · %s (bei Beginn festgelegt)" % [plane["maintenance_start"], plane["maintenance_end"], UI.money(plane["maintenance_cost_eur"])])
 		_:
 			if not String(plane["due_time"]).is_empty():
 				lines.append("Pflichtgrenze mit aktuellem Flugplan: Landung %s" % plane["due_time"])
