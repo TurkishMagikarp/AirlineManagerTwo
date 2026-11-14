@@ -166,6 +166,7 @@ func _ready() -> void:
 	aircraft.add_child(aircraft_journal)
 	var company := UI.panel(self, "WIRTSCHAFTLICHE ENTWICKLUNG")
 	chart_select = OptionButton.new()
+	chart_select.fit_to_longest_item = false
 	for title in ["Kontostand · EUR", "Ticket- und Frachteinnahmen · EUR je Zeitabschnitt", "Kosten inkl. Zinsen, Gebühren, Leasing und Steuern · EUR je Zeitabschnitt", "Ergebnis · EUR je Zeitabschnitt", "Ertragsteuer · EUR je Zeitabschnitt"]:
 		chart_select.add_item(title)
 	chart_select.item_selected.connect(func(_i: int): _chart())
@@ -188,7 +189,8 @@ func _ready() -> void:
 	history.add_child(UI.label("Auslastung je Zeitabschnitt · Lücken = keine Landungen · nach Sitzplätzen gewichtet", ThemeTokens.SMALL, UI.MUTED))
 	flights_tree = UI.table(["Landung", "Richtung", "Ticket", "Pax / Sitze", "Auslastung", "Tickets", "Kosten", "Ergebnis", "Fracht kg / EUR"], [170, 140, 90, 95, 90, 110, 110, 110, 150], 250)
 	history.add_child(flights_tree)
-	var paging := HBoxContainer.new()
+	# The archive count grows with the save; wrap actions when its label no longer fits.
+	var paging := HFlowContainer.new()
 	history.add_child(paging)
 	previous_button = Button.new()
 	previous_button.text = "Neuere Flüge"

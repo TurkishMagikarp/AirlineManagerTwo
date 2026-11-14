@@ -19,6 +19,13 @@ const PAGES: Array[Dictionary] = [
 	{"title": "Personal", "heading": "Personalverwaltung", "body": "Piloten, Flugbegleiter und Techniker · Gehälter werden regelmäßig gezahlt"},
 ]
 
+var compact_navigation := -1
+var rail: PanelContainer
+var rail_brand: VBoxContainer
+var airline_name: Label
+var airline_base: Label
+var nav_badges: Array[Label] = []
+var cash_label: Label
 var attention_button: Button
 var attention_scroll: ScrollContainer
 var attention_rows: VBoxContainer
@@ -93,38 +100,51 @@ func _ready() -> void:
 	var margin := MarginContainer.new()
 	overview = margin
 	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	for side in ["left", "top", "right", "bottom"]:
-		margin.add_theme_constant_override("margin_" + side, 20)
 	add_child(margin)
-	var column := VBoxContainer.new()
-	column.add_theme_constant_override("separation", 14)
-	margin.add_child(column)
-	var brand := HBoxContainer.new()
-	column.add_child(brand)
-	var wordmark := _label("AM  /  AIRLINE MANAGER", ThemeTokens.PANEL_TITLE)
-	wordmark.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	brand.add_child(wordmark)
-	brand.add_child(_label("OPERATIONS CENTER", ThemeTokens.CODE, UI.ACCENT))
-	var nav := GridContainer.new()
-	nav.columns = 7
-	nav.add_theme_constant_override("h_separation", 8)
-	nav.add_theme_constant_override("v_separation", 8)
-	nav.resized.connect(func(): nav.columns = 7 if nav.size.x >= 1000 else 4)
-	column.add_child(nav)
+	var frame := HBoxContainer.new()
+	frame.add_theme_constant_override("separation", 0)
+	margin.add_child(frame)
+	rail = UI.frame_panel(frame, ThemeTokens.SPACE_3)
+	rail.custom_minimum_size.x = 208
+	var nav := VBoxContainer.new()
+	nav.add_theme_constant_override("separation", ThemeTokens.SPACE_1)
+	rail.add_child(nav)
+	rail_brand = VBoxContainer.new()
+	rail_brand.custom_minimum_size.y = 80
+	nav.add_child(rail_brand)
+	airline_name = UI.label("", UI.EMPTY_TITLE)
+	airline_name.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	rail_brand.add_child(airline_name)
+	airline_base = UI.label("", ThemeTokens.CODE, ThemeTokens.INK_MUTED)
+	rail_brand.add_child(airline_base)
 	for index in range(PAGES.size()):
 		var button := Button.new()
 		button.text = PAGES[index]["title"]
+		button.tooltip_text = button.text
+		button.theme_type_variation = "NavButton"
 		button.icon = load("res://resources/icons/%s.svg" % ["overview", "fleet", "routes", "map", "finance", "staff"][index])
-		button.custom_minimum_size = Vector2(85, 42)
-		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		button.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		button.custom_minimum_size.y = 40
 		button.toggle_mode = true
 		button.pressed.connect(_show_page.bind(index))
 		nav.add_child(button)
 		navigation.append(button)
+		nav_badges.append(UI.nav_badge(button))
+	var spacer := Control.new()
+	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	nav.add_child(spacer)
 	new_game_button = Button.new()
 	new_game_button.text = "Neues Spiel"
+	new_game_button.tooltip_text = new_game_button.text
 	new_game_button.pressed.connect(_open_founding)
 	nav.add_child(new_game_button)
+	var column := VBoxContainer.new()
+	column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	column.add_theme_constant_override("separation", 0)
+	frame.add_child(column)
+	_add_time_controls(column)
+	resized.connect(_resize_frame)
+	_resize_frame()
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -132,15 +152,16 @@ func _ready() -> void:
 	column.add_child(scroll)
 	var content := VBoxContainer.new()
 	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	content.add_theme_constant_override("separation", 12)
+	content.add_theme_constant_override("separation", ThemeTokens.SPACE_4)
 	scroll.add_child(content)
+	UI.content_margin(content, ThemeTokens.SPACE_5)
+	_build_attention(content)
 	page_title = _label("", ThemeTokens.LABEL, ThemeTokens.ACCENT_TEXT)
 	heading = _label("", ThemeTokens.SCREEN_TITLE)
 	description = _label("", ThemeTokens.BODY)
 	for label in [page_title, heading, description]:
 		label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		content.add_child(label)
-	_build_attention(content)
 	_build_finance(content)
 	_build_fleet(content)
 	routes_panel = RoutesPanel.new()
@@ -157,49 +178,52 @@ func _ready() -> void:
 	staff_panel.simulation = simulation
 	staff_panel.changed.connect(func(): save_status.text = "Personal geändert · bitte Spielstand speichern.")
 	content.add_child(staff_panel)
-	_add_time_controls(column)
 	_build_founding()
 	_sync_view()
 
 
 func _add_time_controls(column: VBoxContainer) -> void:
-	var panel := UI.panel(column, "")
-	var layout := GridContainer.new()
-	layout.add_theme_constant_override("h_separation", 24)
-	panel.add_child(layout)
-	layout.resized.connect(func(): layout.columns = 2 if layout.size.x >= 980 else 1)
-	var clock_row := HBoxContainer.new()
-	clock_row.add_theme_constant_override("separation", 24)
-	layout.add_child(clock_row)
-	time_label = _label("", ThemeTokens.FIGURE, UI.ACCENT)
-	clock_row.add_child(time_label)
-	state_label = _label("", ThemeTokens.BODY)
-	state_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	clock_row.add_child(state_label)
-	var controls := HBoxContainer.new()
-	controls.add_theme_constant_override("separation", 8)
-	layout.add_child(controls)
+	var shell := UI.frame_panel(column, ThemeTokens.SPACE_3)
+	var panel := VBoxContainer.new()
+	shell.add_child(panel)
+	var readouts := HFlowContainer.new()
+	readouts.add_theme_constant_override("h_separation", ThemeTokens.SPACE_4)
+	panel.add_child(readouts)
+	time_label = UI.flap_readout()
+	readouts.add_child(time_label)
+	state_label = _label("", ThemeTokens.SMALL)
+	readouts.add_child(state_label)
+	cash_label = UI.label("", UI.CASH_STYLE)
+	readouts.add_child(cash_label)
+	var controls := HFlowContainer.new()
+	controls.add_theme_constant_override("h_separation", ThemeTokens.SPACE_2)
+	panel.add_child(controls)
 	start_button = Button.new()
 	start_button.text = "Start"
-	start_button.theme_type_variation = "PrimaryButton"
 	start_button.pressed.connect(func():
 		simulation.start()
-		_refresh_time()
-	)
+		_refresh_time())
 	controls.add_child(start_button)
+	var segments := UI.segment_tray(controls)
+	var group := ButtonGroup.new()
 	pause_button = Button.new()
 	pause_button.text = "Pause"
+	pause_button.toggle_mode = true
+	pause_button.button_group = group
+	pause_button.theme_type_variation = "SegmentButton"
 	pause_button.pressed.connect(func():
 		simulation.pause()
-		_refresh_time()
-	)
-	controls.add_child(pause_button)
+		last_clock_view = ""
+		_refresh_time())
+	segments.add_child(pause_button)
 	for speed in [1, 4, 16]:
 		var button := Button.new()
 		button.text = "%d×" % speed
 		button.toggle_mode = true
+		button.button_group = group
+		button.theme_type_variation = "SegmentButton"
 		button.pressed.connect(_set_speed.bind(speed))
-		controls.add_child(button)
+		segments.add_child(button)
 		speed_buttons.append(button)
 	save_button = Button.new()
 	save_button.text = "Speichern"
@@ -270,6 +294,9 @@ func _process(delta: float) -> void:
 
 
 func _refresh_time() -> void:
+	var airline: Dictionary = simulation.get_airline_info()
+	cash_label.text = UI.money(airline.get("capital_eur", 0))
+	cash_label.add_theme_color_override("font_color", ThemeTokens.STOP if airline.get("capital_eur", 0) < 0 else ThemeTokens.INK)
 	var display: String = simulation.get_display_time()
 	var view := "%s/%s/%d" % [display, simulation.is_running(), simulation.get_speed()]
 	if view == last_clock_view: return
@@ -279,8 +306,9 @@ func _refresh_time() -> void:
 	state_label.add_theme_color_override("font_color", UI.POSITIVE if simulation.is_running() else UI.MUTED)
 	start_button.disabled = simulation.is_running()
 	pause_button.disabled = not simulation.is_running()
+	pause_button.set_pressed_no_signal(not simulation.is_running())
 	for button in speed_buttons:
-		button.set_pressed_no_signal(button.text == "%d×" % simulation.get_speed())
+		button.set_pressed_no_signal(simulation.is_running() and button.text == "%d×" % simulation.get_speed())
 
 
 func _show_page(index: int) -> void:
@@ -761,6 +789,9 @@ func _sync_view() -> void:
 	overview.visible = simulation.has_airline()
 	founding.visible = not simulation.has_airline()
 	cancel_founding_button.visible = simulation.has_airline()
+	var airline: Dictionary = simulation.get_airline_info()
+	airline_name.text = airline.get("name", "—")
+	airline_base.text = "— · Basis %s" % airline.get("airport_icao", "—")
 	_refresh_time()
 	_show_page(0)
 	_refresh_attention()
@@ -811,18 +842,24 @@ func _build_finance(content: VBoxContainer) -> void:
 
 
 func _build_attention(parent: VBoxContainer) -> void:
+	var shell := UI.frame_panel(parent, 0)
+	var body := VBoxContainer.new()
+	body.add_theme_constant_override("separation", 0)
+	shell.add_child(body)
 	attention_button = Button.new()
 	attention_button.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	attention_button.pressed.connect(func():
 		attention_expanded = not attention_expanded
 		attention_scroll.visible = attention_expanded)
-	parent.add_child(attention_button)
+	attention_button.theme_type_variation = "AttentionHeader"
+	body.add_child(attention_button)
 	attention_scroll = ScrollContainer.new()
-	attention_scroll.custom_minimum_size.y = 130
+	attention_scroll.custom_minimum_size.y = 176
 	attention_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	attention_scroll.follow_focus = true
-	parent.add_child(attention_scroll)
+	body.add_child(attention_scroll)
 	attention_rows = VBoxContainer.new()
+	attention_rows.add_theme_constant_override("separation", 0)
 	attention_rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	attention_scroll.add_child(attention_rows)
 
@@ -839,14 +876,32 @@ func _refresh_attention() -> void:
 	for child in attention_rows.get_children():
 		attention_rows.remove_child(child)
 		child.queue_free()
+	var counts := {}
 	for entry in entries:
-		var button := Button.new()
-		button.text = entry["text"]
-		button.tooltip_text = entry["text"]
-		button.alignment = HORIZONTAL_ALIGNMENT_LEFT
-		button.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		var page: int = {"fleet": 1, "routes": 2, "finances": 4, "staff": 5}.get(entry["page"], 0)
+		counts[page] = counts.get(page, 0) + 1
+		var button := UI.attention_row(entry, PAGES[page]["title"])
 		button.pressed.connect(_open_attention.bind(entry))
 		attention_rows.add_child(button)
+	attention_scroll.custom_minimum_size.y = mini(entries.size(), 4) * 44
+	for index in range(navigation.size()):
+		nav_badges[index].text = str(counts.get(index, 0))
+		nav_badges[index].visible = counts.get(index, 0) > 0
+
+
+func _resize_frame() -> void:
+	var compact := size.x < 900
+	# Re-theme only when crossing the breakpoint, not on each layout pass.
+	if compact_navigation == int(compact): return
+	compact_navigation = int(compact)
+	rail.custom_minimum_size.x = 56 if compact else 208
+	UI.rail_padding(rail, ThemeTokens.SPACE_1 if compact else ThemeTokens.SPACE_3)
+	rail_brand.visible = not compact
+	for index in range(navigation.size()):
+		UI.nav_geometry(navigation[index], compact)
+		navigation[index].text = "" if compact else PAGES[index]["title"]
+		navigation[index].alignment = HORIZONTAL_ALIGNMENT_CENTER if compact else HORIZONTAL_ALIGNMENT_LEFT
+	new_game_button.text = "+" if compact else "Neues Spiel"
 
 
 func _open_attention(entry: Dictionary) -> void:

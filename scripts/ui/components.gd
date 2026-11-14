@@ -386,3 +386,138 @@ static func table(titles: Array, widths: Array, height: int = 200) -> Tree:
 	for i in range(widths.size()): minimums[i] = widths[i]
 	result.set_meta("column_minimums", minimums)
 	return result
+
+const CASH_STYLE = {"family": "mono", "size": 18, "height": 20, "weight": 500, "tracking": 0.0}
+const FLAP_STYLE = {"family": "mono", "size": 18, "height": 32, "weight": 500, "tracking": 0.0}
+
+class FlapReadout extends Label:
+	var previous := ""
+	var cells := HBoxContainer.new()
+	func _init() -> void:
+		add_theme_color_override("font_color", ThemeTokens.TRANSPARENT)
+		cells.add_theme_constant_override("separation", 2)
+		cells.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		add_child(cells)
+	func _process(_delta: float) -> void:
+		if previous == text: return
+		previous = text
+		for child in cells.get_children():
+			cells.remove_child(child)
+			child.queue_free()
+		for character in text:
+			var cell := PanelContainer.new()
+			cell.add_theme_stylebox_override("panel", ThemeTokens.box(ThemeTokens.FLAP, ThemeTokens.TRANSPARENT, ThemeTokens.RADIUS_SM, 0, 0))
+			cell.custom_minimum_size = Vector2(22, 32)
+			cells.add_child(cell)
+			var glyph := Label.new()
+			glyph.text = character
+			glyph.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			glyph.add_theme_font_override("font", ThemeTokens.font_for(FLAP_STYLE))
+			glyph.add_theme_font_size_override("font_size", FLAP_STYLE["size"])
+			glyph.add_theme_color_override("font_color", ThemeTokens.FLAP_INK)
+			cell.add_child(glyph)
+			var seam := Control.new()
+			seam.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			glyph.add_child(seam)
+			seam.draw.connect(func(): seam.draw_line(Vector2(0, 16), Vector2(22, 16), ThemeTokens.FLAP_SEAM))
+		custom_minimum_size = Vector2(text.length() * 24 - 2, 32)
+
+static func flap_readout() -> Label:
+	return FlapReadout.new()
+
+static func frame_panel(parent: Node, padding: int) -> PanelContainer:
+	var shell := PanelContainer.new()
+	shell.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	shell.add_theme_stylebox_override("panel", ThemeTokens.box(ThemeTokens.SURFACE, ThemeTokens.LINE, 0, padding, padding))
+	parent.add_child(shell)
+	return shell
+
+static func rail_padding(rail: PanelContainer, padding: int) -> void:
+	rail.size_flags_horizontal = Control.SIZE_FILL
+	rail.add_theme_stylebox_override("panel", ThemeTokens.box(ThemeTokens.SURFACE, ThemeTokens.LINE, 0, padding, ThemeTokens.SPACE_3))
+
+static func content_margin(content: Control, padding: int) -> void:
+	# Preserve the content/scroll ancestry used by all existing UI tests.
+	content.add_theme_constant_override("separation", ThemeTokens.SPACE_4)
+	var scroll := content.get_parent() as ScrollContainer
+	scroll.add_theme_stylebox_override("panel", ThemeTokens.box(ThemeTokens.GROUND, ThemeTokens.TRANSPARENT, 0, padding, padding))
+
+static func nav_badge(button: Button) -> Label:
+	var badge := label("", ThemeTokens.CODE, ThemeTokens.ON_STOP)
+	badge.add_theme_stylebox_override("normal", ThemeTokens.box(ThemeTokens.STOP, ThemeTokens.TRANSPARENT, ThemeTokens.RADIUS_SM, 6, 0))
+	badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	button.add_child(badge)
+	badge.set_anchors_and_offsets_preset(Control.PRESET_CENTER_RIGHT)
+	badge.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	badge.position.x -= 8
+	badge.hide()
+	return badge
+
+static func segment_tray(parent: Node) -> HBoxContainer:
+	var shell := PanelContainer.new()
+	shell.add_theme_stylebox_override("panel", ThemeTokens.box(ThemeTokens.SURFACE_SUNKEN, ThemeTokens.LINE, ThemeTokens.RADIUS_MD, 3, 3))
+	parent.add_child(shell)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 2)
+	shell.add_child(row)
+	return row
+
+static func attention_row(entry: Dictionary, destination: String) -> Button:
+	var button := Button.new()
+	button.text = entry["text"]
+	button.tooltip_text = entry["text"] + " · " + destination + " öffnen →"
+	button.theme_type_variation = "AttentionRow"
+	button.add_theme_color_override("font_color", ThemeTokens.TRANSPARENT)
+	for state in ["hover", "pressed", "hover_pressed", "focus"]:
+		button.add_theme_color_override("font_" + state + "_color", ThemeTokens.TRANSPARENT)
+	button.clip_text = true
+	button.custom_minimum_size.y = 44
+	var row := HBoxContainer.new()
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	button.add_child(row)
+	row.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	row.offset_left = ThemeTokens.SPACE_4
+	row.offset_right = -ThemeTokens.SPACE_4
+	var kind: String = entry["kind"]
+	var state: Array = {
+		"negative_cash": ["Guthaben", "stop"], "crew": ["Personal", "stop"],
+		"technicians": ["Wartung", "caution"], "salary_reserve": ["Personalreserve", "caution"],
+		"idle": ["Geparkt", "neutral"], "training": ["Umschulung", "info"],
+		"delay": ["Verspätung", "caution"], "slots": ["Slots", "caution"],
+		"reputation": ["Pünktlichkeitsruf", "caution"]}.get(kind, ["Hinweis", "caution"])
+	var chip := status_chip(state[0], state[1])
+	chip.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(chip)
+	var sentence := RichTextLabel.new()
+	sentence.bbcode_enabled = true
+	sentence.scroll_active = false
+	sentence.autowrap_mode = TextServer.AUTOWRAP_OFF
+	sentence.fit_content = false
+	sentence.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	sentence.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	sentence.custom_minimum_size.y = ThemeTokens.BODY["height"]
+	sentence.add_theme_font_override("normal_font", ThemeTokens.font_for(ThemeTokens.BODY))
+	sentence.add_theme_font_override("bold_font", ThemeTokens.font_for(ThemeTokens.BODY_STRONG))
+	sentence.add_theme_font_size_override("normal_font_size", ThemeTokens.BODY["size"])
+	var phrase: String = entry["text"].replace("[", "[lb]")
+	var split := phrase.find(":")
+	if split < 0: split = phrase.find(".")
+	if split < 0: split = phrase.length() - 1
+	sentence.text = "[b]%s[/b]%s" % [phrase.left(split + 1), phrase.substr(split + 1)]
+	row.add_child(sentence)
+	var target := label(destination + " öffnen →", ThemeTokens.SMALL, MUTED)
+	row.add_child(target)
+	button.resized.connect(func(): target.visible = button.size.x >= 850)
+	for child in row.get_children(): child.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return button
+
+static func nav_geometry(button: Button, compact: bool) -> void:
+	var badge := button.get_child(0) as Label
+	badge.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT if compact else Control.PRESET_CENTER_RIGHT)
+	badge.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	badge.position.x -= 2 if compact else 8
+	if compact: badge.position.y -= 2
+	for state in ["normal", "hover", "pressed", "hover_pressed", "disabled"]:
+		var style := button.get_theme_stylebox(state, "NavButton").duplicate() as StyleBoxFlat
+		style.content_margin_right = ThemeTokens.SPACE_2 if compact else 34
+		button.add_theme_stylebox_override(state, style)
