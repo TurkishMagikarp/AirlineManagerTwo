@@ -236,7 +236,9 @@ func _wheel(tree: Tree, direction: MouseButton) -> void:
 func _choose_rating(choice: OptionButton, index: int) -> void:
 	await _click(choice)
 	var popup := choice.get_popup()
-	await _mouse(Vector2(popup.position) + Vector2(popup.size.x / 2.0, popup.size.y * (index + 0.5) / choice.item_count))
+	# The kit shadow moves the actual menu panel inside the popup window.
+	var menu_rect: Rect2 = popup.get_child(0, true).get_global_rect()
+	await _mouse(Vector2(popup.position) + menu_rect.position + Vector2(menu_rect.size.x / 2.0, menu_rect.size.y * (index + 0.5) / choice.item_count))
 	_check(choice.selected == index, "Mouse selects pilot type expected=%d actual=%d popup=%s size=%s choice=%s" % [index, choice.selected, popup.position, popup.size, choice.get_global_rect()])
 
 func _rating_index(rating: String) -> int:

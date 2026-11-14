@@ -1121,147 +1121,217 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 
 ## scripts/finance_chart.gd
 1 extends Control
-3 const UI = preload("res://scripts/ui/components.gd")
-8 func _ready() -> void:
-14 func set_series(rows: Array, key: String, is_percent: bool = false) -> void:
-20 func _gui_input(event: InputEvent) -> void:
-26 func _draw() -> void:
+2 const ThemeTokens = preload("res://scripts/ui/operations_theme.gd")
+4 const UI = preload("res://scripts/ui/components.gd")
+9 func _ready() -> void:
+15 func set_series(rows: Array, key: String, is_percent: bool = false) -> void:
+21 func _gui_input(event: InputEvent) -> void:
+27 func _draw() -> void:
 
 ## scripts/finances_panel.gd
 1 extends VBoxContainer
-3 const UI = preload("res://scripts/ui/components.gd")
-4 const Chart = preload("res://scripts/finance_chart.gd")
-47 func _ready() -> void:
-200 func _process(delta: float) -> void:
-208 func refresh(force: bool = false) -> void:
-309 func _chart() -> void:
-312 func _loan_action(borrowing: bool) -> void:
-317 func _select_route() -> void:
-331 func _reset_flights() -> void:
-336 func _flights() -> void:
+2 const ThemeTokens = preload("res://scripts/ui/operations_theme.gd")
+4 const UI = preload("res://scripts/ui/components.gd")
+5 const Chart = preload("res://scripts/finance_chart.gd")
+48 func _ready() -> void:
+205 func _process(delta: float) -> void:
+213 func refresh(force: bool = false) -> void:
+314 func _chart() -> void:
+317 func _loan_action(borrowing: bool) -> void:
+322 func _select_route() -> void:
+336 func _reset_flights() -> void:
+341 func _flights() -> void:
 
 ## scripts/main.gd
 1 extends Control
-4 const RoutesPanel = preload("res://scripts/routes_panel.gd")
-5 const MapPanel = preload("res://scripts/map_panel.gd")
-6 const FinancesPanel = preload("res://scripts/finances_panel.gd")
-7 const StaffPanel = preload("res://scripts/staff_panel.gd")
-8 const UI = preload("res://scripts/ui/components.gd")
-10 const PAGES: Array[Dictionary] = [
-89 func _ready() -> void:
-163 func _add_time_controls(column: VBoxContainer) -> void:
-217 func _save_game() -> void:
-223 func _load_game() -> void:
-236 func _set_speed(speed: int) -> void:
-243 func _process(delta: float) -> void:
-269 func _refresh_time() -> void:
-283 func _show_page(index: int) -> void:
-315 func _refresh_finance() -> void:
-335 func _build_fleet(content: VBoxContainer) -> void:
-417 func _model_selected(index: int) -> void:
-428 func _lease_aircraft() -> void:
-438 func _dispose_aircraft() -> void:
-448 func _buy_aircraft() -> void:
-464 func _refresh_fleet() -> void:
-508 func _maintenance_summary(plane: Dictionary) -> String:
-521 func _build_maintenance(parent: VBoxContainer) -> void:
-557 func _refresh_base_action() -> void:
-569 func _change_maintenance_base() -> void:
-576 func _refresh_maintenance() -> void:
-635 func _request_maintenance() -> void:
-646 func _cancel_maintenance() -> void:
-657 func _build_founding() -> void:
-724 func _country_changed(index: int) -> void:
-738 func _found_airline() -> void:
-750 func _sync_view() -> void:
-767 func _open_founding() -> void:
-776 func _label(text: String, size: int, color: Color = Color("f0f4fa")) -> Label:
-784 func _build_finance(content: VBoxContainer) -> void:
-811 func _build_attention(parent: VBoxContainer) -> void:
-828 func _refresh_attention() -> void:
-850 func _open_attention(entry: Dictionary) -> void:
+2 const ThemeTokens = preload("res://scripts/ui/operations_theme.gd")
+5 const RoutesPanel = preload("res://scripts/routes_panel.gd")
+6 const MapPanel = preload("res://scripts/map_panel.gd")
+7 const FinancesPanel = preload("res://scripts/finances_panel.gd")
+8 const StaffPanel = preload("res://scripts/staff_panel.gd")
+9 const UI = preload("res://scripts/ui/components.gd")
+11 const PAGES: Array[Dictionary] = [
+90 func _ready() -> void:
+165 func _add_time_controls(column: VBoxContainer) -> void:
+220 func _save_game() -> void:
+226 func _load_game() -> void:
+239 func _set_speed(speed: int) -> void:
+246 func _process(delta: float) -> void:
+272 func _refresh_time() -> void:
+286 func _show_page(index: int) -> void:
+318 func _refresh_finance() -> void:
+338 func _build_fleet(content: VBoxContainer) -> void:
+422 func _model_selected(index: int) -> void:
+433 func _lease_aircraft() -> void:
+443 func _dispose_aircraft() -> void:
+453 func _buy_aircraft() -> void:
+469 func _refresh_fleet() -> void:
+513 func _maintenance_summary(plane: Dictionary) -> String:
+526 func _build_maintenance(parent: VBoxContainer) -> void:
+562 func _refresh_base_action() -> void:
+574 func _change_maintenance_base() -> void:
+581 func _refresh_maintenance() -> void:
+640 func _request_maintenance() -> void:
+651 func _cancel_maintenance() -> void:
+662 func _build_founding() -> void:
+736 func _country_changed(index: int) -> void:
+750 func _found_airline() -> void:
+762 func _sync_view() -> void:
+779 func _open_founding() -> void:
+788 func _label(text: String, style: Dictionary, color: Color = ThemeTokens.INK) -> Label:
+792 func _build_finance(content: VBoxContainer) -> void:
+819 func _build_attention(parent: VBoxContainer) -> void:
+836 func _refresh_attention() -> void:
+858 func _open_attention(entry: Dictionary) -> void:
 
 ## scripts/map_background.gd
 1 extends Control
-6 func _ready() -> void:
-27 func _draw() -> void:
+2 const ThemeTokens = preload("res://scripts/ui/operations_theme.gd")
+7 func _ready() -> void:
+28 func _draw() -> void:
 
 ## scripts/map_canvas.gd
 1 extends Control
-3 signal selected(aircraft_id: int)
-14 func _ready() -> void:
-23 func _camera_changed() -> void:
-27 func scale_factor() -> float:
-30 func project(point: Vector2) -> Vector2:
-33 func reset_view() -> void:
-38 func zoom_at(cursor: Vector2, factor: float) -> void:
-45 func _constrain() -> void:
-52 func unwrap_path(points: PackedVector2Array) -> PackedVector2Array:
-59 func _draw() -> void:
-89 func hit_test(point: Vector2) -> int:
-107 func _gui_input(event: InputEvent) -> void:
+2 const ThemeTokens = preload("res://scripts/ui/operations_theme.gd")
+4 signal selected(aircraft_id: int)
+15 func _ready() -> void:
+24 func _camera_changed() -> void:
+28 func scale_factor() -> float:
+31 func project(point: Vector2) -> Vector2:
+34 func reset_view() -> void:
+39 func zoom_at(cursor: Vector2, factor: float) -> void:
+46 func _constrain() -> void:
+53 func unwrap_path(points: PackedVector2Array) -> PackedVector2Array:
+60 func _draw() -> void:
+90 func hit_test(point: Vector2) -> int:
+108 func _gui_input(event: InputEvent) -> void:
 
 ## scripts/map_panel.gd
 1 extends VBoxContainer
-4 const MapCanvas = preload("res://scripts/map_canvas.gd")
-5 const UI = preload("res://scripts/ui/components.gd")
-14 func _ready() -> void:
-41 func refresh() -> void:
-48 func refresh_flights() -> void:
+2 const ThemeTokens = preload("res://scripts/ui/operations_theme.gd")
+5 const MapCanvas = preload("res://scripts/map_canvas.gd")
+6 const UI = preload("res://scripts/ui/components.gd")
+15 func _ready() -> void:
+42 func refresh() -> void:
+49 func refresh_flights() -> void:
 
 ## scripts/routes_panel.gd
 1 extends VBoxContainer
 4 signal changed
 5 const UI = preload("res://scripts/ui/components.gd")
 39 func _ready() -> void:
-195 func _arrange_workspace() -> void:
-237 func _label(text: String) -> Label:
-244 func _select(title: String) -> OptionButton:
-254 func _selected_id(select: OptionButton) -> int:
-258 func _route() -> Dictionary:
-263 func refresh() -> void:
-301 func refresh_operations() -> void:
-358 func _preview() -> void:
-369 func _selection_changed() -> void:
-402 func _update_service_cost(route: Dictionary) -> void:
-408 func _update_schedule_controls(route: Dictionary) -> void:
-423 func _refresh_competition() -> void:
-444 func _assignment_preview() -> void:
-460 func _feedback(error: String, success: String) -> void:
-470 func _create() -> void:
-474 func _assign() -> void:
-484 func _delete() -> void:
-490 func focus_route(id: int) -> void:
+205 func _arrange_workspace() -> void:
+247 func _label(text: String) -> Label:
+254 func _select(title: String) -> OptionButton:
+264 func _selected_id(select: OptionButton) -> int:
+268 func _route() -> Dictionary:
+273 func refresh() -> void:
+311 func refresh_operations() -> void:
+368 func _preview() -> void:
+379 func _selection_changed() -> void:
+412 func _update_service_cost(route: Dictionary) -> void:
+418 func _update_schedule_controls(route: Dictionary) -> void:
+433 func _refresh_competition() -> void:
+454 func _assignment_preview() -> void:
+470 func _feedback(error: String, success: String) -> void:
+480 func _create() -> void:
+484 func _assign() -> void:
+494 func _delete() -> void:
+500 func focus_route(id: int) -> void:
 
 ## scripts/staff_panel.gd
 1 extends VBoxContainer
-4 const UI = preload("res://scripts/ui/components.gd")
-5 signal changed
-28 func _ready() -> void:
-109 func _process(delta: float) -> void:
-117 func refresh(force: bool = false) -> void:
-151 func _roles(overview: Dictionary) -> void:
-166 func _aircraft(overview: Dictionary) -> void:
-195 func _staff(staff: Array) -> void:
-218 func _shortage(overview: Dictionary) -> void:
-236 func _selection_changed() -> void:
-249 func _report(error: String, success: String) -> void:
-257 func _hire() -> void:
-264 func _hire_missing() -> void:
-267 func _dismiss() -> void:
-272 func _train() -> void:
-276 func focus_employee(id: int) -> void:
+2 const ThemeTokens = preload("res://scripts/ui/operations_theme.gd")
+5 const UI = preload("res://scripts/ui/components.gd")
+6 signal changed
+29 func _ready() -> void:
+112 func _process(delta: float) -> void:
+120 func refresh(force: bool = false) -> void:
+154 func _roles(overview: Dictionary) -> void:
+169 func _aircraft(overview: Dictionary) -> void:
+198 func _staff(staff: Array) -> void:
+221 func _shortage(overview: Dictionary) -> void:
+239 func _selection_changed() -> void:
+252 func _report(error: String, success: String) -> void:
+260 func _hire() -> void:
+267 func _hire_missing() -> void:
+270 func _dismiss() -> void:
+275 func _train() -> void:
+279 func focus_employee(id: int) -> void:
 
 ## scripts/ui/components.gd
 1 extends RefCounted
-4 const MUTED = Color("91a3b9")
-5 const ACCENT = Color("83cbd2")
-6 const POSITIVE = Color("8fd5b5")
-7 const NEGATIVE = Color("f1a6ad")
+4 const ThemeTokens = preload("res://scripts/ui/operations_theme.gd")
+5 const MUTED = ThemeTokens.INK_MUTED
+6 const ACCENT = ThemeTokens.ACCENT_TEXT
+7 const POSITIVE = ThemeTokens.GO
+8 const NEGATIVE = ThemeTokens.STOP
 
 ## scripts/ui/operations_theme.gd
 1 extends Theme
-4 func _init() -> void:
+4 const GROUND = Color("11100e")
+5 const SURFACE = Color("1a1816")
+6 const SURFACE_RAISED = Color("24211e")
+7 const SURFACE_SUNKEN = Color("0a0908")
+8 const LINE = Color("35312c")
+9 const LINE_STRONG = Color("7a7368")
+10 const INK = Color("f3eee4")
+11 const INK_MUTED = Color("ada596")
+12 const INK_FAINT = Color("7c766b")
+13 const ACCENT = Color("f4b740")
+14 const ACCENT_HOVER = Color("ffc95c")
+15 const ON_ACCENT = Color("1b1405")
+16 const ACCENT_TEXT = Color("f4b740")
+17 const ACCENT_WASH = Color("2f2612")
+18 const CAUTION = Color("f4b740")
+19 const CAUTION_WASH = Color("2f2612")
+20 const GO = Color("4fd0b8")
+21 const GO_WASH = Color("12302b")
+22 const STOP = Color("ff8a78")
+23 const ON_STOP = Color("2a0a06")
+24 const STOP_WASH = Color("3b1b16")
+25 const SKY = Color("86b8ff")
+26 const SKY_WASH = Color("162741")
+27 const FOCUS = Color("fff4d6")
+28 const FLAP = Color("0a0908")
+29 const FLAP_INK = Color("f4b740")
+30 const FLAP_SEAM = Color("35312c")
+31 const MAP_WATER = Color("0c1519")
+32 const MAP_LAND = Color("26231f")
+33 const SCRIM = Color(0, 0, 0, 0.62)
+34 const SPACE_1 = 4
+35 const SPACE_2 = 8
+36 const SPACE_3 = 12
+37 const SPACE_4 = 16
+38 const SPACE_5 = 24
+39 const SPACE_6 = 32
+40 const SPACE_7 = 48
+41 const RADIUS_SM = 2
+42 const RADIUS_MD = 4
+43 const RADIUS_LG = 8
+44 const SHADOW_POP = {"offset": 12, "size": 32, "color": Color(0, 0, 0, 0.55)}
+45 const TRANSPARENT = Color.TRANSPARENT
+47 const CONTROL_HEIGHT = 36
+48 const TAB_HEIGHT = 40
+49 const TABLE_ROW_HEIGHT = 40
+51 const SCREEN_TITLE = {"family": "display", "size": 32, "height": 36, "weight": 600, "tracking": -0.01}
+52 const PANEL_TITLE = {"family": "display", "size": 15, "height": 20, "weight": 600, "tracking": 0.08}
+53 const COLUMN_HEAD = {"family": "display", "size": 12, "height": 16, "weight": 600, "tracking": 0.08}
+54 const LABEL = {"family": "display", "size": 12, "height": 16, "weight": 600, "tracking": 0.08}
+55 const BODY = {"family": "sans", "size": 16, "height": 22, "weight": 400, "tracking": 0.0}
+56 const BODY_STRONG = {"family": "sans", "size": 16, "height": 22, "weight": 600, "tracking": 0.0}
+57 const SMALL = {"family": "sans", "size": 14, "height": 18, "weight": 400, "tracking": 0.0}
+58 const FIGURE = {"family": "mono", "size": 24, "height": 28, "weight": 500, "tracking": 0.0}
+59 const DATA = {"family": "mono", "size": 14, "height": 20, "weight": 400, "tracking": 0.0}
+60 const CODE = {"family": "mono", "size": 12, "height": 16, "weight": 500, "tracking": 0.06}
+62 const DISPLAY_FONT = preload("res://resources/fonts/outfit/Outfit[wght].ttf")
+63 const SANS_FONT = preload("res://resources/fonts/nunito/Nunito[wght].ttf")
+64 const MONO_FONT = preload("res://resources/fonts/dmmono/DMMono-Regular.ttf")
+65 const MONO_MEDIUM_FONT = preload("res://resources/fonts/dmmono/DMMono-Medium.ttf")
+105 func text_style(type: String, style: Dictionary, font_name: String = "font", size_name: String = "font_siz
+109 func floating_box(radius: int, padding: int) -> StyleBoxFlat:
+116 func button_styles(
+144 func _init() -> void:
 
 ## README.md headings (line text)
 1 # Airline Manager — Neustart

@@ -1,4 +1,5 @@
 extends Control
+const ThemeTokens = preload("res://scripts/ui/operations_theme.gd")
 ## Presentation only. No simulation state or economic calculations.
 
 const RoutesPanel = preload("res://scripts/routes_panel.gd")
@@ -87,6 +88,7 @@ var last_clock_view := ""
 
 
 func _ready() -> void:
+	RenderingServer.set_default_clear_color(ThemeTokens.GROUND)
 	get_window().min_size = Vector2i(680, 520)
 	var margin := MarginContainer.new()
 	overview = margin
@@ -99,10 +101,10 @@ func _ready() -> void:
 	margin.add_child(column)
 	var brand := HBoxContainer.new()
 	column.add_child(brand)
-	var wordmark := _label("AM  /  AIRLINE MANAGER", 21)
+	var wordmark := _label("AM  /  AIRLINE MANAGER", ThemeTokens.PANEL_TITLE)
 	wordmark.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	brand.add_child(wordmark)
-	brand.add_child(_label("OPERATIONS CENTER", 12, UI.ACCENT))
+	brand.add_child(_label("OPERATIONS CENTER", ThemeTokens.CODE, UI.ACCENT))
 	var nav := GridContainer.new()
 	nav.columns = 7
 	nav.add_theme_constant_override("h_separation", 8)
@@ -132,9 +134,9 @@ func _ready() -> void:
 	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	content.add_theme_constant_override("separation", 12)
 	scroll.add_child(content)
-	page_title = _label("", 16, Color("90d6dc"))
-	heading = _label("", 30)
-	description = _label("", 18)
+	page_title = _label("", ThemeTokens.LABEL, ThemeTokens.ACCENT_TEXT)
+	heading = _label("", ThemeTokens.SCREEN_TITLE)
+	description = _label("", ThemeTokens.BODY)
 	for label in [page_title, heading, description]:
 		label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		content.add_child(label)
@@ -169,9 +171,9 @@ func _add_time_controls(column: VBoxContainer) -> void:
 	var clock_row := HBoxContainer.new()
 	clock_row.add_theme_constant_override("separation", 24)
 	layout.add_child(clock_row)
-	time_label = _label("", 21, UI.ACCENT)
+	time_label = _label("", ThemeTokens.FIGURE, UI.ACCENT)
 	clock_row.add_child(time_label)
-	state_label = _label("", 16)
+	state_label = _label("", ThemeTokens.BODY)
 	state_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	clock_row.add_child(state_label)
 	var controls := HBoxContainer.new()
@@ -205,9 +207,10 @@ func _add_time_controls(column: VBoxContainer) -> void:
 	controls.add_child(save_button)
 	load_button = Button.new()
 	load_button.text = "Laden"
+	load_button.theme_type_variation = "GhostButton"
 	load_button.pressed.connect(_load_game)
 	controls.add_child(load_button)
-	save_status = _label("Ein lokaler Spielstand · manuell speichern und laden", 14, Color("b0becf"))
+	save_status = _label("Ein lokaler Spielstand · manuell speichern und laden", ThemeTokens.SMALL, ThemeTokens.INK_MUTED)
 	save_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	save_status.tooltip_text = save_path
 	panel.add_child(save_status)
@@ -223,7 +226,7 @@ func _save_game() -> void:
 func _load_game() -> void:
 	var error: String = simulation.load_game(save_path)
 	save_status.text = "Spielstand geladen." if error.is_empty() else error
-	save_status.add_theme_color_override("font_color", Color("b0becf"))
+	save_status.add_theme_color_override("font_color", ThemeTokens.INK_MUTED)
 	founding_status.text = save_status.text
 	save_status.tooltip_text = save_path
 	if error.is_empty():
@@ -319,7 +322,7 @@ func _refresh_finance() -> void:
 	heading.text = airline["name"]
 	description.text = "%s  /  %s · %s" % [airline["airport_icao"], airline["airport_name"], airline["country_name"]]
 	metrics["balance"].text = UI.money(airline["capital_eur"])
-	metrics["balance"].add_theme_color_override("font_color", UI.NEGATIVE if airline["capital_eur"] < 0 else Color("e2eaf4"))
+	metrics["balance"].add_theme_color_override("font_color", UI.NEGATIVE if airline["capital_eur"] < 0 else ThemeTokens.INK)
 	metrics["profit"].text = UI.money(finance["profit_eur"])
 	metrics["profit"].add_theme_color_override("font_color", UI.POSITIVE if finance["profit_eur"] >= 0 else UI.NEGATIVE)
 	metrics["load"].text = "%.1f %%" % finance["load_percent"]
@@ -364,17 +367,17 @@ func _build_fleet(content: VBoxContainer) -> void:
 	lease_button.text = "Flugzeug leasen"
 	lease_button.pressed.connect(_lease_aircraft)
 	purchase.add_child(lease_button)
-	model_details = _label("", 18, Color("90d6dc"))
+	model_details = _label("", ThemeTokens.BODY, ThemeTokens.ACCENT_TEXT)
 	model_details.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	shop.add_child(model_details)
-	fleet_status = _label("", 16)
+	fleet_status = _label("", ThemeTokens.BODY)
 	fleet_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	shop.add_child(fleet_status)
-	var hint := _label("Vorläufige Kaufpreise · Sitzkonfiguration und Reichweite sind vereinfachte Modellangaben.", 14, Color("b0becf"))
+	var hint := _label("Vorläufige Kaufpreise · Sitzkonfiguration und Reichweite sind vereinfachte Modellangaben.", ThemeTokens.SMALL, ThemeTokens.INK_MUTED)
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	shop.add_child(hint)
 	var owned := UI.panel(grid, "FLOTTENREGISTER  /  EIGENTUM & LEASING")
-	empty_fleet = _label("Noch keine Flugzeuge beschafft.", 17, Color("c2cedc"))
+	empty_fleet = _label("Noch keine Flugzeuge beschafft.", ThemeTokens.BODY, ThemeTokens.INK)
 	owned.add_child(empty_fleet)
 	fleet_tree = Tree.new()
 	fleet_tree.columns = 6
@@ -388,16 +391,18 @@ func _build_fleet(content: VBoxContainer) -> void:
 		fleet_tree.set_column_custom_minimum_width(index, [115, 120, 90, 190, 80, 210][index])
 	fleet_tree.item_selected.connect(_refresh_maintenance)
 	owned.add_child(fleet_tree)
-	disposal_details = _label("", 15)
+	disposal_details = _label("", ThemeTokens.BODY)
 	disposal_details.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	owned.add_child(disposal_details)
 	disposal_button = Button.new()
 	disposal_button.pressed.connect(_dispose_aircraft)
 	owned.add_child(disposal_button)
 	cabin_input = SpinBox.new()
+	cabin_input.get_line_edit().theme_type_variation = "NumericInput"
+	cabin_input.get_line_edit().alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	cabin_input.min_value = 0
 	cabin_input.step = 1
-	owned.add_child(_label("Kabine: Business-Sitze festlegen · Economy nutzt die restliche Fläche", 15))
+	owned.add_child(_label("Kabine: Business-Sitze festlegen · Economy nutzt die restliche Fläche", ThemeTokens.BODY))
 	owned.add_child(cabin_input)
 	cabin_button = Button.new()
 	cabin_button.text = "Kabine umbauen"
@@ -478,20 +483,20 @@ func _refresh_fleet() -> void:
 	for plane in fleet:
 		fleet_rows[plane["id"]] = plane
 		var row := fleet_tree.create_item(root_item)
-		row.set_text(0, plane["identifier"])
-		row.set_text(1, "%s · %s · Y %d / J %d" % [plane["model_name"], plane["ownership"], plane["economy_seats"], plane["business_seats"]])
-		row.set_text(2, plane["location_icao"])
+		UI.cell_text(row, 0, plane["identifier"])
+		UI.cell_text(row, 1, "%s · %s · Y %d / J %d" % [plane["model_name"], plane["ownership"], plane["economy_seats"], plane["business_seats"]])
+		UI.cell_text(row, 2, plane["location_icao"])
 		var phase: String = {"parked": "Geparkt", "in_flight": "Unterwegs", "ground": "Gelandet · Bodenzeit", "maintenance": "In Wartung"}.get(plane["status"], "Unbekannt")
-		row.set_text(3, "%s · Route #%d" % [phase, plane["route_id"]] if plane["route_id"] != 0 else phase)
-		row.set_text(3, row.get_text(3) + " · %d min verspätet" % ceili(plane["delay_seconds"] / 60.0))
-		row.set_custom_color(3, UI.ACCENT if plane["status"] == "in_flight" else UI.POSITIVE if plane["status"] == "parked" else Color("e4c287"))
+		UI.cell_text(row, 3, "%s · Route #%d" % [phase, plane["route_id"]] if plane["route_id"] != 0 else phase)
+		UI.cell_text(row, 3, row.get_text(3) + " · %d min verspätet" % ceili(plane["delay_seconds"] / 60.0))
+		row.set_custom_color(3, UI.ACCENT if plane["status"] == "in_flight" else UI.POSITIVE if plane["status"] == "parked" else ThemeTokens.CAUTION)
 		if plane["status"] == "in_flight":
-			row.set_text(2, "Ab %s (in der Luft)" % plane["location_icao"])
+			UI.cell_text(row, 2, "Ab %s (in der Luft)" % plane["location_icao"])
 		var condition: float = plane.get("condition_percent", 100.0)
-		row.set_text(4, "%.0f %%" % condition)
-		row.set_custom_color(4, UI.POSITIVE if condition >= 50.0 else Color("e4c287") if condition >= 20.0 else UI.NEGATIVE)
-		row.set_text(5, _maintenance_summary(plane))
-		row.set_custom_color(5, UI.NEGATIVE if plane.get("maintenance_due", false) and plane.get("maintenance_state", "none") == "none" else Color("e2eaf4"))
+		UI.cell_text(row, 4, "%.0f %%" % condition)
+		row.set_custom_color(4, UI.POSITIVE if condition >= 50.0 else ThemeTokens.CAUTION if condition >= 20.0 else UI.NEGATIVE)
+		UI.cell_text(row, 5, _maintenance_summary(plane))
+		row.set_custom_color(5, UI.NEGATIVE if plane.get("maintenance_due", false) and plane.get("maintenance_state", "none") == "none" else ThemeTokens.INK)
 		row.set_tooltip_text(0, plane["identifier"])
 		row.set_tooltip_text(1, "%s · gezahlter Kaufpreis: %d EUR" % [plane["model_name"], plane["purchase_price_eur"]])
 		row.set_tooltip_text(2, plane["location_name"])
@@ -522,8 +527,8 @@ func _build_maintenance(parent: VBoxContainer) -> void:
 	maintenance_box = VBoxContainer.new()
 	maintenance_box.add_theme_constant_override("separation", 8)
 	parent.add_child(maintenance_box)
-	maintenance_box.add_child(_label("WARTUNG  /  AUSGEWÄHLTES FLUGZEUG", 13, UI.ACCENT))
-	maintenance_details = _label("", 15, Color("e2eaf4"))
+	maintenance_box.add_child(_label("WARTUNG  /  AUSGEWÄHLTES FLUGZEUG", ThemeTokens.PANEL_TITLE, UI.ACCENT))
+	maintenance_details = _label("", ThemeTokens.BODY, ThemeTokens.INK)
 	maintenance_details.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	maintenance_box.add_child(maintenance_details)
 	maintenance_button = Button.new()
@@ -539,14 +544,14 @@ func _build_maintenance(parent: VBoxContainer) -> void:
 	cancel_maintenance_button.visible = false
 	cancel_maintenance_button.pressed.connect(_cancel_maintenance)
 	maintenance_box.add_child(cancel_maintenance_button)
-	maintenance_status = _label("", 15)
+	maintenance_status = _label("", ThemeTokens.BODY)
 	maintenance_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	maintenance_box.add_child(maintenance_status)
-	maintenance_box.add_child(_label("WARTUNGSBASEN", 13, UI.ACCENT))
+	maintenance_box.add_child(_label("WARTUNGSBASEN", ThemeTokens.PANEL_TITLE, UI.ACCENT))
 	base_airports = OptionButton.new()
 	base_airports.item_selected.connect(func(_index: int) -> void: _refresh_base_action())
 	maintenance_box.add_child(base_airports)
-	base_details = _label("", 15)
+	base_details = _label("", ThemeTokens.BODY)
 	base_details.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	maintenance_box.add_child(base_details)
 	base_action = Button.new()
@@ -663,8 +668,8 @@ func _build_founding() -> void:
 	var column := VBoxContainer.new()
 	column.add_theme_constant_override("separation", 12)
 	founding.add_child(column)
-	column.add_child(_label("AIRLINE MANAGER", 22))
-	column.add_child(_label("DEINE EIGENE FLUGGESELLSCHAFT", 14, Color("90d6dc")))
+	column.add_child(_label("AIRLINE MANAGER", ThemeTokens.SCREEN_TITLE))
+	column.add_child(_label("DEINE EIGENE FLUGGESELLSCHAFT", ThemeTokens.SMALL, ThemeTokens.ACCENT_TEXT))
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -673,15 +678,21 @@ func _build_founding() -> void:
 	var form := VBoxContainer.new()
 	form.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	form.add_theme_constant_override("separation", 10)
-	scroll.add_child(form)
-	form.add_child(_label("Ein neuer Anfang.", 28))
-	form.add_child(_label("Name deiner Airline", 16))
+	# Reserve space for the focus ring inside the clipping scroll viewport.
+	var focus_margin := MarginContainer.new()
+	focus_margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	for side in ["left", "top", "right", "bottom"]:
+		focus_margin.add_theme_constant_override("margin_" + side, ThemeTokens.SPACE_1)
+	scroll.add_child(focus_margin)
+	focus_margin.add_child(form)
+	form.add_child(_label("Ein neuer Anfang.", ThemeTokens.SCREEN_TITLE))
+	form.add_child(_label("Name deiner Airline", ThemeTokens.BODY))
 	name_input = LineEdit.new()
 	name_input.placeholder_text = "Airline-Name (1–80 Zeichen)"
 	name_input.max_length = 80
 	name_input.custom_minimum_size.y = 40
 	form.add_child(name_input)
-	form.add_child(_label("Heimatland", 16))
+	form.add_child(_label("Heimatland", ThemeTokens.BODY))
 	country_select = OptionButton.new()
 	country_select.custom_minimum_size.y = 40
 	for country in simulation.get_countries():
@@ -689,14 +700,14 @@ func _build_founding() -> void:
 		country_select.set_item_metadata(country_select.item_count - 1, country["code"])
 	country_select.item_selected.connect(_country_changed)
 	form.add_child(country_select)
-	form.add_child(_label("Heimatflughafen", 16))
+	form.add_child(_label("Heimatflughafen", ThemeTokens.BODY))
 	airport_select = OptionButton.new()
 	airport_select.custom_minimum_size.y = 40
 	airport_select.fit_to_longest_item = false
 	airport_select.clip_text = true
 	airport_select.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	form.add_child(airport_select)
-	founding_capital = _label("Startkapital: %s · vorläufig konfiguriert" % simulation.get_starting_capital(), 16, Color("90d6dc"))
+	founding_capital = _label("Startkapital: %s · vorläufig konfiguriert" % simulation.get_starting_capital(), ThemeTokens.BODY, ThemeTokens.ACCENT_TEXT)
 	founding_capital.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	form.add_child(founding_capital)
 	var actions := HBoxContainer.new()
@@ -713,9 +724,10 @@ func _build_founding() -> void:
 	actions.add_child(founding_load_button)
 	cancel_founding_button = Button.new()
 	cancel_founding_button.text = "Abbrechen"
+	cancel_founding_button.theme_type_variation = "GhostButton"
 	cancel_founding_button.pressed.connect(_sync_view)
 	actions.add_child(cancel_founding_button)
-	founding_status = _label("Gründen startet pausiert bei Tag 1. Erst Speichern ersetzt den lokalen Spielstand.", 14, Color("b0becf"))
+	founding_status = _label("Gründen startet pausiert bei Tag 1. Erst Speichern ersetzt den lokalen Spielstand.", ThemeTokens.SMALL, ThemeTokens.INK_MUTED)
 	founding_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	column.add_child(founding_status)
 	_country_changed(0)
@@ -773,12 +785,8 @@ func _open_founding() -> void:
 	name_input.grab_focus()
 
 
-func _label(text: String, size: int, color: Color = Color("f0f4fa")) -> Label:
-	var label := Label.new()
-	label.text = text
-	label.add_theme_font_size_override("font_size", size)
-	label.add_theme_color_override("font_color", color)
-	return label
+func _label(text: String, style: Dictionary, color: Color = ThemeTokens.INK) -> Label:
+	return UI.label(text, style, color)
 
 
 func _build_finance(content: VBoxContainer) -> void:
@@ -803,7 +811,7 @@ func _build_finance(content: VBoxContainer) -> void:
 	operation_summary = UI.label("")
 	operation_summary.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	operations.add_child(operation_summary)
-	var note := UI.label("Abrechnung bei Landung · Käufe separat ausgewiesen.\nVereinfachte Wirtschaftswerte · Fortschritt manuell speichern.", 13, UI.MUTED)
+	var note := UI.label("Abrechnung bei Landung · Käufe separat ausgewiesen.\nVereinfachte Wirtschaftswerte · Fortschritt manuell speichern.", ThemeTokens.SMALL, UI.MUTED)
 	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	finance_panel.add_child(note)
 

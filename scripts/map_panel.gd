@@ -1,4 +1,5 @@
 extends VBoxContainer
+const ThemeTokens = preload("res://scripts/ui/operations_theme.gd")
 ## Read-only view: all flight coordinates and progress come from Rust.
 
 const MapCanvas = preload("res://scripts/map_canvas.gd")
@@ -14,7 +15,7 @@ var last_selected_id := -1
 func _ready() -> void:
 	var toolbar := HBoxContainer.new()
 	add_child(toolbar)
-	summary = UI.label("", 14)
+	summary = UI.label("", ThemeTokens.SMALL)
 	summary.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	toolbar.add_child(summary)
 	for caption in ["−", "+", "Welt"]:
@@ -29,11 +30,11 @@ func _ready() -> void:
 	canvas.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	canvas.selected.connect(func(id): selected_id = id; refresh())
 	add_child(canvas)
-	details = UI.label("", 16)
+	details = UI.label("", ThemeTokens.BODY)
 	details.custom_minimum_size.y = 52
 	details.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	add_child(details)
-	var hint := UI.label("Ziehen: verschieben · Mausrad: zoomen · Klick: Details · Cyan: aktiv / Grau: geplant · Natural Earth (Public Domain)", 12, UI.MUTED)
+	var hint := UI.label("Ziehen: verschieben · Mausrad: zoomen · Klick: Details · Cyan: aktiv / Grau: geplant · Natural Earth (Public Domain)", ThemeTokens.CODE, UI.MUTED)
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	add_child(hint)
 	refresh()
