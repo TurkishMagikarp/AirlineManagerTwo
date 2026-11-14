@@ -238,6 +238,9 @@ impl Game {
                 .next_rotation_event()
                 .is_none_or(|t| Duration::from_secs(t) > target.elapsed())
             && self
+                .next_training_event()
+                .is_none_or(|t| Duration::from_secs(t) > target.elapsed())
+            && self
                 .next_payroll_event()
                 .is_none_or(|t| Duration::from_secs(t) > target.elapsed())
         {
@@ -288,6 +291,7 @@ impl Game {
             let maintenance = std::iter::once(staged.next_maintenance_event())
                 .chain(std::iter::once(staged.next_rotation_event()))
                 .chain(std::iter::once(staged.next_payroll_event()))
+                .chain(std::iter::once(staged.next_training_event()))
                 .chain(std::iter::once(staged.next_financing_event()))
                 .chain(std::iter::once(staged.next_tax_event()))
                 .chain(std::iter::once(staged.next_marketing_event()))
@@ -297,6 +301,7 @@ impl Game {
                         c.game.next_maintenance_event(),
                         c.game.next_rotation_event(),
                         c.game.next_payroll_event(),
+                        c.game.next_training_event(),
                         c.game.next_financing_event(),
                         c.game.next_tax_event(),
                         c.game.next_marketing_event(),

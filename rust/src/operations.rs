@@ -522,6 +522,7 @@ impl Game {
             self.airline.as_mut().unwrap().capital_eur = balance;
         }
         self.clock = clock;
+        self.complete_training();
         for (r, p, state, airborne, wear) in updates {
             if let Some(wear) = wear {
                 self.fleet[p].wear = wear;

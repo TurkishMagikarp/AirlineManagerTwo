@@ -1157,8 +1157,9 @@ impl SimulationClock {
                     "id" => e.id, "name" => e.name.as_str(),
                     "role" => e.role.key(), "role_name" => e.role.label(),
                     "salary_eur" => e.salary_eur,
-                    "status" => match a { staff::Activity::Available => "available", staff::Activity::Flying => "flying", staff::Activity::Hangar => "hangar" },
-                    "status_text" => a.label(),
+                    "status" => match a { staff::Activity::Available => "available", staff::Activity::Flying => "flying", staff::Activity::Hangar => "hangar", staff::Activity::Training => "training" },
+                    "status_text" => e.training.as_ref().map(|t| format!("Umschulung → {} bis {}", t.rating, operations::display_time(t.ends_at))).unwrap_or_else(|| a.label().into()).as_str(),
+                    "rating" => e.rating.as_deref().unwrap_or("—"),
                     "can_dismiss" => a == staff::Activity::Available,
                     "hired" => operations::display_time(e.hired_at).as_str(),
                     "days_employed" => (now.saturating_sub(e.hired_at) / 86_400) as i64
@@ -1171,7 +1172,7 @@ impl SimulationClock {
     #[func]
     fn get_staff_overview(&self) -> VarDictionary {
         let g = &self.game;
-        let (idle_pilots, idle_cabin) = self.idle_crew_demand();
+        let (_, idle_cabin) = self.idle_crew_demand();
         let waiting_techs: u32 = g
             .fleet
             .iter()
@@ -1188,7 +1189,10 @@ impl SimulationClock {
             let employed = g.staff_count(role);
             let available = g.available_staff(role);
             let missing = match role {
-                staff::Role::Pilot => idle_pilots.saturating_sub(available),
+                staff::Role::Pilot => staff::ratings()
+                    .iter()
+                    .map(|r| g.idle_pilot_shortage(r))
+                    .sum(),
                 staff::Role::CabinCrew => idle_cabin.saturating_sub(available),
                 staff::Role::Technician => g
                     .technician_target()
@@ -1249,9 +1253,37 @@ impl SimulationClock {
             "payroll_paid_eur" => g.history.as_ref().map(|h| h.payroll_through(u64::MAX).min(i128::from(i64::MAX)) as i64).unwrap_or(0),
             "max_batch" => i64::from(staff::max_hire_batch())
         };
+        let mut types = Array::<VarDictionary>::new();
+        for rating in staff::ratings() {
+            types.push(&vdict! { "rating" => rating.as_str(), "rated" => i64::from(g.rated_count(&rating)), "busy" => i64::from(g.rated_busy(&rating)), "available" => i64::from(g.rated_available(&rating)) });
+        }
+        overview.set("ratings", &types);
+        let (cost, days) = staff::conversion_terms();
+        overview.set("conversion_cost_eur", cost);
+        overview.set("conversion_days", days as i64);
         overview.set("roles", &roles);
         overview.set("aircraft", &aircraft_rows);
         overview
+    }
+
+    #[func]
+    fn hire_pilots(&mut self, rating: GString, count: u32) -> GString {
+        self.game
+            .hire_pilots(&rating.to_string(), count)
+            .err()
+            .unwrap_or_default()
+            .as_str()
+            .into()
+    }
+
+    #[func]
+    fn train_pilot(&mut self, id: u32, rating: GString) -> GString {
+        self.game
+            .train_pilot(id, &rating.to_string())
+            .err()
+            .unwrap_or_default()
+            .as_str()
+            .into()
     }
 
     /// Empty string means success.
@@ -1269,7 +1301,7 @@ impl SimulationClock {
     #[func]
     fn hire_missing_staff(&mut self) -> GString {
         let g = &self.game;
-        let (pilots, cabin) = self.idle_crew_demand();
+        let (_, cabin) = self.idle_crew_demand();
         let techs = g
             .technician_target()
             .saturating_sub(g.staff_count(staff::Role::Technician))
@@ -1285,22 +1317,9 @@ impl SimulationClock {
                     .sum::<u32>()
                     .saturating_sub(g.available_staff(staff::Role::Technician)),
             );
-        let hires = [
-            (
-                staff::Role::Pilot,
-                pilots.saturating_sub(g.available_staff(staff::Role::Pilot)),
-            ),
-            (
-                staff::Role::CabinCrew,
-                cabin.saturating_sub(g.available_staff(staff::Role::CabinCrew)),
-            ),
-            (staff::Role::Technician, techs),
-        ];
-        if hires.iter().all(|h| h.1 == 0) {
-            return "Es fehlt kein Personal.".into();
-        }
+        let cabin = cabin.saturating_sub(g.available_staff(staff::Role::CabinCrew));
         self.game
-            .hire_batch(&hires, true)
+            .hire_missing_rated_staff(cabin, techs)
             .err()
             .unwrap_or_default()
             .as_str()

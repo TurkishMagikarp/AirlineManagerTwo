@@ -473,3 +473,172 @@ fn legacy_crew_costs_and_airborne_quotes_survive_without_new_duplicate_charges()
     loaded.validate_history().unwrap();
     loaded.validate_finance().unwrap();
 }
+
+#[test]
+fn ratings_block_wrong_pilots_and_reserved_conversion_is_atomic() {
+    let mut g = fresh();
+    g.hire_pilots("737", 4).unwrap();
+    g.hire_staff(Role::CabinCrew, 3).unwrap();
+    let before = state(&g);
+    assert!(g.schedule(1, 1, 120).unwrap_err().contains("ATR 72"));
+    assert_eq!(state(&g), before);
+    g.hire_pilots("ATR 72", 4).unwrap();
+    g.schedule(1, 1, 120).unwrap();
+    let id = g
+        .staff
+        .employees
+        .iter()
+        .find(|e| e.rating.as_deref() == Some("ATR 72"))
+        .unwrap()
+        .id;
+    let before = state(&g);
+    assert!(g.train_pilot(id, "737").is_err());
+    assert!(g.dismiss_staff(id).is_err());
+    assert_eq!(state(&g), before);
+    g.validate_staff().unwrap();
+    // AI housekeeping must remove free pilots even when reserved pilots have higher ids.
+    g.dismiss_surplus().unwrap();
+    assert_eq!(g.rated_count("ATR 72"), 4);
+    assert_eq!(g.rated_count("737"), 0);
+    g.validate_staff().unwrap();
+}
+
+#[test]
+fn conversion_boundary_speeds_pause_steps_and_restart_match() {
+    let mut base = fresh();
+    base.hire_pilots("737", 1).unwrap();
+    let id = base.staff.employees[0].id;
+    let money = capital(&base);
+    base.train_pilot(id, "ATR 72").unwrap();
+    assert_eq!(money - capital(&base), crate::staff::conversion_terms().0);
+    assert_eq!(base.rated_available("737"), 0);
+    assert!(base.dismiss_staff(id).is_err());
+    assert!(base.train_pilot(id, "A320 family").is_err());
+    let paused = state(&base);
+    assert!(base.advance(100.0 * DAY));
+    assert_eq!(state(&base), paused);
+    let duration = crate::staff::conversion_terms().1 as f64 * DAY;
+    let mut exact = base.clone();
+    exact.clock.set_running(true);
+    assert!(exact.advance(duration - 1.0));
+    assert!(exact.staff.employees[0].training.is_some());
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("training.json");
+    crate::save::save(&path, &exact).unwrap();
+    exact = crate::save::load(&path).unwrap();
+    assert!(exact.advance(1.0));
+    assert!(exact.staff.employees[0].training.is_none());
+    assert_eq!(exact.rated_available("ATR 72"), 1);
+    assert_eq!(exact.rated_count("737"), 0);
+    assert!(exact.advance(DAY));
+    for speed in [1, 4, 16] {
+        for steps in [1, 15, 120] {
+            let mut g = base.clone();
+            g.clock.set_running(true);
+            g.clock.set_speed(speed);
+            for _ in 0..steps {
+                assert!(g.advance((duration + DAY) / f64::from(speed) / f64::from(steps)));
+            }
+            g.clock.set_speed(1);
+            assert_eq!(state(&g), state(&exact));
+            g.validate_history().unwrap();
+            g.validate_staff().unwrap();
+        }
+    }
+}
+
+#[test]
+fn ratings_v24_migration_preserves_mixed_running_fleets_and_ai() {
+    let mut g = staffed();
+    g.schedule(1, 1, 120).unwrap();
+    g.lease_aircraft("a320_200").unwrap();
+    g.equip_staff_for("a320_200").unwrap();
+    g.create_route("EDDF", "EDDM", 2).unwrap();
+    g.schedule(2, 2, 120).unwrap();
+    g.competitors = crate::competition::initial_competitors().unwrap();
+    g.clock.set_running(true);
+    assert!(g.advance(600.0));
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("v24.json");
+    crate::save::save(&path, &g).unwrap();
+    let mut v: serde_json::Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    v["version"] = 24.into();
+    fn strip(v: &mut serde_json::Value) {
+        match v {
+            serde_json::Value::Object(o) => {
+                o.remove("rating");
+                o.remove("training");
+                for value in o.values_mut() {
+                    strip(value);
+                }
+            }
+            serde_json::Value::Array(a) => {
+                for value in a {
+                    strip(value);
+                }
+            }
+            _ => {}
+        }
+    }
+    strip(&mut v["state"]);
+    std::fs::write(&path, serde_json::to_vec(&v).unwrap()).unwrap();
+    let mut a = crate::save::load(&path).unwrap();
+    let b = crate::save::load(&path).unwrap();
+    assert_eq!(state(&a), state(&b));
+    assert_eq!(capital(&a), capital(&g));
+    assert_eq!(a.finance, g.finance);
+    assert_eq!(a.routes, g.routes);
+    a.validate_staff().unwrap();
+    for (c, old) in a.competitors.iter().zip(&g.competitors) {
+        c.game.validate_staff().unwrap();
+        assert_eq!(c.game.monthly_payroll(), old.game.monthly_payroll());
+    }
+    assert!(a.advance(DAY));
+}
+
+#[test]
+fn selling_last_type_keeps_available_rating_and_ai_hiring_costs() {
+    let mut g = staffed();
+    let payroll = g.monthly_payroll();
+    let rating = g.staff.employees[0].rating.clone();
+    g.sell_aircraft(1).unwrap();
+    assert_eq!(g.rated_available("ATR 72"), 4);
+    assert_eq!(g.staff.employees[0].rating, rating);
+    assert_eq!(g.monthly_payroll(), payroll);
+    g.validate_staff().unwrap();
+    let mut leased = fresh();
+    leased.sell_aircraft(1).unwrap();
+    leased.lease_aircraft("atr72_600").unwrap();
+    leased.equip_staff_for("atr72_600").unwrap();
+    leased.return_aircraft(2).unwrap();
+    assert_eq!(leased.rated_available("ATR 72"), 4);
+    leased.validate_staff().unwrap();
+    for model in crate::aircraft::models().unwrap() {
+        let mut ai = fresh();
+        ai.equip_staff_for(&model.id).unwrap();
+        let n = crate::staff::needs(&model.id).unwrap();
+        assert_eq!(ai.rated_available(&n.rating), n.pilots);
+        assert_eq!(
+            ai.monthly_payroll(),
+            i64::from(n.pilots) * crate::staff::salary(Role::Pilot).unwrap()
+                + i64::from(n.cabin_crew) * crate::staff::salary(Role::CabinCrew).unwrap()
+                + i64::from(n.technicians) * crate::staff::salary(Role::Technician).unwrap()
+        );
+    }
+}
+
+#[test]
+fn rated_shortage_hiring_is_atomic_and_ignores_other_ratings() {
+    let mut g = fresh();
+    g.hire_pilots("737", 4).unwrap();
+    assert_eq!(g.idle_pilot_shortage("ATR 72"), 4);
+    assert_eq!(g.idle_pilot_shortage("737"), 0);
+    g.hire_missing_rated_staff(3, 3).unwrap();
+    assert_eq!(g.rated_count("737"), 4);
+    assert_eq!(g.rated_available("ATR 72"), 4);
+    g.schedule(1, 1, 120).unwrap();
+    g.validate_staff().unwrap();
+    let before = state(&g);
+    assert!(g.hire_missing_rated_staff(50, 1).is_err());
+    assert_eq!(state(&g), before);
+}

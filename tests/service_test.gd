@@ -86,7 +86,7 @@ func _run() -> void:
 			tax_free = RegEx.create_from_string('"tax":\\{[^}]*\\},|,"tax":\\{[^}]*\\}').sub(tax_free, "", true)
 			tax_free = tax_free.replace('"taxes":[],', '').replace(',"taxes":[]', '')
 			file = FileAccess.open(path, FileAccess.WRITE)
-			file.store_string(tax_free.replace('"version":24', '"version":18'))
+			file.store_string(tax_free.replace('"version":25', '"version":18'))
 			file.close()
 			if legacy:
 				# Preserve u64 seeds and nanoseconds: never reserialize the save as GDScript JSON.
@@ -164,7 +164,7 @@ func _run() -> void:
 	if mode == "read-v17":
 		await _click(main.navigation[0])
 		await _click(main.save_button)
-		if not _check(main.save_status.text == "Spielstand gespeichert." and JSON.parse_string(FileAccess.get_file_as_string(path))["version"] == 24, "Migrated v17 resaves as v24"):
+		if not _check(main.save_status.text == "Spielstand gespeichert." and JSON.parse_string(FileAccess.get_file_as_string(path))["version"] == 25, "Migrated v17 resaves as v25"):
 			return
 	print("PASS: real service input, frozen costs, archive/Finances agreement and layout; mode=" + mode)
 	main.queue_free()
