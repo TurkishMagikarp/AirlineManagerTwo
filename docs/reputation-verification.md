@@ -63,6 +63,32 @@ reputation were visually inspected and uploaded to
 
 No production code, economy/configuration or save-format changes were needed.
 
+## Results (2026-11-14)
+
+- `cargo build --locked --manifest-path rust/Cargo.toml`: passed.
+- `cargo test --locked --manifest-path rust/Cargo.toml`: 232 passed, zero failures
+  (409.57 seconds), including migration/determinism, million-flight and ten-year
+  player/AI scenarios.
+- `cargo clippy --locked --manifest-path rust/Cargo.toml`: passed without warnings.
+- The default reputation UI regression and all four separate-process reputation
+  restart modes passed.
+- All 33 `*_test.gd` scripts passed through their supported modes. The default
+  sweep excludes the explicit-mode-only save test and runs the finance stress
+  script in its writer/reader modes instead of duplicating its default writer.
+- All 20 restart families passed: airport, cabin, cargo, competition, disruption,
+  economy, finances, financing, flight, fuel contract, insurance, maintenance,
+  marketing, pilot, reputation, save, service, slots, staff and tax. Together with
+  the default sweep and successful Linux main-scene smoke
+  (`--headless --quit-after 10`), the final run completed **98 successful process
+  invocations**, including **66 restart invocations**. This invokes the GDScript
+  modes directly on Linux, not the PowerShell wrappers.
+- The finance writer and fresh reader both passed within a 900-second harness
+  budget; the saved archive was 226,214,437 bytes. No finance assertion or timeout
+  failed in the final sweep.
+- The editor resource import completed successfully. The real Xvfb captures
+  passed and were visually inspected. The rendered map benchmark also completed;
+  its llvmpipe timings describe this container's software renderer.
+
 Owner checks remain **unrun**: `START.bat`, all PowerShell wrappers (including
 the new wrapper), native Windows DLL/process restarts, and Windows
 rendering/scaling. Linux process tests and software-rendered captures do not
