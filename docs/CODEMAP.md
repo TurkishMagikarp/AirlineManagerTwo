@@ -1184,25 +1184,25 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 446 func _dispose_aircraft() -> void:
 456 func _buy_aircraft() -> void:
 472 func _refresh_used_market() -> void:
-496 func _buy_used_aircraft(listing_id: int) -> void:
-503 func _refresh_fleet() -> void:
-549 func _maintenance_summary(plane: Dictionary) -> String:
-562 func _build_maintenance(parent: VBoxContainer) -> void:
-598 func _refresh_base_action() -> void:
-610 func _change_maintenance_base() -> void:
-617 func _refresh_maintenance() -> void:
-676 func _request_maintenance() -> void:
-687 func _cancel_maintenance() -> void:
-698 func _build_founding() -> void:
-772 func _country_changed(index: int) -> void:
-786 func _found_airline() -> void:
-798 func _sync_view() -> void:
-815 func _open_founding() -> void:
-824 func _label(text: String, style: Dictionary, color: Color = ThemeTokens.INK) -> Label:
-828 func _build_finance(content: VBoxContainer) -> void:
-855 func _build_attention(parent: VBoxContainer) -> void:
-872 func _refresh_attention() -> void:
-894 func _open_attention(entry: Dictionary) -> void:
+512 func _buy_used_aircraft(listing_id: int) -> void:
+524 func _refresh_fleet() -> void:
+570 func _maintenance_summary(plane: Dictionary) -> String:
+583 func _build_maintenance(parent: VBoxContainer) -> void:
+619 func _refresh_base_action() -> void:
+631 func _change_maintenance_base() -> void:
+638 func _refresh_maintenance() -> void:
+697 func _request_maintenance() -> void:
+708 func _cancel_maintenance() -> void:
+719 func _build_founding() -> void:
+793 func _country_changed(index: int) -> void:
+807 func _found_airline() -> void:
+819 func _sync_view() -> void:
+836 func _open_founding() -> void:
+845 func _label(text: String, style: Dictionary, color: Color = ThemeTokens.INK) -> Label:
+849 func _build_finance(content: VBoxContainer) -> void:
+876 func _build_attention(parent: VBoxContainer) -> void:
+893 func _refresh_attention() -> void:
+915 func _open_attention(entry: Dictionary) -> void:
 
 ## scripts/map_background.gd
 1 extends Control
