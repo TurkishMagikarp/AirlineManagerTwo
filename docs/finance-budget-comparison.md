@@ -76,3 +76,21 @@ filtered through `tail -30`. Doc-tests also passed (zero tests).
 warnings. The previously recorded Godot verification is reused; no Godot, GUI,
 START.bat, PowerShell wrapper or native Windows checks were run in this comparison
 session. Windows checks remain owner-only as listed in PR #45.
+
+## Opt-in performance budget
+
+The 300-second advance budget is a deliberate performance check. The normal
+suite still runs the full million-flight scenario and every result, compression,
+AI competitor, save/load and continuation assertion, and reports its advance time;
+wall-clock enforcement is opt-in because shared-runner contention varies.
+On a quiet machine, run:
+
+```bash
+AIRLINE_ENFORCE_PERF_BUDGET=1 cargo test --locked --manifest-path rust/Cargo.toml million_flight -- --test-threads=1
+```
+
+Run this check whenever a change touches long-advance code paths (economy,
+demand, competition, history or operations), and state the measured advance time
+in that PR. Add `--nocapture` to the test arguments to display timing output from
+a passing test. Without the variable set to exactly `1`, the test reports that
+the budget was measured but not enforced and how to enforce it.

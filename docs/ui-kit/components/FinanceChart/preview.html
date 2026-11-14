@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="de" data-theme="night">
+<head><meta charset="utf-8"><link rel="stylesheet" href="../../tokens.css"><link rel="stylesheet" href="../../bundle.css"><title>FinanceChart</title><style>html,body{margin:0;background:var(--ground)}</style></head>
+<body>
+<div class="am-stage am-stage--col">
+  <section class="am-panel">
+    <header class="am-panel__head"><h2 class="am-panel__title">Einnahmen und Kosten</h2><div class="am-legend"><span>Einnahmen</span><span class="is-cost">Kosten</span></div></header>
+    <div class="am-panel__body"><svg class="am-chart" id="chart" viewBox="0 0 720 248" role="img" aria-label="Einnahmen und Kosten pro Woche in Tausend EUR, Kalenderwochen 35 bis 46. Einnahmen steigen von 180 auf 330, Kosten von 170 auf 250."></svg></div>
+  </section>
+</div>
+<script>
+(function () {
+  // One scale for every mark: x by week index, y by thousand EUR.
+  var rev = [180, 195, 210, 205, 230, 250, 262, 255, 280, 300, 310, 330];
+  var cost = [170, 175, 180, 190, 195, 200, 215, 210, 220, 235, 240, 250];
+  var X0 = 56, X1 = 648, Y0 = 208, Y1 = 16, MAX = 400, firstWeek = 35;
+  var x = function (i) { return X0 + (X1 - X0) * i / (rev.length - 1); };
+  var y = function (v) { return Y0 - (Y0 - Y1) * v / MAX; };
+  var pts = function (a) { return a.map(function (v, i) { return x(i).toFixed(1) + ',' + y(v).toFixed(1); }); };
+  var s = '';
+  for (var g = 0; g <= MAX; g += 100) {
+    s += '<line class="grid" x1="' + X0 + '" x2="' + X1 + '" y1="' + y(g) + '" y2="' + y(g) + '"/>';
+    s += '<text class="axis" x="' + (X0 - 10) + '" y="' + (y(g) + 4) + '" text-anchor="end">' + g + '</text>';
+  }
+  for (var i = 0; i < rev.length; i += 1) {
+    s += '<text class="axis" x="' + x(i) + '" y="' + (Y0 + 22) + '" text-anchor="middle">KW' + (firstWeek + i) + '</text>';
+  }
+  var back = pts(cost).reverse();
+  s += '<polygon class="area" points="' + pts(rev).concat(back).join(' ') + '"/>';
+  s += '<polyline class="cost" points="' + pts(cost).join(' ') + '"/>';
+  s += '<polyline class="rev" points="' + pts(rev).join(' ') + '"/>';
+  var last = rev.length - 1;
+  s += '<circle class="end-rev" cx="' + x(last) + '" cy="' + y(rev[last]) + '" r="5"/>';
+  s += '<circle class="end-cost" cx="' + x(last) + '" cy="' + y(cost[last]) + '" r="5"/>';
+  s += '<text class="val" x="' + (x(last) + 12) + '" y="' + (y(rev[last]) + 4) + '">' + rev[last] + ' T</text>';
+  s += '<text class="val" x="' + (x(last) + 12) + '" y="' + (y(cost[last]) + 4) + '">' + cost[last] + ' T</text>';
+  document.getElementById('chart').innerHTML = s;
+})();
+</script>
+</body>
+</html>

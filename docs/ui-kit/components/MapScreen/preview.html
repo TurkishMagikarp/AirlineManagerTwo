@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="de" data-theme="night">
+<head><meta charset="utf-8"><link rel="stylesheet" href="../../tokens.css"><link rel="stylesheet" href="../../bundle.css"><title>MapScreen</title><style>html,body{margin:0;background:var(--ground)}</style></head>
+<body>
+<div class="am-app">
+  <nav class="am-rail" aria-label="Hauptnavigation">
+  <div class="am-rail__brand"><b>Nordwind Regional</b><span class="am-caption">NWR · Basis EDDF</span></div>
+  <a href="#"><svg class="am-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Übersicht</span></a>
+  <a href="#"><svg class="am-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 14 10 21 14 21 16 14 14 14 19 17 21 17 22 12 21 7 22 7 21 10 19 10 14 3 16 3 14 10 10Z"/></svg><span>Flotte</span></a>
+  <a href="#"><svg class="am-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="18" r="3"/><circle cx="19" cy="6" r="3"/><path d="M5 15V8a3 3 0 0 1 3-3h8M19 9v7a3 3 0 0 1-3 3H8"/></svg><span>Routen</span></a>
+  <a href="#" aria-current="page"><svg class="am-icon" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="8"/><ellipse cx="10" cy="10" rx="3.5" ry="8"/><path d="M2 10h16M4 5h12M4 15h12"/></svg><span>Karte</span></a>
+  <a href="#"><svg class="am-icon" viewBox="0 0 20 20" aria-hidden="true"><path d="M3 2v15h15M6 13l4-5 3 2 4-6"/></svg><span>Finanzen</span></a>
+  <a href="#"><svg class="am-icon" viewBox="0 0 20 20" aria-hidden="true"><circle cx="7" cy="6.5" r="2.7"/><path d="M2 17c0-3 2.3-5 5-5s5 2 5 5"/><circle cx="14" cy="7.5" r="2.1"/><path d="M14.5 12.2c2.3.2 3.7 1.9 3.7 4.3"/></svg><span>Personal</span><b class="am-count" aria-label="2 Hinweise">2</b></a>
+</nav>
+  <div class="am-app__main">
+    <header class="am-clockbar">
+  <span class="am-flap" role="img" aria-label="SA 14.11.2026"><span>S</span><span>A</span><i></i><span>1</span><span>4</span><span>.</span><span>1</span><span>1</span><span>.</span><span>2</span><span>0</span><span>2</span><span>6</span></span>
+  <span class="am-flap" role="img" aria-label="08:42"><span>0</span><span>8</span><span>:</span><span>4</span><span>2</span></span>
+  <div class="am-seg" role="group" aria-label="Spielgeschwindigkeit">
+    <button aria-pressed="false">Pause</button><button aria-pressed="false">1×</button><button aria-pressed="true">4×</button><button aria-pressed="false">16×</button>
+  </div>
+  <span class="am-grow"></span>
+  <div class="am-cash"><span class="am-label">Guthaben</span><b>1.284.500 EUR</b></div>
+  <button class="am-btn">Speichern</button>
+  <button class="am-btn am-btn--ghost">Laden</button>
+</header>
+    <div class="am-mapview">
+      <svg class="am-map" viewBox="0 0 720 320" role="img" aria-label="Kartenausschnitt Nordsee bis Ostsee mit Basis EDDF, eigenen Routen nach EDDH und EDDM und einer Konkurrenzroute EDDL–EDDB">
+    <path class="grat" d="M128 0V320M274 0V320M419 0V320M565 0V320M710 0V320M0 55H720M0 128H720M0 201H720M0 274H720"/>
+    <!-- mainland: Channel coast, Low Countries, German Bight, Jutland, Baltic coast to the Vistula lagoon (x = 230 + (lon − 6.8) × 36.4, y = 70 + (53.6 − lat) × 36.5) -->
+    <path class="land" d="M-4 212 22 204 41 194 41 175 50 166 69 163 89 157 114 150 128 147 132 129 139 125 148 112 155 93 179 86 208 77 234 80 245 83 243 70 277 66 281 75 294 72 299 60 310 61 314 59 305 51 296 44 312 38 302 30 296 23 292 12 290 2 290-4H337L328 1 330 10 326 17 326 26 345 27 341 38 352 43 372 41 387 41 376 52 379 57 399 59 423 49 437 38 448 40 459 44 470 52 492 54 501 58 524 54 549 49 579 40 596 34 621 28 649 25 652 29 658 37 661 43 674 43 696 39 724 34V324H-4Z"/>
+    <!-- England: Norfolk to Essex, and Kent -->
+    <path class="land" d="M-4 95 13 93 30 94 46 111 40 125 24 136 8 142-4 144ZM-4 150 20 149 35 151 30 160 17 168-4 170Z"/>
+    <!-- Frisian islands and Sylt -->
+    <path class="land" d="M168 81 181 77 182 80 169 84ZM194 75 206 72 207 75 195 78ZM249 66 258 64 259 67 250 69ZM262 63 271 62 272 65 263 66ZM289 17 292 17 294 29 291 29Z"/>
+    <!-- Funen, Zealand, Lolland-Falster, Rügen, Bornholm, Scania -->
+    <path class="land" d="M346 4 358-2 376 2 378 14 364 20 350 14ZM390 6 398-4H446L444 8 432 18 416 14 404 16ZM384 27 398 23 416 25 421 33 408 31 392 33ZM458 38 466 30 478 28 484 36 476 44 464 43ZM518 12 526 8 533 14 527 20 520 18ZM448-4 452 6 462 6 485 3 505-2 508-4Z"/>
+    <path class="rival" d="M230 150Q350 96 470 110"/>
+    <path class="route route--sel" d="M300 190Q296 124 340 70"/>
+    <path class="route" d="M300 190Q380 205 420 260"/>
+    <polygon class="plane" points="-8,-6 8,0 -8,6 -4,0" transform="translate(370 215) rotate(30)"/>
+    <circle class="apt" cx="340" cy="70" r="5"/><text x="352" y="82">EDDH</text>
+    <circle class="apt" cx="420" cy="260" r="5"/><text x="432" y="264">EDDM</text>
+    <circle class="apt" cx="230" cy="150" r="5"/><text x="180" y="154">EDDL</text>
+    <circle class="apt" cx="470" cy="110" r="5"/><text x="482" y="114">EDDB</text>
+    <rect class="hub" x="293" y="183" width="14" height="14"/>
+    <rect class="tag" x="246" y="204" width="50" height="22" rx="2"/><text x="254" y="219">EDDF</text>
+  </svg>
+      <div class="am-mapview__tl"><div class="am-layers" role="group" aria-label="Kartenebenen">
+  <span class="am-label">Ebenen</span>
+  <button class="am-check" role="checkbox" aria-checked="true"><i></i><span class="am-swatch"></span>Eigene Routen</button>
+  <button class="am-check" role="checkbox" aria-checked="true"><i></i><span class="am-swatch am-swatch--rival"></span>Konkurrenz</button>
+  <button class="am-check" role="checkbox" aria-checked="false"><i></i><span class="am-swatch am-swatch--demand"></span>Nachfrage</button>
+</div></div>
+      <div class="am-mapview__tr"><div class="am-mapctl" role="group" aria-label="Zoom"><button aria-label="Vergrößern">+</button><button aria-label="Verkleinern">−</button><button aria-label="Auf Basis zentrieren">◎</button></div></div>
+      <div class="am-mapview__bl"><div class="am-scale" role="img" aria-label="Maßstab: 200 Kilometer">200 km</div></div>
+      <div class="am-mapview__r"><aside class="am-mapcard" aria-label="Flughafen EDDM">
+  <div class="am-mapcard__head"><div><div class="am-mapcard__code">EDDM</div><div class="am-mapcard__name">München</div></div><span class="am-chip am-chip--go">Bedient</span></div>
+  <dl class="am-facts"><dt>Entfernung ab EDDF</dt><dd>299 km</dd><dt>Nachfrage pro Tag</dt><dd>1.840 Pax</dd><dt>Landegebühr</dt><dd>412 EUR</dd><dt>Eigene Flüge pro Tag</dt><dd>8</dd><dt>Konkurrenten</dt><dd>2</dd></dl>
+  <div class="am-mapcard__actions"><button class="am-btn am-btn--primary am-btn--sm">Route planen</button><button class="am-btn am-btn--sm">Routen anzeigen</button></div>
+</aside></div>
+    </div>
+    <main class="am-app__content" style="padding-top:var(--space-4)">
+      <div class="am-table-wrap"><table class="am-table">
+        <thead><tr><th>Route</th><th>Flugzeug</th><th>Status</th><th class="is-num">Entfernung</th><th class="is-num">Auslastung</th><th class="is-num">Ergebnis / Tag</th></tr></thead>
+        <tbody>
+          <tr aria-selected="true"><td class="am-code">EDDF–EDDM</td><td class="am-code">D-ANFA</td><td><span class="am-chip am-chip--info">Im Flug</span></td><td class="is-num">299 km</td><td class="is-num">81 %</td><td class="is-num am-go">+9.240 EUR</td></tr>
+          <tr><td class="am-code">EDDF–EDDH</td><td class="am-code">D-ANFB</td><td><span class="am-chip">Bodenzeit</span></td><td class="is-num">412 km</td><td class="is-num">74 %</td><td class="is-num am-go">+4.860 EUR</td></tr>
+        </tbody>
+      </table></div>
+    </main>
+  </div>
+</div>
+</body>
+</html>

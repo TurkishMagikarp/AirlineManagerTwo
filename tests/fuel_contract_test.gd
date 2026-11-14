@@ -247,8 +247,10 @@ func _store(path: String, value: Array) -> void:
 func _pick(option: OptionButton, index: int) -> void:
 	await _click(option)
 	var popup := option.get_popup()
+	# The kit shadow moves the actual menu panel inside the popup window.
+	var menu_rect: Rect2 = popup.get_child(0, true).get_global_rect()
 	_check(popup.visible, "Mouse opens options")
-	var position := Vector2(popup.position) + Vector2(popup.size.x / 2.0, popup.size.y * (index + 0.5) / 3.0)
+	var position := Vector2(popup.position) + menu_rect.position + Vector2(menu_rect.size.x / 2.0, menu_rect.size.y * (index + 0.5) / 3.0)
 	for pressed in [true, false]:
 		var event := InputEventMouseButton.new()
 		event.button_index = MOUSE_BUTTON_LEFT

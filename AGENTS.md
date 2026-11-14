@@ -11,9 +11,11 @@ Godot 4.6+ UI over a Rust (godot-rust 0.5.5, edition 2024) simulation core. Docs
 - `rust/src/lib.rs` — GDExtension adapter only. Modules: `game` (airline state), `clock`, `aircraft`, `airports`, `routes`, `operations` (flights), `economy`, `demand`, `competition` (AI airlines), `maintenance`, `staff` (pilots/cabin/technicians, payroll), `history` (finance archive), `save` (versioned saves + migrations), `map`, `quality` (test-only long-run scenarios).
 - `scripts/main.gd` — main UI; panels: `routes_panel.gd`, `finances_panel.gd`, `finance_chart.gd`, `map_*.gd`; theme in `scripts/ui/`.
 - `tests/*_test.gd` — headless Godot tests; `tests/run_*_restart_test.ps1` — multi-process save/restart tests.
+- UI kit (target look): `docs/ui-kit/` — `README.md` (rules), `tokens.json` (all colours/type/spacing), `components/<Name>/README.md` (spec + Godot mapping), `bundle.css` (exact sizes/states). For UI work read the README and only the component folders you implement; don't read `preview.html` files unless you need the markup.
 - Design docs: `docs/game-design/` (decisions in `decisions/DECISION-REGISTER.md`); topic docs: `docs/{economy,demand,map,ui-design,staff}.md`; history: `docs/verification-log.md`.
 
 ## Commands
+Use `AIRLINE_ENFORCE_PERF_BUDGET=1 cargo test --locked --manifest-path rust/Cargo.toml million_flight -- --test-threads=1` on a quiet machine after long-advance changes; report the measured time in the PR.
 ```
 cargo build --locked --manifest-path rust/Cargo.toml
 cargo test  --locked --manifest-path rust/Cargo.toml
@@ -22,6 +24,10 @@ Godot --headless --path . --script res://tests/<name>_test.gd
 powershell -ExecutionPolicy Bypass -File tests/run_<name>_restart_test.ps1
 START.bat --headless --quit-after 10   # full startup smoke test
 ```
+Linux without a display (agent server): `tools/godot_check.sh test <name>` runs one Godot test headless, `tools/godot_check.sh tests` runs all of them, `tools/godot_check.sh shots <out-dir>` renders real screenshots of overview/fleet/routes at three window sizes via Xvfb. Look at the PNGs after UI changes. The PowerShell restart tests and START.bat stay Windows-only.
+
+On the Paperclip agent server this works with `export AIRLINE_GODOT=/paperclip/airline/godot/godot` and replaces any older agent instruction that says Godot cannot run there. Before merging a change that touches GDScript, scenes, resources or a Rust API Godot calls, run `tools/godot_check.sh tests`. For a change to how the UI looks, also capture to `/paperclip/shots/<ISSUE-KEY>`, open the PNGs (at least 1440x1000 and 680x520 of each screen you touched), fix clipped or overlapping text, values leaving their cards, wrong colours or fonts, and say in the PR which screenshots you checked. The capture covers overview, fleet and routes; extend the list in `tests/ui_layout_test.gd` when you change another screen. Rendering there is software OpenGL and can differ slightly from Windows.
+
 Close Godot before rebuilding Rust (Windows locks the DLL). Godot path: `AIRLINE_GODOT` env var or `%USERPROFILE%\Documents\Godot\Godot_v4.7.2-stable_win64.exe`.
 
 ## Token hygiene

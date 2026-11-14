@@ -1,4 +1,5 @@
 extends VBoxContainer
+const ThemeTokens = preload("res://scripts/ui/operations_theme.gd")
 ## All balances, route aggregates, period values and flight pages come from Rust.
 const UI = preload("res://scripts/ui/components.gd")
 const Chart = preload("res://scripts/finance_chart.gd")
@@ -53,7 +54,7 @@ func _ready() -> void:
 	grid.resized.connect(func(): grid.columns = 4 if grid.size.x >= 1150 else 2)
 	for item in [["balance", "KONTOSTAND"], ["revenue", "TICKETUMSÄTZE"], ["cargo", "FRACHTUMSÄTZE"], ["costs", "GESAMTKOSTEN"], ["profit", "GEWINN / VERLUST"]]:
 		metrics[item[0]] = UI.metric(grid, item[1])
-	note = UI.label("", 13, UI.MUTED)
+	note = UI.label("", ThemeTokens.SMALL, UI.MUTED)
 	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	add_child(note)
 	var insurance := UI.panel(self, "FLUGZEUGVERSICHERUNG")
@@ -102,6 +103,8 @@ func _ready() -> void:
 	var marketing_actions := HFlowContainer.new()
 	marketing.add_child(marketing_actions)
 	marketing_budget = SpinBox.new()
+	marketing_budget.get_line_edit().theme_type_variation = "NumericInput"
+	marketing_budget.get_line_edit().alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	marketing_budget.min_value = 0
 	marketing_budget.step = 1
 	marketing_budget.custom_minimum_size.x = 180
@@ -126,12 +129,14 @@ func _ready() -> void:
 	loan_status = UI.label("")
 	loan_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	loans.add_child(loan_status)
-	loan_rules = UI.label("", 13, UI.MUTED)
+	loan_rules = UI.label("", ThemeTokens.SMALL, UI.MUTED)
 	loan_rules.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	loans.add_child(loan_rules)
 	var actions := HFlowContainer.new()
 	loans.add_child(actions)
 	loan_amount = SpinBox.new()
+	loan_amount.get_line_edit().theme_type_variation = "NumericInput"
+	loan_amount.get_line_edit().alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	loan_amount.min_value = 1
 	loan_amount.max_value = 1000000000
 	loan_amount.step = 1
@@ -167,7 +172,7 @@ func _ready() -> void:
 	company.add_child(chart_select)
 	chart = Chart.new()
 	company.add_child(chart)
-	chart_range = UI.label("", 13, UI.MUTED)
+	chart_range = UI.label("", ThemeTokens.SMALL, UI.MUTED)
 	chart_range.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	company.add_child(chart_range)
 	var routes := UI.panel(self, "ROUTENCONTROLLING  /  ROUTE ANKLICKEN")
@@ -180,7 +185,7 @@ func _ready() -> void:
 	history.add_child(detail)
 	load_chart = Chart.new()
 	history.add_child(load_chart)
-	history.add_child(UI.label("Auslastung je Zeitabschnitt · Lücken = keine Landungen · nach Sitzplätzen gewichtet", 13, UI.MUTED))
+	history.add_child(UI.label("Auslastung je Zeitabschnitt · Lücken = keine Landungen · nach Sitzplätzen gewichtet", ThemeTokens.SMALL, UI.MUTED))
 	flights_tree = UI.table(["Landung", "Richtung", "Ticket", "Pax / Sitze", "Auslastung", "Tickets", "Kosten", "Ergebnis", "Fracht kg / EUR"], [170, 140, 90, 95, 90, 110, 110, 110, 150], 250)
 	history.add_child(flights_tree)
 	var paging := HBoxContainer.new()
@@ -237,8 +242,8 @@ func refresh(force: bool = false) -> void:
 	var marketing_root := marketing_history.create_item()
 	for entry in simulation.get_marketing_history():
 		var row := marketing_history.create_item(marketing_root)
-		row.set_text(0, entry["time"])
-		row.set_text(1, UI.money(entry["amount_eur"]))
+		UI.cell_text(row, 0, entry["time"])
+		UI.cell_text(row, 1, UI.money(entry["amount_eur"]))
 	loan_status.text = "Verfügbar: %s · Restschuld: %s · Zinsen / Gebühren bisher: %s\nNächste Rate: %s am %s (davon Zinsen: %s) · Überfällige Tilgung: %s\n%s" % [UI.money(financing["available_cash_eur"]), UI.money(financing["debt_eur"]), UI.money(financing["interest_eur"]), UI.money(financing["payment_eur"]), financing["next_due"], UI.money(financing["next_interest_eur"]), UI.money(financing["overdue_eur"]), financing["status"]]
 	loan_status.text += "\nNächste Gehälter: %s am %s · Verfügbares Guthaben ist nicht für künftige Ausgaben reserviert." % [UI.money(financing["payroll_eur"]), financing["payroll_due"]]
 	loan_status.add_theme_color_override("font_color", UI.NEGATIVE if financing["distressed"] else UI.MUTED)
@@ -249,11 +254,12 @@ func refresh(force: bool = false) -> void:
 	loan_repay.disabled = financing["insolvent"] or financing["debt_eur"] <= 0 or financing["available_cash_eur"] <= 0
 	note.tooltip_text = "Treibstoff: weltweiter Preis, wöchentlich aktualisiert; Kosten bei Abflug fixiert."
 	metrics["balance"].text = UI.money(airline.get("capital_eur", 0))
+	metrics["balance"].add_theme_color_override("font_color", UI.NEGATIVE if airline.get("capital_eur", 0) < 0 else ThemeTokens.INK)
 	for field in ["revenue", "costs", "profit"]:
 		metrics[field].text = UI.money(summary[field + "_eur"])
 	metrics["revenue"].text = UI.money(summary["ticket_revenue_eur"])
 	metrics["cargo"].text = UI.money(summary["cargo_revenue_eur"])
-	metrics["profit"].add_theme_color_override("font_color", UI.POSITIVE if summary["profit_eur"] >= 0 else UI.NEGATIVE)
+	metrics["profit"].add_theme_color_override("font_color", ThemeTokens.INK if summary["profit_eur"] >= 0 else UI.NEGATIVE)
 	var info: Dictionary = simulation.get_finance_history_info()
 	note.text = "Summen: gesamte erfasste Wirtschaft. Routenarchiv und Diagramme ab %s.\nBei älteren Spielständen fehlt frühere Detailhistorie; sie wird nicht nachberechnet. Flugzeugkäufe insgesamt: %s · Wartungschecks insgesamt: %s · Personalaufwand (Gehälter + Umschulung) insgesamt: %s." % [info.get("since", "—"), UI.money(summary["purchases_eur"]), UI.money(summary["maintenance_eur"]), UI.money(summary["payroll_eur"])]
 	note.text += "\nPassagierbetreuung / Entschädigung (in Kosten und Steuerbasis enthalten): %s." % UI.money(summary["care_eur"])
@@ -268,14 +274,14 @@ func refresh(force: bool = false) -> void:
 		var tax_row := tax_history.create_item(tax_root)
 		var tax_values := [str(assessment["year"]), UI.money(assessment["profit_eur"]), "%.2f %%" % (assessment["rate_bps"] / 100.0), UI.money(assessment["tax_eur"]), UI.money(assessment["loss_eur"])]
 		for column in range(tax_values.size()):
-			tax_row.set_text(column, tax_values[column])
+			UI.cell_text(tax_row, column, tax_values[column])
 	aircraft_journal.clear()
 	var journal_root := aircraft_journal.create_item()
 	for entry in simulation.get_aircraft_cash_history():
 		var row := aircraft_journal.create_item(journal_root)
-		row.set_text(0, entry["time"])
-		row.set_text(1, entry["kind"])
-		row.set_text(2, UI.money(entry["cash_eur"]))
+		UI.cell_text(row, 0, entry["time"])
+		UI.cell_text(row, 1, entry["kind"])
+		UI.cell_text(row, 2, UI.money(entry["cash_eur"]))
 	company_series = simulation.get_finance_series(0)
 	chart_range.text = "%s → %s\nBis zu 64 Zeitpunkte · Werte im Tooltip · Käufe und Tilgung sind keine Betriebskosten; Zinsen und Leasingraten sind enthalten; Verkäufe und Kautionen erscheinen im Kontostand." % [company_series[0]["time"], company_series[-1]["time"]] if not company_series.is_empty() else "Noch keine Finanzhistorie."
 	_chart()
@@ -286,15 +292,15 @@ func refresh(force: bool = false) -> void:
 	for r in simulation.get_route_finances():
 		var row := route_tree.create_item(root)
 		row.set_metadata(0, r)
-		row.set_text(0, "#%d %s–%s%s" % [r["route_id"], r["origin"], r["destination"], " · gelöscht" if not r["active"] else ""])
-		row.set_text(1, str(r["flights"]))
+		UI.cell_text(row, 0, "#%d %s–%s%s" % [r["route_id"], r["origin"], r["destination"], " · gelöscht" if not r["active"] else ""])
+		UI.cell_text(row, 1, str(r["flights"]))
 		row.set_tooltip_text(2, "Economy: %s (%d Pax) · Business: %s (%d Pax)" % [UI.money(r["economy_revenue_eur"]), r["economy_passengers"], UI.money(r["business_revenue_eur"]), r["business_passengers"]])
 		for pair in [[2, "revenue_eur"], [3, "costs_eur"], [4, "profit_eur"]]:
-			row.set_text(pair[0], UI.money(r[pair[1]]))
-		row.set_text(2, UI.money(r["ticket_revenue_eur"]))
+			UI.cell_text(row, pair[0], UI.money(r[pair[1]]))
+		UI.cell_text(row, 2, UI.money(r["ticket_revenue_eur"]))
 		row.set_tooltip_text(3, "Davon Betreuung / Entschädigung: %s" % UI.money(r["care_eur"]))
-		row.set_text(6, "%d kg / %s" % [r["cargo_kg"], UI.money(r["cargo_revenue_eur"])])
-		row.set_text(5, "%.1f %%" % r["load_percent"] if r["flights"] > 0 else "Keine Flüge")
+		UI.cell_text(row, 6, "%d kg / %s" % [r["cargo_kg"], UI.money(r["cargo_revenue_eur"])])
+		UI.cell_text(row, 5, "%.1f %%" % r["load_percent"] if r["flights"] > 0 else "Keine Flüge")
 		row.set_custom_color(4, UI.MUTED if r["flights"] == 0 else UI.POSITIVE if r["profit_eur"] >= 0 else UI.NEGATIVE)
 		if r["route_id"] == route_id:
 			selected = row
@@ -341,7 +347,7 @@ func _flights() -> void:
 		var row := flights_tree.create_item(root)
 		var values := [f["landing"], "%s → %s" % [f["origin"], f["destination"]], UI.money(f["ticket_eur"]), "%d / %d" % [f["passengers"], f["seats"]], "%.1f %%" % f["load_percent"], UI.money(f["ticket_revenue_eur"]), UI.money(f["costs_eur"]), UI.money(f["profit_eur"]), "%d kg / %s" % [f["cargo_kg"], UI.money(f["cargo_revenue_eur"])]]
 		for i in range(values.size()):
-			row.set_text(i, values[i])
+			UI.cell_text(row, i, values[i])
 			row.set_tooltip_text(i, "Ticket: %s\nTreibstoff: %s\nFlughäfen: %s\nPersonal: %s\nWartung / Verwaltung: %s\nBordservice (± Standard): %s" % [UI.money(f["ticket_eur"]), UI.money(f["fuel_eur"]), UI.money(f["airport_eur"]), UI.money(f["crew_eur"]), UI.money(f["overhead_eur"]), UI.money(f["service_eur"])])
 			row.set_tooltip_text(i, row.get_tooltip_text(i) + "\nBetreuung / Entschädigung: %s" % UI.money(f["care_eur"]))
 		row.set_custom_color(7, UI.POSITIVE if f["profit_eur"] >= 0 else UI.NEGATIVE)

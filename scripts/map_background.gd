@@ -1,4 +1,5 @@
 extends Control
+const ThemeTokens = preload("res://scripts/ui/operations_theme.gd")
 ## Retained static draw commands: aircraft updates never rebuild the basemap.
 var shapes: Array[Dictionary] = []
 var draw_count := 0
@@ -29,18 +30,18 @@ func _draw() -> void:
 	var camera = get_parent()
 	var viewport := Rect2(Vector2.ZERO, camera.size)
 	var scale: float = camera.scale_factor()
-	draw_rect(viewport, Color("0b1725"))
+	draw_rect(viewport, ThemeTokens.MAP_WATER)
 	for lon in range(-180, 181, 30):
 		for copy in range(-1, 2):
 			var x := lon + copy * 360
-			draw_line(camera.project(Vector2(x, -90)), camera.project(Vector2(x, 90)), Color("182b3e"))
+			draw_line(camera.project(Vector2(x, -90)), camera.project(Vector2(x, 90)), ThemeTokens.LINE)
 	for lat in range(-60, 61, 30):
-		draw_line(Vector2(0, camera.project(Vector2(0, lat)).y), Vector2(camera.size.x, camera.project(Vector2(0, lat)).y), Color("182b3e"))
+		draw_line(Vector2(0, camera.project(Vector2(0, lat)).y), Vector2(camera.size.x, camera.project(Vector2(0, lat)).y), ThemeTokens.LINE)
 	for copy in range(-1, 2):
 		var translation: Vector2 = camera.size / 2 + camera.offset + Vector2(copy * 360 * scale, 0)
 		draw_set_transform(translation, 0, Vector2(scale, scale))
 		for shape in shapes:
 			var bounds: Rect2 = shape["bounds"]
 			if not viewport.intersects(Rect2(translation + bounds.position * scale, bounds.size * scale)): continue
-			draw_mesh(shape["mesh"], null, Transform2D.IDENTITY, Color("223b4b"))
-			draw_polyline(shape["ring"], Color("355466"), 1.0 / scale, true)
+			draw_mesh(shape["mesh"], null, Transform2D.IDENTITY, ThemeTokens.MAP_LAND)
+			draw_polyline(shape["ring"], ThemeTokens.LINE, 1.0 / scale, true)

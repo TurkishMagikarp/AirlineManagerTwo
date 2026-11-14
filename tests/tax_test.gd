@@ -150,9 +150,11 @@ func _select_tax() -> bool:
 	var select: OptionButton = main.finances_panel.chart_select
 	await _click(select)
 	var popup := select.get_popup()
+	# The kit shadow moves the actual menu panel inside the popup window.
+	var menu_rect: Rect2 = popup.get_child(0, true).get_global_rect()
 	if not _check(popup.visible, "Chart selector opens through mouse input"):
 		return false
-	var position := Vector2(popup.position) + Vector2(popup.size.x / 2.0, popup.size.y * 4.5 / 5.0)
+	var position := Vector2(popup.position) + menu_rect.position + Vector2(menu_rect.size.x / 2.0, menu_rect.size.y * 4.5 / 5.0)
 	await _mouse(position)
 	return _check(select.selected == 4, "Mouse selects Ertragsteuer chart series")
 
