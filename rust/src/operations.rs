@@ -330,6 +330,7 @@ impl Game {
                 (flight + ground).div_ceil(60)
             ));
         }
+        self.check_slots(&route.origin_icao, &route.destination_icao, interval)?;
         let first = self
             .clock
             .elapsed()

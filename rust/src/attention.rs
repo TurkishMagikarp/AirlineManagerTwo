@@ -78,6 +78,28 @@ impl Game {
                 0,
             );
         }
+        let nearly_full: Vec<_> = crate::airports::catalog()
+            .unwrap()
+            .airports
+            .iter()
+            .filter(|a| {
+                a.icao == airline.home_airport_icao
+                    || self
+                        .routes
+                        .iter()
+                        .any(|r| r.origin_icao == a.icao || r.destination_icao == a.icao)
+            })
+            .filter(|a| {
+                a.daily_departure_slots.is_some_and(|cap| {
+                    self.slot_usage(&a.icao) * 100
+                        >= u64::from(cap) * u64::from(crate::slots::RULES.near_full_percent)
+                })
+            })
+            .map(|a| self.slot_text(&a.icao))
+            .collect();
+        if !nearly_full.is_empty() {
+            add("slots", nearly_full.join(" · "), "routes", 0, 0, 0);
+        }
         for p in &self.fleet {
             if let Some(i) = self.planned_route(p.id)
                 && let Ok(state) = operations::movement(

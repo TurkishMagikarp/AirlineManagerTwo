@@ -8,6 +8,9 @@ use std::collections::HashSet;
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Game {
+    /// Derived snapshot of other owners, refreshed before each AI review.
+    #[serde(skip)]
+    pub external_slots: std::collections::BTreeMap<String, u64>,
     pub insurance: crate::insurance::Policy,
     pub fuel_contract: Option<crate::fuel_contracts::Contract>,
     pub clock: Clock,
@@ -37,6 +40,7 @@ pub struct Game {
 impl Default for Game {
     fn default() -> Self {
         Self {
+            external_slots: Default::default(),
             insurance: Default::default(),
             fuel_contract: None,
             clock: Clock::default(),

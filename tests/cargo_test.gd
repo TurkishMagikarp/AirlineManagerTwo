@@ -52,7 +52,7 @@ func _run() -> void:
 				return
 			if legacy:
 				var original := FileAccess.get_file_as_string(path)
-				var fixture := _strip(original).replace('"version":26', '"version":21')
+				var fixture := _strip(original).replace('"version":27', '"version":21')
 				if not _check(JSON.parse_string(fixture)["version"] == 21 and not '"cargo_' in fixture, "True v21 fixture omits every cargo field"):
 					return
 				_write(path, fixture)
@@ -69,7 +69,7 @@ func _run() -> void:
 			_store(path + ".expected", _snapshot())
 		elif not _check(_snapshot() == _read(path + ".expected"), "Long continuation equals uninterrupted player/AI world, history, charts and quotes"):
 			return
-		if not _check(sim.save_game(probe_path).is_empty() and JSON.parse_string(FileAccess.get_file_as_string(probe_path))["version"] == 26, "Writes current v26"):
+		if not _check(sim.save_game(probe_path).is_empty() and JSON.parse_string(FileAccess.get_file_as_string(probe_path))["version"] == 27, "Writes current v27"):
 			return
 	if not await _layouts():
 		return

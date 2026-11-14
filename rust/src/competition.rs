@@ -431,7 +431,9 @@ impl Game {
             // All companies settle against the same immutable offer snapshot first.
             for i in 0..staged.competitors.len() {
                 let supply = staged.market_routes();
+                let external = staged.slots_except_competitor(i);
                 let c = &mut staged.competitors[i];
+                c.game.external_slots = external;
                 if c.next_review == end.as_secs() && !c.review(&supply) {
                     return false;
                 }
@@ -1108,6 +1110,11 @@ impl Competitor {
                     interval_seconds: interval * 60,
                     ..Default::default()
                 });
+                if g.check_slots(&r.origin_icao, &r.destination_icao, interval * 60)
+                    .is_err()
+                {
+                    continue;
+                }
                 for step in 3..=15 {
                     if r.parent_route_id.is_some() && step != 3 {
                         continue;
@@ -1263,6 +1270,23 @@ impl Competitor {
         let Ok(km) = crate::routes::distance_km(&r.origin_icao, &r.destination_icao) else {
             return false;
         };
+        if self
+            .game
+            .check_slots(
+                &r.origin_icao,
+                &r.destination_icao,
+                u64::from(AI_INTERVAL_MINUTES) * 60,
+            )
+            .is_err()
+        {
+            // Free the aircraft for another market on the next review.
+            let id = r.id;
+            if self.game.delete_route(id).is_err() {
+                return false;
+            }
+            self.route_reviews.retain(|r| r.route_id != id);
+            return true;
+        }
         let reference = crate::economy::reference_price(km);
         let now = self.game.clock.elapsed().as_secs();
         let mut candidate = r.clone();
@@ -2309,5 +2333,39 @@ mod tests {
         let before = state(&g);
         assert!(!g.advance(86400.0));
         assert_eq!(state(&g), before);
+    }
+}
+
+#[cfg(test)]
+mod slot_admission_tests {
+    #[test]
+    fn slots_ai_full_hub_skips_purchase_and_full_destination_uses_other_markets() {
+        let mut c = super::initial_competitors().unwrap().remove(0);
+        let before = c.game.fleet.len();
+        c.game.external_slots.insert("EDDF".into(), 120);
+        c.expand(&[]).unwrap();
+        assert_eq!(c.game.fleet.len(), before);
+        assert_eq!(c.game.routes.len(), 1);
+        let mut stopped = c.clone();
+        stopped.game.stop_schedule(1).unwrap();
+        stopped.idle_reviews = super::RETRY_AFTER - 1;
+        stopped.route_reviews.push(super::RouteReview {
+            route_id: 1,
+            ..Default::default()
+        });
+        assert!(stopped.retry(0, &[]));
+        assert!(stopped.game.routes.is_empty());
+        assert!(stopped.route_reviews.is_empty());
+        c.game.external_slots.clear();
+        c.game.external_slots.insert("LTFM".into(), 120);
+        c.game.external_slots.insert("EDDF".into(), 108);
+        // Existing EDDF service holds six; at most one more six-slot service fits.
+        c.expand(&[]).unwrap();
+        assert!(c.game.slot_usage("EDDF") <= 120);
+        assert!(c.game.routes.iter().all(|r| r.destination_icao != "LTFM"));
+        assert!(
+            c.game.routes.len() > 1,
+            "AI should find another profitable destination"
+        );
     }
 }

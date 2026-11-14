@@ -49,6 +49,9 @@ mod seasonal_tests;
 mod service;
 #[cfg(test)]
 mod service_tests;
+#[cfg(test)]
+mod slot_tests;
+mod slots;
 mod staff;
 #[cfg(test)]
 mod staff_tests;
@@ -249,6 +252,7 @@ impl SimulationClock {
                     .map(|a| {
                         vdict! {
                             "icao" => a.icao.as_str(), "name" => a.name.as_str(),
+                            "slots" => self.game.slot_text(&a.icao).as_str(),
                             "position" => Vector2::new(a.longitude as f32, a.latitude as f32)
                         }
                     })
@@ -700,10 +704,13 @@ impl SimulationClock {
         let error = self
             .game
             .check_route(&a, &b, aircraft_id, (route_id != 0).then_some(route_id))
+            .and_then(|distance| self.game.check_slots(&a, &b, 43200).map(|()| distance))
             .err()
             .unwrap_or_default();
         let quote = self.game.planning_quote(&a, &b, aircraft_id).ok();
         vdict! { "distance_km" => distance, "error" => error.as_str(),
+        "origin_slots" => self.game.slot_text(&a).as_str(),
+        "destination_slots" => self.game.slot_text(&b).as_str(),
         "has_cost_estimate" => quote.is_some(),
         "estimated_airport_eur" => quote.as_ref().map_or(0, |q| q.airport),
         "estimated_costs_eur" => quote.as_ref().map_or(0, |q| q.costs()),
@@ -1396,6 +1403,7 @@ impl SimulationClock {
                     "icao" => airport.icao.as_str(),
                     "name" => airport.name.as_str(),
                     "iata" => airport.iata.as_deref().unwrap_or(""),
+                    "slots" => self.game.slot_text(&airport.icao).as_str(),
                     "charge_percent" => airport.charge_percent
                 }
             })

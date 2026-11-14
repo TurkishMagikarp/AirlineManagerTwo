@@ -13,7 +13,9 @@ use std::time::Duration;
 // Identity migration: keep all stored money, history and airborne quotes verbatim;
 // no new saved fields are needed because tariffs belong to the world catalog.
 // v26: deterministic delay cursors and punctuality/care totals.
-const VERSION: u32 = 26;
+// v27: identity migration for slots. Existing schedules (including over-capacity
+// airports) remain valid; admission checks apply only to new schedules.
+const VERSION: u32 = 27;
 // Bounded input, including centuries of fuel/seasonal quotes for the player
 // and both AI airlines in the million-flight finance restart scenario.
 // Version 17 retains per-class quotes, which also split more archive batches.
@@ -259,6 +261,7 @@ pub fn load(path: &Path) -> Result<Game, String> {
         return Err("Ungültiger Treibstoffmarkt.".into());
     }
     let mut game = Game {
+        external_slots: Default::default(),
         fuel_contract: data.state.fuel_contract,
         marketing: data.state.marketing.ok_or("Marketingdaten fehlen.")?,
         tax: if data.version >= 19 {

@@ -97,6 +97,7 @@ impl Game {
     ) -> Result<(), String> {
         self.require_solvent()?;
         self.check_route(origin, destination, aircraft_id, None)?;
+        self.check_slots(origin, destination, 43200)?;
         let next = self
             .next_route_id
             .checked_add(1)

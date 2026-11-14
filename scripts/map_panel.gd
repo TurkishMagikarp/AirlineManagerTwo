@@ -42,7 +42,7 @@ func refresh() -> void:
 	if not is_instance_valid(canvas): return
 	canvas.airports = simulation.get_map_airports()
 	canvas.routes = simulation.get_map_routes()
-	last_selected_id = -1 # Route/airport snapshots may change without a flight change.
+	last_selected_id = -2147483648 # Route/airport snapshots may change without a flight change.
 	refresh_flights()
 
 func refresh_flights() -> void:
@@ -54,6 +54,9 @@ func refresh_flights() -> void:
 	last_selected_id = selected_id
 	summary.text = "%d unterwegs  /  %d Routen" % [canvas.flights.size(), canvas.routes.size()]
 	details.text = "Kein Flug ausgewählt · Nur tatsächlich fliegende Flugzeuge werden angezeigt."
+	if selected_id < 0 and -selected_id - 1 < canvas.airports.size():
+		var airport: Dictionary = canvas.airports[-selected_id - 1]
+		details.text = "%s · %s\n%s" % [airport["icao"], airport["name"], airport["slots"]]
 	for flight in canvas.flights:
 		if flight["aircraft_id"] == selected_id:
 			details.text = "%s  /  %s · %s\n%s → %s   ·   %.1f %%   ·   Ankunft: %s" % [flight["flight_number"], flight["model"], flight["identifier"], flight["origin"], flight["destination"], flight["progress"] * 100, flight["arrival"]]
