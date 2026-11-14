@@ -468,10 +468,10 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 444 fn settled_cache_matches_scans_after_merges_groups_and_reload()
 491 fn million_flights_are_lossless_compact_and_random_access()
 539 fn million_flight_finance_scenario_stays_within_budget()
-596 fn frame_partitioning_and_simultaneous_routes_match_archive()
-621 fn price_changes_preserve_old_load_costs_and_deleted_routes()
-642 fn legacy_migration_starts_at_known_balance_without_fabricating_flights()
-668 fn corrupt_archive_is_rejected_and_overflow_leaves_it_unchanged()
+598 fn frame_partitioning_and_simultaneous_routes_match_archive()
+623 fn price_changes_preserve_old_load_costs_and_deleted_routes()
+644 fn legacy_migration_starts_at_known_balance_without_fabricating_flights()
+670 fn corrupt_archive_is_rejected_and_overflow_leaves_it_unchanged()
 
 ## rust/src/insurance.rs
 7 const DAY: u64 = 86400;

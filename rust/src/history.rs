@@ -561,7 +561,9 @@ mod tests {
         assert!(h.totals(2, u64::MAX).flights > 900_000);
         assert!(h.totals(1, u64::MAX).profit() > 0);
         assert!(h.totals(2, u64::MAX).profit() < 0);
-        assert!(h.batches.len() < 100_000);
+        // Additional disruption boundaries still compress at least 90% of
+        // settled player flights in the mixed two-route scenario.
+        assert!((h.batches.len() as i64) * 10 < g.finance.totals.flights);
         assert_eq!(g.competitors.len(), 2);
         assert!(
             g.competitors
