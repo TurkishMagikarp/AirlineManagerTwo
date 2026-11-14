@@ -303,3 +303,24 @@ Wartungsende wieder verschwindet. Spielstandversion unverändert (10), neues Fel
   in `docs/insurance.md`. START.bat, tatsächlicher PowerShell-Wrapper, native
   Windows-Neustarts/DLL-Verhalten, Rendering und Skalierung sind auf diesem
   Linux-Server nicht ausgeführt und bleiben Besitzerprüfungen.
+
+- Abschluss Godot: alle 26 eigenständigen Tests, Hauptszene, Editor-Import und
+  sämtliche 15 Neustart-Testfamilien erfolgreich in getrennten Linux-Prozessen
+  (74 erforderliche Aufrufe, Finanzarchiv-Schreiber zugleich eigenständiger Test).
+  Enthalten sind das etwa zwei Millionen Flüge große Finanzarchiv mit frischem
+  Leser, laufende/pausierte Unicode-Speicherpfade und alle Legacy-/aktuellen
+  Migrationsphasen. Die zunächst parallel abgebrochene Neustartserie und der
+  bewusst gestoppte überlappende Godot-Finanzstresstest zählen nicht als Erfolge;
+  die abschließende Godot-Serie lief sequenziell ohne Rust-Stresslauf daneben.
+- Rust: alle 197 Tests abgedeckt und bestanden: 196 im vollständigen Lauf mit
+  einem Test-Thread, der unveränderte Millionenflugtest abschließend isoliert.
+  Der erste Gesamtlauf hatte beim Benchmark unter überlappender Last nach
+  361,36 s das unveränderte 300-s-Limit verletzt (196 bestanden, 1 fehlgeschlagen).
+  Der isolierte `cargo test million_flight_finance_scenario_stays_within_budget
+  --locked --manifest-path rust/Cargo.toml -- --test-threads=1 --nocapture`
+  bestand mit 267.55 s Fortschreibung unter demselben 300-s-Limit, einschließlich
+  Speichern/Laden/Fortsetzung (348,87 s insgesamt; das Limit misst nur die
+  Fortschreibung). `cargo clippy --locked --manifest-path
+  rust/Cargo.toml` bestand ohne Warnungen; der Locked-Build bestand ebenfalls.
+  Determinismus, alte Speicherstände und langfristige KI-Prüfungen unverändert.
+  Keine Gameplay-, Economy-, Konfigurations- oder Rust-Änderung erforderlich.
