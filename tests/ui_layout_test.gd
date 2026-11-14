@@ -30,7 +30,7 @@ func _run() -> void:
 	var unchanged: Dictionary = sim.get_financial_summary().duplicate(true)
 	for dimensions in [Vector2i(1440, 1000), Vector2i(1100, 720), Vector2i(680, 520)]:
 		root.size = dimensions
-		for page in range(3):
+		for page in range(main.PAGES.size()):
 			main._show_page(page)
 			if page == 2:
 				main.routes_panel.route_tree.get_root().get_first_child().select(0)
@@ -50,8 +50,15 @@ func _run() -> void:
 				return
 			if not capture_dir.is_empty():
 				await RenderingServer.frame_post_draw
-				var filename := "%s-%dx%d.png" % [["overview", "fleet", "routes"][page], dimensions.x, dimensions.y]
+				var filename := "%s-%dx%d.png" % [["overview", "fleet", "routes", "map", "finances", "staff"][page], dimensions.x, dimensions.y]
 				assert(root.get_texture().get_image().save_png(capture_dir.path_join(filename)) == OK)
+			if not capture_dir.is_empty():
+				var panel: Control = [main.finance_panel, main.fleet_panel, main.routes_panel, main.map_panel, main.finances_panel, main.staff_panel][page]
+				scroll.scroll_vertical = int(panel.position.y)
+				for frame in range(5):
+					await process_frame
+				await RenderingServer.frame_post_draw
+				assert(root.get_texture().get_image().save_png(capture_dir.path_join("%s-content-%dx%d.png" % [["overview", "fleet", "routes", "map", "finances", "staff"][page], dimensions.x, dimensions.y])) == OK)
 			if page == 2:
 				# Verify deep controls stay reachable through the page scroll.
 				scroll.ensure_control_visible(main.routes_panel.schedule_button)
@@ -68,8 +75,16 @@ func _run() -> void:
 				if not capture_dir.is_empty():
 					await RenderingServer.frame_post_draw
 					assert(root.get_texture().get_image().save_png(capture_dir.path_join("route-results-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
+		main._open_founding()
+		for frame in range(5):
+			await process_frame
+		assert(root.get_visible_rect().encloses(main.founding.get_global_rect()))
+		if not capture_dir.is_empty():
+			await RenderingServer.frame_post_draw
+			assert(root.get_texture().get_image().save_png(capture_dir.path_join("founding-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
+		main._sync_view()
 	assert(sim.get_financial_summary() == unchanged, "Navigation/layout must never change finances")
 	main.queue_free()
 	await process_frame
-	print("PASS: populated overview/fleet/routes at 1440x1000, 1100x720, 680x520; deep controls reachable; no financial changes")
+	print("PASS: populated overview/fleet/routes/map/finances/staff and founding at 1440x1000, 1100x720, 680x520; deep controls reachable; no financial changes")
 	quit(0)

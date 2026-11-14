@@ -207,6 +207,7 @@ func _add_time_controls(column: VBoxContainer) -> void:
 	controls.add_child(save_button)
 	load_button = Button.new()
 	load_button.text = "Laden"
+	load_button.theme_type_variation = "GhostButton"
 	load_button.pressed.connect(_load_game)
 	controls.add_child(load_button)
 	save_status = _label("Ein lokaler Spielstand · manuell speichern und laden", ThemeTokens.SMALL, ThemeTokens.INK_MUTED)
@@ -677,7 +678,13 @@ func _build_founding() -> void:
 	var form := VBoxContainer.new()
 	form.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	form.add_theme_constant_override("separation", 10)
-	scroll.add_child(form)
+	# Reserve space for the focus ring inside the clipping scroll viewport.
+	var focus_margin := MarginContainer.new()
+	focus_margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	for side in ["left", "top", "right", "bottom"]:
+		focus_margin.add_theme_constant_override("margin_" + side, ThemeTokens.SPACE_1)
+	scroll.add_child(focus_margin)
+	focus_margin.add_child(form)
 	form.add_child(_label("Ein neuer Anfang.", ThemeTokens.SCREEN_TITLE))
 	form.add_child(_label("Name deiner Airline", ThemeTokens.BODY))
 	name_input = LineEdit.new()
@@ -717,6 +724,7 @@ func _build_founding() -> void:
 	actions.add_child(founding_load_button)
 	cancel_founding_button = Button.new()
 	cancel_founding_button.text = "Abbrechen"
+	cancel_founding_button.theme_type_variation = "GhostButton"
 	cancel_founding_button.pressed.connect(_sync_view)
 	actions.add_child(cancel_founding_button)
 	founding_status = _label("Gründen startet pausiert bei Tag 1. Erst Speichern ersetzt den lokalen Spielstand.", ThemeTokens.SMALL, ThemeTokens.INK_MUTED)

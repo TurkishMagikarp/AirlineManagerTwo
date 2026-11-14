@@ -60,9 +60,10 @@ Godot --headless --path . --script res://tests/ui_layout_test.gd
 Godot --path . --script res://tests/ui_layout_test.gd -- --capture-dir=docs/screenshots
 ```
 
-Der zweite Aufruf benötigt einen echten Grafikrenderer. Er erzeugt echte
-Viewport-Aufnahmen für Übersicht, Flotte, Routen, tieferliegende Routenaktionen
-und Flugergebnisse bei **1440×1000, 1100×720 und 680×520**.
+Der zweite Aufruf benötigt einen echten Grafikrenderer. `tools/godot_check.sh
+shots /paperclip/shots/AIR-117` startet diesen unter Linux über Xvfb. Er erzeugt
+echte Viewport-Aufnahmen für Übersicht, Flotte, Routen, Karte, Finanzen, Personal,
+Gründung sowie gescrollte Inhalte, tieferliegende Routenaktionen und Flugergebnisse bei **1440×1000, 1100×720 und 680×520**.
 Die Test-Airline wird ausschließlich über die bestehenden Rust-APIs gegründet:
 drei regulär gekaufte ATR, EDDF–EDDM mit Ticketpreis 71 EUR und acht Landungen.
 Keine künstlichen UI-Zahlen, keine Änderungen an Wirtschaftskonfiguration oder
@@ -73,6 +74,12 @@ der Flugplansteuerung und unveränderte Finanzsummen nach Navigation/Größenwec
 Die bestehenden UI-Tests prüfen weiterhin echte Maus-/Tastaturaktionen und
 Speichern/Laden; ihre Anzeigeprüfungen verwenden jetzt die Kennzahlen-Karten und
 Ergebnistabellen statt der früheren Fließtexte.
+
+`ui_theme_test.gd` prüft die tatsächlich beim TextServer ankommenden variablen
+Schriftgewichte. OpenType-Achsen werden als numerische Tags übergeben; der String
+`wght` würde bei Godot unbemerkt auf die dünnste Schriftstärke zurückfallen.
+DM Mono verwendet ausschließlich die mitgelieferten Schnitte 400 und 500.
+Die Gründungsmaske reserviert im Scrollbereich Platz für den äußeren Fokusring.
 
 ### Verifiziert am 12.11.2026
 

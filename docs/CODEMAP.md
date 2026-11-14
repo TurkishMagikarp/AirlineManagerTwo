@@ -1153,36 +1153,36 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 11 const PAGES: Array[Dictionary] = [
 90 func _ready() -> void:
 165 func _add_time_controls(column: VBoxContainer) -> void:
-219 func _save_game() -> void:
-225 func _load_game() -> void:
-238 func _set_speed(speed: int) -> void:
-245 func _process(delta: float) -> void:
-271 func _refresh_time() -> void:
-285 func _show_page(index: int) -> void:
-317 func _refresh_finance() -> void:
-337 func _build_fleet(content: VBoxContainer) -> void:
-421 func _model_selected(index: int) -> void:
-432 func _lease_aircraft() -> void:
-442 func _dispose_aircraft() -> void:
-452 func _buy_aircraft() -> void:
-468 func _refresh_fleet() -> void:
-512 func _maintenance_summary(plane: Dictionary) -> String:
-525 func _build_maintenance(parent: VBoxContainer) -> void:
-561 func _refresh_base_action() -> void:
-573 func _change_maintenance_base() -> void:
-580 func _refresh_maintenance() -> void:
-639 func _request_maintenance() -> void:
-650 func _cancel_maintenance() -> void:
-661 func _build_founding() -> void:
-728 func _country_changed(index: int) -> void:
-742 func _found_airline() -> void:
-754 func _sync_view() -> void:
-771 func _open_founding() -> void:
-780 func _label(text: String, style: Dictionary, color: Color = ThemeTokens.INK) -> Label:
-784 func _build_finance(content: VBoxContainer) -> void:
-811 func _build_attention(parent: VBoxContainer) -> void:
-828 func _refresh_attention() -> void:
-850 func _open_attention(entry: Dictionary) -> void:
+220 func _save_game() -> void:
+226 func _load_game() -> void:
+239 func _set_speed(speed: int) -> void:
+246 func _process(delta: float) -> void:
+272 func _refresh_time() -> void:
+286 func _show_page(index: int) -> void:
+318 func _refresh_finance() -> void:
+338 func _build_fleet(content: VBoxContainer) -> void:
+422 func _model_selected(index: int) -> void:
+433 func _lease_aircraft() -> void:
+443 func _dispose_aircraft() -> void:
+453 func _buy_aircraft() -> void:
+469 func _refresh_fleet() -> void:
+513 func _maintenance_summary(plane: Dictionary) -> String:
+526 func _build_maintenance(parent: VBoxContainer) -> void:
+562 func _refresh_base_action() -> void:
+574 func _change_maintenance_base() -> void:
+581 func _refresh_maintenance() -> void:
+640 func _request_maintenance() -> void:
+651 func _cancel_maintenance() -> void:
+662 func _build_founding() -> void:
+736 func _country_changed(index: int) -> void:
+750 func _found_airline() -> void:
+762 func _sync_view() -> void:
+779 func _open_founding() -> void:
+788 func _label(text: String, style: Dictionary, color: Color = ThemeTokens.INK) -> Label:
+792 func _build_finance(content: VBoxContainer) -> void:
+819 func _build_attention(parent: VBoxContainer) -> void:
+836 func _refresh_attention() -> void:
+858 func _open_attention(entry: Dictionary) -> void:
 
 ## scripts/map_background.gd
 1 extends Control
@@ -1328,10 +1328,10 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 63 const SANS_FONT = preload("res://resources/fonts/nunito/Nunito[wght].ttf")
 64 const MONO_FONT = preload("res://resources/fonts/dmmono/DMMono-Regular.ttf")
 65 const MONO_MEDIUM_FONT = preload("res://resources/fonts/dmmono/DMMono-Medium.ttf")
-104 func text_style(type: String, style: Dictionary, font_name: String = "font", size_name: String = "font_siz
-108 func floating_box(radius: int, padding: int) -> StyleBoxFlat:
-115 func button_styles(
-143 func _init() -> void:
+105 func text_style(type: String, style: Dictionary, font_name: String = "font", size_name: String = "font_siz
+109 func floating_box(radius: int, padding: int) -> StyleBoxFlat:
+116 func button_styles(
+144 func _init() -> void:
 
 ## README.md headings (line text)
 1 # Airline Manager — Neustart

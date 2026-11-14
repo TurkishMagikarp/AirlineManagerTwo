@@ -73,7 +73,8 @@ static func font_for(style: Dictionary) -> Font:
 		font.base_font = MONO_MEDIUM_FONT if style["weight"] == 500 else MONO_FONT
 	else:
 		font.base_font = DISPLAY_FONT if style["family"] == "display" else SANS_FONT
-		font.variation_opentype = {"wght": style["weight"]}
+		# FontVariation expects OpenType axis tags as integers. A string silently uses weight 100.
+		font.variation_opentype = {0x77676874: style["weight"]}
 	font.spacing_glyph = roundi(style["size"] * style["tracking"])
 	var extra := roundi(style["height"] - font.get_height(style["size"]))
 	font.spacing_top = floori(extra / 2.0)
@@ -115,7 +116,7 @@ func floating_box(radius: int, padding: int) -> StyleBoxFlat:
 func button_styles(
 	type: String, fill: Color, hover: Color, pressed: Color, border: Color, ink: Color
 ) -> void:
-	if type != "Button":
+	if type not in ["Button", "OptionButton"]:
 		set_type_variation(type, "Button")
 	text_style(type, BODY_STRONG)
 	for state in ["normal", "hover", "pressed", "hover_pressed", "disabled"]:
@@ -123,7 +124,7 @@ func button_styles(
 		var edge := border
 		if state == "hover":
 			bg = hover
-			if type == "Button": edge = INK_MUTED
+			if type in ["Button", "OptionButton"]: edge = INK_MUTED
 		elif state in ["pressed", "hover_pressed"]: bg = pressed
 		elif state == "disabled":
 			bg = SURFACE
@@ -153,8 +154,10 @@ func _init() -> void:
 	button_styles("DangerSolidButton", STOP, STOP, STOP, STOP, ON_STOP)
 	button_styles("GhostButton", TRANSPARENT, SURFACE_RAISED, SURFACE_SUNKEN, TRANSPARENT, INK_MUTED)
 	button_styles("OptionButton", SURFACE_RAISED, SURFACE_RAISED, SURFACE_SUNKEN, LINE_STRONG, INK)
-	set_type_variation("OptionButton", "Button")
 	text_style("OptionButton", BODY)
+	for side in ["normal", "hover", "pressed", "disabled"]:
+		get_stylebox(side, "OptionButton").content_margin_left = SPACE_3
+		get_stylebox(side, "OptionButton").content_margin_right = SPACE_3
 	for type in ["LineEdit", "Tree", "PopupMenu", "TabBar", "TabContainer"]:
 		text_style(type, BODY)
 		set_color("font_color", type, INK)
@@ -187,7 +190,7 @@ func _init() -> void:
 	set_color("guide_color", "Tree", LINE)
 	set_color("font_hovered_color", "Tree", INK)
 	set_color("font_hovered_selected_color", "Tree", INK)
-	set_constant("v_separation", "Tree", TABLE_ROW_HEIGHT - BODY["height"])
+	set_constant("v_separation", "Tree", (TABLE_ROW_HEIGHT - BODY["height"]) / 2)
 	set_constant("h_separation", "Tree", SPACE_3)
 	set_constant("draw_guides", "Tree", 0)
 	for type in ["TabBar", "TabContainer"]:

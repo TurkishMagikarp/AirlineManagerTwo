@@ -21,7 +21,6 @@ static func label(text: String, style: Dictionary = ThemeTokens.BODY, color: Col
 ## Classify rendered table text only; values and units still come from Rust.
 static func cell_text(item: TreeItem, column: int, text: String) -> void:
 	item.set_text(column, text)
-	item.custom_minimum_height = ThemeTokens.TABLE_ROW_HEIGHT
 	if _numeric == null:
 		_numeric = RegEx.new()
 		_numeric.compile("^[−+0-9]|[0-9] (EUR|%|km|kg)$")
