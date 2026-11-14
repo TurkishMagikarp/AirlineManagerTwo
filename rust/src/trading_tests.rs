@@ -278,3 +278,221 @@ fn trading_overflow_cannot_remove_aircraft_or_partially_post() {
     assert!(!g.advance(50000.0 * DAY));
     assert_eq!(state(&g), before);
 }
+
+#[test]
+fn used_market_sale_rebuy_preserves_airframe_and_posts_purchase() {
+    let mut g = fresh();
+    g.buy_aircraft("atr72_600").unwrap();
+    g.clock.set_running(true);
+    assert!(g.advance(10.0 * DAY));
+    g.fleet[0].wear = g.fleet[0].wear.added(120, 3600).unwrap();
+    let original = g.fleet[0].clone();
+    let hull = g.hull_value(&original).unwrap();
+    g.sell_aircraft(1).unwrap();
+    let listing = g.used_market.listings[0].clone();
+    let price = g.used_price(&listing).unwrap();
+    assert_eq!(
+        price,
+        hull * (10000 + trading::RULES.dealer_markup_bps) / 10000
+    );
+    assert_eq!(listing.aircraft.wear, original.wear);
+    assert!(g.advance(20.0 * DAY));
+    assert!(g.used_price(&listing).unwrap() < price);
+    let before = g.cash();
+    let paid = g.used_price(&listing).unwrap();
+    g.buy_used_aircraft(listing.id).unwrap();
+    let p = &g.fleet[0];
+    assert_eq!(p.wear, original.wear);
+    assert_eq!(p.acquired_at, original.acquired_at);
+    assert_eq!(p.purchased_at, Some(30 * 86400));
+    assert_eq!(p.purchase_price_eur, paid);
+    assert_eq!(p.lease, None);
+    assert_ne!(p.id, original.id);
+    assert_eq!(g.cash(), before - paid);
+    assert_eq!(
+        g.history.as_ref().unwrap().purchases.last().unwrap().amount,
+        paid
+    );
+    assert!(g.used_market.listings.is_empty());
+    g.validate_history().unwrap();
+    g.validate_fleet().unwrap();
+    let before = state(&g);
+    assert!(g.buy_used_aircraft(listing.id).is_err());
+    assert_eq!(state(&g), before);
+}
+
+#[test]
+fn used_market_lease_returns_caps_expiry_and_failed_buys() {
+    let mut g = fresh();
+    for _ in 0..=trading::RULES.market_size_cap {
+        g.lease_aircraft("atr72_600").unwrap();
+        let id = g.fleet.last().unwrap().id;
+        g.return_aircraft(id).unwrap();
+    }
+    assert_eq!(g.used_market.listings.len(), trading::RULES.market_size_cap);
+    assert_eq!(g.used_market.listings[0].id, 2);
+    assert_eq!(g.used_market.listings[0].seller, "Leasinggesellschaft");
+    assert!(
+        g.used_market
+            .listings
+            .iter()
+            .all(|l| l.aircraft.lease.is_none())
+    );
+    cash(&mut g, 1);
+    let before = state(&g);
+    assert!(g.buy_used_aircraft(2).is_err());
+    assert_eq!(state(&g), before);
+    let expiry = trading::RULES.market_expiry_days as f64 * DAY;
+    // Running an empty airline needs no staff or operating money.
+    g.clock.set_running(true);
+    assert!(g.advance(expiry - 1.0));
+    assert!(!g.used_market.listings.is_empty());
+    let balance = g.cash();
+    assert!(g.advance(1.0));
+    assert!(g.used_market.listings.is_empty());
+    assert_eq!(g.cash(), balance);
+}
+
+#[test]
+fn used_market_speeds_steps_pause_restart_migration_and_corruption() {
+    let mut seed = fresh();
+    seed.buy_aircraft("atr72_600").unwrap();
+    seed.sell_aircraft(1).unwrap();
+    seed.clock.set_running(true);
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("used.json");
+    let mut expected = seed.clone();
+    assert!(expected.advance(40.0 * DAY));
+    for speed in [1, 4, 16] {
+        let mut g = seed.clone();
+        g.clock.set_speed(speed);
+        for day in 0..40 {
+            assert!(g.advance(DAY / f64::from(speed)));
+            if day == 19 {
+                save::save(&path, &g).unwrap();
+                g = save::load(&path).unwrap();
+                g.clock.set_running(false);
+                let paused = state(&g);
+                g.advance(DAY);
+                assert_eq!(state(&g), paused);
+                g.clock.set_running(true);
+            }
+        }
+        assert_eq!(state(&g), state(&expected));
+    }
+    save::save(&path, &expected).unwrap();
+    let saved: serde_json::Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    for field in ["id", "listed_at"] {
+        let mut bad = saved.clone();
+        bad["state"]["used_market"]["listings"][0][field] = u64::MAX.into();
+        std::fs::write(&path, serde_json::to_vec(&bad).unwrap()).unwrap();
+        assert!(save::load(&path).is_err());
+    }
+    let mut old = saved;
+    old["version"] = 29.into();
+    old["state"].as_object_mut().unwrap().remove("used_market");
+    std::fs::write(&path, serde_json::to_vec(&old).unwrap()).unwrap();
+    let migrated = save::load(&path).unwrap();
+    assert!(migrated.used_market.listings.is_empty());
+    assert_eq!(migrated.cash(), expected.cash());
+    assert_eq!(
+        migrated.history.unwrap().purchases,
+        expected.history.unwrap().purchases
+    );
+}
+
+#[test]
+fn used_market_shared_ai_two_year_economy_and_determinism() {
+    let mut g = fresh();
+    cash(&mut g, 100_000_000);
+    for model in ["atr72_600", "a320_200", "b737_800"] {
+        g.buy_aircraft(model).unwrap();
+        let p = g.fleet.last_mut().unwrap();
+        p.wear = p.wear.added(40, 3600).unwrap();
+        let id = p.id;
+        g.sell_aircraft(id).unwrap();
+    }
+    g.competitors = crate::competition::initial_competitors().unwrap();
+    for c in &mut g.competitors {
+        c.game.stop_schedule(1).unwrap();
+        c.game.routes.clear();
+        c.game.sell_aircraft(1).unwrap();
+        // Transfer AI sale through the same market handoff used at reviews.
+        for l in c.game.used_market.listings.drain(..) {
+            let mut l = l;
+            l.id = g.used_market.next_id;
+            g.used_market.next_id += 1;
+            g.used_market.listings.push(l);
+        }
+    }
+    g.clock.set_running(true);
+    let mut expected = g.clone();
+    assert!(expected.advance(730.0 * DAY));
+    assert_eq!(expected.competitors.len(), 2);
+    assert!(
+        expected
+            .competitors
+            .iter()
+            .any(|c| c.game.fleet.iter().any(|p| p.purchased_at.is_some()))
+    );
+    for c in &expected.competitors {
+        assert!(c.game.cash() > 0 && c.game.cash() < 1_000_000_000);
+        assert!(c.game.fleet.len() <= 6);
+        c.game.validate_history().unwrap();
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("shared-market.json");
+    for speed in [1, 4, 16] {
+        let mut run = g.clone();
+        run.clock.set_speed(speed);
+        for day in 0..730 {
+            assert!(run.advance(DAY / f64::from(speed)));
+            if day == 90 {
+                save::save(&path, &run).unwrap();
+                run = save::load(&path).unwrap();
+            }
+        }
+        assert_eq!(state(&run), state(&expected));
+        run.validate_competitors().unwrap();
+    }
+}
+
+#[test]
+fn used_market_ai_disposal_is_visible_to_player_and_other_owners() {
+    for leased in [false, true] {
+        let mut g = fresh();
+        g.competitors = crate::competition::initial_competitors().unwrap();
+        g.competitors.truncate(1);
+        let c = &mut g.competitors[0];
+        c.game.stop_schedule(1).unwrap();
+        c.game.routes.clear();
+        if leased {
+            c.game.fleet.clear();
+            c.game.lease_aircraft("atr72_600").unwrap();
+        }
+        c.game.fleet[0].wear = c.game.fleet[0].wear.added(50, 3600).unwrap();
+        let wear = c.game.fleet[0].wear.clone();
+        let seller = if leased {
+            "Leasinggesellschaft".to_string()
+        } else {
+            c.game.airline.as_ref().unwrap().name.clone()
+        };
+        cash(&mut c.game, -50_000);
+        g.clock.set_running(true);
+        assert!(g.advance(7.0 * DAY));
+        let listing = g
+            .used_market
+            .listings
+            .iter()
+            .find(|l| l.seller == seller)
+            .unwrap();
+        assert_eq!(listing.aircraft.wear, wear);
+        assert!(listing.aircraft.lease.is_none());
+        let id = listing.id;
+        assert!(g.competitors[0].game.used_market.listings.is_empty());
+        g.validate_competitors().unwrap();
+        g.buy_used_aircraft(id).unwrap();
+        assert_eq!(g.fleet[0].wear, wear);
+        g.validate_history().unwrap();
+    }
+}

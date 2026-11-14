@@ -82,6 +82,9 @@ pub struct Aircraft {
     /// Simulation seconds since founding; version 13.
     #[serde(default)]
     pub acquired_at: Option<u64>,
+    /// Date paid by the current owner; original acquisition remains the age origin.
+    #[serde(default)]
+    pub purchased_at: Option<u64>,
     #[serde(default)]
     pub lease: Option<crate::trading::Lease>,
     /// Additive (version 10): older saves start without recorded wear.

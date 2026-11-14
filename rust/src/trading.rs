@@ -8,6 +8,9 @@ use std::sync::LazyLock;
 
 #[derive(Deserialize)]
 pub struct Rules {
+    pub dealer_markup_bps: i64,
+    pub market_expiry_days: u64,
+    pub market_size_cap: usize,
     pub resale_initial_bps: i64,
     pub resale_floor_bps: i64,
     pub annual_depreciation_bps: i64,
@@ -20,6 +23,9 @@ pub struct Rules {
 pub static RULES: LazyLock<Rules> = LazyLock::new(|| {
     let r: Rules = serde_json::from_str(include_str!("../../config/aircraft_trading.json"))
         .expect("aircraft trading config");
+    assert!((0..=2000).contains(&r.dealer_markup_bps));
+    assert!((1..=3650).contains(&r.market_expiry_days));
+    assert!((1..=1024).contains(&r.market_size_cap));
     assert!((1..=10000).contains(&r.resale_initial_bps));
     assert!((0..=r.resale_initial_bps).contains(&r.resale_floor_bps));
     assert!((0..=10000).contains(&r.annual_depreciation_bps));
@@ -109,6 +115,7 @@ impl Game {
             status: AircraftStatus::Parked,
             purchase_price_eur: model.price_eur,
             acquired_at: Some(now),
+            purchased_at: None,
             lease: Some(Lease {
                 deposit,
                 monthly,
@@ -153,24 +160,7 @@ impl Game {
     }
 
     pub fn hull_value(&self, p: &Aircraft) -> Result<i64, String> {
-        let price = i128::from(aircraft::model(&p.model_id)?.price_eur);
-        let condition = i128::from(
-            p.wear
-                .condition_permille(crate::maintenance::rules(&p.model_id)?),
-        );
-        let age = self
-            .clock
-            .elapsed()
-            .as_secs()
-            .checked_sub(p.acquired_at.ok_or("Erwerbsdatum fehlt.")?)
-            .ok_or("Ungültiges Erwerbsdatum.")?;
-        let depreciation =
-            i128::from(age) * i128::from(RULES.annual_depreciation_bps) / (365 * 86400);
-        let age_bps = (i128::from(RULES.resale_initial_bps) - depreciation)
-            .max(i128::from(RULES.resale_floor_bps));
-        let condition_bps = i128::from(RULES.condition_floor_bps)
-            + (10000 - i128::from(RULES.condition_floor_bps)) * condition / 1000;
-        Ok((price * age_bps * condition_bps / 100_000_000) as i64)
+        hull_value_at(p, self.clock.elapsed().as_secs())
     }
 
     pub fn sell_aircraft(&mut self, id: u32) -> Result<(), String> {
@@ -189,6 +179,10 @@ impl Game {
     }
     fn dispose_aircraft(&mut self, id: u32, kind: Kind) -> Result<(), String> {
         let quote = self.disposal_quote(id)?;
+        self.used_market
+            .next_id
+            .checked_add(1)
+            .ok_or("Marktkennung erschöpft.")?;
         self.post_aircraft_cash(quote, kind)?;
         for r in &mut self.routes {
             if r.aircraft_id == Some(id) {
@@ -198,7 +192,27 @@ impl Game {
                 r.rotation_phase = None;
             }
         }
-        self.fleet.retain(|p| p.id != id);
+        let index = self.fleet.iter().position(|p| p.id == id).unwrap();
+        let mut plane = self.fleet.remove(index);
+        let seller = if plane.lease.take().is_some() {
+            "Leasinggesellschaft".to_string()
+        } else {
+            self.airline.as_ref().unwrap().name.clone()
+        };
+        self.prune_used_market();
+        // IDs never repeat, including when a listing expires or is scrapped.
+        let listing_id = self.used_market.next_id;
+        self.used_market.next_id += 1;
+        plane.status = AircraftStatus::Parked;
+        self.used_market.listings.push(Listing {
+            id: listing_id,
+            listed_at: self.clock.elapsed().as_secs(),
+            seller,
+            aircraft: plane,
+        });
+        if self.used_market.listings.len() > RULES.market_size_cap {
+            self.used_market.listings.remove(0);
+        }
         Ok(())
     }
 
@@ -225,9 +239,10 @@ impl Game {
 
     pub fn validate_trading(&self) -> Result<(), String> {
         let now = self.clock.elapsed().as_secs();
+        self.validate_used_market()?;
         for p in &self.fleet {
             let acquired = p.acquired_at.ok_or("Erwerbsdatum fehlt.")?;
-            if acquired > now {
+            if acquired > now || p.purchased_at.is_some_and(|t| t < acquired || t > now) {
                 return Err("Ungültiges Erwerbsdatum.".into());
             }
             if let Some(l) = &p.lease
@@ -262,4 +277,141 @@ impl Game {
         }
         Ok(())
     }
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Listing {
+    pub id: u64,
+    pub listed_at: u64,
+    pub seller: String,
+    pub aircraft: Aircraft,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Market {
+    pub next_id: u64,
+    pub listings: Vec<Listing>,
+}
+impl Default for Market {
+    fn default() -> Self {
+        Self {
+            next_id: 1,
+            listings: Vec::new(),
+        }
+    }
+}
+
+impl Game {
+    pub fn prune_used_market(&mut self) {
+        let now = self.clock.elapsed().as_secs();
+        self.used_market
+            .listings
+            .retain(|l| now.saturating_sub(l.listed_at) < RULES.market_expiry_days * 86400);
+    }
+
+    pub fn used_price(&self, listing: &Listing) -> Result<i64, String> {
+        let hull = self.hull_value(&listing.aircraft)?;
+        Ok((i128::from(hull) * i128::from(10000 + RULES.dealer_markup_bps) / 10000).max(1) as i64)
+    }
+
+    /// Same admission and purchase journal as a factory purchase, preserving wear.
+    pub fn buy_used_aircraft(&mut self, listing_id: u64) -> Result<(), String> {
+        self.require_solvent()?;
+        let home = self
+            .airline
+            .as_ref()
+            .ok_or("Bitte zuerst eine Airline gründen.")?
+            .home_airport_icao
+            .clone();
+        let now = self.clock.elapsed().as_secs();
+        let i = self
+            .used_market
+            .listings
+            .iter()
+            .position(|l| {
+                l.id == listing_id
+                    && now.saturating_sub(l.listed_at) < RULES.market_expiry_days * 86400
+            })
+            .ok_or("Angebot nicht mehr verfügbar.")?;
+        let price = self.used_price(&self.used_market.listings[i])?;
+        if self.cash() < price {
+            return Err("Nicht genügend Guthaben.".into());
+        }
+        let next = self
+            .next_aircraft_id
+            .checked_add(1)
+            .ok_or("Keine weitere Flugzeugkennung verfügbar.")?;
+        let mut plane = self.used_market.listings.remove(i).aircraft;
+        plane.id = self.next_aircraft_id;
+        plane.location_icao = home;
+        plane.purchase_price_eur = price;
+        plane.purchased_at = Some(now);
+        self.airline.as_mut().unwrap().capital_eur -= price;
+        if let Some(h) = &mut self.history {
+            h.purchases.push(crate::history::Purchase {
+                time: now,
+                amount: price,
+            });
+        }
+        self.fleet.push(plane);
+        self.next_aircraft_id = next;
+        Ok(())
+    }
+
+    fn validate_used_market(&self) -> Result<(), String> {
+        let now = self.clock.elapsed().as_secs();
+        let mut previous = (0, 0);
+        if self.used_market.next_id == 0 || self.used_market.listings.len() > RULES.market_size_cap
+        {
+            return Err("Ungültiger Gebrauchtmarkt.".into());
+        }
+        for l in &self.used_market.listings {
+            let p = &l.aircraft;
+            aircraft::model(&p.model_id)?;
+            crate::cabins::layout(p)?;
+            if l.id <= previous.0
+                || l.id >= self.used_market.next_id
+                || l.listed_at < previous.1
+                || l.listed_at > now
+                || now - l.listed_at >= RULES.market_expiry_days * 86400
+                || l.seller.is_empty()
+                || l.seller.chars().count() > 80
+                || p.acquired_at.is_none_or(|t| t > l.listed_at)
+                || p.purchased_at
+                    .is_some_and(|t| t > l.listed_at || Some(t) < p.acquired_at)
+                || p.status != AircraftStatus::Parked
+                || p.lease.is_some()
+                || p.maintenance.is_some()
+                || p.wear.check_seconds > p.wear.flight_seconds
+                || p.wear.check_cycles > p.wear.cycles
+                || p.purchase_price_eur <= 0
+                || !crate::airports::catalog()?
+                    .airports
+                    .iter()
+                    .any(|a| a.icao == p.location_icao)
+            {
+                return Err("Ungültiges Gebrauchtangebot.".into());
+            }
+            previous = (l.id, l.listed_at);
+        }
+        Ok(())
+    }
+}
+
+/// Same valuation for current quotes and AI residual value, with existing wear.
+pub fn hull_value_at(p: &Aircraft, now: u64) -> Result<i64, String> {
+    let price = i128::from(aircraft::model(&p.model_id)?.price_eur);
+    let condition = i128::from(
+        p.wear
+            .condition_permille(crate::maintenance::rules(&p.model_id)?),
+    );
+    let age = now
+        .checked_sub(p.acquired_at.ok_or("Erwerbsdatum fehlt.")?)
+        .ok_or("Ungültiges Erwerbsdatum.")?;
+    let depreciation = i128::from(age) * i128::from(RULES.annual_depreciation_bps) / (365 * 86400);
+    let age_bps = (i128::from(RULES.resale_initial_bps) - depreciation)
+        .max(i128::from(RULES.resale_floor_bps));
+    let condition_bps = i128::from(RULES.condition_floor_bps)
+        + (10000 - i128::from(RULES.condition_floor_bps)) * condition / 1000;
+    Ok((price * age_bps * condition_bps / 100_000_000) as i64)
 }

@@ -39,7 +39,7 @@ func _run() -> void:
 			if not _check(sim.load_game(probe_path).is_empty(), "Load neutral v29 comparison world"):
 				return
 			var expected := _snapshot()
-			var old := RegEx.create_from_string(',"reputation":\\{[^{}]*\\}').sub(world, "", true).replace('"version":29', '"version":27')
+			var old := RegEx.create_from_string(',"reputation":\\{[^{}]*\\}').sub(world, "", true).replace('"version":30', '"version":27')
 			if not _check(not '"reputation"' in old and '"version":27' in old, "Legacy fixture omits reputation for player and both AI"):
 				return
 			_write(reputation_path, old)

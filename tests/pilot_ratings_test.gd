@@ -55,7 +55,7 @@ func _run() -> void:
 			# v24 has no ratings or training. Strip only the new employee fields;
 			# do not round u64 seeds or financial remainders through Godot JSON.
 			var before: String = _snapshot()[0]
-			var old := _without_ratings(before).replace('"version":29', '"version":24')
+			var old := _without_ratings(before).replace('"version":30', '"version":24')
 			if not _check(not '"rating"' in old and not '"training"' in old and '"version":24' in old, "Legacy fixture contains no post-v24 employee fields"):
 				return
 			_write(path, old)
