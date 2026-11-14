@@ -23,6 +23,8 @@ Godot --headless --path . --script res://tests/<name>_test.gd
 powershell -ExecutionPolicy Bypass -File tests/run_<name>_restart_test.ps1
 START.bat --headless --quit-after 10   # full startup smoke test
 ```
+Linux without a display (agent server): `tools/godot_check.sh test <name>` runs one Godot test headless, `tools/godot_check.sh tests` runs all of them, `tools/godot_check.sh shots <out-dir>` renders real screenshots of overview/fleet/routes at three window sizes via Xvfb. Look at the PNGs after UI changes. The PowerShell restart tests and START.bat stay Windows-only.
+
 Close Godot before rebuilding Rust (Windows locks the DLL). Godot path: `AIRLINE_GODOT` env var or `%USERPROFILE%\Documents\Godot\Godot_v4.7.2-stable_win64.exe`.
 
 ## Token hygiene
