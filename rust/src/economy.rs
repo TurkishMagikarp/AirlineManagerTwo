@@ -331,6 +331,7 @@ pub fn quote_at_price(
     quote_with_time(route, model_id, routes, fuel_cents, None)
 }
 
+#[cfg(test)]
 pub fn quote_at_time(
     route: &Route,
     model_id: &str,
@@ -348,6 +349,39 @@ fn quote_with_time(
     fuel_cents: i64,
     departure: Option<u64>,
 ) -> Result<Totals, String> {
+    let mut market = QuoteMarket::new(route, model_id, routes)?;
+    quote_prepared(route, model_id, routes, fuel_cents, departure, &mut market)
+}
+
+pub(crate) struct QuoteMarket {
+    cargo: crate::cargo::Market,
+    passengers: crate::demand::Prepared,
+}
+impl QuoteMarket {
+    pub fn new(
+        route: &Route,
+        model_id: &str,
+        routes: &[crate::demand::Offer],
+    ) -> Result<Self, String> {
+        let seats = routes
+            .iter()
+            .find(|o| crate::demand::same_offer(route, &o.route))
+            .map_or(aircraft::model(model_id)?.seats, |o| o.seats);
+        Ok(Self {
+            cargo: crate::cargo::Market::new(route, model_id, routes)?,
+            passengers: crate::demand::Prepared::new(route, seats, routes)?,
+        })
+    }
+}
+
+pub(crate) fn quote_prepared(
+    route: &Route,
+    model_id: &str,
+    routes: &[crate::demand::Offer],
+    fuel_cents: i64,
+    departure: Option<u64>,
+    market: &mut QuoteMarket,
+) -> Result<Totals, String> {
     let c = &*CONFIG;
     let model = aircraft::model(model_id)?;
     let offer = routes
@@ -355,11 +389,10 @@ fn quote_with_time(
         .find(|o| crate::demand::same_offer(route, &o.route));
     let seats = offer.map_or(model.seats, |o| o.seats);
     let business_seats = offer.map_or(0, |o| o.business_seats);
-    let (demand, passenger_loads) =
-        crate::demand::estimate_with_loads(route, seats, routes, departure)?;
+    let (demand, passenger_loads) = market.passengers.estimate(departure);
     let passengers = demand.per_departure;
     let business_revenue = demand.business * route.business_ticket_eur;
-    let cargo_kg = crate::cargo::estimate_loaded(route, model_id, routes, &passenger_loads)?;
+    let cargo_kg = market.cargo.estimate(passenger_loads);
     let cargo_revenue = crate::cargo::revenue(cargo_kg, route.cargo_rate_cents);
     let seconds = operations::timings(route, model_id)?.0 as i64;
     let rates = &c.models[model_id];

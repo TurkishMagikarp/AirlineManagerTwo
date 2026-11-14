@@ -68,6 +68,18 @@ fn departure_quote_at_price(
     routes: &[crate::demand::Offer],
     fuel_cents: i64,
 ) -> Result<crate::economy::FlightResult, String> {
+    let mut market = crate::economy::QuoteMarket::new(route, model, routes)?;
+    departure_quote_prepared(route, model, index, routes, fuel_cents, &mut market)
+}
+
+fn departure_quote_prepared(
+    route: &Route,
+    model: &str,
+    index: u64,
+    routes: &[crate::demand::Offer],
+    fuel_cents: i64,
+    market: &mut crate::economy::QuoteMarket,
+) -> Result<crate::economy::FlightResult, String> {
     let plan = route.plan.as_ref().ok_or("Kein Flugplan.")?;
     let mut directed = route.clone();
     if plan.is_return(index) {
@@ -85,12 +97,13 @@ fn departure_quote_at_price(
         origin: directed.origin_icao.clone(),
         destination: directed.destination_icao.clone(),
         ticket_eur: route.ticket_eur,
-        totals: crate::economy::quote_at_time(
+        totals: crate::economy::quote_prepared(
             &directed,
             model,
             routes,
             fuel_cents,
-            landing - flight,
+            Some(landing - flight),
+            market,
         )?,
     })
 }
@@ -376,9 +389,14 @@ impl Game {
                     index += 1;
                 }
                 if index < state.completed {
-                    // Fuel is constant within its configured week. Cache only
-                    // this derived price locally; still quote demand per departure.
+                    // Fuel is constant within its configured week. Reuse the
+                    // offer workspace, but evaluate demand at each departure.
                     let (mut fuel_until, mut fuel_cents) = (0, 0);
+                    let Ok(mut market) =
+                        crate::economy::QuoteMarket::new(route, &self.fleet[p].model_id, supply)
+                    else {
+                        return false;
+                    };
                     while index < state.completed {
                         let departure = plan.first_departure + index * plan.interval_seconds;
                         if departure >= fuel_until {
@@ -386,12 +404,13 @@ impl Game {
                             fuel_until = self.fuel_market.next_change(departure);
                         }
                         let count = 1;
-                        let Ok(mut f) = departure_quote_at_price(
+                        let Ok(mut f) = departure_quote_prepared(
                             route,
                             &self.fleet[p].model_id,
                             index,
                             supply,
                             fuel_cents,
+                            &mut market,
                         ) else {
                             return false;
                         };

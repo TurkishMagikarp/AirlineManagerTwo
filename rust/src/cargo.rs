@@ -67,71 +67,100 @@ struct Share {
     allocated: f64,
 }
 
+#[cfg(test)]
 pub fn estimate_loaded(
     route: &Route,
     model_id: &str,
     supply: &[demand::Offer],
     passengers: &[i64],
 ) -> Result<i64, String> {
-    if route.plan.is_none() {
-        return Ok(0);
-    }
-    let base = daily_demand(route)?;
-    let offers: Vec<_> = supply
-        .iter()
-        .filter(|o| o.route.plan.is_some() && demand::same_market(route, &o.route))
-        .collect();
-    let mut shares = Vec::with_capacity(offers.len());
-    let mut target = None;
-    for (i, o) in offers.iter().enumerate() {
-        let own = demand::same_offer(route, &o.route)
-            && o.cargo_model
-                .as_deref()
-                .is_none_or(|model| model == model_id);
-        if own && target.is_none() {
-            target = Some(i);
+    Ok(Market::new(route, model_id, supply)?.estimate(passengers))
+}
+
+/// Derived only from one immutable offer snapshot. Never saved or reused after
+/// a company event; seasonal passenger loads are still supplied per departure.
+pub struct Market {
+    base: f64,
+    target: Option<usize>,
+    shares: Vec<Share>,
+    models: Vec<&'static aircraft::Model>,
+}
+impl Market {
+    pub fn new(route: &Route, model_id: &str, supply: &[demand::Offer]) -> Result<Self, String> {
+        let mut market = Self {
+            base: 0.0,
+            target: None,
+            shares: Vec::new(),
+            models: Vec::new(),
+        };
+        if route.plan.is_none() {
+            return Ok(market);
         }
-        let f = 43200.0 / o.route.plan.as_ref().unwrap().interval_seconds as f64;
-        let w = (1.0 - o.route.cargo_rate_cents as f64 / RULES.zero_demand_rate_cents as f64)
-            .clamp(0.0, 1.0);
-        let pax = passengers[i];
-        // Synthetic planning offers may omit model metadata; actual fleet offers always carry it.
-        let model = aircraft::model(o.cargo_model.as_deref().unwrap_or(model_id))?;
-        shares.push(Share {
-            frequency: f,
-            willingness: w,
-            limit: (capacity(model, pax) as f64 * f).min(base * w),
-            allocated: 0.0,
-        });
-    }
-    let Some(target) = target else {
-        return Ok(0);
-    };
-    // Shippers can choose the cheapest available airline. An overpriced
-    // competitor must not destroy demand that an affordable carrier can serve.
-    let mut remaining = base * shares.iter().map(|s| s.willingness).fold(0.0, f64::max);
-    for _ in 0..=shares.len() {
-        let weight: f64 = shares
+        market.base = daily_demand(route)?;
+        for o in supply
             .iter()
-            .filter(|s| s.allocated < s.limit)
-            .map(|s| s.frequency * s.willingness)
-            .sum();
-        // Match the passenger allocator's tolerance: rounding dust cannot fill
-        // another kilogram and must not trigger repeated spill rounds.
-        if weight <= 0.0 || remaining <= 1e-9 {
-            break;
+            .filter(|o| o.route.plan.is_some() && demand::same_market(route, &o.route))
+        {
+            let own = demand::same_offer(route, &o.route)
+                && o.cargo_model
+                    .as_deref()
+                    .is_none_or(|model| model == model_id);
+            if own && market.target.is_none() {
+                market.target = Some(market.shares.len());
+            }
+            market.models.push(aircraft::model(
+                o.cargo_model.as_deref().unwrap_or(model_id),
+            )?);
+            market.shares.push(Share {
+                frequency: 43200.0 / o.route.plan.as_ref().unwrap().interval_seconds as f64,
+                willingness: (1.0
+                    - o.route.cargo_rate_cents as f64 / RULES.zero_demand_rate_cents as f64)
+                    .clamp(0.0, 1.0),
+                limit: 0.0,
+                allocated: 0.0,
+            });
         }
-        let mut used = 0.0;
-        for s in &mut shares {
-            let amount = (remaining * s.frequency * s.willingness / weight)
-                .min((s.limit - s.allocated).max(0.0));
-            s.allocated += amount;
-            used += amount;
-        }
-        remaining = (remaining - used).max(0.0);
+        Ok(market)
     }
-    let own = &shares[target];
-    Ok((own.allocated / own.frequency.max(1.0)).floor() as i64)
+
+    /// Reuse allocation storage, but refresh every payload limit and spill round.
+    pub fn estimate(&mut self, passengers: &[i64]) -> i64 {
+        let Some(target) = self.target else {
+            return 0;
+        };
+        let base = self.base;
+        let shares = &mut self.shares;
+        for (i, share) in shares.iter_mut().enumerate() {
+            share.limit = (capacity(self.models[i], passengers[i]) as f64 * share.frequency)
+                .min(base * share.willingness);
+            share.allocated = 0.0;
+        }
+        // Shippers can choose the cheapest available airline. An overpriced
+        // competitor must not destroy demand that an affordable carrier can serve.
+        let mut remaining = base * shares.iter().map(|s| s.willingness).fold(0.0, f64::max);
+        for _ in 0..=shares.len() {
+            let weight: f64 = shares
+                .iter()
+                .filter(|s| s.allocated < s.limit)
+                .map(|s| s.frequency * s.willingness)
+                .sum();
+            // Match the passenger allocator's tolerance: rounding dust cannot fill
+            // another kilogram and must not trigger repeated spill rounds.
+            if weight <= 0.0 || remaining <= 1e-9 {
+                break;
+            }
+            let mut used = 0.0;
+            for s in shares.iter_mut() {
+                let amount = (remaining * s.frequency * s.willingness / weight)
+                    .min((s.limit - s.allocated).max(0.0));
+                s.allocated += amount;
+                used += amount;
+            }
+            remaining = (remaining - used).max(0.0);
+        }
+        let own = &shares[target];
+        (own.allocated / own.frequency.max(1.0)).floor() as i64
+    }
 }
 impl Game {
     pub fn set_cargo_rate(&mut self, id: u32, rate: i64) -> Result<(), String> {

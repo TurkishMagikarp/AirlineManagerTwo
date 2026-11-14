@@ -333,3 +333,43 @@ fn cargo_shared_passenger_loads_match_each_owners_quote_with_colliding_local_ids
         }
     }
 }
+
+#[test]
+fn cargo_reused_market_refreshes_payload_and_matches_fresh_seasonal_quotes() {
+    let a = game();
+    let mut b = a.clone();
+    b.airline.as_mut().unwrap().name = "Other cargo owner".into();
+    b.fleet[0].model_id = "b737_800".into();
+    b.fleet[0].business_seats = 12;
+    for rate in [0, 150, 600] {
+        b.routes[0].cargo_rate_cents = rate;
+        let mut supply = a.market_routes();
+        supply.extend(b.market_routes());
+        let mut market = cargo::Market::new(&a.routes[0], "a320_200", &supply).unwrap();
+        let mut quote_market =
+            economy::QuoteMarket::new(&a.routes[0], "a320_200", &supply).unwrap();
+        // Revisit earlier times and payload extremes to catch stale spill state.
+        for time in [0, 86400, 180 * 86400, 0] {
+            let loads = crate::demand::market_passengers(&supply, Some(time)).unwrap();
+            for payload in [&loads[..], &[0, 0], &[180, 189], &loads[..]] {
+                assert_eq!(
+                    market.estimate(payload),
+                    cargo::estimate_loaded(&a.routes[0], "a320_200", &supply, payload).unwrap()
+                );
+            }
+            let mut directed = a.routes[0].clone();
+            std::mem::swap(&mut directed.origin_icao, &mut directed.destination_icao);
+            let fresh = economy::quote_at_time(&directed, "a320_200", &supply, 100, time).unwrap();
+            let cached = economy::quote_prepared(
+                &directed,
+                "a320_200",
+                &supply,
+                100,
+                Some(time),
+                &mut quote_market,
+            )
+            .unwrap();
+            assert_eq!(cached, fresh);
+        }
+    }
+}

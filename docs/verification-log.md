@@ -210,3 +210,13 @@ Wartungsende wieder verschwindet. Spielstandversion unverändert (10), neues Fel
 - Nicht ausführbar auf diesem Server: Godot, GUI-/Screenshotprüfung, START.bat und Windows-Prozessneustarts. Keine Screenshots erstellt; Rust-Ergebnisse bestätigen keine visuelle Korrektheit. Manueller Ablauf in `docs/cargo.md` dokumentiert.
 
 - Hedging-/Kontrollvergleich über zehn Jahre: Rohkasse kann wegen zeitlich verschobener Flottenkäufe abweichen. Begrenzung auf 5 % des kumulierten Betriebsumsatzes; beide KI-Varianten bleiben solvent und Fracht bleibt jährlich < 10 % des Ticketumsatzes. Alter reiner Ticketumsatzvergleich und Leerflug-Kassenvergleich auf getrennten Frachtumsatz angepasst; Leerflug bleibt verlustreich.
+
+
+## 2026-11-14 — AIR-51: Angebots-Workspace und Performance-Abschluss
+
+- Temporäre Profilierung mit 10.000 Flügen: rund 1,1 s Passagier-Allokation und 0,15 s Frachtaufbau/-Allokation. Instrumentierung und verkürztes Profil-Fixture entfernt. Reine Frachtpuffer-Wiederverwendung reichte nicht: erster vollständiger Folgelauf 188/189, Advance 369,779 s > 300 s.
+- Gemeinsamer lokaler Angebots-Workspace berechnet Kabinenreihenfolge, Flughafen-/Preisfaktoren, Frequenzen und Modellreferenzen einmal pro unverändertem Angebotsstand. Allokationspuffer werden wiederverwendet. Saisonale Passagierlasten, freie Nutzlast und Überhang bleiben pro Abflug unverändert berechnet. Keine Änderung an Spielregeln, Speicherformat oder 300-s-Grenze.
+- Neue Regression: exakte Gleichheit mit dem ursprünglichen Passagier-Allokator über zwei saisonale Jahre, verschiedene Preise, Premiumkabinen, Bekanntheit und seltene Flüge. Weitere Regression: wiederverwendete/frische Angebote, volle/leere Nutzlast und Gegenrichtung. Acht Frachttests bestanden.
+- Vollständige Suite: `cargo test --locked --manifest-path rust/Cargo.toml -- --test-threads=2 --nocapture`: **190 bestanden, 0 fehlgeschlagen**. Million-Flight-Advance **241,801 s < 300 s**; mit Save/Load/Fortsetzung 297,237 s. Stress-Save 96.719.289 Bytes; exakter Roundtrip und Fortsetzung bestanden. Gesamtsuite 319,27 s.
+- Godot, GUI/Screenshots, START.bat und Windows-Neustarttests auf diesem Server weiterhin nicht ausführbar. Keine Screenshots erstellt; Rust-Prüfungen belegen keine visuelle Korrektheit. Manuelle Schritte in `docs/cargo.md`.
+- Abschließend: `cargo build --locked --manifest-path rust/Cargo.toml` und `cargo clippy --locked --manifest-path rust/Cargo.toml` bestanden, ohne Warnungen. `git diff --check` sauber.

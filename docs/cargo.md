@@ -45,6 +45,17 @@ Geschwindigkeits-, Schrittgrößen-, Steuer- und Neustartvergleich. Ein gemeinsa
 Passagier-Allokationslauf liefert sämtliche Nutzlastwerte; ein Vergleichstest
 prüft die Gleichheit mit einzelnen Angeboten bei gleichen lokalen IDs,
 verschiedenen Modellen, Kabinen, Preisen, Frequenzen und Jahreszeiten.
+Der gemeinsame Angebots-Arbeitsbereich wird pro unverändertem Angebotsstand
+vorbereitet: Flughafen-/Preisfaktoren, Kabinenreihenfolge, Fracht-Basismenge,
+Frequenzen und Modellreferenzen werden wiederverwendet.
+Jeder Abflug berechnet weiterhin saisonale Passagierlasten, freie Nutzlast und
+Überhang neu. Der Allokationspuffer wird ohne neue Speicherallokation befüllt;
+der Cache wird weder gespeichert noch über Firmenereignisse hinweg verwendet.
+Ein unabhängiger Vergleich mit dem ursprünglichen Passagier-Allokator prüft
+identische Ergebnisse für zwei saisonale Jahre einschließlich Premiumkabinen,
+Preisen, Bekanntheit und seltenen Flügen. Ein weiterer Regressionstest vergleicht
+wiederverwendete und frische Angebote bei
+wechselnden Jahreszeiten, vollen/leeren Kabinen und umgekehrten Richtungen.
 
 Godot/GUI, Screenshots, START.bat und Windows-Neustarttests sind auf dem
 Linux-Server nicht ausführbar. Offene manuelle Prüfung: Route auswählen,

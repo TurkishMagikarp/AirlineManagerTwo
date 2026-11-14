@@ -59,9 +59,13 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 41 pub fn daily_demand(route: &Route) -> Result<f64, String>
 48 pub fn estimate(
 63 struct Share
-70 pub fn estimate_loaded(
-136 impl Game
-137 pub fn set_cargo_rate(&mut self, id: u32, rate: i64) -> Result<(), String>
+71 pub fn estimate_loaded(
+82 pub struct Market
+88 impl Market
+89 pub fn new(route: &Route, model_id: &str, supply: &[demand::Offer]) -> Result<Self, String>
+127 pub fn estimate(&mut self, passengers: &[i64]) -> i64
+165 impl Game
+166 pub fn set_cargo_rate(&mut self, id: u32, rate: i64) -> Result<(), String>
 
 ## rust/src/cargo_tests.rs
 3 fn game() -> Game
@@ -76,6 +80,7 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 226 fn cargo_daily_market_is_conserved_for_mixed_rates_frequencies_and_reverse_routes()
 263 fn cargo_income_enters_tax_base_and_impossible_airborne_payload_is_rejected()
 302 fn cargo_shared_passenger_loads_match_each_owners_quote_with_colliding_local_ids()
+338 fn cargo_reused_market_refreshes_payload_and_matches_fresh_seasonal_quotes()
 
 ## rust/src/clock.rs
 5 pub struct Clock
@@ -161,32 +166,41 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 68 pub fn market(route: &Route, price: i64) -> Result<Market, String>
 72 pub fn market_at(route: &Route, price: i64, time: u64) -> Result<Market, String>
 76 fn market_with_season(route: &Route, price: i64, time: Option<u64>) -> Result<Market, String>
-107 pub struct Offer
-116 impl Offer
-117 pub fn new(route: &Route, seats: u32) -> Self
-131 pub struct Estimate
-138 fn frequency(route: &Route) -> f64
-145 pub(crate) fn same_offer(a: &Route, b: &Route) -> bool
-160 pub fn estimate(route: &Route, seats: u32, routes: &[Offer]) -> Result<Estimate, String>
-164 pub fn estimate_at(
-174 pub fn estimate_with_loads(
-188 pub fn market_passengers(routes: &[Offer], time: Option<u64>) -> Result<Vec<i64>, String>
-197 fn rounded_passengers(daily: f64, offer: &Offer) -> i64
-207 fn estimate_with_season(
-434 pub fn passengers(route: &Route, routes: &[Offer]) -> Result<i64, String>
-443 pub fn same_market(a: &Route, b: &Route) -> bool
-449 mod tests
-453 fn game(count: u32, interval: u32) -> Game
-469 fn seat_spill_reaches_cheaper_and_pricier_offers_but_respects_limits()
-520 fn all_full_and_single_offer_are_capacity_bounded_without_inventing_demand()
-540 fn spilling_service_matches_pause_speeds_steps_and_restart()
-579 fn unrelated_market_does_not_dilute_supply()
-592 fn airport_size_distance_and_segments_define_market_not_seats()
-626 fn actual_landings_cover_large_mixed_and_regional_airports_at_different_prices()
-660 fn multiple_flights_share_daily_market_instead_of_multiplying_it()
-678 fn reversed_routes_share_market_and_unplanned_routes_do_not_dilute_it()
-701 fn rare_flights_do_not_bank_days_of_demand()
-710 fn shared_market_survives_restart_and_schedule_changes_without_rewriting_history()
+86 struct MarketInputs
+92 impl MarketInputs
+93 fn new(route: &Route, price: i64) -> Result<Self, String>
+119 fn at(&self, season: &Market) -> Market
+129 pub struct Offer
+138 impl Offer
+139 pub fn new(route: &Route, seats: u32) -> Self
+153 pub struct Estimate
+160 fn frequency(route: &Route) -> f64
+167 pub(crate) fn same_offer(a: &Route, b: &Route) -> bool
+182 pub fn estimate(route: &Route, seats: u32, routes: &[Offer]) -> Result<Estimate, String>
+186 pub fn estimate_at(
+198 pub fn market_passengers(routes: &[Offer], time: Option<u64>) -> Result<Vec<i64>, String>
+207 fn rounded_passengers(daily: f64, offer: &Offer) -> i64
+217 fn estimate_with_season(
+235 pub(crate) struct Prepared
+248 impl Prepared
+249 pub fn new(route: &Route, seats: u32, routes: &[Offer]) -> Result<Self, String>
+365 pub fn estimate(&mut self, time: Option<u64>) -> (Estimate, &[i64])
+503 fn estimate_reference(
+730 pub fn passengers(route: &Route, routes: &[Offer]) -> Result<i64, String>
+739 pub fn same_market(a: &Route, b: &Route) -> bool
+745 mod tests
+749 fn game(count: u32, interval: u32) -> Game
+765 fn prepared_market_matches_original_allocator_exactly_across_seasons()
+796 fn seat_spill_reaches_cheaper_and_pricier_offers_but_respects_limits()
+847 fn all_full_and_single_offer_are_capacity_bounded_without_inventing_demand()
+867 fn spilling_service_matches_pause_speeds_steps_and_restart()
+906 fn unrelated_market_does_not_dilute_supply()
+919 fn airport_size_distance_and_segments_define_market_not_seats()
+953 fn actual_landings_cover_large_mixed_and_regional_airports_at_different_prices()
+987 fn multiple_flights_share_daily_market_instead_of_multiplying_it()
+1005 fn reversed_routes_share_market_and_unplanned_routes_do_not_dilute_it()
+1028 fn rare_flights_do_not_bank_days_of_demand()
+1037 fn shared_market_survives_restart_and_schedule_changes_without_rewriting_history()
 
 ## rust/src/economy.rs
 14 pub struct FuelMarket
@@ -222,22 +236,26 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 304 pub fn quote(route: &Route, model_id: &str) -> Result<Totals, String>
 316 pub fn quote_shared(
 325 pub fn quote_at_price(
-334 pub fn quote_at_time(
-344 fn quote_with_time(
-391 impl Game
-392 pub fn set_ticket_price(&mut self, id: u32, price: i64) -> Result<(), String>
-402 pub fn validate_finance(&self) -> Result<(), String>
-481 mod tests
-484 fn fuel_checkpoints_match_original_replay_in_any_query_order()
-526 fn game(price: i64) -> Game
-539 fn prices_distance_capacity_and_costs_are_predictable()
-569 fn landing_debits_once_empty_flights_can_create_debt_and_prices_validate()
-609 fn frame_sizes_16x_save_load_and_history_are_identical()
-647 fn v5_migration_never_charges_past_landings_and_new_saves_reject_bad_finance()
-689 fn financial_overflow_rolls_back_clock_flights_and_balance()
-701 fn deleting_routes_preserves_results_and_new_game_resets_finances()
-723 fn calibrated_route_matrix_and_price_sensitivity()
-851 fn historical_v6_costs_and_active_flight_survive_rebalancing()
+335 pub fn quote_at_time(
+345 fn quote_with_time(
+356 pub(crate) struct QuoteMarket
+360 impl QuoteMarket
+361 pub fn new(
+377 pub(crate) fn quote_prepared(
+424 impl Game
+425 pub fn set_ticket_price(&mut self, id: u32, price: i64) -> Result<(), String>
+435 pub fn validate_finance(&self) -> Result<(), String>
+514 mod tests
+517 fn fuel_checkpoints_match_original_replay_in_any_query_order()
+559 fn game(price: i64) -> Game
+572 fn prices_distance_capacity_and_costs_are_predictable()
+602 fn landing_debits_once_empty_flights_can_create_debt_and_prices_validate()
+642 fn frame_sizes_16x_save_load_and_history_are_identical()
+680 fn v5_migration_never_charges_past_landings_and_new_saves_reject_bad_finance()
+722 fn financial_overflow_rolls_back_clock_flights_and_balance()
+734 fn deleting_routes_preserves_results_and_new_game_resets_finances()
+756 fn calibrated_route_matrix_and_price_sensitivity()
+884 fn historical_v6_costs_and_active_flight_survive_rebalancing()
 
 ## rust/src/financing.rs
 6 const DAY: u64 = 86400;
@@ -600,28 +618,29 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 34 pub fn departure_quote(
 49 pub fn departure_quote_in_market(
 64 fn departure_quote_at_price(
-98 pub struct Movement
-109 pub fn display_time(seconds: u64) -> String
-119 pub fn timings(route: &Route, model_id: &str) -> Result<(u64, u64), String>
-128 pub fn movement(route: &Route, model: &str, now: u64) -> Result<Movement, String>
-182 impl Game
-183 pub fn require_no_plan(&self, id: u32) -> Result<(), String>
-194 pub fn schedule(
-224 pub(crate) fn schedule_service(
-285 pub fn stop_schedule(&mut self, id: u32) -> Result<(), String>
-303 pub(crate) fn stop_service(&mut self, id: u32) -> Result<(), String>
-325 pub(crate) fn advance_company_to(
-514 pub fn validate_operations(&self) -> Result<(), String>
-578 mod tests
-580 fn game() -> Game
-592 fn departure_snapshot_survives_supply_changes_and_restart_until_settlement()
-662 fn parallel_opposite_services_are_order_independent_with_mixed_steps()
-706 fn v7_airborne_migration_freezes_once_and_v8_rejects_corrupt_snapshots()
-754 fn simultaneous_services_and_minimum_interval_keep_exact_boundaries()
-787 fn exact_departure_landing_ground_and_return_boundaries()
-820 fn large_steps_equal_small_steps_at_all_speeds_and_never_double_count()
-867 fn schedule_validation_and_save_restore_in_every_phase()
-903 fn corrupt_operation_saves_rejected_and_v4_migrates_without_flights()
+75 fn departure_quote_prepared(
+111 pub struct Movement
+122 pub fn display_time(seconds: u64) -> String
+132 pub fn timings(route: &Route, model_id: &str) -> Result<(u64, u64), String>
+141 pub fn movement(route: &Route, model: &str, now: u64) -> Result<Movement, String>
+195 impl Game
+196 pub fn require_no_plan(&self, id: u32) -> Result<(), String>
+207 pub fn schedule(
+237 pub(crate) fn schedule_service(
+298 pub fn stop_schedule(&mut self, id: u32) -> Result<(), String>
+316 pub(crate) fn stop_service(&mut self, id: u32) -> Result<(), String>
+338 pub(crate) fn advance_company_to(
+533 pub fn validate_operations(&self) -> Result<(), String>
+597 mod tests
+599 fn game() -> Game
+611 fn departure_snapshot_survives_supply_changes_and_restart_until_settlement()
+681 fn parallel_opposite_services_are_order_independent_with_mixed_steps()
+725 fn v7_airborne_migration_freezes_once_and_v8_rejects_corrupt_snapshots()
+773 fn simultaneous_services_and_minimum_interval_keep_exact_boundaries()
+806 fn exact_departure_landing_ground_and_return_boundaries()
+839 fn large_steps_equal_small_steps_at_all_speeds_and_never_double_count()
+886 fn schedule_validation_and_save_restore_in_every_phase()
+922 fn corrupt_operation_saves_rejected_and_v4_migrates_without_flights()
 
 ## rust/src/quality.rs
 5 fn scenario(price: Option<i64>) -> Game
