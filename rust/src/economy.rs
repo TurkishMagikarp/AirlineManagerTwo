@@ -433,6 +433,7 @@ impl Game {
         Ok(())
     }
     pub fn validate_finance(&self) -> Result<(), String> {
+        self.validate_insurance()?;
         let valid = |t: &Totals| {
             crate::cargo::valid(t)
                 && crate::service::valid(t)

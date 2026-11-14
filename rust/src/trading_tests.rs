@@ -251,6 +251,7 @@ fn trading_v12_migrates_player_and_ai_acquisition_without_changing_balance() {
     }
     std::fs::write(&path, serde_json::to_vec(&old).unwrap()).unwrap();
     let loaded = save::load(&path).unwrap();
+    g.migrate_insurance_fixture();
     assert_eq!(state(&g), state(&loaded));
 }
 

@@ -233,3 +233,38 @@ Wartungsende wieder verschwindet. Spielstandversion unverändert (10), neues Fel
 - Vollständige Godot-Regression erfolgreich: alle 25 eigenständig ausführbaren Tests, abschließender Editor-Import, Hauptszene (`--headless --quit-after 10`), frischer Markt-Migrationsprozess und sämtliche 14 Neustartszenarien als getrennte Linux-Prozesse (69 erforderliche Aufrufe, der Finanzarchiv-Schreiber zugleich als eigenständiger Test gezählt). Einschließlich laufender/pausierter Unicode-Speicherpfade, etwa zwei Millionen archivierter Flüge mit frischem Leser und sämtlicher Legacy-/aktueller Migrationsphasen. 15 echte Renderaufnahmen erstellt und sechs Route-/Finanzbilder am Task angehängt.
 
 - Rust-Abschluss erfolgreich: `cargo build --locked --manifest-path rust/Cargo.toml`, `cargo test --locked --manifest-path rust/Cargo.toml -- --test-threads=1` (190 Tests) und `cargo clippy --locked --manifest-path rust/Cargo.toml` ohne Warnungen. Die Suite wurde nach zwei mit Signal 143 abgebrochenen parallelen Läufen mit einem Test-Thread ausgeführt; diese Abbrüche wurden nicht als bestandene Prüfungen gezählt. Alle unveränderten Determinismus-, Altspielstand-, langfristigen KI- und Performance-Prüfungen bestanden. Keine Gameplay- oder Balanceänderungen erforderlich; vorhandene Versionsassertionen waren bereits aktuell.
+
+## 2026-11-14 — AIR-59: Flugzeugversicherung und deterministische Schäden
+
+- Neu: `config/insurance.json`, adressierbare Landungsereignisse, gemeinsame
+  Wartungsabwicklung, Basis-/Volldeckung, anteilige Prämien, Selbstbehalte,
+  Versichererlimits, begrenzte Schadenhistorie und jährliche Schadenaufschläge.
+  Spieler und KI zahlen dieselben Kosten; neue KI wählen Basis, migrierte KI
+  übernehmen sie bei der nächsten gesunden Wochenprüfung. Finanzsummen,
+  Kontoverlauf und Steuerbasis enthalten die getrennten Versicherungskosten.
+- Spielstand v23: neutrale Migration aller alten Eigentümer; keine Neuberechnung
+  von Geld, Flugangeboten oder Abnutzung. Auch reine v1-Uhrstände bleiben ladbar.
+- Linux/Rust: `cargo build --locked --manifest-path rust/Cargo.toml` und
+  `cargo clippy --locked --manifest-path rust/Cargo.toml` erfolgreich, ohne Warnung.
+  Compiler über vorhandenen Zig-cc-Wrapper in `/paperclip/airline/bin`.
+- Alle 197 Rust-Tests abgedeckt: abschließend
+  `cargo test --locked --manifest-path rust/Cargo.toml -- --skip history::tests::million_flight_finance_scenario_stays_within_budget`
+  mit **196 bestanden, 0 fehlgeschlagen** (79,14 s). Der unveränderte ausgelassene
+  Stresstest bestand im vorherigen Gesamtlauf: **263,60 s** Fortschreibung unter
+  dem unveränderten 300-s-Limit; Save **125.927.701 Byte**, mit
+  Speichern/Laden/Fortsetzung **333,68 s**. Danach wurden ausschließlich zwei
+  irrtümlich neutralisierte Rotationstest-Fixtures korrigiert; der
+  Produktionscode blieb unverändert. Zehnjahresszenarien prüfen weiter
+  KI-Zahlungsfähigkeit, identische Tages-/Großschritte und jährlichen Neustart;
+  Versicherungskosten bleiben unter 10 % der KI-Einnahmen.
+- Sieben gezielte Versicherungstests: geplante/fällige Wartung, alle Deckungen,
+  negative Liquidität, Verkauf und Leasingrückgabe, unterjährige Wechsel,
+  Schaden-/saubere Verlängerung, Pause/1×/4×/16×, Schrittaufteilung,
+  Speichern/Laden, beschädigte Policen und echte feldlose v22-Migration für
+  Spieler und KI.
+- Hier **nicht ausgeführt**: Godot (auch Headless-Tests), GUI-/Layout-/Screenshot-
+  Prüfung, `START.bat`, Windows- und Mehrprozess-Neustarttests. Neu vorbereitet:
+  `tests/insurance_test.gd` für Adapter/Controls. Eigentümerseitig sind echte
+  Maus-/Tastaturbedienung, schmale/breite Fenster und Neustart mit laufender
+  Reparatur sowie v22-Altstand zu prüfen; Rust beweist keine sichtbare UI.
+  Details und Zeitregeln: `docs/insurance.md`.

@@ -20,6 +20,9 @@ mod fuel_contracts;
 mod fuel_tests;
 mod game;
 mod history;
+mod insurance;
+#[cfg(test)]
+mod insurance_tests;
 mod maintenance;
 mod map;
 mod marketing;
@@ -196,7 +199,7 @@ impl SimulationClock {
             // Central expenses belong only to the company series, never to
             // every route (which would duplicate them again).
             let costs = i128::from(t.costs()) + if route_id == 0 {
-                h.maintenance_through(time) + h.payroll_through(time) + h.interest_through(time) + h.rent_through(time) + h.tax_through(time) + h.marketing_through(time)
+                h.maintenance_through(time) + h.payroll_through(time) + h.interest_through(time) + h.rent_through(time) + h.tax_through(time) + h.marketing_through(time) + h.insurance_through(time)
             } else { 0 };
             let tax = if route_id == 0 { h.tax_through(time) } else { 0 };
             let period_costs = costs - previous_costs;
@@ -339,6 +342,54 @@ impl SimulationClock {
     }
 
     #[func]
+    fn get_insurance(&self) -> VarDictionary {
+        let g = &self.game;
+        let p = &g.insurance;
+        let mut premium = 0i128;
+        let mut deductible = 0i128;
+        let mut uninsured = 0i128;
+        if let Some(h) = &g.history {
+            for e in &h.insurance_costs {
+                premium += i128::from(e.premium);
+                deductible += i128::from(e.deductible);
+                uninsured += i128::from(e.uninsured);
+            }
+        }
+        let claims: Array<VarDictionary> = p.recent.iter().rev().map(|c| {
+            vdict! { "time" => operations::display_time(c.time).as_str(), "aircraft" => c.aircraft as i64,
+                "kind" => ["Vogelschlag", "Bodenschaden", "Harte Landung"][c.kind.min(2) as usize],
+                "repair" => c.repair, "paid" => c.paid, "insurer" => c.insurer }
+        }).collect();
+        vdict! { "coverage" => p.coverage.name(), "annual" => p.annual_premium,
+        "basic_annual" => g.insurance_quote(insurance::Coverage::Basic).unwrap_or(0),
+        "full_annual" => g.insurance_quote(insurance::Coverage::Full).unwrap_or(0),
+        "basic_deductible_bps" => insurance::RULES.basic.deductible_bps,
+        "full_deductible_bps" => insurance::RULES.full.deductible_bps,
+        "basic_limit_bps" => insurance::RULES.basic.limit_bps, "full_limit_bps" => insurance::RULES.full.limit_bps,
+        "loading_bps" => p.loading_bps,
+        "premium" => premium.min(i128::from(i64::MAX)) as i64,
+        "deductible" => deductible.min(i128::from(i64::MAX)) as i64,
+        "uninsured" => uninsured.min(i128::from(i64::MAX)) as i64,
+        "claims" => &claims, "can_change" => g.airline.is_some() && !g.insolvent() }
+    }
+
+    #[func]
+    fn set_insurance(&mut self, level: GString) -> GString {
+        let coverage = match level.to_string().as_str() {
+            "none" => insurance::Coverage::None,
+            "basic" => insurance::Coverage::Basic,
+            "full" => insurance::Coverage::Full,
+            _ => return "Unbekannte Deckung.".into(),
+        };
+        self.game
+            .set_coverage(coverage)
+            .err()
+            .unwrap_or_default()
+            .as_str()
+            .into()
+    }
+
+    #[func]
     fn get_financial_summary(&self) -> VarDictionary {
         let t = &self.game.finance.totals;
         let purchases = self.game.history.as_ref().map_or(0, |h| {
@@ -386,7 +437,13 @@ impl SimulationClock {
             .history
             .as_ref()
             .map_or(0, |h| h.marketing_through(u64::MAX));
-        let costs = marketing
+        let insurance = self
+            .game
+            .history
+            .as_ref()
+            .map_or(0, |h| h.insurance_through(u64::MAX));
+        let costs = insurance
+            + marketing
             + tax
             + i128::from(t.costs())
             + i128::from(maintenance)

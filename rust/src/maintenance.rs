@@ -328,7 +328,7 @@ impl Game {
     }
 
     /// All fallible checks precede the first mutation.
-    fn begin_visit(&mut self, p: usize) -> Result<(), String> {
+    pub(crate) fn begin_visit(&mut self, p: usize) -> Result<(), String> {
         let plane = &self.fleet[p];
         if plane.status == AircraftStatus::InFlight {
             return Err("Flugzeug ist noch in der Luft.".into());
@@ -885,6 +885,7 @@ mod tests {
         g.fuel_market = loaded.fuel_market.clone();
         g.migrate_tax().unwrap();
         g.marketing.settled_at = 100;
+        g.migrate_insurance_fixture();
         assert!(loaded.advance(86400.0));
         assert!(g.advance(86400.0));
         assert_eq!(state(&loaded), state(&g));

@@ -1,0 +1,12 @@
+{
+  "incident_per_million_landings": 200,
+  "repair_min_bps": 100,
+  "repair_max_bps": 500,
+  "downtime_hours": 12,
+  "basic": {"annual_bps": 12, "deductible_bps": 100, "limit_bps": 10000},
+  "full": {"annual_bps": 30, "deductible_bps": 10, "limit_bps": 10000},
+  "claim_loading_bps": 1500,
+  "clean_year_decay_bps": 500,
+  "max_loading_bps": 10000,
+  "history_limit": 20
+}

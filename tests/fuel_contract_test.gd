@@ -1,5 +1,6 @@
 extends SceneTree
 ## Real Finances mouse/keyboard input; write/read modes require separate processes.
+const InsuranceFixture = preload("res://tests/insurance_fixture.gd")
 const DAY := 86400.0
 var main
 var probe_path := ""
@@ -57,13 +58,13 @@ func _run() -> void:
 				return
 			# Pre-contract world: all effects are zero. Strip additive fields with
 			# text edits to preserve Rust u64/nanosecond encodings exactly.
-			var fixture := _strip_fields(original).replace('"version":22', '"version":20')
+			var fixture := _strip_fields(original).replace('"version":23', '"version":20')
 			if not _check(JSON.parse_string(fixture)["version"] == 20 and not '"fuel_contract' in fixture, "True v20 fixture for every owner and historical quote"):
 				return
 			_write(path, fixture)
 			if not _check(sim.load_game(path).is_empty(), "Load v20 migration reference"):
 				return
-			if not _check(_snapshot()[0] == original, "v20 migration preserves the entire state and history, adding only neutral contract fields"):
+			if not _check(InsuranceFixture.without_policy(_snapshot()[0]) == InsuranceFixture.without_policy(original), "v20 migration preserves prior state and history alongside neutral insurance migration"):
 				return
 		_store(path + ".initial", _snapshot())
 	if not _verify_owners(not legacy) or not _verify_ui():
@@ -83,7 +84,7 @@ func _run() -> void:
 	elif mode.begins_with("read-"):
 		if not _check(_snapshot() == FileAccess.open(path + ".expected", FileAccess.READ).get_var(), "Restart continuation equals uninterrupted world, active terms, AI, cumulative effect and frozen quotes"):
 			return
-		if not _check(sim.save_game(path).is_empty() and JSON.parse_string(FileAccess.get_file_as_string(path))["version"] == 22, "Resave as v22"):
+		if not _check(sim.save_game(path).is_empty() and JSON.parse_string(FileAccess.get_file_as_string(path))["version"] == 23, "Resave as v23"):
 			return
 	if not await _layouts("expired"):
 		return

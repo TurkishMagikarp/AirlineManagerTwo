@@ -1,5 +1,6 @@
 extends SceneTree
 ## Real cargo controls; restart writers and readers must run in separate processes.
+const InsuranceFixture = preload("res://tests/insurance_fixture.gd")
 var main
 var probe_path := ""
 var capture_dir := ""
@@ -51,11 +52,11 @@ func _run() -> void:
 				return
 			if legacy:
 				var original := FileAccess.get_file_as_string(path)
-				var fixture := _strip(original).replace('"version":22', '"version":21')
+				var fixture := _strip(original).replace('"version":23', '"version":21')
 				if not _check(JSON.parse_string(fixture)["version"] == 21 and not '"cargo_' in fixture, "True v21 fixture omits every cargo field"):
 					return
 				_write(path, fixture)
-				if not _check(sim.load_game(path).is_empty() and _snapshot()[0] == original.replace('"cargo_rate_cents":10000', '"cargo_rate_cents":150'), "Migration adds only default rates and zero cargo; money, history and quotes unchanged"):
+				if not _check(sim.load_game(path).is_empty() and InsuranceFixture.without_policy(_snapshot()[0]) == InsuranceFixture.without_policy(original.replace('"cargo_rate_cents":10000', '"cargo_rate_cents":150')), "Migration adds only default rates and zero cargo; money, history and quotes unchanged"):
 					return
 			_store(path + ".initial", _snapshot())
 	if not _owners(legacy, mode != "ui") or not await _views():
@@ -68,7 +69,7 @@ func _run() -> void:
 			_store(path + ".expected", _snapshot())
 		elif not _check(_snapshot() == _read(path + ".expected"), "Long continuation equals uninterrupted player/AI world, history, charts and quotes"):
 			return
-		if not _check(sim.save_game(probe_path).is_empty() and JSON.parse_string(FileAccess.get_file_as_string(probe_path))["version"] == 22, "Writes current v22"):
+		if not _check(sim.save_game(probe_path).is_empty() and JSON.parse_string(FileAccess.get_file_as_string(probe_path))["version"] == 23, "Writes current v23"):
 			return
 	if not await _layouts():
 		return
