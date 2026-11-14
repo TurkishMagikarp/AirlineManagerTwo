@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="de" data-theme="night">
+<head><meta charset="utf-8"><link rel="stylesheet" href="../../tokens.css"><link rel="stylesheet" href="../../bundle.css"><title>MapMarkers</title><style>html,body{margin:0;background:var(--ground)}</style></head>
+<body>
+<div class="am-stage am-stage--col">
+  <svg class="am-map" viewBox="0 0 720 320" role="img" aria-label="Kartenausschnitt Nordsee bis Ostsee mit Basis EDDF, eigenen Routen nach EDDH und EDDM und einer Konkurrenzroute EDDL–EDDB">
+    <path class="grat" d="M128 0V320M274 0V320M419 0V320M565 0V320M710 0V320M0 55H720M0 128H720M0 201H720M0 274H720"/>
+    <!-- mainland: Channel coast, Low Countries, German Bight, Jutland, Baltic coast to the Vistula lagoon (x = 230 + (lon − 6.8) × 36.4, y = 70 + (53.6 − lat) × 36.5) -->
+    <path class="land" d="M-4 212 22 204 41 194 41 175 50 166 69 163 89 157 114 150 128 147 132 129 139 125 148 112 155 93 179 86 208 77 234 80 245 83 243 70 277 66 281 75 294 72 299 60 310 61 314 59 305 51 296 44 312 38 302 30 296 23 292 12 290 2 290-4H337L328 1 330 10 326 17 326 26 345 27 341 38 352 43 372 41 387 41 376 52 379 57 399 59 423 49 437 38 448 40 459 44 470 52 492 54 501 58 524 54 549 49 579 40 596 34 621 28 649 25 652 29 658 37 661 43 674 43 696 39 724 34V324H-4Z"/>
+    <!-- England: Norfolk to Essex, and Kent -->
+    <path class="land" d="M-4 95 13 93 30 94 46 111 40 125 24 136 8 142-4 144ZM-4 150 20 149 35 151 30 160 17 168-4 170Z"/>
+    <!-- Frisian islands and Sylt -->
+    <path class="land" d="M168 81 181 77 182 80 169 84ZM194 75 206 72 207 75 195 78ZM249 66 258 64 259 67 250 69ZM262 63 271 62 272 65 263 66ZM289 17 292 17 294 29 291 29Z"/>
+    <!-- Funen, Zealand, Lolland-Falster, Rügen, Bornholm, Scania -->
+    <path class="land" d="M346 4 358-2 376 2 378 14 364 20 350 14ZM390 6 398-4H446L444 8 432 18 416 14 404 16ZM384 27 398 23 416 25 421 33 408 31 392 33ZM458 38 466 30 478 28 484 36 476 44 464 43ZM518 12 526 8 533 14 527 20 520 18ZM448-4 452 6 462 6 485 3 505-2 508-4Z"/>
+    <path class="rival" d="M230 150Q350 96 470 110"/>
+    <path class="route route--sel" d="M300 190Q296 124 340 70"/>
+    <path class="route" d="M300 190Q380 205 420 260"/>
+    <polygon class="plane" points="-8,-6 8,0 -8,6 -4,0" transform="translate(370 215) rotate(30)"/>
+    <circle class="apt" cx="340" cy="70" r="5"/><text x="352" y="82">EDDH</text>
+    <circle class="apt" cx="420" cy="260" r="5"/><text x="432" y="264">EDDM</text>
+    <circle class="apt" cx="230" cy="150" r="5"/><text x="180" y="154">EDDL</text>
+    <circle class="apt" cx="470" cy="110" r="5"/><text x="482" y="114">EDDB</text>
+    <rect class="hub" x="293" y="183" width="14" height="14"/>
+    <rect class="tag" x="246" y="204" width="50" height="22" rx="2"/><text x="254" y="219">EDDF</text>
+  </svg>
+  <div class="am-legend"><span class="is-own">Eigene Route</span><span class="is-rival">Route der Konkurrenz</span></div>
+</div>
+</body>
+</html>

@@ -11,6 +11,7 @@ Godot 4.6+ UI over a Rust (godot-rust 0.5.5, edition 2024) simulation core. Docs
 - `rust/src/lib.rs` — GDExtension adapter only. Modules: `game` (airline state), `clock`, `aircraft`, `airports`, `routes`, `operations` (flights), `economy`, `demand`, `competition` (AI airlines), `maintenance`, `staff` (pilots/cabin/technicians, payroll), `history` (finance archive), `save` (versioned saves + migrations), `map`, `quality` (test-only long-run scenarios).
 - `scripts/main.gd` — main UI; panels: `routes_panel.gd`, `finances_panel.gd`, `finance_chart.gd`, `map_*.gd`; theme in `scripts/ui/`.
 - `tests/*_test.gd` — headless Godot tests; `tests/run_*_restart_test.ps1` — multi-process save/restart tests.
+- UI kit (target look): `docs/ui-kit/` — `README.md` (rules), `tokens.json` (all colours/type/spacing), `components/<Name>/README.md` (spec + Godot mapping), `bundle.css` (exact sizes/states). For UI work read the README and only the component folders you implement; don't read `preview.html` files unless you need the markup.
 - Design docs: `docs/game-design/` (decisions in `decisions/DECISION-REGISTER.md`); topic docs: `docs/{economy,demand,map,ui-design,staff}.md`; history: `docs/verification-log.md`.
 
 ## Commands

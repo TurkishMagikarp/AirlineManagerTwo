@@ -1,0 +1,82 @@
+/* Airline Manager UI Kit — generated from tokens.json by the kit export. Do not edit by hand. */
+:root, [data-theme="night"] {
+  --ground: #11100e;
+  --surface: #1a1816;
+  --surface-raised: #24211e;
+  --surface-sunken: #0a0908;
+  --line: #35312c;
+  --line-strong: #7a7368;
+  --ink: #f3eee4;
+  --ink-muted: #ada596;
+  --ink-faint: #7c766b;
+  --accent: #f4b740;
+  --accent-hover: #ffc95c;
+  --on-accent: #1b1405;
+  --accent-text: #f4b740;
+  --accent-wash: #2f2612;
+  --caution: #f4b740;
+  --caution-wash: #2f2612;
+  --go: #4fd0b8;
+  --go-wash: #12302b;
+  --stop: #ff8a78;
+  --on-stop: #2a0a06;
+  --stop-wash: #3b1b16;
+  --sky: #86b8ff;
+  --sky-wash: #162741;
+  --focus: #fff4d6;
+  --flap: #0a0908;
+  --flap-ink: #f4b740;
+  --flap-seam: #35312c;
+  --map-water: #0c1519;
+  --map-land: #26231f;
+  --scrim: rgba(0, 0, 0, 0.62);
+  --shadow-pop: 0 12px 32px rgba(0, 0, 0, 0.55);
+}
+[data-theme="day"] {
+  --ground: #eceee9;
+  --surface: #f8f8f5;
+  --surface-raised: #ffffff;
+  --surface-sunken: #dfe2db;
+  --line: #d0d3cb;
+  --line-strong: #767b73;
+  --ink: #1a1c19;
+  --ink-muted: #535851;
+  --ink-faint: #8b9088;
+  --accent: #f0b02e;
+  --accent-hover: #f7c152;
+  --on-accent: #1b1405;
+  --accent-text: #7a5000;
+  --accent-wash: #f7e8bf;
+  --caution: #7a5000;
+  --caution-wash: #f7e8bf;
+  --go: #006b5b;
+  --go-wash: #d2efe7;
+  --stop: #b0261b;
+  --on-stop: #ffffff;
+  --stop-wash: #fbdcd6;
+  --sky: #1d5bb8;
+  --sky-wash: #dae7fb;
+  --focus: #1a1c19;
+  --flap: #1a1c19;
+  --flap-ink: #f4b740;
+  --flap-seam: #4a4e48;
+  --map-water: #cddde8;
+  --map-land: #e3e5dc;
+  --scrim: rgba(26, 28, 25, 0.45);
+  --shadow-pop: 0 12px 32px rgba(26, 28, 25, 0.18);
+}
+:root {
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 8px;
+  --font-display: Outfit, "Segoe UI", system-ui, sans-serif;
+  --font-sans: Nunito, "Segoe UI", system-ui, sans-serif;
+  --font-mono: "DM Mono", Consolas, "Courier New", monospace;
+}
