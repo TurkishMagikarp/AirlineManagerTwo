@@ -18,6 +18,11 @@ const PAGES: Array[Dictionary] = [
 	{"title": "Personal", "heading": "Personalverwaltung", "body": "Piloten, Flugbegleiter und Techniker · Gehälter werden regelmäßig gezahlt"},
 ]
 
+var attention_button: Button
+var attention_scroll: ScrollContainer
+var attention_rows: VBoxContainer
+var attention_signature := ""
+var attention_expanded := true
 var navigation: Array[Button] = []
 var page_title: Label
 var heading: Label
@@ -129,6 +134,7 @@ func _ready() -> void:
 	for label in [page_title, heading, description]:
 		label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		content.add_child(label)
+	_build_attention(content)
 	_build_finance(content)
 	_build_fleet(content)
 	routes_panel = RoutesPanel.new()
@@ -240,6 +246,7 @@ func _process(delta: float) -> void:
 		save_status.text = message
 		save_status.add_theme_color_override("font_color", UI.NEGATIVE)
 	_refresh_time()
+	_refresh_attention()
 	var second := int(simulation.get_elapsed_seconds())
 	if current_page == 3 and simulation.is_running():
 		map_panel.refresh_flights()
@@ -703,6 +710,7 @@ func _sync_view() -> void:
 	cancel_founding_button.visible = simulation.has_airline()
 	_refresh_time()
 	_show_page(0)
+	_refresh_attention()
 	if overview.visible:
 		navigation[0].grab_focus()
 	else:
@@ -751,3 +759,56 @@ func _build_finance(content: VBoxContainer) -> void:
 	var note := UI.label("Abrechnung bei Landung · Käufe separat ausgewiesen.\nVereinfachte Wirtschaftswerte · Fortschritt manuell speichern.", 13, UI.MUTED)
 	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	finance_panel.add_child(note)
+
+
+func _build_attention(parent: VBoxContainer) -> void:
+	attention_button = Button.new()
+	attention_button.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	attention_button.pressed.connect(func():
+		attention_expanded = not attention_expanded
+		attention_scroll.visible = attention_expanded)
+	parent.add_child(attention_button)
+	attention_scroll = ScrollContainer.new()
+	attention_scroll.custom_minimum_size.y = 130
+	attention_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	attention_scroll.follow_focus = true
+	parent.add_child(attention_scroll)
+	attention_rows = VBoxContainer.new()
+	attention_rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	attention_scroll.add_child(attention_rows)
+
+
+func _refresh_attention() -> void:
+	var entries: Array = simulation.get_attention_snapshot()
+	var key := str(entries)
+	if key == attention_signature:
+		return
+	attention_signature = key
+	attention_button.text = "Aufmerksamkeit (%d) · zum Ein-/Ausklappen" % entries.size() if not entries.is_empty() else "Aufmerksamkeit · Keine aktuellen Hinweise"
+	attention_button.disabled = entries.is_empty()
+	attention_scroll.visible = attention_expanded and not entries.is_empty()
+	for child in attention_rows.get_children():
+		attention_rows.remove_child(child)
+		child.queue_free()
+	for entry in entries:
+		var button := Button.new()
+		button.text = entry["text"]
+		button.tooltip_text = entry["text"]
+		button.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		button.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		button.pressed.connect(_open_attention.bind(entry))
+		attention_rows.add_child(button)
+
+
+func _open_attention(entry: Dictionary) -> void:
+	var page: int = {"fleet": 1, "routes": 2, "finances": 4, "staff": 5}.get(entry["page"], 0)
+	if page == 1:
+		selected_aircraft = entry["aircraft_id"]
+	_show_page(page)
+	if page == 1:
+		fleet_tree.ensure_cursor_is_visible()
+		fleet_tree.grab_focus()
+	elif page == 2:
+		routes_panel.focus_route(entry["route_id"])
+	elif page == 5:
+		staff_panel.focus_employee(entry["employee_id"])

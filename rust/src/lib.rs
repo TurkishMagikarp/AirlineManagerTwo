@@ -2,6 +2,9 @@ mod aircraft;
 #[cfg(test)]
 mod airport_charge_tests;
 mod airports;
+mod attention;
+#[cfg(test)]
+mod attention_tests;
 #[cfg(test)]
 mod cabin_tests;
 mod cabins;
@@ -82,6 +85,21 @@ impl IRefCounted for SimulationClock {
 
 #[godot_api]
 impl SimulationClock {
+    #[func]
+    fn get_attention_snapshot(&self) -> Array<VarDictionary> {
+        self.game
+            .attention_snapshot()
+            .iter()
+            .map(|e| {
+                vdict! {
+                    "kind" => e.kind, "priority" => e.priority as i64, "text" => e.text.as_str(),
+                    "page" => e.page, "route_id" => e.route_id, "aircraft_id" => e.aircraft_id,
+                    "employee_id" => e.employee_id
+                }
+            })
+            .collect()
+    }
+
     /// Departure snapshots, not live estimates or already settled finances.
     #[func]
     fn get_active_flights(&self) -> Array<VarDictionary> {

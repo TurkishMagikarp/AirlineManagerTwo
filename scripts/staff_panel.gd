@@ -271,3 +271,15 @@ func _dismiss() -> void:
 
 func _train() -> void:
 	_report(simulation.train_pilot(selected_id, rating_select.get_item_text(rating_select.selected)), "Umschulung begonnen. Bitte Spielstand speichern.")
+
+
+func focus_employee(id: int) -> void:
+	var row := staff_tree.get_root().get_first_child()
+	while row != null:
+		if row.get_metadata(0)["id"] == id:
+			row.select(0)
+			_selection_changed()
+			staff_tree.ensure_cursor_is_visible()
+			staff_tree.grab_focus()
+			return
+		row = row.get_next()

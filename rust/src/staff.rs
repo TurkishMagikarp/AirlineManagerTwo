@@ -535,6 +535,14 @@ impl Game {
             .collect()
     }
 
+    /// Same reserve as hiring: outstanding salaries plus configured payroll periods.
+    pub fn salary_reserve(&self) -> Result<i64, String> {
+        self.monthly_payroll()
+            .checked_mul(i64::from(config()?.salary_reserve_periods))
+            .and_then(|v| v.checked_add(self.accrued_payroll().ok()?))
+            .ok_or_else(|| "Finanzüberlauf.".into())
+    }
+
     pub fn monthly_payroll(&self) -> i64 {
         self.staff
             .employees
