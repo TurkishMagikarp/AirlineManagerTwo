@@ -342,3 +342,21 @@ Wartungsende wieder verschwindet. Spielstandversion unverändert (10), neues Fel
   Kein Gameplay-/Rust-Code geändert. Details: airport-charges-verification.md.
 - Native Windows-DLLs/Prozesse, START.bat, tatsächliche PowerShell-Wrapper und
   Windows-Darstellung/-Skalierung bleiben Besitzerprüfungen.
+
+### 2026-11-14 — AIR-75 Musterberechtigungen in Godot
+
+- Echte Personal-Maus-/Tastatureingaben: musterspezifische Einstellung,
+  Umschulung, exakte API-Anzeigen und deaktivierte Entlassung/Umschulung
+  während Training. Geprüfte Xvfb-Aufnahmen in allen drei Fenstergrößen
+  an der Aufgabe; kleine Tabellen werden horizontal/vertikal gescrollt.
+- Neue v24-Migration und v25-Neustart mitten im Training: Spieler und beide
+  KIs mit gemischter Flotte, aktivem Dienst und Wartung. Vollständige Welt/API
+  sofort und nach 100 Tagen identisch; exakte Abschlussfrist, Gehälter und
+  einmalige Umschulungskosten geprüft. Kein erfundenes Training vor v25.
+- Alle 28 Godot-Skripte, Hauptszene, Editor-Import und bisherigen
+  Neustartfamilien bestanden; 207 Rust-Tests, Locked-Build und strenges Clippy
+  bestanden. Millionenflugtest isoliert: 263.229513905 s Fortschreibung unter
+  unverändert 300 s. Kein Produktionscode geändert.
+- START.bat, tatsächliche PowerShell-Wrapper, native Windows-DLLs/Prozesse
+  und Windows-Skalierung bleiben Besitzerprüfungen.
+  Details: pilot-ratings-verification.md.
