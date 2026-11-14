@@ -28,6 +28,28 @@ Rückgabeentscheidungen nutzen den Kit-Dialog mit Abbrechen als erstem Fokus.
 Flugzeug- und Wartungszustände erscheinen als Chips mit Glyphen und Text;
 Wartungsdetails bleiben vollständig im Tooltip und im Auswahlbereich lesbar.
 
+## Routen und Personal
+
+Das Routenregister steht vor der Planung. Strecken erscheinen als ICAO-Paare in
+DM Mono, Zahlen rechtsbündig und Zustände als Chips; blockierte Routen zeigen
+den vorhandenen Wartungs- oder Personalgrund auch ohne Hover. Ergebnisse tragen
+ein explizites Vorzeichen und `go`/`stop`. Der Tabellen-Tooltip schlüsselt die
+Landekosten mit gedämpften Bezeichnungen, rechtsbündigen Werten und Summe auf.
+Leere Register und Landungslisten bieten eine Aktion zur Planung.
+
+Planungs-, Preis-, Flugplan- und Einstellfelder zeigen die Beschriftung über dem
+Feld. Einheiten stehen im Zahlenfeld, bestehende Hilfesätze darunter. Vorhandene
+Rust-Fehler ersetzen die Feldhilfe und färben den Feldrand `stop`; bei einer
+Eingabeänderung kehrt die Hilfe zurück. Die
+Personalübersicht behält alle Aktionen; Musterberechtigungen und Umschulungen
+erscheinen als Chips, laufende Umschulungen zusätzlich als Fortschrittsbalken.
+Die bestehende Rust-API liefert den Endtermin nur im deutschen Statussatz:
+Die Anzeige liest diesen Termin sowie Dauer und aktuelle Simulationszeit aus
+Rust und berechnet daraus ausschließlich den Darstellungsanteil. Sie speichert
+keine Zeit und greift nicht auf Spielstände zu. Leere Mitarbeiter- und
+Flugzeugtabellen führen zum Einstellen bzw. zur Flotte. Tabellen scrollen im
+Rahmen; Formulare und Aktionen bleiben über den Seiten-Scroll erreichbar.
+
 ## Gemeinsames Design
 
 `resources/operations_theme.tres` ist das gemeinsame Godot-Theme. Die Ressource

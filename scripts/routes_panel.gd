@@ -2,6 +2,7 @@ extends VBoxContainer
 ## Presentation only: Rust owns routes, availability, distances and validation.
 
 signal changed
+const ThemeTokens = preload("res://scripts/ui/operations_theme.gd")
 const UI = preload("res://scripts/ui/components.gd")
 
 var simulation: RefCounted
@@ -34,6 +35,7 @@ var ticket_input: SpinBox
 var ticket_button: Button
 var results_tree: Tree
 var competition_label: Label
+var results_empty: Control
 
 
 func _ready() -> void:
@@ -61,7 +63,10 @@ func _ready() -> void:
 		select.item_selected.connect(func(_index: int): _preview())
 	status = _label("")
 	add_child(status)
-	empty_label = UI.empty_state("Noch keine Routen erstellt.", hint.text, create_button.text, func(): origin.grab_focus())
+	empty_label = UI.empty_state("Noch keine Routen erstellt.", hint.text, create_button.text, func():
+		get_parent().get_parent().ensure_control_visible(origin)
+		origin.grab_focus()
+	)
 	add_child(empty_label)
 	route_tree = UI.table(["Route", "Strecke", "Entfernung", "Flugzeug", "Markt / Wir / Abgewiesen →", "Auslastung"], [65, 140, 110, 170, 220, 100], 180)
 	for i in range(6):
@@ -72,7 +77,7 @@ func _ready() -> void:
 	season_label.tooltip_text = "Skaliert den Basismarkt vor Preisreaktion und Sitzverteilung. 1,00 = Jahresmittel."
 	add_child(season_label)
 	assignment = _select("Ausgewählte Route: Flugzeugzuweisung")
-	var actions := HBoxContainer.new()
+	var actions := HFlowContainer.new()
 	add_child(actions)
 	assign_button = Button.new()
 	assign_button.text = "Flugzeug hinzufügen"
@@ -98,7 +103,7 @@ func _ready() -> void:
 	ticket_button.pressed.connect(func():
 		var route := _route()
 		if not route.is_empty():
-			_feedback(simulation.set_ticket_price(route["id"], int(ticket_input.value)), "Ticketpreis geändert.")
+			_feedback(simulation.set_ticket_price(route["id"], int(ticket_input.value)), "Ticketpreis geändert.", ticket_input)
 	)
 	add_child(ticket_button)
 	add_child(_label("Business-Preis · EUR pro Passagier und Einzelflug"))
@@ -114,7 +119,7 @@ func _ready() -> void:
 	business_button.pressed.connect(func():
 		var route := _route()
 		if not route.is_empty():
-			_feedback(simulation.set_business_ticket_price(route["id"], int(business_input.value)), "Business-Preis geändert.")
+			_feedback(simulation.set_business_ticket_price(route["id"], int(business_input.value)), "Business-Preis geändert.", business_input)
 	)
 	add_child(business_button)
 	add_child(_label("Bauchfracht · EUR pro kg · gilt ab dem nächsten Abflug"))
@@ -130,7 +135,7 @@ func _ready() -> void:
 		var route := _route()
 		if not route.is_empty():
 			cargo_input.apply()
-			_feedback(simulation.set_cargo_rate(route["id"], roundi(cargo_input.value * 100.0)), "Frachtpreis geändert.")
+			_feedback(simulation.set_cargo_rate(route["id"], roundi(cargo_input.value * 100.0)), "Frachtpreis geändert.", cargo_input)
 	)
 	add_child(cargo_button)
 	cargo_status = _label("")
@@ -170,7 +175,7 @@ func _ready() -> void:
 	schedule_button.pressed.connect(func():
 		var route := _route()
 		if not route.is_empty():
-			_feedback(simulation.schedule_route(route["id"], int(delay_input.value), int(interval_input.value)), "Flugplan aktiviert.")
+			_feedback(simulation.schedule_route(route["id"], int(delay_input.value), int(interval_input.value)), "Flugplan aktiviert.", interval_input)
 	)
 	add_child(schedule_button)
 	stop_button = Button.new()
@@ -189,6 +194,10 @@ func _ready() -> void:
 	operations_label = _label("")
 	add_child(operations_label)
 	_arrange_workspace()
+	for control in [origin, destination, aircraft, assignment, service_select]:
+		UI.field_from_label(control)
+	for pair in [[ticket_input, "EUR"], [business_input, "EUR"], [cargo_input, "EUR/kg"], [delay_input, "min"], [interval_input, "min"]]:
+		UI.field_from_label(pair[0], pair[1], ticket_button.tooltip_text if pair[0] == ticket_input else "")
 	competition_label = _label("Route auswählen, um den gemeinsamen Passagiermarkt zu sehen.")
 	var competition_panel := UI.panel(self, "05  /  WETTBEWERB · GEMEINSAMER STRECKENMARKT")
 	competition_panel.add_child(competition_label)
@@ -197,19 +206,17 @@ func _ready() -> void:
 
 func _arrange_workspace() -> void:
 	var original := get_children()
-	var grid := GridContainer.new()
-	grid.add_theme_constant_override("h_separation", 12)
-	grid.add_theme_constant_override("v_separation", 12)
+	var grid := VBoxContainer.new()
+	grid.add_theme_constant_override("separation", ThemeTokens.SPACE_4)
 	add_child(grid)
-	grid.resized.connect(func(): grid.columns = 2 if grid.size.x >= 1050 else 1)
 	var network := UI.panel(grid, "01  /  ROUTENREGISTER & LIVE-BETRIEB")
 	var planner := UI.panel(grid, "02  /  VERBINDUNG PLANEN")
 	var editor := UI.panel(self, "03  /  AUSGEWÄHLTE ROUTE · ZUWEISUNG & FLUGPLAN")
 	var editor_grid := GridContainer.new()
-	editor_grid.add_theme_constant_override("h_separation", 18)
-	editor_grid.add_theme_constant_override("v_separation", 18)
+	editor_grid.add_theme_constant_override("h_separation", ThemeTokens.SPACE_4)
+	editor_grid.add_theme_constant_override("v_separation", ThemeTokens.SPACE_4)
 	editor.add_child(editor_grid)
-	editor_grid.resized.connect(func(): editor_grid.columns = 3 if editor_grid.size.x >= 1000 else 1)
+	editor_grid.resized.connect(func(): editor_grid.columns = 3 if editor_grid.size.x >= 1100 else 1)
 	var editor_columns: Array[VBoxContainer] = []
 	for i in range(3):
 		var column := VBoxContainer.new()
@@ -235,11 +242,16 @@ func _arrange_workspace() -> void:
 		node.reparent(target)
 	results_tree = UI.table(["Landung / Route", "Strecke", "Pax / Auslastung", "Tickets", "Kosten", "Ergebnis", "Fracht kg / EUR"], [170, 145, 135, 110, 110, 110, 150], 240)
 	result_panel.add_child(results_tree)
+	results_empty = UI.empty_state("Noch keine Landungen", "Flugplan: Pendelverkehr mit abwechselndem Hin- und Rückflug. Keine automatische Überführung.", schedule_button.text, func():
+		var next_control: Control = origin if simulation.get_routes().is_empty() else route_tree if _route().is_empty() else schedule_button
+		get_parent().get_parent().ensure_control_visible(next_control)
+		next_control.grab_focus()
+	)
+	result_panel.add_child(results_empty)
 
 
 func _label(text: String) -> Label:
-	var label := Label.new()
-	label.text = text
+	var label := UI.label(text, ThemeTokens.SMALL, UI.MUTED)
 	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	return label
 
@@ -285,7 +297,7 @@ func refresh() -> void:
 		var row := route_tree.create_item(root_item)
 		row.set_metadata(0, route)
 		UI.cell_text(row, 0, "#%d" % route["id"])
-		UI.cell_text(row, 1, "%s → %s" % [route["origin_icao"], route["destination_icao"]])
+		UI.cell_text(row, 1, "%s–%s" % [route["origin_icao"], route["destination_icao"]])
 		UI.cell_text(row, 2, "%.1f km" % route["distance_km"])
 		var assigned_names: PackedStringArray = []
 		for plane in fleet:
@@ -321,6 +333,13 @@ func refresh_operations() -> void:
 			if route.get("aircraft_ids", []) != row.get_metadata(0).get("aircraft_ids", []):
 				refresh.call_deferred()
 				return
+			var reason: String = route["maintenance_status"] if not String(route["maintenance_status"]).is_empty() else route["staff_status"]
+			var names: PackedStringArray = []
+			for plane in simulation.get_fleet():
+				if plane["id"] in route["aircraft_ids"]: names.append("%s · %s" % [plane["identifier"], plane["model_name"]])
+			var assigned := ", ".join(names) if not names.is_empty() else "Nicht zugewiesen"
+			var state := reason if not reason.is_empty() else "Flugplan aktiviert." if route["has_plan"] else "Reichweite ausreichend"
+			UI.cell_status(row, 3, assigned + (" · " + state if not names.is_empty() else ""), "stop" if not reason.is_empty() or names.is_empty() else "go" if route["has_plan"] else "neutral")
 			UI.cell_text(row, 4, "%d / %d / %d" % [route["base_daily_market"], route["expected_daily_passengers"], route["daily_spill"]])
 			row.set_tooltip_text(0, "Pünktlichkeit: %s · %d erfasste Flüge" % ["—" if route["punctuality_percent"] < 0 else "%.1f %%" % route["punctuality_percent"], route["punctuality_flights"]])
 			row.set_tooltip_text(4, "Pro Tag und Richtung: gemeinsamer Markt / erwartete eigene Passagiere / wegen Sitzmangel abgewiesen.\nAbgewiesen = eigener anfänglicher Anteil minus Beförderung vor Rundung; diese Reisenden können zur Konkurrenz wechseln.\nOhne eigenen Flugplan: keine Beförderung, kein Sitzmangel.\nDurchschnitt pro Abflug: %d Pax" % route["estimated_passengers"])
@@ -342,21 +361,27 @@ func refresh_operations() -> void:
 	results_tree.clear()
 	var root_item := results_tree.create_item()
 	var results: Array = simulation.get_flight_results()
-	if results.is_empty():
-		var empty := results_tree.create_item(root_item)
-		UI.cell_text(empty, 0, "Noch keine Landungen")
-		empty.set_selectable(0, false)
+	results_tree.visible = not results.is_empty()
+	results_empty.visible = results.is_empty()
+	results_empty.get_child(0).get_child(2).text = create_button.text if metrics.is_empty() else "Flugplan aktivieren"
+	results_tree.set_meta("breakdowns", {})
 	for result in results:
 		var row := results_tree.create_item(root_item)
-		var values := ["%s / #%d" % [result["landing"], result["route_id"]], "%s → %s" % [result["origin"], result["destination"]], "%d/%d · %.1f %%" % [result["passengers"], result["seats"], result["load_percent"]], UI.money(result["ticket_revenue_eur"]), UI.money(result["costs_eur"]), UI.money(result["profit_eur"])]
+		var values := ["%s / #%d" % [result["landing"], result["route_id"]], "%s–%s" % [result["origin"], result["destination"]], "%d/%d · %.1f %%" % [result["passengers"], result["seats"], result["load_percent"]], UI.money(result["ticket_revenue_eur"]), UI.money(result["costs_eur"]), UI.money(result["profit_eur"])]
 		for i in range(values.size()):
 			UI.cell_text(row, i, values[i])
 			row.set_tooltip_text(i, "Ticket: %s\nTreibstoff: %s\nFlughäfen: %s\nPersonal: %s\nWartung / Verwaltung: %s\nBordservice (± Standard): %s" % [UI.money(result["ticket_eur"]), UI.money(result["fuel_eur"]), UI.money(result["airport_eur"]), UI.money(result["crew_eur"]), UI.money(result["overhead_eur"]), UI.money(result["service_eur"])])
 			row.set_tooltip_text(i, row.get_tooltip_text(i) + "\nBetreuung / Entschädigung: %s" % UI.money(result["care_eur"]))
+		var tooltip := row.get_tooltip_text(4)
+		var parts: Array = []
+		for pair in [["Treibstoff", "fuel_eur"], ["Flughäfen", "airport_eur"], ["Personal", "crew_eur"], ["Wartung / Verwaltung", "overhead_eur"], ["Bordservice (± Standard)", "service_eur"], ["Betreuung / Entschädigung", "care_eur"], ["Kosten", "costs_eur"]]:
+			parts.append([pair[0], UI.money(result[pair[1]])])
+		var breakdowns: Dictionary = results_tree.get_meta("breakdowns")
+		breakdowns[tooltip] = parts
 		UI.cell_text(row, 2, "Y %d/%d · J %d/%d" % [result["economy_passengers"], result["economy_seats"], result["business_passengers"], result["business_seats"]])
 		row.set_tooltip_text(3, "Economy: %s · Business: %s" % [UI.money(result["economy_revenue_eur"]), UI.money(result["business_revenue_eur"])])
 		UI.cell_text(row, 6, "%d kg / %s" % [result["cargo_kg"], UI.money(result["cargo_revenue_eur"])])
-		row.set_custom_color(5, UI.POSITIVE if result["profit_eur"] >= 0 else UI.NEGATIVE)
+		UI.cell_result(row, 5, result["profit_eur"])
 
 
 func _preview() -> void:
@@ -365,6 +390,7 @@ func _preview() -> void:
 	preview.text += "\n%s · %s" % [result["origin_slots"], result["destination_slots"]]
 	if result["has_cost_estimate"]:
 		preview.text += "\nPlanung: %d Pax · Kosten %s, davon Flughäfen Start + Ziel %s je Abflug.\nJahresmittel, Standardpreise, 1 Abflug/Tag/Richtung; Personal und Wartungschecks separat." % [result["estimated_passengers"], UI.money(result["estimated_costs_eur"]), UI.money(result["estimated_airport_eur"])]
+	UI.field_error(aircraft, result["error"])
 	create_button.disabled = not result["error"].is_empty()
 	if aircraft.item_count == 0:
 		preview.text += "\nKein freies Flugzeug. Im Flotte-Tab kaufen oder eine Zuweisung lösen."
@@ -461,8 +487,9 @@ func _assignment_preview() -> void:
 		status.text = result["error"]
 
 
-func _feedback(error: String, success: String) -> void:
+func _feedback(error: String, success: String, field: Control = null) -> void:
 	refresh()
+	if field != null: UI.field_error(field, error)
 	status.text = success + " Bitte speichern." if error.is_empty() else error
 	if error.is_empty():
 		changed.emit()

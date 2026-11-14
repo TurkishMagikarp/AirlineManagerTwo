@@ -25,6 +25,9 @@ var signature := ""
 var elapsed := 0.0
 var selected_id := 0
 var staff_signature := ""
+var staff_empty: Control
+var aircraft_empty: Control
+var training_rows: VBoxContainer
 
 func _ready() -> void:
 	add_theme_constant_override("separation", 12)
@@ -56,17 +59,17 @@ func _ready() -> void:
 	ratings_tree = UI.table(["Muster", "Berechtigt", "Im Einsatz", "Verfügbar"], [180, 100, 100, 100], 130)
 	ratings.add_child(ratings_tree)
 	var hire := UI.panel(self, "EINSTELLEN")
-	var hire_row := HFlowContainer.new()
+	var hire_row := VBoxContainer.new()
 	hire_row.add_theme_constant_override("separation", 8)
 	hire.add_child(hire_row)
 	role_select = OptionButton.new()
 	role_select.custom_minimum_size.x = 300
 	role_select.fit_to_longest_item = false
 	role_select.clip_text = true
-	hire_row.add_child(role_select)
+	UI.field(hire_row, "Rolle", role_select)
 	rating_select = OptionButton.new()
 	rating_select.tooltip_text = "Muster für Piloten-Einstellung und Umschulung"
-	hire_row.add_child(rating_select)
+	UI.field(hire_row, "Muster", rating_select, rating_select.tooltip_text)
 	count_spin = SpinBox.new()
 	count_spin.get_line_edit().theme_type_variation = "NumericInput"
 	count_spin.get_line_edit().alignment = HORIZONTAL_ALIGNMENT_RIGHT
@@ -75,7 +78,7 @@ func _ready() -> void:
 	count_spin.max_value = 50
 	count_spin.value = 1
 	count_spin.suffix = "Personen"
-	hire_row.add_child(count_spin)
+	UI.field(hire_row, "Personen", count_spin, "", "Personen")
 	hire_button = Button.new()
 	hire_button.text = "Einstellen"
 	hire_button.pressed.connect(_hire)
@@ -88,12 +91,26 @@ func _ready() -> void:
 	var planes := UI.panel(self, "PERSONALBEDARF JE FLUGZEUG")
 	aircraft_tree = UI.table(["Flugzeug", "Modell", "Piloten", "Flugbegleiter", "Techniker (Wartung)", "Status"], [110, 160, 80, 110, 150, 320], 150)
 	planes.add_child(aircraft_tree)
+	aircraft_empty = UI.empty_state("PERSONALBEDARF JE FLUGZEUG", rules.text, "Flugzeug kaufen", func():
+		var page: Node = self
+		while not page.has_method("_show_page"): page = page.get_parent()
+		page._show_page(1)
+	)
+	planes.add_child(aircraft_empty)
 
 	var people := UI.panel(self, "MITARBEITER")
-	staff_tree = UI.table(["Name", "Rolle", "Gehalt / Monat", "Status", "Eingestellt"], [190, 190, 130, 340, 180], 300)
+	staff_tree = UI.table(["Name", "Rolle", "Gehalt / Monat", "Status", "Eingestellt", "Muster"], [190, 190, 130, 340, 180, 110], 300)
 	staff_tree.item_selected.connect(_selection_changed)
 	staff_tree.nothing_selected.connect(_selection_changed)
 	people.add_child(staff_tree)
+	staff_empty = UI.empty_state("MITARBEITER", rules.text, hire_button.text, func():
+		get_parent().get_parent().ensure_control_visible(role_select)
+		role_select.grab_focus()
+	)
+	people.add_child(staff_empty)
+	training_rows = VBoxContainer.new()
+	training_rows.add_theme_constant_override("separation", ThemeTokens.SPACE_3)
+	people.add_child(training_rows)
 	dismiss_button = Button.new()
 	dismiss_button.text = "Ausgewählten Mitarbeiter entlassen"
 	dismiss_button.pressed.connect(_dismiss)
@@ -102,6 +119,7 @@ func _ready() -> void:
 	people.add_child(dismiss_status)
 	people.add_child(dismiss_button)
 	train_button = Button.new()
+	train_button.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	train_button.pressed.connect(_train)
 	people.add_child(train_button)
 	var dismissal_rules := UI.label("Bei der Entlassung wird das bis dahin angefallene Gehalt anteilig auf volle EUR aufgerundet gezahlt. Mitarbeiter im Einsatz können nicht entlassen werden.", ThemeTokens.SMALL, UI.MUTED)
@@ -123,6 +141,7 @@ func refresh(force: bool = false) -> void:
 	var overview: Dictionary = simulation.get_staff_overview()
 	var staff: Array = simulation.get_staff()
 	var airline: Dictionary = simulation.get_airline_info()
+	_training(staff, overview["conversion_days"])
 	var key := "%s/%s/%s" % [overview, staff, airline.get("capital_eur", 0)]
 	if key == signature and not force:
 		return
@@ -142,6 +161,7 @@ func refresh(force: bool = false) -> void:
 		var values := [rating["rating"], str(rating["rated"]), str(rating["busy"]), str(rating["available"])]
 		for i in range(values.size()):
 			UI.cell_text(row, i, values[i])
+		UI.cell_status(row, 0, rating["rating"], "neutral")
 	train_button.text = "Umschulung auf gewähltes Muster · %s · %d Tage" % [UI.money(overview["conversion_cost_eur"]), overview["conversion_days"]]
 	_roles(overview)
 	_aircraft(overview)
@@ -167,6 +187,8 @@ func _roles(overview: Dictionary) -> void:
 			row.set_custom_color(4, UI.NEGATIVE)
 
 func _aircraft(overview: Dictionary) -> void:
+	aircraft_tree.visible = not overview["aircraft"].is_empty()
+	aircraft_empty.visible = not aircraft_tree.visible
 	aircraft_tree.clear()
 	var root := aircraft_tree.create_item()
 	for plane in overview["aircraft"]:
@@ -196,6 +218,8 @@ func _aircraft(overview: Dictionary) -> void:
 		UI.cell_status(row, 5, status, "info" if plane["state"] == "hangar" else "go" if color == UI.POSITIVE else "stop")
 
 func _staff(staff: Array) -> void:
+	staff_tree.visible = not staff.is_empty()
+	staff_empty.visible = staff.is_empty()
 	var key := str(staff)
 	if key == staff_signature:
 		return
@@ -211,6 +235,7 @@ func _staff(staff: Array) -> void:
 		for i in range(values.size()):
 			UI.cell_text(row, i, values[i])
 			row.set_tooltip_text(i, values[i])
+		UI.cell_status(row, 5, employee["rating"], "neutral")
 		UI.cell_status(row, 3, employee["status_text"], "neutral" if employee["status"] == "available" else "info")
 		if employee["id"] == previous_id:
 			selected = row
@@ -249,7 +274,8 @@ func _selection_changed() -> void:
 	dismiss_button.disabled = not employee["can_dismiss"]
 	dismiss_button.tooltip_text = "" if employee["can_dismiss"] else "Im Einsatz: erst Flugplan beenden bzw. Wartung abwarten."
 
-func _report(error: String, success: String) -> void:
+func _report(error: String, success: String, field: Control = null) -> void:
+	if field != null: UI.field_error(field, error)
 	for status in [action_status, dismiss_status]:
 		status.text = success if error.is_empty() else error
 		status.add_theme_color_override("font_color", UI.POSITIVE if error.is_empty() else UI.NEGATIVE)
@@ -262,7 +288,7 @@ func _hire() -> void:
 	var role: String = role_keys[role_select.selected]
 	var count := int(count_spin.value)
 	var error: String = simulation.hire_pilots(rating_select.get_item_text(rating_select.selected), count) if role == "pilot" else simulation.hire_staff(role, count)
-	_report(error, "%d Mitarbeiter eingestellt. Bitte Spielstand speichern." % count)
+	_report(error, "%d Mitarbeiter eingestellt. Bitte Spielstand speichern." % count, count_spin)
 
 func _hire_missing() -> void:
 	_report(simulation.hire_missing_staff(), "Fehlendes Personal eingestellt. Bitte Spielstand speichern.")
@@ -286,3 +312,23 @@ func focus_employee(id: int) -> void:
 			staff_tree.grab_focus()
 			return
 		row = row.get_next()
+
+## The existing API exposes the Rust deadline in status_text, not as a number.
+## Decode that display value only; now and duration both come from Rust.
+## No accumulated UI time, disk save access or simulation mutation is involved.
+func _training(staff: Array, duration_days: int) -> void:
+	for child in training_rows.get_children():
+		training_rows.remove_child(child)
+		child.queue_free()
+	var deadline := RegEx.new()
+	deadline.compile("bis Tag ([0-9]+) ([0-9]+):([0-9]+):([0-9]+)$")
+	for employee in staff:
+		if employee["status"] != "training": continue
+		var match_time := deadline.search(employee["status_text"])
+		if match_time == null or duration_days <= 0: continue
+		var ends := (int(match_time.get_string(1)) - 1) * 86400 + int(match_time.get_string(2)) * 3600 + int(match_time.get_string(3)) * 60 + int(match_time.get_string(4))
+		var percent := clampf(100.0 * (1.0 - (ends - simulation.get_elapsed_seconds()) / (duration_days * 86400.0)), 0, 100)
+		var sentence := UI.label(employee["name"] + " · " + employee["status_text"], ThemeTokens.SMALL, UI.MUTED)
+		sentence.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		training_rows.add_child(sentence)
+		training_rows.add_child(UI.progress(percent, "info"))

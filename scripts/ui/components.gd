@@ -98,7 +98,7 @@ static func cell_text(item: TreeItem, column: int, text: String) -> void:
 		"Flüge", "Tickets", "Kosten", "Ergebnis", "Auslastung", "Fracht kg / EUR",
 		"Beschäftigt", "Im Einsatz", "Verfügbar", "Fehlt", "Berechtigt", "Piloten",
 		"Flugbegleiter", "Techniker (Wartung)", "Gehalt / Monat", "Kosten / Monat",
-		"Gehalt je Person / Monat", "Pax / Sitze", "Pax / Auslastung"
+		"Gehalt je Person / Monat", "Pax / Sitze", "Pax / Auslastung", "Eingestellt"
 	]
 	var code := not text.is_empty() and (_code.search(text) != null and (not numeric or text.begins_with("#")) or item.get_tree().get_column_title(column) in ["Muster", "Kennung", "Kennzeichen", "Route", "Route / Strecke", "Strecke", "Richtung"])
 	var style: Dictionary = ThemeTokens.CODE if code else ThemeTokens.DATA if numeric else ThemeTokens.BODY
@@ -363,7 +363,9 @@ static func money(value: int) -> String:
 	return ("−" if value < 0 else "") + result + " EUR"
 
 static func table(titles: Array, widths: Array, height: int = 200) -> Tree:
-	var result := Tree.new()
+	var result := BreakdownTable.new()
+	result.tooltip_builder = breakdown_tooltip
+	result.result_formatter = signed_money
 	result.columns = titles.size()
 	result.hide_root = true
 	result.select_mode = Tree.SELECT_ROW
@@ -564,3 +566,117 @@ static func aircraft_facts(body: VBoxContainer, model: Dictionary) -> void:
 	for fact in [["Sitze", str(model["seats"])], ["Reichweite", "%d km" % model["range_km"]], ["Reisegeschwindigkeit", "%d km/h" % model["cruise_kmh"]], ["Besatzung", "%d Piloten · %d Kabine" % [model["pilots"], model["cabin_crew"]]]]:
 		body.add_child(label(fact[0], ThemeTokens.LABEL, MUTED))
 		body.add_child(label(fact[1], ThemeTokens.DATA))
+
+## Field structure keeps the original control and its input behaviour.
+static func field(parent: Node, title: String, control: Control, help: String = "", unit: String = "") -> VBoxContainer:
+	var column := VBoxContainer.new()
+	column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	column.add_theme_constant_override("separation", ThemeTokens.SPACE_2)
+	parent.add_child(column)
+	var caption := label(title, ThemeTokens.LABEL, MUTED)
+	caption.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	column.add_child(caption)
+	if control.get_parent() != null: control.reparent(column)
+	else: column.add_child(control)
+	control.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	control.custom_minimum_size.y = ThemeTokens.CONTROL_HEIGHT
+	if control is SpinBox:
+		control.suffix = unit
+		control.get_line_edit().theme_type_variation = "NumericInput"
+		control.get_line_edit().alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	var sentence := label(help, ThemeTokens.SMALL, MUTED)
+	sentence.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	sentence.visible = not help.is_empty()
+	column.add_child(sentence)
+	control.set_meta("field_help", sentence)
+	control.set_meta("field_help_text", help)
+	var well: Control = control.get_line_edit() if control is SpinBox else control
+	control.set_meta("field_normal", well.get_theme_stylebox("normal"))
+	if control is SpinBox:
+		control.value_changed.connect(func(_value: float): field_error(control, ""))
+	return column
+
+static func field_from_label(control: Control, unit: String = "", help: String = "") -> void:
+	var parent := control.get_parent()
+	var index := control.get_index()
+	var caption := parent.get_child(index - 1) as Label
+	var title := caption.text
+	var parts := title.split(" · ", true, 1)
+	if parts.size() > 1:
+		title = parts[0]
+		help = parts[1] + ("\n" + help if not help.is_empty() else "")
+	elif title.begins_with("Abstand pro Flugzeug"):
+		title = "Abstand pro Flugzeug"
+		help = caption.text.trim_prefix(title).strip_edges()
+	var column := field(parent, title, control, help, unit)
+	parent.move_child(column, index - 1)
+	parent.remove_child(caption)
+	caption.queue_free()
+
+class BreakdownTable extends Tree:
+	var result_formatter: Callable
+	func _draw_result(item: TreeItem, rect: Rect2) -> void:
+		var amount: int = item.get_meta("result_amount")
+		var display: String = result_formatter.call(amount)
+		var font := ThemeTokens.font_for(ThemeTokens.DATA)
+		var font_size: int = ThemeTokens.DATA["size"]
+		var width := font.get_string_size(display, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
+		var baseline := rect.position.y + (rect.size.y - font.get_height(font_size)) / 2.0 + font.get_ascent(font_size)
+		draw_string(font, Vector2(rect.end.x - ThemeTokens.SPACE_3 - width, baseline), display, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, ThemeTokens.GO if amount >= 0 else ThemeTokens.STOP)
+
+	var tooltip_builder: Callable
+	func _make_custom_tooltip(for_text: String) -> Object:
+		var breakdowns: Dictionary = get_meta("breakdowns", {})
+		if not breakdowns.has(for_text): return null
+		return tooltip_builder.call(breakdowns[for_text])
+
+static func breakdown_tooltip(parts: Array) -> Control:
+	var card := PanelContainer.new()
+	card.add_theme_stylebox_override("panel", ThemeTokens.new().floating_box(ThemeTokens.RADIUS_MD, ThemeTokens.SPACE_3))
+	var column := VBoxContainer.new()
+	column.add_theme_constant_override("separation", ThemeTokens.SPACE_2)
+	card.add_child(column)
+	for i in range(parts.size()):
+		if i == parts.size() - 1: column.add_child(HSeparator.new())
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", ThemeTokens.SPACE_4)
+		column.add_child(row)
+		var caption := label(parts[i][0], ThemeTokens.SMALL, ThemeTokens.INK if i == parts.size() - 1 else MUTED)
+		caption.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(caption)
+		var value := label(parts[i][1], ThemeTokens.DATA)
+		value.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		row.add_child(value)
+	return card
+
+static func signed_money(amount: int) -> String:
+	return "+" + money(amount) if amount >= 0 else money(amount)
+
+## Rust owns validation; fields only present its error and restore existing help.
+static func field_error(control: Control, error: String) -> void:
+	if not control.has_meta("field_help"): return
+	var sentence: Label = control.get_meta("field_help")
+	sentence.text = error if not error.is_empty() else control.get_meta("field_help_text")
+	sentence.visible = not sentence.text.is_empty()
+	sentence.add_theme_color_override("font_color", MUTED if error.is_empty() else NEGATIVE)
+	var well: Control = control.get_line_edit() if control is SpinBox else control
+	var normal: StyleBoxFlat = control.get_meta("field_normal")
+	if not error.is_empty():
+		normal = normal.duplicate()
+		normal.border_color = NEGATIVE
+	well.add_theme_stylebox_override("normal", normal)
+
+## Retain canonical money text for existing table consumers; paint the sign.
+static func cell_result(item: TreeItem, column: int, amount: int) -> void:
+	item.set_cell_mode(column, TreeItem.CELL_MODE_CUSTOM)
+	cell_text(item, column, money(amount))
+	# Custom cells also paint their stored text; only the signed renderer is visible.
+	item.set_custom_color(column, ThemeTokens.TRANSPARENT)
+	var tree := item.get_tree()
+	var minimums: Dictionary = tree.get_meta("column_minimums", {})
+	var width := ThemeTokens.font_for(ThemeTokens.DATA).get_string_size(signed_money(amount), HORIZONTAL_ALIGNMENT_LEFT, -1, ThemeTokens.DATA["size"]).x
+	minimums[column] = maxi(minimums.get(column, 0), ceili(width) + ThemeTokens.SPACE_3 * 2)
+	tree.set_meta("column_minimums", minimums)
+	tree.set_column_custom_minimum_width(column, minimums[column])
+	item.set_meta("result_amount", amount)
+	item.set_custom_draw_callback(column, Callable(item.get_tree(), "_draw_result"))
