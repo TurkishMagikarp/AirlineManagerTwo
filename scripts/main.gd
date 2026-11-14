@@ -120,7 +120,6 @@ func _ready() -> void:
 	for index in range(PAGES.size()):
 		var button := Button.new()
 		button.text = PAGES[index]["title"]
-		button.tooltip_text = button.text
 		button.theme_type_variation = "NavButton"
 		button.icon = load("res://resources/icons/%s.svg" % ["overview", "fleet", "routes", "map", "finance", "staff"][index])
 		button.alignment = HORIZONTAL_ALIGNMENT_LEFT
@@ -899,6 +898,7 @@ func _resize_frame() -> void:
 	rail_brand.visible = not compact
 	for index in range(navigation.size()):
 		UI.nav_geometry(navigation[index], compact)
+		navigation[index].tooltip_text = PAGES[index]["title"] if compact else ""
 		navigation[index].text = "" if compact else PAGES[index]["title"]
 		navigation[index].alignment = HORIZONTAL_ALIGNMENT_CENTER if compact else HORIZONTAL_ALIGNMENT_LEFT
 	new_game_button.text = "+" if compact else "Neues Spiel"

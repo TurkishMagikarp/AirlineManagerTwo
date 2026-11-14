@@ -27,7 +27,7 @@ func _run() -> void:
 		for frame in range(5): await process_frame
 		assert(is_equal_approx(main.rail.size.x, 56.0 if width < 900 else 208.0))
 		for index in range(6):
-			assert(main.navigation[index].tooltip_text == main.PAGES[index]["title"])
+			assert(main.navigation[index].tooltip_text == (main.PAGES[index]["title"] if width < 900 else ""))
 			assert(main.navigation[index].text == ("" if width < 900 else main.PAGES[index]["title"]))
 		var scroll: ScrollContainer = main.fleet_panel.get_parent().get_parent()
 		var rail_position: Vector2 = main.rail.global_position
