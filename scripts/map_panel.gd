@@ -245,8 +245,8 @@ func _position_overlays() -> void:
 	for flight in canvas.flights:
 		if flight["aircraft_id"] == selected_id: anchor = canvas.project(flight["position"])
 	var x := anchor.x + 24
-	if x + card.size.x > canvas.size.x - 16: x = anchor.x - card.size.x - 24
-	card.position = Vector2(clampf(x, 16, maxf(16, canvas.size.x - card.size.x - 16)), clampf(anchor.y, 16, maxf(16, canvas.size.y - card.size.y - 16)))
+	if x + card.size.x > canvas.size.x - 68: x = anchor.x - card.size.x - 24
+	card.position = Vector2(clampf(x, 16, maxf(16, canvas.size.x - card.size.x - 68)), clampf(anchor.y, 16, maxf(16, canvas.size.y - card.size.y - 16)))
 
 func _unhandled_key_input(event: InputEvent) -> void:
 	if visible and event.is_action_pressed("ui_cancel"):
@@ -261,9 +261,9 @@ func _reveal_selected() -> void:
 	if selected_id < 0: anchor = canvas.project(canvas.airports[-selected_id - 1]["position"])
 	for flight in canvas.flights:
 		if flight["aircraft_id"] == selected_id: anchor = canvas.project(flight["position"])
-	var right_space := canvas.size.x - anchor.x
-	if anchor.x < card.size.x + 40 and right_space < card.size.x + 40:
-		var shift := canvas.size.x - card.size.x - 48 - anchor.x
+	if canvas.size.x < card.size.x * 2 + 120:
+		# Leave the 36px zoom group and its 16px gutters beside the card.
+		var shift := canvas.size.x - card.size.x - 92 - anchor.x
 		canvas.offset.x += shift
 		canvas.selection_position.x += shift
 		canvas._constrain()
