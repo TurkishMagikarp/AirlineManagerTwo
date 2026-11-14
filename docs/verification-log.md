@@ -378,3 +378,20 @@ Wartungsende wieder verschwindet. Spielstandversion unverändert (10), neues Fel
   Gameplay, Ökonomie und Speicherformat v25 unverändert. Native Windows-,
   START.bat-, PowerShell- und Windows-Neustartprüfungen bleiben beim Besitzer.
   Details: attention-verification.md.
+
+## 2026-11-14 — AIR-87: technische Verspätungen, UI-/Restart-Verifikation
+
+- Godot-Testfamilie mit festem Produktionsseed: Fälligkeit, 1×/4×/16×-Frames,
+  Pünktlichkeit, Betreuung in Routen-/Flugkosten, Laden, Rückstand/Erholung und
+  Renderfälle 1440×1000, 1100×720, 680×520. Neuer PowerShell-Wrapper vergleicht
+  v25→v26 und v26 mitten im verspäteten Flug in vier getrennten Prozessen,
+  vollständige Spieler-/KI-Welt und APIs sofort/nach 100 Tagen.
+- Rust: 218 Tests plus zwei separat gestartete Millionenflugtests bestanden;
+  build und Clippy bestanden. Kompaktarchiv: 16.064.553 Bytes. Finanzstress:
+  Simulation 233,943 s < unverändert 300 s; inklusive Speichern/Laden/Fortsetzung
+  357,461 s, Spielstand 234.113.598 Bytes. Fixture und beide 100-Tage-Familien
+  mit KI bestanden; keine Aussage über echte Godot-Prozessneustarts.
+- Nicht ausgeführt: Godot-/GUI-/Xvfb-Suiten, START.bat und sämtliche Windows-
+  Restart-Wrapper. Keine Originalrenders vorhanden/angehängt; Sichtprüfung
+  und diese Läufe bleiben beim Windows-Eigentümer. Keine Gameplay-, Wirtschafts-
+  oder Speicherformatänderungen. Headless-Rust-Tests belegen kein UI-Layout.
