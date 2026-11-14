@@ -376,8 +376,13 @@ func _build_fleet(content: VBoxContainer) -> void:
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	shop.add_child(hint)
 	var used := UI.panel(grid, "USED MARKET / GEBRAUCHTFLUGZEUGE")
+	var used_scroll := ScrollContainer.new()
+	used_scroll.custom_minimum_size.y = 220
+	used_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	used.add_child(used_scroll)
 	used_rows = VBoxContainer.new()
-	used.add_child(used_rows)
+	used_rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	used_scroll.add_child(used_rows)
 	var owned := UI.panel(grid, "FLOTTENREGISTER  /  EIGENTUM & LEASING")
 	empty_fleet = _label("Noch keine Flugzeuge beschafft.", 17, Color("c2cedc"))
 	owned.add_child(empty_fleet)

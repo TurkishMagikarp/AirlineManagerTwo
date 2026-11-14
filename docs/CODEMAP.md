@@ -1176,30 +1176,30 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 285 func _show_page(index: int) -> void:
 317 func _refresh_finance() -> void:
 337 func _build_fleet(content: VBoxContainer) -> void:
-422 func _model_selected(index: int) -> void:
-433 func _lease_aircraft() -> void:
-443 func _dispose_aircraft() -> void:
-453 func _buy_aircraft() -> void:
-469 func _refresh_used_market() -> void:
-493 func _buy_used_aircraft(listing_id: int) -> void:
-500 func _refresh_fleet() -> void:
-545 func _maintenance_summary(plane: Dictionary) -> String:
-558 func _build_maintenance(parent: VBoxContainer) -> void:
-594 func _refresh_base_action() -> void:
-606 func _change_maintenance_base() -> void:
-613 func _refresh_maintenance() -> void:
-672 func _request_maintenance() -> void:
-683 func _cancel_maintenance() -> void:
-694 func _build_founding() -> void:
-761 func _country_changed(index: int) -> void:
-775 func _found_airline() -> void:
-787 func _sync_view() -> void:
-804 func _open_founding() -> void:
-813 func _label(text: String, size: int, color: Color = Color("f0f4fa")) -> Label:
-821 func _build_finance(content: VBoxContainer) -> void:
-848 func _build_attention(parent: VBoxContainer) -> void:
-865 func _refresh_attention() -> void:
-887 func _open_attention(entry: Dictionary) -> void:
+427 func _model_selected(index: int) -> void:
+438 func _lease_aircraft() -> void:
+448 func _dispose_aircraft() -> void:
+458 func _buy_aircraft() -> void:
+474 func _refresh_used_market() -> void:
+498 func _buy_used_aircraft(listing_id: int) -> void:
+505 func _refresh_fleet() -> void:
+550 func _maintenance_summary(plane: Dictionary) -> String:
+563 func _build_maintenance(parent: VBoxContainer) -> void:
+599 func _refresh_base_action() -> void:
+611 func _change_maintenance_base() -> void:
+618 func _refresh_maintenance() -> void:
+677 func _request_maintenance() -> void:
+688 func _cancel_maintenance() -> void:
+699 func _build_founding() -> void:
+766 func _country_changed(index: int) -> void:
+780 func _found_airline() -> void:
+792 func _sync_view() -> void:
+809 func _open_founding() -> void:
+818 func _label(text: String, size: int, color: Color = Color("f0f4fa")) -> Label:
+826 func _build_finance(content: VBoxContainer) -> void:
+853 func _build_attention(parent: VBoxContainer) -> void:
+870 func _refresh_attention() -> void:
+892 func _open_attention(entry: Dictionary) -> void:
 
 ## scripts/map_background.gd
 1 extends Control
