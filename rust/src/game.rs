@@ -11,6 +11,8 @@ pub struct Game {
     /// Derived snapshot of other owners, refreshed before each AI review.
     #[serde(skip)]
     pub external_slots: std::collections::BTreeMap<String, u64>,
+    #[serde(default)]
+    pub maintenance_bases: Vec<crate::maintenance::Base>,
     pub insurance: crate::insurance::Policy,
     pub fuel_contract: Option<crate::fuel_contracts::Contract>,
     pub clock: Clock,
@@ -43,6 +45,7 @@ impl Default for Game {
     fn default() -> Self {
         Self {
             external_slots: Default::default(),
+            maintenance_bases: Vec::new(),
             insurance: Default::default(),
             fuel_contract: None,
             clock: Clock::default(),

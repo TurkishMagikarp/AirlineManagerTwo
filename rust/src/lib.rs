@@ -1161,6 +1161,36 @@ impl SimulationClock {
             .collect()
     }
 
+    #[func]
+    fn set_maintenance_base(&mut self, icao: GString, open: bool) -> GString {
+        let result = if open {
+            self.game.open_maintenance_base(&icao.to_string())
+        } else {
+            self.game.close_maintenance_base(&icao.to_string())
+        };
+        result.err().unwrap_or_default().as_str().into()
+    }
+
+    #[func]
+    fn get_maintenance_airports(&self) -> Array<VarDictionary> {
+        let Ok(catalog) = airports::catalog() else {
+            return Array::new();
+        };
+        let (setup, fee) = self.game.base_prices().unwrap_or_default();
+        catalog.airports.iter().map(|a| {
+            let base = self.game.is_maintenance_base(&a.icao);
+            let home = self.game.airline.as_ref().is_some_and(|airline| airline.home_airport_icao == a.icao);
+            let error = self.game.validate_base_action(&a.icao, !base).err().unwrap_or_default();
+            vdict! {
+                "icao" => a.icao.as_str(), "name" => a.name.as_str(),
+                "is_base" => base, "is_home" => home,
+                "setup_eur" => setup, "fee_eur" => fee,
+                "next_fee" => self.game.maintenance_bases.iter().find(|b| b.icao == a.icao).map(|b| operations::display_time(b.next_fee)).unwrap_or_default().as_str(),
+                "action_error" => error.as_str()
+            }
+        }).collect()
+    }
+
     /// Empty string means success. Airborne aircraft enter the hangar after landing.
     #[func]
     fn request_maintenance(&mut self, aircraft_id: u32) -> GString {
@@ -1408,6 +1438,7 @@ impl SimulationClock {
                     "icao" => airport.icao.as_str(),
                     "name" => airport.name.as_str(),
                     "iata" => airport.iata.as_deref().unwrap_or(""),
+                    "maintenance_base" => self.game.is_maintenance_base(&airport.icao),
                     "slots" => self.game.slot_text(&airport.icao).as_str(),
                     "charge_percent" => airport.charge_percent
                 }
@@ -1621,7 +1652,21 @@ impl SimulationClock {
         };
         let shown = visit.cloned().or_else(|| quote.as_ref().ok().cloned());
         let due = self.game.due_landing(p);
+        let location = self
+            .game
+            .maintenance_location(plane.id)
+            .unwrap_or_else(|_| plane.location_icao.clone());
+        let regular = self
+            .game
+            .check_at(&location, w, r, false)
+            .unwrap_or_default();
+        let forced = self
+            .game
+            .check_at(&location, w, r, true)
+            .unwrap_or_default();
         vdict! {
+            "maintenance_location" => location.as_str(),
+            "maintenance_location_kind" => if self.game.is_maintenance_base(&location) { "Wartungsbasis" } else { "Außenstation (Aufschlag)" },
             "condition_percent" => w.condition_permille(r) as f64 / 10.0,
             "flight_hours" => hours(w.flight_seconds), "cycles" => w.cycles as i64,
             "checks" => w.checks as i64,
@@ -1635,10 +1680,10 @@ impl SimulationClock {
             "maintenance_start" => shown.as_ref().map(|v| operations::display_time(v.start)).unwrap_or_default().as_str(),
             "maintenance_end" => shown.as_ref().map(|v| operations::display_time(v.end)).unwrap_or_default().as_str(),
             "maintenance_end_seconds" => shown.as_ref().map(|v| v.end as i64).unwrap_or(-1),
-            "maintenance_cost_eur" => shown.as_ref().map(|v| v.cost_eur).unwrap_or_else(|| maintenance::cost(w, r, false).unwrap_or(0)),
-            "maintenance_hours" => maintenance::duration(r, false).unwrap_or(0) as f64 / 3600.0,
-            "unscheduled_cost_eur" => maintenance::cost(w, r, true).unwrap_or(0),
-            "unscheduled_hours" => maintenance::duration(r, true).unwrap_or(0) as f64 / 3600.0,
+            "maintenance_cost_eur" => shown.as_ref().map(|v| v.cost_eur).unwrap_or_else(|| regular.0),
+            "maintenance_hours" => shown.as_ref().map_or(regular.1, |v| v.end - v.start) as f64 / 3600.0,
+            "unscheduled_cost_eur" => forced.0,
+            "unscheduled_hours" => forced.1 as f64 / 3600.0,
             "due_time" => due.map(operations::display_time).unwrap_or_default().as_str(),
             "can_request_maintenance" => quote.is_ok(),
             "can_cancel_maintenance" => state == "pending" && !visit.is_some_and(|v| v.unscheduled),

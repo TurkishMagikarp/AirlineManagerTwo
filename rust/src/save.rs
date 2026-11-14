@@ -16,7 +16,8 @@ use std::time::Duration;
 // v27: identity migration for slots. Existing schedules (including over-capacity
 // airports) remain valid; admission checks apply only to new schedules.
 // v28: neutral punctuality reputation for older saves, without history replay.
-const VERSION: u32 = 28;
+// v29: implicit home base, dated extra bases; existing visits remain frozen.
+const VERSION: u32 = 29;
 // Bounded input, including centuries of fuel/seasonal quotes for the player
 // and both AI airlines in the million-flight finance restart scenario.
 // Version 17 retains per-class quotes, which also split more archive batches.
@@ -32,6 +33,8 @@ struct SaveGame {
 // Future simulation data belongs here, not in the UI or a serialized Godot object.
 #[derive(Serialize, Deserialize)]
 struct GameState {
+    #[serde(default)]
+    maintenance_bases: Vec<crate::maintenance::Base>,
     #[serde(default)]
     insurance: Option<crate::insurance::Policy>,
     fuel_contract: Option<crate::fuel_contracts::Contract>,
@@ -102,6 +105,7 @@ pub fn save(path: &Path, game: &Game) -> Result<(), String> {
     let data = SaveGame {
         version: VERSION,
         state: GameState {
+            maintenance_bases: game.maintenance_bases.clone(),
             insurance: Some(game.insurance.clone()),
             fuel_contract: game.fuel_contract.clone(),
             fuel_market: Some(game.fuel_market.clone()),
@@ -193,6 +197,14 @@ pub fn load(path: &Path) -> Result<Game, String> {
     }
     if value["version"].as_u64().is_some_and(|v| v < 28) {
         crate::reputation::migrate(&mut value["state"]);
+    }
+    if value["version"].as_u64().is_some_and(|v| v < 29) {
+        value["state"]["maintenance_bases"] = serde_json::json!([]);
+        if let Some(owners) = value["state"]["competitors"].as_array_mut() {
+            for owner in owners {
+                owner["game"]["maintenance_bases"] = serde_json::json!([]);
+            }
+        }
     }
     // v26 is an additive migration: absent cursors and punctuality/care
     // fields deserialize to None/zero for every owner and archived result.
@@ -300,6 +312,7 @@ pub fn load(path: &Path) -> Result<Game, String> {
         },
         finance,
         clock,
+        maintenance_bases: data.state.maintenance_bases,
         airline: data.state.airline,
         fleet: fleet.aircraft,
         next_aircraft_id: fleet.next_aircraft_id,

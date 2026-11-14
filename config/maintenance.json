@@ -1,6 +1,10 @@
 {
   "unscheduled_cost_percent": 150,
   "unscheduled_duration_percent": 150,
+  "outstation_cost_percent": 110,
+  "outstation_duration_percent": 105,
+  "base_setup_cost_eur": 250000,
+  "base_recurring_fee_eur": 10000,
   "models": {
     "a320_200": { "interval_flight_hours": 600, "interval_cycles": 450, "duration_hours": 24, "base_cost_eur": 60000, "cost_per_flight_hour_eur": 150, "cost_per_cycle_eur": 50 },
     "b737_800": { "interval_flight_hours": 600, "interval_cycles": 450, "duration_hours": 24, "base_cost_eur": 55000, "cost_per_flight_hour_eur": 150, "cost_per_cycle_eur": 50 },

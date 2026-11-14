@@ -92,6 +92,22 @@ fn insurance_incident_deductible_grounding_speeds_and_saved_request() {
         );
         assert!(a.sell_aircraft(1).is_err());
         assert_eq!(a.fleet[0].location_icao, "EDDM");
+        let check = a.fleet[0].maintenance.as_ref().unwrap();
+        let expected = a
+            .check_at(
+                "EDDM",
+                &a.fleet[0].wear,
+                crate::maintenance::rules("atr72_600").unwrap(),
+                false,
+            )
+            .unwrap();
+        assert_eq!(check.cost_eur, expected.0);
+        assert_eq!(
+            check.end - check.start,
+            expected
+                .1
+                .max(crate::insurance::RULES.downtime_hours * 3600)
+        );
         a = restart(&a);
         let end = a.fleet[0].maintenance.as_ref().unwrap().end;
         assert!(a.advance((end - landing) as f64));
@@ -111,6 +127,15 @@ fn insurance_insufficient_cash_repairs_are_mandatory_and_disposal_removes_risk()
         g.history.as_mut().unwrap().opening_balance += shift;
         assert!(g.advance((landing - 61) as f64));
         assert_eq!(g.insurance.recent.len(), 1);
+        let repair = g.fleet[0].maintenance.as_ref().unwrap();
+        assert_eq!(
+            repair.cost_eur, 0,
+            "repair is already booked in insurance, never reprice it as a check"
+        );
+        assert_eq!(
+            repair.end - repair.start,
+            crate::insurance::RULES.downtime_hours * 3600
+        );
         assert!(g.cash() < 0);
         g.validate_history().unwrap();
         assert_eq!(
