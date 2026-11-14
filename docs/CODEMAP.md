@@ -1166,23 +1166,23 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 436 func _dispose_aircraft() -> void:
 446 func _buy_aircraft() -> void:
 462 func _refresh_fleet() -> void:
-506 func _maintenance_summary(plane: Dictionary) -> String:
-519 func _build_maintenance(parent: VBoxContainer) -> void:
-555 func _refresh_base_action() -> void:
-567 func _change_maintenance_base() -> void:
-574 func _refresh_maintenance() -> void:
-633 func _request_maintenance() -> void:
-644 func _cancel_maintenance() -> void:
-655 func _build_founding() -> void:
-729 func _country_changed(index: int) -> void:
-743 func _found_airline() -> void:
-755 func _sync_view() -> void:
-772 func _open_founding() -> void:
-781 func _label(text: String, style: Dictionary, color: Color = ThemeTokens.INK) -> Label:
-785 func _build_finance(content: VBoxContainer) -> void:
-812 func _build_attention(parent: VBoxContainer) -> void:
-829 func _refresh_attention() -> void:
-851 func _open_attention(entry: Dictionary) -> void:
+507 func _maintenance_summary(plane: Dictionary) -> String:
+520 func _build_maintenance(parent: VBoxContainer) -> void:
+556 func _refresh_base_action() -> void:
+568 func _change_maintenance_base() -> void:
+575 func _refresh_maintenance() -> void:
+634 func _request_maintenance() -> void:
+645 func _cancel_maintenance() -> void:
+656 func _build_founding() -> void:
+730 func _country_changed(index: int) -> void:
+744 func _found_airline() -> void:
+756 func _sync_view() -> void:
+773 func _open_founding() -> void:
+782 func _label(text: String, style: Dictionary, color: Color = ThemeTokens.INK) -> Label:
+786 func _build_finance(content: VBoxContainer) -> void:
+813 func _build_attention(parent: VBoxContainer) -> void:
+830 func _refresh_attention() -> void:
+852 func _open_attention(entry: Dictionary) -> void:
 
 ## scripts/map_background.gd
 1 extends Control
@@ -1226,18 +1226,18 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 257 func _selected_id(select: OptionButton) -> int:
 261 func _route() -> Dictionary:
 266 func refresh() -> void:
-304 func refresh_operations() -> void:
-361 func _preview() -> void:
-372 func _selection_changed() -> void:
-405 func _update_service_cost(route: Dictionary) -> void:
-411 func _update_schedule_controls(route: Dictionary) -> void:
-426 func _refresh_competition() -> void:
-447 func _assignment_preview() -> void:
-463 func _feedback(error: String, success: String) -> void:
-473 func _create() -> void:
-477 func _assign() -> void:
-487 func _delete() -> void:
-493 func focus_route(id: int) -> void:
+305 func refresh_operations() -> void:
+362 func _preview() -> void:
+373 func _selection_changed() -> void:
+406 func _update_service_cost(route: Dictionary) -> void:
+412 func _update_schedule_controls(route: Dictionary) -> void:
+427 func _refresh_competition() -> void:
+448 func _assignment_preview() -> void:
+464 func _feedback(error: String, success: String) -> void:
+474 func _create() -> void:
+478 func _assign() -> void:
+488 func _delete() -> void:
+494 func focus_route(id: int) -> void:
 
 ## scripts/staff_panel.gd
 1 extends VBoxContainer

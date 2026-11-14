@@ -277,6 +277,7 @@ func refresh() -> void:
 	aircraft.disabled = aircraft.item_count == 0
 	var routes: Array = simulation.get_routes()
 	empty_label.visible = routes.is_empty()
+	create_button.theme_type_variation = "Button" if routes.is_empty() else "PrimaryButton"
 	route_tree.visible = not routes.is_empty()
 	route_tree.clear()
 	var root_item := route_tree.create_item()
