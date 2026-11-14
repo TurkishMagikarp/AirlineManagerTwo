@@ -223,7 +223,7 @@ pub fn project(route: &Route, model: &str, now: u64) -> Result<Projection, Strin
         AircraftStatus::Parked
     };
     // During ground time show the last flight's delay. Once ready, show the
-    // next flight's predicted delay (including its own technical repair).
+    // next flight's delay once its scheduled departure has been reached.
     let delay_leg = if in_flight || status == AircraftStatus::Ground {
         displayed
     } else {
@@ -244,7 +244,11 @@ pub fn project(route: &Route, model: &str, now: u64) -> Result<Projection, Strin
         landing: displayed.landing,
         ready: displayed.ready,
         completed: cursor.index,
-        delay_seconds: delay_leg.departure - delay_leg.scheduled,
+        delay_seconds: if now < delay_leg.scheduled {
+            0
+        } else {
+            delay_leg.departure - delay_leg.scheduled
+        },
     };
     Ok(Projection {
         state,

@@ -236,14 +236,14 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 32 fn cursor(g: &mut Game) -> &mut Cursor
 43 fn delayed(interval: u32) -> Game
 73 fn disruptions_absorb_and_propagate_without_shortening_ground_time()
-98 fn disruptions_restart_midflight_speeds_steps_pause_and_care_reconcile()
-155 fn disruptions_late_arrival_starts_due_and_requested_checks()
-195 fn disruptions_sale_and_lease_return_clear_pending_delay()
-229 fn disruptions_v25_migrates_all_owners_empty_and_keeps_airborne_times()
-237 fn strip(v: &mut serde_json::Value)
-283 fn disruptions_wear_age_and_corrupt_cursor_validation()
-318 fn disruptions_care_settles_once_reduces_tax_base_and_attention_is_read_only()
-395 fn disruptions_long_delay_cash_runway_never_reuses_a_past_arrival()
+110 fn disruptions_restart_midflight_speeds_steps_pause_and_care_reconcile()
+167 fn disruptions_late_arrival_starts_due_and_requested_checks()
+207 fn disruptions_sale_and_lease_return_clear_pending_delay()
+241 fn disruptions_v25_migrates_all_owners_empty_and_keeps_airborne_times()
+249 fn strip(v: &mut serde_json::Value)
+295 fn disruptions_wear_age_and_corrupt_cursor_validation()
+330 fn disruptions_care_settles_once_reduces_tax_base_and_attention_is_read_only()
+407 fn disruptions_long_delay_cash_runway_never_reuses_a_past_arrival()
 
 ## rust/src/disruptions.rs
 15 pub struct Rules
@@ -258,14 +258,14 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 152 pub fn validate(route: &Route, plane: &crate::aircraft::Aircraft) -> Result<(), String>
 187 pub struct Projection
 193 pub fn project(route: &Route, model: &str, now: u64) -> Result<Projection, String>
-261 struct ForecastKey
-274 static FORECASTS: std::cell::RefCell<std::collections::HashMap<ForecastKey, u64>> = std::cell::RefCell::ne
-278 pub fn landing_at(route: &Route, model: &str, index: u64) -> Result<u64, String>
-331 pub fn valid(t: &Totals) -> bool
-339 pub fn percent(t: &Totals) -> f64
-346 pub fn apply(t: &mut Totals, leg: &Leg) -> Result<(), String>
-360 impl Game
-361 pub(crate) fn initialize_disruptions(&mut self) -> Result<(), String>
+265 struct ForecastKey
+278 static FORECASTS: std::cell::RefCell<std::collections::HashMap<ForecastKey, u64>> = std::cell::RefCell::ne
+282 pub fn landing_at(route: &Route, model: &str, index: u64) -> Result<u64, String>
+335 pub fn valid(t: &Totals) -> bool
+343 pub fn percent(t: &Totals) -> f64
+350 pub fn apply(t: &mut Totals, leg: &Leg) -> Result<(), String>
+364 impl Game
+365 pub(crate) fn initialize_disruptions(&mut self) -> Result<(), String>
 
 ## rust/src/economy.rs
 14 pub struct FuelMarket

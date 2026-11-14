@@ -74,6 +74,18 @@ fn disruptions_absorb_and_propagate_without_shortening_ground_time() {
     for interval in [tight_interval(), 180] {
         let g = delayed(interval);
         let r = &g.routes[0];
+        assert_eq!(
+            operations::movement(r, "atr72_600", 0)
+                .unwrap()
+                .delay_seconds,
+            0
+        );
+        assert!(
+            operations::movement(r, "atr72_600", 60)
+                .unwrap()
+                .delay_seconds
+                > 1000
+        );
         let mut c = r.plan.as_ref().unwrap().disruption.clone().unwrap();
         let (_, ground) = operations::timings(r, "atr72_600").unwrap();
         let mut delays = Vec::new();
