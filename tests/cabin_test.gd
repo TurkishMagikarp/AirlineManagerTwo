@@ -109,7 +109,7 @@ func _run() -> void:
 			return
 		if mode.ends_with("v17") or mode.ends_with("v16"):
 			var version := 16 if mode.ends_with("v16") else 17
-			var contents := FileAccess.get_file_as_string(path).replace('"version":25', '"version":%d' % version)
+			var contents := FileAccess.get_file_as_string(path).replace('"version":26', '"version":%d' % version)
 			var service := RegEx.create_from_string('"service_level":"[a-z]+",|,"service_level":"[a-z]+"|"service":-?\\d+,|,"service":-?\\d+')
 			var file := FileAccess.open(path, FileAccess.WRITE)
 			file.store_string(service.sub(contents, "", true))

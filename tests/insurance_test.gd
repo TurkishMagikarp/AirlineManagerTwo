@@ -58,7 +58,7 @@ func _run() -> void:
 				return
 			_advance(120)
 			var original: String = _snapshot()[0]
-			var old := _without_insurance(original).replace('"version":25', '"version":22')
+			var old := _without_insurance(original).replace('"version":26', '"version":22')
 			_write(path, old)
 			if not _check(not '"insurance"' in old and not '"insurance_costs"' in old and sim.load_game(path).is_empty() and _without_insurance(_snapshot()[0]) == _without_insurance(original), "v22 migration preserves all money, history, fleet and frozen departure offers byte-for-byte"):
 				return
