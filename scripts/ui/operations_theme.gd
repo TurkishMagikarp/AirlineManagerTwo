@@ -178,14 +178,23 @@ func _init() -> void:
 	set_stylebox("panel", "PopupMenu", floating_box(RADIUS_LG, SPACE_1))
 	set_stylebox("hover", "PopupMenu", box(LINE, TRANSPARENT, RADIUS_SM, SPACE_2, SPACE_1))
 	set_color("font_hover_color", "PopupMenu", INK)
+	set_color("font_accelerator_color", "PopupMenu", INK_MUTED)
+	set_color("font_separator_color", "PopupMenu", INK_MUTED)
+	for state in ["separator", "labeled_separator_left", "labeled_separator_right"]:
+		set_stylebox(state, "PopupMenu", box(LINE, TRANSPARENT, 0, 0, 0))
 	set_constant("v_separation", "PopupMenu", SPACE_2)
 	set_stylebox("panel", "Tree", box(SURFACE, LINE, RADIUS_LG, 0, 0))
-	for state in ["selected", "selected_focus"]:
+	for state in ["selected", "selected_focus", "hovered_selected", "hovered_selected_focus"]:
 		set_stylebox(state, "Tree", box(ACCENT_WASH, TRANSPARENT, 0, 0, 0))
-	set_stylebox("hovered", "Tree", box(SURFACE_RAISED, TRANSPARENT, 0, 0, 0))
+	for state in ["hovered", "hovered_dimmed"]:
+		set_stylebox(state, "Tree", box(SURFACE_RAISED, TRANSPARENT, 0, 0, 0))
+	set_stylebox("button_hover", "Tree", box(SURFACE_RAISED))
+	set_stylebox("button_pressed", "Tree", box(SURFACE_SUNKEN))
+	set_stylebox("cursor", "Tree", focus_box())
+	set_stylebox("cursor_unfocused", "Tree", box(TRANSPARENT, LINE_STRONG, 0, 0, 0))
 	for state in ["normal", "hover", "pressed"]:
 		set_stylebox("title_button_" + state, "Tree", box(SURFACE_SUNKEN, LINE, 0, SPACE_3, SPACE_2))
-		set_color("title_button_color" if state == "normal" else "title_button_color_" + state, "Tree", INK_MUTED)
+	set_color("title_button_color", "Tree", INK_MUTED)
 	text_style("Tree", COLUMN_HEAD, "title_button_font", "title_button_font_size")
 	set_color("guide_color", "Tree", LINE)
 	set_color("font_hovered_color", "Tree", INK)
@@ -203,6 +212,8 @@ func _init() -> void:
 				tab.border_width_bottom = 2
 				tab.border_color = ACCENT_TEXT
 			set_stylebox(state, type, tab)
+		set_stylebox("button_highlight", type, box(SURFACE_RAISED))
+		set_stylebox("button_pressed", type, box(SURFACE_SUNKEN))
 		set_stylebox("tab_focus", type, focus_box())
 		set_color("font_unselected_color", type, INK_MUTED)
 		set_color("font_hovered_color", type, INK)
