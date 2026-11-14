@@ -1,4 +1,6 @@
 {
+  "conversion_cost_eur": 25000,
+  "conversion_days": 14,
   "payroll_period_days": 30,
   "salary_reserve_periods": 1,
   "max_employees": 600,
@@ -9,9 +11,9 @@
     "technician": 4200
   },
   "models": {
-    "a320_200": { "pilots": 4, "cabin_crew": 6, "technicians": 6 },
-    "b737_800": { "pilots": 4, "cabin_crew": 7, "technicians": 6 },
-    "atr72_600": { "pilots": 4, "cabin_crew": 3, "technicians": 3 }
+    "a320_200": { "rating": "A320 family", "pilots": 4, "cabin_crew": 6, "technicians": 6 },
+    "b737_800": { "rating": "737", "pilots": 4, "cabin_crew": 7, "technicians": 6 },
+    "atr72_600": { "rating": "ATR 72", "pilots": 4, "cabin_crew": 3, "technicians": 3 }
   },
   "first_names": ["Anna", "Mehmet", "Lukas", "Elif", "Jonas", "Sofia", "Emre", "Clara", "Felix", "Leyla", "Noah", "Mira", "Can", "Hanna", "Paul", "Selin", "Ben", "Ida", "Deniz", "Marta"],
   "last_names": ["Schmidt", "Yilmaz", "Weber", "Demir", "Fischer", "Kaya", "Wagner", "Aydin", "Becker", "Celik", "Hoffmann", "Arslan", "Koch", "Sahin", "Richter", "Polat", "Klein", "Aksoy", "Wolf", "Ozturk"]

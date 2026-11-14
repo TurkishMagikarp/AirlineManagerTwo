@@ -8,10 +8,11 @@ use std::io::{Read, Write};
 use std::path::Path;
 use std::time::Duration;
 
+// v25: pilot ratings and timed conversion training; v24 crew are rated on load.
 // v24: airport-specific tariffs apply only to new departure quotes.
 // Identity migration: keep all stored money, history and airborne quotes verbatim;
 // no new saved fields are needed because tariffs belong to the world catalog.
-const VERSION: u32 = 24;
+const VERSION: u32 = 25;
 // Bounded input, including centuries of fuel/seasonal quotes for the player
 // and both AI airlines in the million-flight finance restart scenario.
 // Version 17 retains per-class quotes, which also split more archive batches.
@@ -363,6 +364,12 @@ pub fn load(path: &Path) -> Result<Game, String> {
         game.migrate_tax()?;
         for c in &mut game.competitors {
             c.game.migrate_tax()?;
+        }
+    }
+    if data.version < 25 {
+        game.migrate_ratings()?;
+        for c in &mut game.competitors {
+            c.game.migrate_ratings()?;
         }
     }
     game.validate_maintenance()?;

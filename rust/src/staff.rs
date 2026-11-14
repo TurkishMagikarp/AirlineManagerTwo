@@ -1,6 +1,6 @@
-//! Staff v1: pilots, cabin crew and technicians, identical for players and AI.
+//! Staff: rated pilots, cabin crew and technicians, identical for players and AI.
 //!
-//! Pooled and deterministic, no individual qualifications or shifts:
+//! Deterministic pools per pilot rating and other role, without shifts:
 //! - A flight plan *reserves* the pilots and cabin crew of its aircraft model for
 //!   as long as it (or its post-maintenance resumption) exists. A plan cannot be
 //!   created without enough unreserved crew, so no flight departs understaffed.
@@ -74,12 +74,15 @@ struct Salaries {
 #[derive(Deserialize)]
 pub struct Needs {
     pub pilots: u32,
+    pub rating: String,
     pub cabin_crew: u32,
     pub technicians: u32,
 }
 
 #[derive(Deserialize)]
 struct Config {
+    conversion_cost_eur: i64,
+    conversion_days: u64,
     payroll_period_days: u64,
     salary_reserve_periods: u32,
     max_employees: usize,
@@ -95,7 +98,9 @@ static CONFIG: LazyLock<Result<Config, String>> = LazyLock::new(|| {
         .map_err(|_| "Personalkonfiguration ist ungültig.".to_string())?;
     let invalid = || "Personalkonfiguration enthält ungültige Werte.".to_string();
     let s = &c.salary_eur_per_period;
-    if !(1..=365).contains(&c.payroll_period_days)
+    if c.conversion_cost_eur <= 0
+        || !(1..=365).contains(&c.conversion_days)
+        || !(1..=365).contains(&c.payroll_period_days)
         || c.salary_reserve_periods > 12
         || !(1..=100_000).contains(&c.max_employees)
         || !(1..=1000).contains(&c.max_hire_batch)
@@ -112,9 +117,10 @@ static CONFIG: LazyLock<Result<Config, String>> = LazyLock::new(|| {
             .models
             .get(&m.id)
             .ok_or_else(|| format!("Personalbedarf fehlt für {}.", m.id))?;
-        if [n.pilots, n.cabin_crew, n.technicians]
-            .iter()
-            .any(|v| !(1..=1000).contains(v))
+        if n.rating.is_empty()
+            || [n.pilots, n.cabin_crew, n.technicians]
+                .iter()
+                .any(|v| !(1..=1000).contains(v))
         {
             return Err(invalid());
         }
@@ -160,6 +166,33 @@ pub struct Employee {
     pub hired_at: u64,
     /// Salary is settled up to this instant.
     pub paid_until: u64,
+    #[serde(default)]
+    pub rating: Option<String>,
+    #[serde(default)]
+    pub training: Option<Training>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Training {
+    pub rating: String,
+    pub ends_at: u64,
+}
+
+pub fn ratings() -> Vec<String> {
+    let mut values: Vec<_> = config()
+        .unwrap()
+        .models
+        .values()
+        .map(|n| n.rating.clone())
+        .collect();
+    values.sort();
+    values.dedup();
+    values
+}
+
+pub fn conversion_terms() -> (i64, u64) {
+    let c = config().unwrap();
+    (c.conversion_cost_eur, c.conversion_days)
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -175,6 +208,7 @@ pub struct Staff {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Activity {
     Available,
+    Training,
     /// Pilot or cabin crew reserved by a flight plan.
     Flying,
     /// Technician working on an aircraft in the hangar.
@@ -184,6 +218,7 @@ pub enum Activity {
 impl Activity {
     pub fn label(self) -> &'static str {
         match self {
+            Activity::Training => "Umschulung",
             Activity::Available => "Verfügbar",
             Activity::Flying => "Im Flugdienst",
             Activity::Hangar => "In der Wartung",
@@ -192,6 +227,180 @@ impl Activity {
 }
 
 impl Game {
+    fn default_rating(&self) -> String {
+        self.fleet
+            .first()
+            .and_then(|p| needs(&p.model_id).ok())
+            .map(|n| n.rating.clone())
+            .unwrap_or_else(|| ratings()[0].clone())
+    }
+
+    pub fn rated_busy(&self, rating: &str) -> u32 {
+        self.fleet
+            .iter()
+            .filter(|p| {
+                self.planned_route(p.id).is_some()
+                    || p.maintenance.as_ref().is_some_and(|v| v.resume.is_some())
+            })
+            .filter_map(|p| needs(&p.model_id).ok())
+            .filter(|n| n.rating == rating)
+            .map(|n| n.pilots)
+            .sum()
+    }
+
+    pub fn rated_count(&self, rating: &str) -> u32 {
+        self.staff
+            .employees
+            .iter()
+            .filter(|e| {
+                e.role == Role::Pilot && e.training.is_none() && e.rating.as_deref() == Some(rating)
+            })
+            .count() as u32
+    }
+
+    pub fn rated_available(&self, rating: &str) -> u32 {
+        self.rated_count(rating)
+            .saturating_sub(self.rated_busy(rating))
+    }
+
+    pub fn idle_pilot_shortage(&self, rating: &str) -> u32 {
+        let demand: u32 = self
+            .fleet
+            .iter()
+            .filter(|p| {
+                p.status == AircraftStatus::Parked
+                    && self.planned_route(p.id).is_none()
+                    && p.maintenance.is_none()
+            })
+            .filter_map(|p| needs(&p.model_id).ok())
+            .filter(|n| n.rating == rating)
+            .map(|n| n.pilots)
+            .sum();
+        demand.saturating_sub(self.rated_available(rating))
+    }
+
+    /// Atomic UI convenience: retain the shared batch limit across all ratings.
+    pub fn hire_missing_rated_staff(&mut self, cabin: u32, technicians: u32) -> Result<(), String> {
+        let pilots: Vec<_> = ratings()
+            .into_iter()
+            .map(|r| {
+                let count = self.idle_pilot_shortage(&r);
+                (r, count)
+            })
+            .collect();
+        let total: u32 = pilots.iter().map(|p| p.1).sum::<u32>() + cabin + technicians;
+        if total == 0 {
+            return Err("Es fehlt kein Personal.".into());
+        }
+        if total > max_hire_batch() {
+            return Err(format!(
+                "Höchstens {} Mitarbeiter pro Einstellung.",
+                max_hire_batch()
+            ));
+        }
+        let mut staged = self.clone();
+        staged.hire_batch(
+            &[(Role::CabinCrew, cabin), (Role::Technician, technicians)],
+            true,
+        )?;
+        for (rating, count) in pilots {
+            if count > 0 {
+                staged.hire_pilots(&rating, count)?;
+            }
+        }
+        *self = staged;
+        Ok(())
+    }
+
+    pub fn hire_pilots(&mut self, rating: &str, count: u32) -> Result<(), String> {
+        if !ratings().iter().any(|r| r == rating) {
+            return Err("Unbekannte Musterberechtigung.".into());
+        }
+        let start = self.staff.employees.len();
+        self.hire_staff(Role::Pilot, count)?;
+        for e in &mut self.staff.employees[start..] {
+            e.rating = Some(rating.into());
+        }
+        Ok(())
+    }
+
+    pub fn train_pilot(&mut self, id: u32, rating: &str) -> Result<(), String> {
+        self.require_solvent()?;
+        let i = self
+            .staff
+            .employees
+            .iter()
+            .position(|e| e.id == id)
+            .ok_or("Unbekannter Mitarbeiter.")?;
+        let e = &self.staff.employees[i];
+        if e.role != Role::Pilot
+            || self.staff_activity()[i] != Activity::Available
+            || e.rating.as_deref() == Some(rating)
+            || !ratings().iter().any(|r| r == rating)
+        {
+            return Err(
+                "Umschulung braucht einen verfügbaren Piloten und eine andere Musterberechtigung."
+                    .into(),
+            );
+        }
+        let (cost, days) = conversion_terms();
+        let ends_at = self
+            .clock
+            .elapsed()
+            .as_secs()
+            .checked_add(days * 86400)
+            .ok_or("Zeitüberlauf.")?;
+        let airline = self.airline.as_mut().ok_or("Airline fehlt.")?;
+        if airline.capital_eur < cost {
+            return Err("Nicht genügend Guthaben für Umschulung.".into());
+        }
+        airline.capital_eur -= cost;
+        self.staff.employees[i].training = Some(Training {
+            rating: rating.into(),
+            ends_at,
+        });
+        self.record_payroll(self.clock.elapsed().as_secs(), cost);
+        Ok(())
+    }
+
+    pub fn next_training_event(&self) -> Option<u64> {
+        self.staff
+            .employees
+            .iter()
+            .filter_map(|e| e.training.as_ref().map(|t| t.ends_at))
+            .min()
+    }
+
+    pub(crate) fn complete_training(&mut self) {
+        let now = self.clock.elapsed().as_secs();
+        for e in &mut self.staff.employees {
+            if e.training.as_ref().is_some_and(|t| t.ends_at <= now) {
+                e.rating = Some(e.training.take().unwrap().rating);
+            }
+        }
+    }
+
+    pub(crate) fn migrate_ratings(&mut self) -> Result<(), String> {
+        let mut required = Vec::new();
+        for rating in ratings() {
+            for _ in 0..self.rated_busy(&rating) {
+                required.push(rating.clone());
+            }
+        }
+        let fallback = self.default_rating();
+        let mut assigned = required.into_iter();
+        for e in &mut self.staff.employees {
+            if e.role == Role::Pilot {
+                e.rating = Some(assigned.next().unwrap_or_else(|| fallback.clone()));
+                e.training = None;
+            }
+        }
+        if assigned.next().is_some() {
+            return Err("Alter Spielstand hat zu wenig Piloten.".into());
+        }
+        Ok(())
+    }
+
     pub fn staff_count(&self, role: Role) -> u32 {
         self.staff
             .employees
@@ -239,7 +448,11 @@ impl Game {
     }
 
     pub fn available_staff(&self, role: Role) -> u32 {
-        self.staff_count(role).saturating_sub(self.busy_staff(role))
+        self.staff_activity()
+            .iter()
+            .zip(&self.staff.employees)
+            .filter(|(a, e)| e.role == role && **a == Activity::Available)
+            .count() as u32
     }
 
     /// Technicians needed to service the largest aircraft of the fleet.
@@ -256,7 +469,7 @@ impl Game {
     pub fn crew_shortage(&self, model_id: &str) -> Result<(u32, u32), String> {
         let n = needs(model_id)?;
         Ok((
-            n.pilots.saturating_sub(self.available_staff(Role::Pilot)),
+            n.pilots.saturating_sub(self.rated_available(&n.rating)),
             n.cabin_crew
                 .saturating_sub(self.available_staff(Role::CabinCrew)),
         ))
@@ -269,7 +482,7 @@ impl Game {
         }
         let mut parts = Vec::new();
         if pilots > 0 {
-            parts.push(format!("{pilots} Piloten"));
+            parts.push(format!("{pilots} Piloten ({})", needs(model_id)?.rating));
         }
         if cabin > 0 {
             parts.push(format!("{cabin} Flugbegleiter"));
@@ -283,6 +496,7 @@ impl Game {
     /// Per-employee activity, in employee order.
     pub fn staff_activity(&self) -> Vec<Activity> {
         let mut used = [0u32; 3];
+        let mut pilots = std::collections::BTreeMap::<String, u32>::new();
         let busy = [
             self.busy_staff(Role::Pilot),
             self.busy_staff(Role::CabinCrew),
@@ -292,6 +506,20 @@ impl Game {
             .employees
             .iter()
             .map(|e| {
+                if e.role == Role::Pilot {
+                    if e.training.is_some() {
+                        return Activity::Training;
+                    }
+                    let rating = e.rating.as_deref().unwrap_or("");
+                    let remaining = pilots
+                        .entry(rating.to_string())
+                        .or_insert_with(|| self.rated_busy(rating));
+                    if *remaining > 0 {
+                        *remaining -= 1;
+                        return Activity::Flying;
+                    }
+                    return Activity::Available;
+                }
                 let i = Role::ALL.iter().position(|r| *r == e.role).unwrap();
                 if used[i] < busy[i] {
                     used[i] += 1;
@@ -396,6 +624,8 @@ impl Game {
                     salary_eur: salary(*role)?,
                     hired_at: now,
                     paid_until: now,
+                    rating: (*role == Role::Pilot).then(|| self.default_rating()),
+                    training: None,
                 });
                 id += 1;
             }
@@ -427,6 +657,7 @@ impl Game {
             .technician_target()
             .max(n.technicians)
             .saturating_sub(self.staff_count(Role::Technician));
+        let start = self.staff.employees.len();
         self.hire_batch(
             &[
                 (Role::Pilot, pilots),
@@ -434,7 +665,13 @@ impl Game {
                 (Role::Technician, techs),
             ],
             true,
-        )
+        )?;
+        for e in &mut self.staff.employees[start..] {
+            if e.role == Role::Pilot {
+                e.rating = Some(n.rating.clone());
+            }
+        }
+        Ok(())
     }
 
     /// Salary owed to `e` up to `until` since the last settlement.
@@ -519,12 +756,16 @@ impl Game {
                 _ => self.busy_staff(role),
             };
             while self.staff_count(role) > keep {
-                let i = self
+                let activity = self.staff_activity();
+                let Some(i) = self
                     .staff
                     .employees
                     .iter()
-                    .rposition(|e| e.role == role)
-                    .unwrap();
+                    .enumerate()
+                    .rposition(|(i, e)| e.role == role && activity[i] == Activity::Available)
+                else {
+                    break;
+                };
                 self.remove_employee(i)?;
             }
         }
@@ -638,7 +879,14 @@ impl Game {
         }
         let mut ids = HashSet::new();
         for e in &self.staff.employees {
-            if e.id == 0
+            if (e.role == Role::Pilot && !e.rating.as_ref().is_some_and(|r| ratings().contains(r)))
+                || (e.role != Role::Pilot && (e.rating.is_some() || e.training.is_some()))
+                || e.training.as_ref().is_some_and(|t| {
+                    t.ends_at <= now
+                        || !ratings().contains(&t.rating)
+                        || Some(&t.rating) == e.rating.as_ref()
+                })
+                || e.id == 0
                 || e.id >= self.staff.next_id
                 || !ids.insert(e.id)
                 || !(1..=1_000_000).contains(&e.salary_eur)
@@ -660,6 +908,13 @@ impl Game {
                 .iter()
                 .any(|p| p.time < h.since || p.time > now || p.amount <= 0)
                 || h.payroll.windows(2).any(|p| p[0].time > p[1].time))
+        {
+            return Err(invalid());
+        }
+        if ratings()
+            .iter()
+            .any(|r| self.rated_count(r) < self.rated_busy(r))
+            || self.staff_count(Role::CabinCrew) < self.busy_staff(Role::CabinCrew)
         {
             return Err(invalid());
         }
@@ -691,5 +946,21 @@ impl Game {
             false,
         )
         .unwrap();
+        let mut required = Vec::new();
+        for p in &self.fleet {
+            let n = needs(&p.model_id).unwrap();
+            for _ in 0..n.pilots {
+                required.push(n.rating.clone());
+            }
+        }
+        for (e, r) in self
+            .staff
+            .employees
+            .iter_mut()
+            .filter(|e| e.role == Role::Pilot)
+            .zip(required)
+        {
+            e.rating = Some(r);
+        }
     }
 }

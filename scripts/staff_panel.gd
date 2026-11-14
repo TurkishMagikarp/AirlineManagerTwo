@@ -10,6 +10,9 @@ var hire_missing_button: Button
 var roles_tree: Tree
 var aircraft_tree: Tree
 var staff_tree: Tree
+var rating_select: OptionButton
+var ratings_tree: Tree
+var train_button: Button
 var role_select: OptionButton
 var count_spin: SpinBox
 var hire_button: Button
@@ -48,6 +51,9 @@ func _ready() -> void:
 	rules.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	roles.add_child(rules)
 
+	var ratings := UI.panel(self, "MUSTERBERECHTIGUNGEN")
+	ratings_tree = UI.table(["Muster", "Berechtigt", "Im Einsatz", "Verfügbar"], [180, 100, 100, 100], 130)
+	ratings.add_child(ratings_tree)
 	var hire := UI.panel(self, "EINSTELLEN")
 	var hire_row := HFlowContainer.new()
 	hire_row.add_theme_constant_override("separation", 8)
@@ -57,6 +63,9 @@ func _ready() -> void:
 	role_select.fit_to_longest_item = false
 	role_select.clip_text = true
 	hire_row.add_child(role_select)
+	rating_select = OptionButton.new()
+	rating_select.tooltip_text = "Muster für Piloten-Einstellung und Umschulung"
+	hire_row.add_child(rating_select)
 	count_spin = SpinBox.new()
 	count_spin.custom_minimum_size.x = 170
 	count_spin.min_value = 1
@@ -78,7 +87,7 @@ func _ready() -> void:
 	planes.add_child(aircraft_tree)
 
 	var people := UI.panel(self, "MITARBEITER")
-	staff_tree = UI.table(["Name", "Rolle", "Gehalt / Monat", "Status", "Eingestellt"], [190, 130, 130, 150, 180], 300)
+	staff_tree = UI.table(["Name", "Rolle", "Gehalt / Monat", "Status", "Eingestellt"], [190, 190, 130, 340, 180], 300)
 	staff_tree.item_selected.connect(_selection_changed)
 	staff_tree.nothing_selected.connect(_selection_changed)
 	people.add_child(staff_tree)
@@ -89,6 +98,9 @@ func _ready() -> void:
 	dismiss_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	people.add_child(dismiss_status)
 	people.add_child(dismiss_button)
+	train_button = Button.new()
+	train_button.pressed.connect(_train)
+	people.add_child(train_button)
 	var dismissal_rules := UI.label("Bei der Entlassung wird das bis dahin angefallene Gehalt anteilig auf volle EUR aufgerundet gezahlt. Mitarbeiter im Einsatz können nicht entlassen werden.", 13, UI.MUTED)
 	dismissal_rules.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	people.add_child(dismissal_rules)
@@ -117,6 +129,17 @@ func refresh(force: bool = false) -> void:
 	metrics["next_pay"].text = overview["next_payroll"]
 	metrics["missing"].text = "Keiner" if overview["missing_total"] == 0 else "%d fehlen" % overview["missing_total"]
 	metrics["missing"].add_theme_color_override("font_color", UI.POSITIVE if overview["missing_total"] == 0 else UI.NEGATIVE)
+	ratings_tree.clear()
+	var rating_root := ratings_tree.create_item()
+	var first_rating := rating_select.item_count == 0
+	for rating in overview["ratings"]:
+		if first_rating:
+			rating_select.add_item(rating["rating"])
+		var row := ratings_tree.create_item(rating_root)
+		var values := [rating["rating"], str(rating["rated"]), str(rating["busy"]), str(rating["available"])]
+		for i in range(values.size()):
+			row.set_text(i, values[i])
+	train_button.text = "Umschulung auf gewähltes Muster · %s · %d Tage" % [UI.money(overview["conversion_cost_eur"]), overview["conversion_days"]]
 	_roles(overview)
 	_aircraft(overview)
 	_staff(staff)
@@ -181,9 +204,10 @@ func _staff(staff: Array) -> void:
 	for employee in staff:
 		var row := staff_tree.create_item(root)
 		row.set_metadata(0, employee)
-		var values := [employee["name"], employee["role_name"], UI.money(employee["salary_eur"]), employee["status_text"], "%s (%d Tage)" % [employee["hired"], employee["days_employed"]]]
+		var values := [employee["name"], "%s · %s" % [employee["role_name"], employee["rating"]], UI.money(employee["salary_eur"]), employee["status_text"], "%s (%d Tage)" % [employee["hired"], employee["days_employed"]]]
 		for i in range(values.size()):
 			row.set_text(i, values[i])
+			row.set_tooltip_text(i, values[i])
 		row.set_custom_color(3, UI.MUTED if employee["status"] == "available" else UI.ACCENT)
 		if employee["id"] == previous_id:
 			selected = row
@@ -214,9 +238,11 @@ func _selection_changed() -> void:
 	if row == null:
 		selected_id = 0
 		dismiss_button.disabled = true
+		train_button.disabled = true
 		return
 	var employee: Dictionary = row.get_metadata(0)
 	selected_id = employee["id"]
+	train_button.disabled = employee["role"] != "pilot" or not employee["can_dismiss"]
 	dismiss_button.disabled = not employee["can_dismiss"]
 	dismiss_button.tooltip_text = "" if employee["can_dismiss"] else "Im Einsatz: erst Flugplan beenden bzw. Wartung abwarten."
 
@@ -232,7 +258,8 @@ func _hire() -> void:
 	count_spin.apply()
 	var role: String = role_keys[role_select.selected]
 	var count := int(count_spin.value)
-	_report(simulation.hire_staff(role, count), "%d Mitarbeiter eingestellt. Bitte Spielstand speichern." % count)
+	var error: String = simulation.hire_pilots(rating_select.get_item_text(rating_select.selected), count) if role == "pilot" else simulation.hire_staff(role, count)
+	_report(error, "%d Mitarbeiter eingestellt. Bitte Spielstand speichern." % count)
 
 func _hire_missing() -> void:
 	_report(simulation.hire_missing_staff(), "Fehlendes Personal eingestellt. Bitte Spielstand speichern.")
@@ -241,3 +268,6 @@ func _dismiss() -> void:
 	if selected_id == 0:
 		return
 	_report(simulation.dismiss_staff(selected_id), "Mitarbeiter entlassen · anteiliges Gehalt gezahlt.")
+
+func _train() -> void:
+	_report(simulation.train_pilot(selected_id, rating_select.get_item_text(rating_select.selected)), "Umschulung begonnen. Bitte Spielstand speichern.")

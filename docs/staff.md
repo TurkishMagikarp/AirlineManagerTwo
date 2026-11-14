@@ -1,4 +1,4 @@
-# Personal (Version 1)
+# Personal und Musterberechtigungen
 
 Alle Regeln stehen in Rust (`rust/src/staff.rs`), alle Werte in `config/staff.json`.
 Spieler und KI-Airlines nutzen exakt dieselben Funktionen.
@@ -6,8 +6,16 @@ Spieler und KI-Airlines nutzen exakt dieselben Funktionen.
 ## Rollen und Bedarf
 Piloten, Flugbegleiter, Techniker. Jeder Mitarbeiter hat Rolle, Gehalt (je 30-Tage-Zeitraum) und einen
 abgeleiteten Status: *Verfügbar*, *Im Flugdienst* (Pilot/Flugbegleiter) oder *In der Wartung* (Techniker).
-Der Bedarf ist pro Flugzeugmodell konfiguriert (`models`). Es gibt bewusst keine Einzelqualifikationen,
-Schichtpläne, Gewerkschaften oder Schulungen: Personal wird als Pool je Rolle gezählt.
+Der Bedarf und die Musterberechtigung sind pro Flugzeugmodell konfiguriert (`models`). Jeder Pilot
+hat genau eine Berechtigung (A320 family, 737 oder ATR 72); die Reservierung erfolgt je Muster,
+in Mitarbeiterreihenfolge. Andere Rollen bleiben Pools ohne Berechtigungen.
+
+Im Personal-Tab wird beim Einstellen das Muster gewählt. Verfügbare Piloten können auf ein anderes
+Muster umgeschult werden: `conversion_cost_eur` (25.000 EUR sofort) und `conversion_days` (14 Tage).
+Währenddessen bleiben sie angestellt und bezahlt, sind aber weder einsetzbar noch entlassbar.
+Nach Abschluss ersetzt das neue Muster das alte; die Rust-Ereignisuhr verarbeitet den Abschluss auch
+innerhalb großer Zeitschritte. Ausbildungskosten werden im bestehenden Personalaufwandskonto
+`history.payroll` verbucht (die Finanzanzeige fasst Gehälter und Ausbildung dort zusammen).
 
 ## Regeln
 - **Flüge:** Ein Flugplan *reserviert* die Piloten und Flugbegleiter seines Flugzeugmodells, solange er
@@ -44,11 +52,13 @@ Rentabilität ein. Nach jeder wöchentlichen Prüfung entlassen sie Personal ohn
 Flotte bleiben.
 
 ## Spielstände
-Version 11. Ältere Spielstände laden weiterhin: Beim Laden wird die Mindestbesatzung für bereits bestehende
+Version 25. v24 erhält deterministisch zuerst Berechtigungen für alle laufenden und für Wartung
+reservierten Pläne, übrige Piloten das Muster des ersten Flugzeugs (ohne Flotte: erstes sortiertes Muster).
+Namen, Gehälter, Geld und Abflugangebote bleiben erhalten. Noch ältere Spielstände laden weiterhin: Beim Laden wird die Mindestbesatzung für bereits bestehende
 Flugpläne und die Technikerzahl für die Flotte eingestellt (ab dem Ladezeitpunkt, ohne Nachzahlung), damit
 nichts stehen bleibt. Wartende Wartungen sind additiv (`staffed`, Standard `true`).
 
 ## Noch nicht enthalten
-Individuelle Qualifikationen/Musterberechtigungen, Schulungen, Schichten und Ruhezeiten, Gehaltsverhandlung
+Mehrere Berechtigungen pro Pilot, Schichten und Ruhezeiten, Gehaltsverhandlung
 oder -erhöhungen, Fluktuation, Einstellungsverzögerung, Kündigungsfristen, Personalmangel *während* eines
 laufenden Flugplans (Personal im Einsatz ist gesperrt, statt Flüge zu kippen).
