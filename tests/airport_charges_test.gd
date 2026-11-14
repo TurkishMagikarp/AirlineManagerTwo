@@ -172,6 +172,9 @@ func _capture(label: String, dimensions: Vector2i) -> void:
 
 # Container reflow after resizing/rebuilding the route grid takes several frames.
 func _reveal(control: Control) -> void:
+	for i in range(main.fleet_sections.size()):
+		if main.fleet_sections[i].is_ancestor_of(control):
+			main.fleet_tabs.current_tab = i
 	for frame in range(5):
 		await process_frame
 	var parent := control.get_parent()

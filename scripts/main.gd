@@ -93,6 +93,14 @@ var metrics: Dictionary = {}
 var finance_breakdown: Label
 var operation_summary: Label
 var metric_grid: GridContainer
+var decision_dialog: Control
+var previous_fleet_tab := 0
+var fleet_tabs: TabBar
+var fleet_sections: Array[Control] = []
+var aircraft_cards: Array[Dictionary] = []
+var overview_register: Tree
+var overview_operations: VBoxContainer
+var fleet_operations: VBoxContainer
 var last_clock_view := ""
 
 
@@ -339,6 +347,7 @@ func _show_page(index: int) -> void:
 	if index == 0 and simulation.has_airline():
 		_refresh_finance()
 	if index == 1:
+		fleet_tabs.current_tab = 0
 		_refresh_fleet()
 	for button_index in range(navigation.size()):
 		navigation[button_index].set_pressed_no_signal(button_index == index)
@@ -360,19 +369,25 @@ func _refresh_finance() -> void:
 	var operations: Array = simulation.get_operations()
 	operation_summary.text = "%d Flugzeuge  ·  %d Routen  ·  %d aktive Flugpläne" % [simulation.get_fleet().size(), simulation.get_routes().size(), operations.size()]
 	operation_summary.text += "\n\n%s\nRestschuld: %s · Zinsen bisher: %s · Details und Kreditaktionen unter Finanzen." % [financing["status"], UI.money(financing["debt_eur"]), UI.money(financing["interest_eur"])]
-	for operation in operations:
-		operation_summary.text += "\n\n%s  /  Route #%d\n%s\nNächster Abflug: %s" % [operation["identifier"], operation["route_id"], operation["status_text"], operation["next_departure"]]
+	_refresh_overview_register()
+	_render_operations(overview_operations)
 
 
 func _build_fleet(content: VBoxContainer) -> void:
 	fleet_panel = VBoxContainer.new()
 	fleet_panel.add_theme_constant_override("separation", 12)
 	content.add_child(fleet_panel)
-	var grid := GridContainer.new()
-	grid.add_theme_constant_override("h_separation", 24)
-	grid.add_theme_constant_override("v_separation", 18)
-	fleet_panel.add_child(grid)
-	grid.resized.connect(func(): grid.columns = 2 if grid.size.x >= 1250 else 1)
+	fleet_tabs = TabBar.new()
+	for title in ["REGISTER", "BESCHAFFUNG", "WARTUNGSBASEN"]:
+		fleet_tabs.add_tab(title)
+	fleet_panel.add_child(fleet_tabs)
+	for index in range(3):
+		var section := VBoxContainer.new()
+		section.add_theme_constant_override("separation", ThemeTokens.SPACE_4)
+		fleet_panel.add_child(section)
+		fleet_sections.append(section)
+	fleet_tabs.tab_changed.connect(_fleet_tab_changed)
+	var grid := fleet_sections[1]
 	var shop := UI.panel(grid, "BESCHAFFUNG  /  FLUGZEUGMARKT")
 	var purchase := HBoxContainer.new()
 	purchase.add_theme_constant_override("separation", 12)
@@ -386,22 +401,29 @@ func _build_fleet(content: VBoxContainer) -> void:
 		model_select.set_item_metadata(model_select.item_count - 1, model)
 	model_select.item_selected.connect(_model_selected)
 	purchase.add_child(model_select)
-	buy_button = Button.new()
-	buy_button.text = "Flugzeug kaufen"
-	buy_button.theme_type_variation = "PrimaryButton"
-	buy_button.tooltip_text = "Kauft das gewählte Modell sofort zum angezeigten Preis."
-	buy_button.pressed.connect(_buy_aircraft)
-	purchase.add_child(buy_button)
-	lease_button = Button.new()
-	lease_button.text = "Flugzeug leasen"
-	lease_button.pressed.connect(_lease_aircraft)
-	purchase.add_child(lease_button)
-	model_details = _label("", ThemeTokens.BODY, ThemeTokens.ACCENT_TEXT)
+	model_details = _label("", ThemeTokens.BODY)
 	model_details.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	shop.add_child(model_details)
+	var offers := HFlowContainer.new()
+	offers.add_theme_constant_override("h_separation", ThemeTokens.SPACE_4)
+	offers.add_theme_constant_override("v_separation", ThemeTokens.SPACE_4)
+	shop.add_child(offers)
+	for index in range(model_select.item_count):
+		var model: Dictionary = model_select.get_item_metadata(index)
+		var card := UI.aircraft_card(offers, model)
+		card["buy"].pressed.connect(func():
+			model_select.select(index)
+			_model_selected(index)
+			_buy_aircraft())
+		card["lease"].pressed.connect(func():
+			model_select.select(index)
+			_model_selected(index)
+			_lease_aircraft())
+		aircraft_cards.append(card)
 	fleet_status = _label("", ThemeTokens.BODY)
 	fleet_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	shop.add_child(fleet_status)
+	fleet_panel.add_child(fleet_status)
+	fleet_panel.move_child(fleet_status, 1)
 	var hint := _label("Vorläufige Kaufpreise · Sitzkonfiguration und Reichweite sind vereinfachte Modellangaben.", ThemeTokens.SMALL, ThemeTokens.INK_MUTED)
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	shop.add_child(hint)
@@ -413,8 +435,10 @@ func _build_fleet(content: VBoxContainer) -> void:
 	used_rows = VBoxContainer.new()
 	used_rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	used_scroll.add_child(used_rows)
-	var owned := UI.panel(grid, "FLOTTENREGISTER  /  EIGENTUM & LEASING")
-	empty_fleet = UI.empty_state("Noch keine Flugzeuge beschafft.", hint.text, buy_button.text, func(): buy_button.grab_focus())
+	var owned := UI.panel(fleet_sections[0], "FLOTTENREGISTER  /  EIGENTUM & LEASING")
+	empty_fleet = UI.empty_state("Noch keine Flugzeuge beschafft.", hint.text, "Flugzeug kaufen", func():
+		fleet_tabs.current_tab = 1
+		buy_button.grab_focus())
 	owned.add_child(empty_fleet)
 	fleet_tree = UI.table(["Kennung", "Typ", "Standort", "Status", "Zustand", "Nächste Wartung"], [115, 120, 90, 190, 80, 210], 220)
 	for index in range(6):
@@ -425,7 +449,7 @@ func _build_fleet(content: VBoxContainer) -> void:
 	disposal_details.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	owned.add_child(disposal_details)
 	disposal_button = Button.new()
-	disposal_button.pressed.connect(_dispose_aircraft)
+	disposal_button.pressed.connect(_confirm_disposal)
 	owned.add_child(disposal_button)
 	cabin_input = SpinBox.new()
 	cabin_input.get_line_edit().theme_type_variation = "NumericInput"
@@ -444,20 +468,66 @@ func _build_fleet(content: VBoxContainer) -> void:
 	)
 	owned.add_child(cabin_button)
 	_build_maintenance(owned)
-	# The operational register takes precedence over procurement.
-	grid.move_child(owned.get_meta("panel_shell"), 0)
+	fleet_operations = UI.panel(fleet_sections[0], "LIVE-BETRIEB  /  FLOTTE & NETZWERK")
 	_model_selected(model_select.selected)
+	_fleet_tab_changed(0)
 
 
 func _model_selected(index: int) -> void:
-	buy_button.disabled = index < 0
-	lease_button.disabled = index < 0
+	if index >= 0:
+		buy_button = aircraft_cards[index]["buy"]
+		lease_button = aircraft_cards[index]["lease"]
 	if index < 0:
 		model_details.text = "Kein Flugzeugmodell verfügbar. Bitte Katalog und Preise prüfen."
 		return
 	var model: Dictionary = model_select.get_item_metadata(index)
 	model_details.text = "%s\n%d Sitzplätze   /   %d km Referenzreichweite" % [UI.money(model["price_eur"]), model["seats"], model["range_km"]]
 	model_details.text += "\nLeasing: Kaution %s · Rate %s alle %d Spieltage · erste Rate nach einer Periode. Kaution bei Rückgabe abzüglich Zustandsgebühr." % [UI.money(model["lease_deposit_eur"]), UI.money(model["lease_monthly_eur"]), model["lease_period_days"]]
+
+	_refresh_offers()
+	if buy_button.disabled:
+		fleet_status.text = buy_button.tooltip_text
+	fleet_status.visible = not fleet_status.text.is_empty()
+
+
+func _fleet_tab_changed(index: int) -> void:
+	var plane: Dictionary = fleet_rows.get(selected_aircraft, {})
+	if previous_fleet_tab == 0 and index != 0 and not plane.is_empty() and int(cabin_input.value) != plane["business_seats"]:
+		fleet_tabs.set_block_signals(true)
+		fleet_tabs.current_tab = 0
+		fleet_tabs.set_block_signals(false)
+		var dialog := UI.dialog(self, "Kabinenänderung verwerfen?", "Die noch nicht übernommene Sitzkonfiguration wird verworfen.", "Abbrechen", "Änderung verwerfen", func():
+			cabin_input.value = plane["business_seats"]
+			fleet_tabs.current_tab = index)
+		dialog.popup_centered()
+		return
+	previous_fleet_tab = index
+	for i in range(fleet_sections.size()):
+		fleet_sections[i].visible = i == index
+
+
+func _refresh_offers() -> void:
+	var cash: int = simulation.get_airline_info().get("capital_eur", 0)
+	for i in range(aircraft_cards.size()):
+		var model: Dictionary = model_select.get_item_metadata(i)
+		var card: Dictionary = aircraft_cards[i]
+		var blocked: bool = cash < model["price_eur"]
+		card["buy"].disabled = blocked
+		card["buy"].tooltip_text = "Nicht genügend Guthaben für dieses Flugzeug." if blocked else "Kauft das gewählte Modell sofort zum angezeigten Preis."
+		card["reason"].text = card["buy"].tooltip_text if blocked else ""
+		card["reason"].visible = blocked
+		card["lease"].disabled = cash < model["lease_deposit_eur"]
+		card["lease"].tooltip_text = "Nicht genügend Guthaben für die Leasingkaution." if card["lease"].disabled else ""
+
+
+func _confirm_disposal() -> void:
+	var plane: Dictionary = fleet_rows.get(selected_aircraft, {})
+	if plane.is_empty(): return
+	var aircraft_id := selected_aircraft
+	var dialog := UI.dialog(self, "%s verkaufen?" % plane["identifier"] if not plane["leased"] else "%s zurückgeben?" % plane["identifier"], disposal_details.text, "Abbrechen", disposal_button.text, func():
+		selected_aircraft = aircraft_id
+		_dispose_aircraft())
+	dialog.popup_centered()
 
 
 func _lease_aircraft() -> void:
@@ -498,7 +568,7 @@ func _buy_aircraft() -> void:
 
 func _refresh_used_market() -> void:
 	var listings: Array = simulation.get_used_market()
-	var signature := str(listings)
+	var signature := str([listings, simulation.get_airline_info().get("capital_eur", 0)])
 	if signature == used_signature:
 		return
 	used_signature = signature
@@ -515,9 +585,13 @@ func _refresh_used_market() -> void:
 		var card := VBoxContainer.new()
 		card.add_theme_constant_override("separation", ThemeTokens.SPACE_2)
 		used_rows.add_child(card)
-		var model := UI.label(listing["model"], ThemeTokens.CODE)
+		var model := UI.label(listing["model"], UI.EMPTY_TITLE)
 		model.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		card.add_child(model)
+		for catalog_model in simulation.get_aircraft_models():
+			if catalog_model["name"] == listing["model"]:
+				card.add_child(UI.label(catalog_model["class"], ThemeTokens.CODE, ThemeTokens.INK_MUTED))
+				UI.aircraft_facts(card, catalog_model)
 		var facts := UI.label("%d Tage · %.0f %% Zustand\n%.1f FH / %d Zyklen" % [listing["age_days"], listing["condition_percent"], listing["flight_hours"], listing["cycles"]], ThemeTokens.DATA)
 		facts.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		card.add_child(facts)
@@ -532,6 +606,13 @@ func _refresh_used_market() -> void:
 		row.add_child(price)
 		var button := Button.new()
 		button.text = "Gebraucht kaufen"
+		button.disabled = simulation.get_airline_info().get("capital_eur", 0) < listing["price_eur"]
+		button.tooltip_text = "Nicht genügend Guthaben für dieses Flugzeug." if button.disabled else ""
+		if button.disabled:
+			var reason := UI.label(button.tooltip_text, ThemeTokens.SMALL, UI.NEGATIVE)
+			reason.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			card.add_child(reason)
+			card.move_child(reason, card.get_child_count() - 2)
 		button.pressed.connect(_buy_used_aircraft.bind(listing["id"]))
 		row.add_child(button)
 
@@ -549,7 +630,11 @@ func _buy_used_aircraft(listing_id: int) -> void:
 
 
 func _refresh_fleet() -> void:
+	fleet_status.visible = not fleet_status.text.is_empty()
+	maintenance_status.visible = not maintenance_status.text.is_empty()
+	_refresh_offers()
 	_refresh_used_market()
+	_render_operations(fleet_operations)
 	var fleet: Array = simulation.get_fleet()
 	var airline: Dictionary = simulation.get_airline_info()
 	if current_page == 1:
@@ -557,7 +642,6 @@ func _refresh_fleet() -> void:
 		description.text = "%d Flugzeuge  /  Verfügbares Guthaben: %s · Pünktlichkeit: %s (%d Flüge)" % [fleet.size(), UI.money(airline.get("capital_eur", 0)), "—" if punctuality["punctuality_percent"] < 0 else "%.1f %%" % punctuality["punctuality_percent"], punctuality["punctuality_flights"]]
 		description.text += " · Pünktlichkeitsruf: %+.1f %% (%s)" % [punctuality["reputation_percent"], punctuality["reputation_trend"]]
 	empty_fleet.visible = fleet.is_empty()
-	buy_button.theme_type_variation = "Button" if fleet.is_empty() else "PrimaryButton"
 	fleet_tree.visible = not fleet.is_empty()
 	maintenance_box.visible = not fleet.is_empty()
 	fleet_rows = {}
@@ -578,9 +662,8 @@ func _refresh_fleet() -> void:
 			UI.cell_text(row, 2, "Ab %s (in der Luft)" % plane["location_icao"])
 		var condition: float = plane.get("condition_percent", 100.0)
 		UI.cell_text(row, 4, "%.0f %%" % condition)
-		row.set_custom_color(4, UI.POSITIVE if condition >= 50.0 else ThemeTokens.CAUTION if condition >= 20.0 else UI.NEGATIVE)
 		UI.cell_text(row, 5, _maintenance_summary(plane))
-		row.set_custom_color(5, UI.NEGATIVE if plane.get("maintenance_due", false) and plane.get("maintenance_state", "none") == "none" else ThemeTokens.INK)
+		UI.cell_status(row, 5, _maintenance_summary(plane), "info" if plane["maintenance_state"] in ["active", "pending"] else "caution" if plane["maintenance_due"] else "neutral")
 		row.set_tooltip_text(0, plane["identifier"])
 		row.set_tooltip_text(1, "%s · gezahlter Kaufpreis: %d EUR" % [plane["model_name"], plane["purchase_price_eur"]])
 		row.set_tooltip_text(2, plane["location_name"])
@@ -619,7 +702,7 @@ func _build_maintenance(parent: VBoxContainer) -> void:
 	maintenance_button.text = "Wartung durchführen"
 	maintenance_button.theme_type_variation = "PrimaryButton"
 	maintenance_button.tooltip_text = "Schickt das Flugzeug in die Wartung. Flugzeuge in der Luft beenden zuerst ihren Flug; während der Wartung finden keine Abflüge statt."
-	maintenance_button.pressed.connect(_request_maintenance)
+	maintenance_button.pressed.connect(_confirm_maintenance)
 	maintenance_box.add_child(maintenance_button)
 	cancel_maintenance_button = Button.new()
 	cancel_maintenance_button.text = "Wartungsauftrag stornieren"
@@ -630,17 +713,18 @@ func _build_maintenance(parent: VBoxContainer) -> void:
 	maintenance_box.add_child(cancel_maintenance_button)
 	maintenance_status = _label("", ThemeTokens.BODY)
 	maintenance_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	maintenance_box.add_child(maintenance_status)
-	maintenance_box.add_child(_label("WARTUNGSBASEN", ThemeTokens.PANEL_TITLE, UI.ACCENT))
+	fleet_panel.add_child(maintenance_status)
+	fleet_panel.move_child(maintenance_status, 2)
+	var bases := UI.panel(fleet_sections[2], "WARTUNGSBASEN")
 	base_airports = OptionButton.new()
 	base_airports.item_selected.connect(func(_index: int) -> void: _refresh_base_action())
-	maintenance_box.add_child(base_airports)
+	bases.add_child(base_airports)
 	base_details = _label("", ThemeTokens.BODY)
 	base_details.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	maintenance_box.add_child(base_details)
+	bases.add_child(base_details)
 	base_action = Button.new()
 	base_action.pressed.connect(_change_maintenance_base)
-	maintenance_box.add_child(base_action)
+	bases.add_child(base_action)
 
 
 func _refresh_base_action() -> void:
@@ -719,6 +803,18 @@ func _refresh_maintenance() -> void:
 	if not String(plane["maintenance_hint"]).is_empty() and plane["maintenance_state"] == "none":
 		lines.append(plane["maintenance_hint"])
 	maintenance_details.text = "\n".join(lines)
+
+
+func _confirm_maintenance() -> void:
+	var plane: Dictionary = fleet_rows.get(selected_aircraft, {})
+	if plane.is_empty(): return
+	var aircraft_id := selected_aircraft
+	var consequence := "Wartung jetzt: ca. %s · %.0f h Dauer. Die Kosten werden bei Beginn festgelegt. Während der Wartung finden keine Abflüge statt." % [UI.money(plane["maintenance_cost_eur"]), plane["maintenance_hours"]]
+	if plane["status"] == "in_flight": consequence += " Unterwegs: Die Wartung beginnt erst nach der Landung."
+	decision_dialog = UI.dialog(self, "%s warten?" % plane["identifier"], consequence, "Abbrechen", "Wartung durchführen", func():
+		selected_aircraft = aircraft_id
+		_request_maintenance())
+	decision_dialog.popup_centered()
 
 
 func _request_maintenance() -> void:
@@ -846,6 +942,8 @@ func _found_airline() -> void:
 func _sync_view() -> void:
 	fleet_status.text = ""
 	maintenance_status.text = ""
+	fleet_status.hide()
+	maintenance_status.hide()
 	selected_aircraft = 0
 	routes_panel.status.text = ""
 	overview.visible = simulation.has_airline()
@@ -880,21 +978,28 @@ func _build_finance(content: VBoxContainer) -> void:
 	finance_panel = VBoxContainer.new()
 	content.add_child(finance_panel)
 	metric_grid = GridContainer.new()
-	metric_grid.add_theme_constant_override("h_separation", 12)
-	metric_grid.add_theme_constant_override("v_separation", 12)
+	metric_grid.add_theme_constant_override("h_separation", ThemeTokens.SPACE_4)
+	metric_grid.add_theme_constant_override("v_separation", ThemeTokens.SPACE_4)
 	finance_panel.add_child(metric_grid)
-	metric_grid.resized.connect(func(): metric_grid.columns = 4 if metric_grid.size.x >= 1150 else 2)
+	get_viewport().size_changed.connect(func(): metric_grid.columns = 4 if get_viewport_rect().size.x >= 1280 else 2)
+	metric_grid.columns = 4 if get_viewport_rect().size.x >= 1280 else 2
 	for item in [["balance", "KONTOSTAND"], ["profit", "BETRIEBSERGEBNIS"], ["load", "AUSLASTUNG · GESAMT"], ["flights", "LANDUNGEN / PASSAGIERE"]]:
 		metrics[item[0]] = UI.metric(metric_grid, item[1])
+	finance_panel.add_theme_constant_override("separation", ThemeTokens.SPACE_4)
 	var grid := GridContainer.new()
-	grid.add_theme_constant_override("h_separation", 12)
-	grid.add_theme_constant_override("v_separation", 12)
+	grid.add_theme_constant_override("h_separation", ThemeTokens.SPACE_4)
+	grid.add_theme_constant_override("v_separation", ThemeTokens.SPACE_4)
 	finance_panel.add_child(grid)
-	grid.resized.connect(func(): grid.columns = 2 if grid.size.x >= 900 else 1)
-	var finance := UI.panel(grid, "FINANZÜBERSICHT  /  KUMULIERT")
+	get_viewport().size_changed.connect(func(): grid.columns = 2 if get_viewport_rect().size.x >= 1100 else 1)
+	grid.columns = 2 if get_viewport_rect().size.x >= 1100 else 1
+	var register := UI.panel(grid, "FLOTTENREGISTER  /  EIGENTUM & LEASING")
+	overview_register = UI.table(["Kennung", "Typ", "Standort", "Status"], [115, 150, 90, 130], 220)
+	register.add_child(overview_register)
+	overview_operations = UI.panel(grid, "LIVE-BETRIEB  /  FLOTTE & NETZWERK")
+	var finance := UI.panel(finance_panel, "FINANZÜBERSICHT  /  KUMULIERT")
 	finance_breakdown = UI.label("")
 	finance.add_child(finance_breakdown)
-	var operations := UI.panel(grid, "LIVE-BETRIEB  /  FLOTTE & NETZWERK")
+	var operations := UI.panel(finance_panel, "LIVE-BETRIEB  /  FLOTTE & NETZWERK")
 	operation_summary = UI.label("")
 	operation_summary.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	operations.add_child(operation_summary)
@@ -979,3 +1084,35 @@ func _open_attention(entry: Dictionary) -> void:
 		routes_panel.focus_route(entry["route_id"])
 	elif page == 5:
 		staff_panel.focus_employee(entry["employee_id"])
+
+
+func _refresh_overview_register() -> void:
+	overview_register.clear()
+	var root_item := overview_register.create_item()
+	for plane in simulation.get_fleet():
+		var row := overview_register.create_item(root_item)
+		UI.cell_text(row, 0, plane["identifier"])
+		UI.cell_text(row, 1, plane["model_name"])
+		UI.cell_text(row, 2, plane["location_icao"])
+		var phase: String = {"parked": "Geparkt", "in_flight": "Unterwegs", "ground": "Gelandet · Bodenzeit", "maintenance": "In Wartung"}.get(plane["status"], "Unbekannt")
+		UI.cell_status(row, 3, phase, "info" if plane["status"] in ["in_flight", "maintenance"] else "neutral")
+
+
+func _render_operations(parent: VBoxContainer) -> void:
+	if parent == null: return
+	for child in parent.get_children():
+		parent.remove_child(child)
+		child.queue_free()
+	var flights: Array = simulation.get_map_flights()
+	for flight in flights:
+		parent.add_child(UI.label(flight["identifier"], ThemeTokens.CODE))
+		parent.add_child(UI.status_chip("Unterwegs", "info"))
+		parent.add_child(UI.route_leg(flight["origin"], flight["destination"], flight["progress"] * 100, flight["arrival"]))
+	for operation in simulation.get_operations():
+		var airborne := false
+		for flight in flights:
+			if flight["aircraft_id"] == operation["aircraft_id"]: airborne = true
+		if airborne: continue
+		var text := UI.label("%s · %s\nNächster Abflug: %s" % [operation["identifier"], operation["status_text"], operation["next_departure"]])
+		text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		parent.add_child(text)

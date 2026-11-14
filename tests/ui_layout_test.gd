@@ -61,7 +61,7 @@ func _run() -> void:
 				await process_frame
 			for control in [main.navigation[0], main.navigation[2], main.new_game_button, main.start_button, main.save_button, main.load_button, main.time_label, main.save_status]:
 				if not root.get_visible_rect().encloses(control.get_global_rect()):
-					push_error("Control outside viewport at %s: %s" % [dimensions, control])
+					push_error("Control outside viewport at %s page %d: %s %s %s" % [dimensions, page, control, control.get_global_rect(), control.text])
 					quit(1)
 					return
 			if main.size.x > dimensions.x:
@@ -80,6 +80,33 @@ func _run() -> void:
 				await RenderingServer.frame_post_draw
 				assert(root.get_texture().get_image().save_png(capture_dir.path_join("%s-content-%dx%d.png" % [["overview", "fleet", "routes", "map", "finances", "staff"][page], dimensions.x, dimensions.y])) == OK)
 			if page == 1:
+				if not capture_dir.is_empty():
+					for tab in [1, 2]:
+						main.fleet_tabs.current_tab = tab
+						scroll.scroll_vertical = int(main.fleet_panel.position.y)
+						for frame in range(5): await process_frame
+						await RenderingServer.frame_post_draw
+						assert(root.get_texture().get_image().save_png(capture_dir.path_join("fleet-tab-%d-%dx%d.png" % [tab, dimensions.x, dimensions.y])) == OK)
+						if tab == 1:
+							for i in range(main.aircraft_cards.size()):
+								for action in ["buy", "lease"]:
+									var button: Control = main.aircraft_cards[i][action]
+									scroll.ensure_control_visible(button)
+									for frame in range(5): await process_frame
+									assert(root.get_visible_rect().encloses(button.get_global_rect()))
+									await RenderingServer.frame_post_draw
+									assert(root.get_texture().get_image().save_png(capture_dir.path_join("aircraft-%d-%s-%dx%d.png" % [i, action, dimensions.x, dimensions.y])) == OK)
+
+				if not capture_dir.is_empty():
+					main._confirm_maintenance()
+					for frame in range(5): await process_frame
+					assert(root.get_visible_rect().encloses(main.decision_dialog.get_ok_button().get_global_rect()))
+					await RenderingServer.frame_post_draw
+					assert(root.get_texture().get_image().save_png(capture_dir.path_join("maintenance-dialog-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
+					main.decision_dialog.get_cancel_button().pressed.emit()
+					await process_frame
+				main.fleet_tabs.current_tab = 1
+				await process_frame
 				# Capture the market heading, then prove every nested buy control is reachable.
 				var market_scroll: ScrollContainer = main.used_rows.get_parent()
 				market_scroll.scroll_vertical = 0

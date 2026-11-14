@@ -521,3 +521,46 @@ static func nav_geometry(button: Button, compact: bool) -> void:
 		var style := button.get_theme_stylebox(state, "NavButton").duplicate() as StyleBoxFlat
 		style.content_margin_right = ThemeTokens.SPACE_2 if compact else 34
 		button.add_theme_stylebox_override(state, style)
+
+
+const AIRCRAFT_PRICE = {"family": "mono", "size": 20, "height": 24, "weight": 500, "tracking": 0.0}
+
+static func aircraft_card(parent: HFlowContainer, model: Dictionary) -> Dictionary:
+	var shell := PanelContainer.new()
+	shell.custom_minimum_size.x = 280
+	shell.add_theme_stylebox_override("panel", ThemeTokens.box(ThemeTokens.SURFACE, ThemeTokens.LINE, ThemeTokens.RADIUS_LG, ThemeTokens.SPACE_4, ThemeTokens.SPACE_4))
+	parent.add_child(shell)
+	var body := VBoxContainer.new()
+	body.add_theme_constant_override("separation", ThemeTokens.SPACE_3)
+	shell.add_child(body)
+	body.add_child(label(model["name"], EMPTY_TITLE))
+	body.add_child(label(model["class"], ThemeTokens.CODE, MUTED))
+	aircraft_facts(body, model)
+	body.add_child(HSeparator.new())
+	var price := RichTextLabel.new()
+	price.bbcode_enabled = true
+	price.fit_content = true
+	price.scroll_active = false
+	price.add_theme_font_override("normal_font", ThemeTokens.font_for(AIRCRAFT_PRICE))
+	price.add_theme_font_size_override("normal_font_size", AIRCRAFT_PRICE["size"])
+	price.text = money(model["price_eur"]).trim_suffix(" EUR") + " [font_size=13][color=%s]EUR[/color][/font_size]" % MUTED.to_html()
+	body.add_child(price)
+	var buy := Button.new()
+	buy.text = "Flugzeug kaufen"
+	body.add_child(buy)
+	var reason := label("", ThemeTokens.SMALL, NEGATIVE)
+	reason.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	body.add_child(reason)
+	var terms := label("Leasing: Kaution %s · Rate %s alle %d Spieltage · erste Rate nach einer Periode. Kaution bei Rückgabe abzüglich Zustandsgebühr." % [money(model["lease_deposit_eur"]), money(model["lease_monthly_eur"]), model["lease_period_days"]], ThemeTokens.SMALL, MUTED)
+	terms.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	body.add_child(terms)
+	var lease := Button.new()
+	lease.text = "Flugzeug leasen"
+	body.add_child(lease)
+	return {"buy": buy, "lease": lease, "reason": reason, "shell": shell}
+
+
+static func aircraft_facts(body: VBoxContainer, model: Dictionary) -> void:
+	for fact in [["Sitze", str(model["seats"])], ["Reichweite", "%d km" % model["range_km"]], ["Reisegeschwindigkeit", "%d km/h" % model["cruise_kmh"]], ["Besatzung", "%d Piloten · %d Kabine" % [model["pilots"], model["cabin_crew"]]]]:
+		body.add_child(label(fact[0], ThemeTokens.LABEL, MUTED))
+		body.add_child(label(fact[1], ThemeTokens.DATA))
