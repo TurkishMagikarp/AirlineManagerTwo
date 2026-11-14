@@ -193,7 +193,7 @@ func _aircraft(overview: Dictionary) -> void:
 		for i in range(values.size()):
 			UI.cell_text(row, i, values[i])
 			row.set_tooltip_text(i, status)
-		UI.cell_status(row, 5, status, "go" if color == UI.POSITIVE else "stop")
+		UI.cell_status(row, 5, status, "info" if plane["state"] == "hangar" else "go" if color == UI.POSITIVE else "stop")
 
 func _staff(staff: Array) -> void:
 	var key := str(staff)

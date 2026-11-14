@@ -483,7 +483,7 @@ func _refresh_fleet() -> void:
 		var phase: String = {"parked": "Geparkt", "in_flight": "Unterwegs", "ground": "Gelandet · Bodenzeit", "maintenance": "In Wartung"}.get(plane["status"], "Unbekannt")
 		UI.cell_text(row, 3, "%s · Route #%d" % [phase, plane["route_id"]] if plane["route_id"] != 0 else phase)
 		UI.cell_text(row, 3, row.get_text(3) + " · %d min verspätet" % ceili(plane["delay_seconds"] / 60.0))
-		UI.cell_status(row, 3, row.get_text(3), "info" if plane["status"] == "in_flight" else "neutral" if plane["status"] == "parked" else "caution")
+		UI.cell_status(row, 3, row.get_text(3), "info" if plane["status"] in ["in_flight", "maintenance"] else "neutral")
 		if plane["status"] == "in_flight":
 			UI.cell_text(row, 2, "Ab %s (in der Luft)" % plane["location_icao"])
 		var condition: float = plane.get("condition_percent", 100.0)
