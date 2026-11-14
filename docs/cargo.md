@@ -57,8 +57,23 @@ Preisen, Bekanntheit und seltenen Flügen. Ein weiterer Regressionstest vergleic
 wiederverwendete und frische Angebote bei
 wechselnden Jahreszeiten, vollen/leeren Kabinen und umgekehrten Richtungen.
 
-Godot/GUI, Screenshots, START.bat und Windows-Neustarttests sind auf dem
-Linux-Server nicht ausführbar. Offene manuelle Prüfung: Route auswählen,
-Frachtpreis ändern, während des Fluges erneut ändern, unveränderte Landung
-prüfen, nächste Landung und getrennte Finanzzeilen vergleichen; Layout und
-Lesbarkeit bei kleinen Fenstern prüfen und Screenshots anfertigen.
+`tests/cargo_test.gd` prüft echte Maus-/Tastatureingaben einschließlich
+Preisgrenzen, Änderung im Flug, eingefrorener erster und neu bepreister zweiter
+Landung. Route, Firmen-/Routen-/Flugfinanzen und Umsatzdiagramm werden mit der
+Rust-API verglichen. Bedienelemente und horizontale Tabellenscrollbalken werden
+bei 1440×1000, 1100×720 und 680×520 betätigt; `--capture-dir=<Ordner>`
+speichert echte Renderaufnahmen (kein Headless-Renderer).
+
+`tests/run_cargo_restart_test.ps1` startet vier getrennte Godot-Prozesse:
+`write-v21`, `read-v21`, `write-v22`, `read-v22`. Alternativ die Skriptargumente
+`--cargo-mode=<Modus> --cargo-save=<isolierter Pfad>` verwenden. Die v21-Fixture
+enthält für Spieler und KI abgeschlossene Flüge und laufende Angebote ohne
+Frachtfelder. Ihre Migration ergänzt ausschließlich Standardpreise und Nullwerte.
+Der v22-Test enthält bezahlte Spieler-/KI-Fracht und ein laufendes Frachtangebot.
+Vollständiger Speicherzustand und API-Ausgaben müssen unmittelbar nach Neustart
+und nach weiteren 100 Tagen exakt dem ununterbrochenen Lauf entsprechen.
+
+Linux-Godot und gerenderte Xvfb-Aufnahmen sind separat vom Rust-Test geprüft;
+Details stehen in `docs/verification-log.md`. START.bat, die tatsächlichen
+PowerShell-Wrapper, Windows-DLL-/Prozessverhalten und natives Windows-Rendering
+bleiben auf dem Rechner des Besitzers zu prüfen.
