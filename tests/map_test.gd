@@ -40,6 +40,27 @@ func _run() -> void:
 	check(main.current_page == 3, "Actual Karte navigation button")
 	var panel = main.map_panel
 	var canvas = panel.canvas
+	check(not canvas.show_competitors and not panel.competitor_layer.button_pressed, "Competitor layer defaults off")
+	var offers: Array = sim.get_competitor_routes()
+	check(offers.size() == 2, "Real AI public schedules")
+	var expected_keys := ["airline", "business_ticket_eur", "departures_per_day_per_direction", "destination_icao", "model", "origin_icao", "ticket_eur"]
+	for offer in offers:
+		var keys: Array = offer.keys()
+		keys.sort()
+		check(keys == expected_keys, "Public dictionary allowlist excludes confidential fields")
+	var map_scroll: ScrollContainer = panel.get_parent().get_parent()
+	map_scroll.ensure_control_visible(panel.competitor_layer)
+	for _frame in range(3): await process_frame
+	check(root.get_visible_rect().encloses(panel.competitor_layer.get_global_rect()), "Layer checkbox visible for real input: %s" % panel.competitor_layer.get_global_rect())
+	await click_at(panel.competitor_layer.get_global_rect().get_center())
+	check(canvas.show_competitors, "Layer checkbox enables competitors")
+	main._show_page(2)
+	main._show_page(3)
+	check(canvas.show_competitors, "Layer persists across navigation")
+	var rebuilds: int = panel.geometry_rebuilds
+	for _i in range(5): panel.refresh_flights()
+	check(panel.geometry_rebuilds == rebuilds, "Unchanged schedules reuse competitor geometry")
+
 	check(canvas.flights.is_empty(), "No invented aircraft before departure")
 	sim.start()
 	sim.advance(60 + sim.get_operations()[0]["flight_seconds"] * 0.4)
@@ -157,6 +178,30 @@ func _run() -> void:
 	await process_frame
 	check(panel.card.visible, "Route selection opens card")
 	check(Rect2(Vector2.ZERO, canvas.size).encloses(panel.card.get_rect()), "Route card clamped at narrow width: %s / %s" % [panel.card.get_rect(), canvas.size])
+	var own_card := ""
+	for child in panel.card_body.get_children():
+		if child is Label: own_card += child.text
+	check("Regional Wings" in own_card and "90 EUR" in own_card, "Own route names public competitor offer")
+	canvas.show_routes = false
+	var competitor_point: Vector2 = canvas.project(canvas.competitor_paths[1][90])
+	canvas.hit_test(competitor_point)
+	check(canvas.selected_competitor == 1, "Competitor arc hit testing")
+	panel.selected_id = 0
+	panel.refresh_flights()
+	await process_frame
+	await process_frame
+	check(panel.card.visible and "Continental Sky" in panel.details.text, "Read-only competitor card")
+	for child in panel.card_body.get_children(): check(not child is Button, "Competitor card has no edit actions")
+	check(Rect2(Vector2.ZERO, canvas.size).encloses(panel.card.get_rect()), "Competitor card fits narrow map")
+	TranslationServer.set_locale("en")
+	check(panel.tr("MAP_COMPETITORS") == "Competitor routes", "English map catalog")
+	check(panel.tr("MAP_FREQUENCY") == "%.1f departures/day each way", "English frequency catalog")
+	TranslationServer.set_locale("de")
+	panel.competitor_layer.button_pressed = false
+	check(canvas.selected_competitor == -1 and not panel.card.visible, "Hiding layer clears competitor selection")
+	canvas.show_routes = true
+	canvas.selected_route = 1
+	panel.refresh_flights()
 	var escape := InputEventKey.new()
 	escape.keycode = KEY_ESCAPE
 	escape.pressed = true
@@ -179,6 +224,10 @@ func _run() -> void:
 	panel.refresh_flights()
 	await process_frame
 	await process_frame
+	var airport_card := ""
+	for child in panel.card_body.get_children():
+		if child is Label: airport_card += child.text
+	check("Regional Wings" in airport_card and "Map Test Air" in airport_card, "Airport card lists serving airlines with departures")
 	var create_action: Button = panel.card_body.get_child(panel.card_body.get_child_count() - 2)
 	create_action.pressed.emit()
 	await process_frame

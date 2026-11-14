@@ -7,3 +7,6 @@ docs/screenshots/
 *.log
 .DS_Store
 Thumbs.db
+
+# Generated from the localization CSV during Godot import.
+resources/localization/*.translation

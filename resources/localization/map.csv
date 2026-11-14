@@ -1,0 +1,32 @@
+keys,de,en
+MAP_COMPETITORS,Konkurrenzrouten,Competitor routes
+MAP_COMPETITOR,Konkurrenz,Competitor
+MAP_AIRPORT_SERVICE,%s · %.1f Abflüge/Tag,%s · %.1f departures/day
+MAP_CONTESTED,%s · Eco %s / Business %s · %.1f/Tag je Richtung,%s · Eco %s / Business %s · %.1f/day each way
+MAP_FREQUENCY,%.1f Abflüge/Tag je Richtung,%.1f departures/day each way
+MAP_ECONOMY,Economy,Economy
+MAP_BUSINESS,Business,Business
+MAP_LAYERS,Ebenen,Layers
+MAP_OWN_ROUTES,Eigene Routen,Own routes
+MAP_AIRPORTS,Flughäfen,Airports
+MAP_AIRCRAFT,Flugzeuge,Aircraft
+MAP_BASE,Basis,Base
+MAP_CREATE_ROUTE,Route erstellen,Create route
+MAP_SHOW_ROUTES,Routen anzeigen,Show routes
+MAP_EDIT_SCHEDULE,Flugplan bearbeiten,Edit schedule
+MAP_IN_FLIGHT,Im Flug,In flight
+MAP_ACTIVE,Aktiv,Active
+MAP_PLANNED,Geplant,Planned
+MAP_DISTANCE,Entfernung,Distance
+MAP_TICKET_PRICE,Ticketpreis,Ticket price
+MAP_ARRIVAL,Ankunft,Arrival
+MAP_ROUTE,Route,Route
+MAP_CENTER_BASE,Auf Basis zentrieren,Center on base
+MAP_ZOOM_IN,Vergrößern,Zoom in
+MAP_ZOOM_OUT,Verkleinern,Zoom out
+MAP_HINT,Ziehen: verschieben · Mausrad: zoomen · Klick: Details · Natural Earth (Public Domain),Drag: pan · Wheel: zoom · Click: details · Natural Earth (Public Domain)
+MAP_SUMMARY,%d unterwegs  /  %d Routen,%d airborne  /  %d routes
+MAP_NO_FLIGHT,Kein Flug ausgewählt · Nur tatsächlich fliegende Flugzeuge werden angezeigt.,No flight selected · Only aircraft actually in flight are shown.
+MAP_FLIGHT_DETAILS,"%s  /  %s · %s
+%s → %s   ·   %.1f %%   ·   Ankunft: %s","%s  /  %s · %s
+%s → %s   ·   %.1f %%   ·   Arrival: %s"

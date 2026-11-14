@@ -30,6 +30,28 @@ Pause, 1×/4×/16× und Laden verwenden unverändert die autoritative Rust-Uhr.
 Die Karte benötigt keine zusätzlichen Spielstandfelder (aktuell Version 9).
 Kamera und Auswahl werden nicht gespeichert.
 
+## Öffentliche Konkurrenz
+
+Die Ebene **Konkurrenzrouten** ist anfangs aus und bleibt während der Sitzung
+beim Seitenwechsel erhalten. Gestrichelte `ink-faint`-Linien liegen unter den
+eigenen Routen; bei überlappenden Linien hat die eigene Auswahl Vorrang.
+Die Konkurrenzkarte zeigt Airline, Flugzeugtyp, Economy-/Businesspreis und
+Abflüge pro Tag **je Richtung**. Flughafenkarten summieren die täglichen
+Abflüge pro Airline; eigene Routenkarten nennen die Angebote auf demselben
+Städtepaar (auch in Gegenrichtung).
+
+`get_competitor_routes()` liefert ausschließlich öffentliche aktive Angebote.
+Gleiche Airline, Endpunkte, Preise und Flugzeugtyp werden zusammengefasst;
+Frequenzen stammen aus den tatsächlichen Pendelflugplänen. Keine Auslastung,
+Gewinne, Kassenstände oder Kosten werden in diesem Snapshot geliefert.
+Godot vergleicht diesen kleinen Snapshot und ruft `get_map_competitor_routes()`
+nur bei Änderungen auf. Keine Änderungen an Simulation oder Speicherformat.
+`tests/competitor_snapshot_test.gd` startet getrennte Schreib-/Leseprozesse
+und vergleicht Angebote, Geometrie, Flughafendienste und Fortsetzung nach dem Laden.
+Die Kartenoberfläche nutzt Godots Übersetzungskatalog
+`resources/localization/map.csv` (Deutsch/Englisch, Fallback Deutsch).
+
+
 ## Kartendaten / Lizenz
 
 `data/world_land.geojson`: Natural Earth **1:110m Land**, unverändert bezogen von

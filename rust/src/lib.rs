@@ -253,9 +253,19 @@ impl SimulationClock {
                 c.airports
                     .iter()
                     .map(|a| {
+                        let airlines: Array<VarDictionary> = std::iter::once(&self.game)
+                            .chain(self.game.competitors.iter().map(|c| &*c.game))
+                            .filter_map(|g| {
+                                let airline = g.airline.as_ref()?;
+                                let frequency: f64 = g.routes.iter()
+                                    .filter(|r| r.origin_icao == a.icao || r.destination_icao == a.icao)
+                                    .filter_map(|r| r.plan.as_ref())
+                                    .map(|p| 43200.0 / p.interval_seconds as f64).sum();
+                                (frequency > 0.0).then(|| vdict! { "airline" => airline.name.as_str(), "departures_per_day" => frequency })
+                            }).collect();
                         vdict! {
                             "icao" => a.icao.as_str(), "name" => a.name.as_str(),
-                            "slots" => self.game.slot_text(&a.icao).as_str(),
+                            "slots" => self.game.slot_text(&a.icao).as_str(), "airlines" => &airlines,
                             "position" => Vector2::new(a.longitude as f32, a.latitude as f32)
                         }
                     })
@@ -280,6 +290,42 @@ impl SimulationClock {
                     })
                     .collect();
                 Some(vdict! { "id" => r.id, "points" => &points, "active" => self.game.routes.iter().any(|s| s.public_id() == r.id && s.plan.is_some()) })
+            })
+            .collect()
+    }
+
+    /// Small public schedule snapshot; callers compare it before requesting geometry.
+    #[func]
+    fn get_competitor_routes(&self) -> Array<VarDictionary> {
+        map::competitor_routes(&self.game)
+            .iter()
+            .map(|r| {
+                vdict! {
+                    "airline" => r.airline.as_str(), "origin_icao" => r.origin_icao.as_str(),
+                    "destination_icao" => r.destination_icao.as_str(),
+                    "departures_per_day_per_direction" => r.departures_per_day_per_direction,
+                    "ticket_eur" => r.ticket_eur, "business_ticket_eur" => r.business_ticket_eur,
+                    "model" => r.model.as_str()
+                }
+            })
+            .collect()
+    }
+
+    #[func]
+    fn get_map_competitor_routes(&self) -> Array<PackedVector2Array> {
+        map::competitor_routes(&self.game)
+            .iter()
+            .filter_map(|r| {
+                let a = map::airport(&r.origin_icao)?;
+                let b = map::airport(&r.destination_icao)?;
+                Some(
+                    (0..=128)
+                        .map(|i| {
+                            let (lon, lat) = map::position(a, b, f64::from(i) / 128.0);
+                            Vector2::new(lon as f32, lat as f32)
+                        })
+                        .collect(),
+                )
             })
             .collect()
     }

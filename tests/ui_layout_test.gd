@@ -88,12 +88,25 @@ func _run() -> void:
 			if page == 3:
 				var map = main.map_panel
 				map.canvas.center_base()
-				for kind in ["airport", "route"]:
+				map.competitor_layer.button_pressed = true
+				map.selected_id = 0
+				map.canvas.selected_route = 0
+				map.canvas.selected_competitor = -1
+				map.refresh_flights()
+				for frame in range(5): await process_frame
+				if not capture_dir.is_empty():
+					await RenderingServer.frame_post_draw
+					assert(root.get_texture().get_image().save_png(capture_dir.path_join("map-competitors-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
+				for kind in ["airport", "route", "competitor"]:
 					map.selected_id = 0
 					map.canvas.selected_route = 0
+					map.canvas.selected_competitor = -1
 					if kind == "airport":
 						for i in range(map.canvas.airports.size()):
 							if map.canvas.airports[i]["icao"] == "EDDF": map.selected_id = -i - 1
+					elif kind == "competitor":
+						map.canvas.selected_competitor = 1
+						map.canvas.selection_position = map.canvas.size / 2
 					else:
 						map.canvas.selected_route = 1
 						map.canvas.selection_position = map.canvas.size / 2
@@ -108,6 +121,7 @@ func _run() -> void:
 						assert(root.get_texture().get_image().save_png(capture_dir.path_join("map-%s-%dx%d.png" % [kind, dimensions.x, dimensions.y])) == OK)
 				map.selected_id = 0
 				map.canvas.selected_route = 0
+				map.canvas.selected_competitor = -1
 				map.refresh_flights()
 			if page == 1:
 				if not capture_dir.is_empty():
