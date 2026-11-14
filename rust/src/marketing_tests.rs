@@ -238,3 +238,33 @@ fn marketing_changed_rates_and_airborne_restart_are_partition_independent() {
         assert_eq!(state(&g), state(&expected));
     }
 }
+
+#[test]
+fn marketing_daily_distress_cut_and_restructuring_stop_spend() {
+    // Exercise the same Game used by each AI, with distress between weekly reviews.
+    let mut g = game();
+    g.review_marketing().unwrap();
+    assert!(g.marketing.budget_eur > 0);
+    assert!(g.advance((DAY / 2) as f64));
+    let shift = -1 - g.cash();
+    g.history.as_mut().unwrap().opening_balance += shift;
+    g.airline.as_mut().unwrap().capital_eur += shift;
+    g.observe_distress();
+    assert!(g.advance((DAY / 2) as f64));
+    assert!(g.distressed());
+    assert_eq!(g.marketing.budget_eur, 0);
+    let spent = g.history.as_ref().unwrap().marketing_through(u64::MAX);
+    assert!(spent > 0);
+    let grace = crate::financing::RULES.distress_grace_days;
+    assert!(g.advance((grace * DAY) as f64));
+    assert!(g.resolution.deadline.is_some());
+    g.review_marketing().unwrap();
+    assert_eq!(g.marketing.budget_eur, 0);
+    assert!(g.advance(DAY as f64));
+    assert_eq!(
+        g.history.as_ref().unwrap().marketing_through(u64::MAX),
+        spent
+    );
+    g.validate_history().unwrap();
+    g.validate_marketing().unwrap();
+}

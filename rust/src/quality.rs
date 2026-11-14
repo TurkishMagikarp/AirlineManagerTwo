@@ -32,6 +32,10 @@ fn ten_year_scenarios_reconcile_and_survive_annual_restart() {
                 assert!(daily.advance(86400.0));
                 let mut multi = false;
                 for c in &daily.competitors {
+                    assert!(
+                        !c.game.distressed() && c.game.resolution.deadline.is_none(),
+                        "AI entered distress with marketing: year={year} price={price:?}"
+                    );
                     peak_fleet = peak_fleet.max(c.game.fleet.len());
                     for root in c.game.routes.iter().filter(|r| r.parent_route_id.is_none()) {
                         let count = c
