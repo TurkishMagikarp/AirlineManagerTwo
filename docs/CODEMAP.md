@@ -35,6 +35,7 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 40 pub fn catalog() -> Result<&'static Catalog, String>
 45 mod tests
 50 fn catalog_has_unique_identifiers_and_valid_countries()
+78 fn worldwide_catalogue_preserves_original_entries_and_connects_each_region()
 
 ## rust/src/attention.rs
 7 struct Rules
@@ -825,6 +826,7 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 290 struct Reset;
 291 impl Drop for Reset
 292 fn drop(&mut self)
+354 fn two_year_catalogue_ai_audit()
 
 ## rust/src/reputation.rs
 5 pub const DAY: u64 = 86400;
@@ -920,6 +922,7 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 651 fn v2_company_migrates_without_buying_aircraft_or_changing_balance()
 669 fn rejects_corrupt_fleet_instead_of_silently_losing_aircraft()
 711 fn oversized_archive_cannot_overwrite_a_loadable_save()
+732 fn all_save_versions_preserve_catalogue_company_state()
 
 ## rust/src/seasonal_tests.rs
 3 const DAY: u64 = 86400;
@@ -1213,18 +1216,18 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 820 func _request_maintenance() -> void:
 831 func _cancel_maintenance() -> void:
 842 func _build_founding() -> void:
-916 func _country_changed(index: int) -> void:
-930 func _found_airline() -> void:
-942 func _sync_view() -> void:
-964 func _open_founding() -> void:
-973 func _label(text: String, style: Dictionary, color: Color = ThemeTokens.INK) -> Label:
-977 func _build_finance(content: VBoxContainer) -> void:
-1011 func _build_attention(parent: VBoxContainer) -> void:
-1034 func _refresh_attention() -> void:
-1059 func _resize_frame() -> void:
-1075 func _open_attention(entry: Dictionary) -> void:
-1089 func _refresh_overview_register() -> void:
-1101 func _render_operations(parent: VBoxContainer) -> void:
+922 func _country_changed(index: int) -> void:
+939 func _found_airline() -> void:
+951 func _sync_view() -> void:
+973 func _open_founding() -> void:
+982 func _label(text: String, style: Dictionary, color: Color = ThemeTokens.INK) -> Label:
+986 func _build_finance(content: VBoxContainer) -> void:
+1020 func _build_attention(parent: VBoxContainer) -> void:
+1043 func _refresh_attention() -> void:
+1068 func _resize_frame() -> void:
+1084 func _open_attention(entry: Dictionary) -> void:
+1098 func _refresh_overview_register() -> void:
+1110 func _render_operations(parent: VBoxContainer) -> void:
 
 ## scripts/map_background.gd
 1 extends Control
@@ -1276,24 +1279,24 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 5 const ThemeTokens = preload("res://scripts/ui/operations_theme.gd")
 6 const UI = preload("res://scripts/ui/components.gd")
 41 func _ready() -> void:
-207 func _arrange_workspace() -> void:
-253 func _label(text: String) -> Label:
-259 func _select(title: String) -> OptionButton:
-269 func _selected_id(select: OptionButton) -> int:
-273 func _route() -> Dictionary:
-278 func refresh() -> void:
-317 func refresh_operations() -> void:
-387 func _preview() -> void:
-399 func _selection_changed() -> void:
-432 func _update_service_cost(route: Dictionary) -> void:
-438 func _update_schedule_controls(route: Dictionary) -> void:
-453 func _refresh_competition() -> void:
-474 func _assignment_preview() -> void:
-490 func _feedback(error: String, success: String, field: Control = null) -> void:
-501 func _create() -> void:
-505 func _assign() -> void:
-515 func _delete() -> void:
-521 func focus_route(id: int) -> void:
+212 func _arrange_workspace() -> void:
+258 func _label(text: String) -> Label:
+264 func _select(title: String) -> OptionButton:
+275 func _selected_id(select: OptionButton) -> int:
+279 func _route() -> Dictionary:
+284 func refresh() -> void:
+323 func refresh_operations() -> void:
+393 func _preview() -> void:
+405 func _selection_changed() -> void:
+438 func _update_service_cost(route: Dictionary) -> void:
+444 func _update_schedule_controls(route: Dictionary) -> void:
+459 func _refresh_competition() -> void:
+480 func _assignment_preview() -> void:
+496 func _feedback(error: String, success: String, field: Control = null) -> void:
+507 func _create() -> void:
+511 func _assign() -> void:
+521 func _delete() -> void:
+527 func focus_route(id: int) -> void:
 
 ## scripts/staff_panel.gd
 1 extends VBoxContainer

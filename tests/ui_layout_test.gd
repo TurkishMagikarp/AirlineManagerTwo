@@ -16,6 +16,14 @@ func _run() -> void:
 	root.add_child(main)
 	main.set_process(false)
 	var sim: RefCounted = main.simulation
+	root.gui_embed_subwindows = true
+	if not capture_dir.is_empty():
+		for dimensions in [Vector2i(1440, 1000), Vector2i(680, 520)]:
+			root.size = dimensions
+			main._sync_view()
+			for frame in range(5): await process_frame
+			await _capture_picker(main.country_select, "founding-country", dimensions)
+			await _capture_picker(main.airport_select, "founding-airport", dimensions)
 	assert(sim.found_airline("Meridian Air", "DE", "EDDF").is_empty())
 	if not capture_dir.is_empty():
 		for dimensions in [Vector2i(1440, 1000), Vector2i(1100, 720), Vector2i(680, 520)]:
@@ -85,9 +93,13 @@ func _run() -> void:
 					for frame in range(5): await process_frame
 				await RenderingServer.frame_post_draw
 				assert(root.get_texture().get_image().save_png(capture_dir.path_join("%s-content-%dx%d.png" % [["overview", "fleet", "routes", "map", "finances", "staff"][page], dimensions.x, dimensions.y])) == OK)
+			if page == 2 and not capture_dir.is_empty():
+				scroll.ensure_control_visible(main.routes_panel.destination)
+				for frame in range(5): await process_frame
+				await _capture_picker(main.routes_panel.destination, "route-airport", dimensions)
 			if page == 3:
 				var map = main.map_panel
-				map.canvas.center_base()
+				map.canvas.reset_view()
 				map.competitor_layer.button_pressed = true
 				map.selected_id = 0
 				map.canvas.selected_route = 0
@@ -97,13 +109,18 @@ func _run() -> void:
 				if not capture_dir.is_empty():
 					await RenderingServer.frame_post_draw
 					assert(root.get_texture().get_image().save_png(capture_dir.path_join("map-competitors-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
+				map.canvas.center_base()
+				for frame in range(5): await process_frame
+				if not capture_dir.is_empty():
+					await RenderingServer.frame_post_draw
+					assert(root.get_texture().get_image().save_png(capture_dir.path_join("map-europe-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
 				for kind in ["airport", "route", "competitor"]:
 					map.selected_id = 0
 					map.canvas.selected_route = 0
 					map.canvas.selected_competitor = -1
 					if kind == "airport":
 						for i in range(map.canvas.airports.size()):
-							if map.canvas.airports[i]["icao"] == "EDDF": map.selected_id = -i - 1
+							if map.canvas.airports[i]["icao"] == "EGLL": map.selected_id = -i - 1
 					elif kind == "competitor":
 						map.canvas.selected_competitor = 1
 						map.canvas.selection_position = map.canvas.size / 2
@@ -313,3 +330,18 @@ func _capture_components(dimensions: Vector2i, sim: RefCounted) -> void:
 	dialog.queue_free()
 	layer.queue_free()
 	await process_frame
+
+
+func _capture_picker(select: OptionButton, prefix: String, dimensions: Vector2i) -> void:
+	select.show_popup()
+	var popup := select.get_popup()
+	for frame in range(5): await process_frame
+	assert(popup.size.x <= dimensions.x and popup.size.y <= 280)
+	await RenderingServer.frame_post_draw
+	assert(root.get_texture().get_image().save_png(capture_dir.path_join("%s-%dx%d.png" % [prefix, dimensions.x, dimensions.y])) == OK)
+	popup.set_focused_item(popup.item_count - 1)
+	for frame in range(5): await process_frame
+	await RenderingServer.frame_post_draw
+	assert(root.get_texture().get_image().save_png(capture_dir.path_join("%s-end-%dx%d.png" % [prefix, dimensions.x, dimensions.y])) == OK)
+	popup.hide()
+	for frame in range(3): await process_frame

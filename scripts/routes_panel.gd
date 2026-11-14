@@ -44,13 +44,18 @@ func _ready() -> void:
 	add_child(hint)
 	origin = _select("Startflughafen")
 	destination = _select("Zielflughafen")
+	var airports: Array = []
 	for country in simulation.get_countries():
-		for airport in simulation.get_airports(country["code"]):
-			for select in [origin, destination]:
-				select.add_item("%s · Gebühren %d %% · %s (%s)" % [airport["iata"], airport["charge_percent"], airport["name"], airport["icao"]])
-				select.set_item_metadata(select.item_count - 1, airport["icao"])
-				select.set_item_tooltip(select.item_count - 1, "%s · Gebührenstufe %d %% des Modell-/Passagiertarifs an diesem Endpunkt; Start und Ziel werden addiert." % [airport["name"], airport["charge_percent"]])
-	destination.select(1)
+		airports.append_array(simulation.get_airports(country["code"]))
+	airports.sort_custom(func(a: Dictionary, b: Dictionary): return a["iata"].naturalnocasecmp_to(b["iata"]) < 0)
+	for airport in airports:
+		for select in [origin, destination]:
+			select.add_item("%s · Gebühren %d %% · %s (%s)" % [airport["iata"], airport["charge_percent"], String(airport["name"]).left(32) + ("…" if String(airport["name"]).length() > 32 else ""), airport["icao"]])
+			select.set_item_metadata(select.item_count - 1, airport["icao"])
+			select.set_item_tooltip(select.item_count - 1, "%s · Gebührenstufe %d %% des Modell-/Passagiertarifs an diesem Endpunkt; Start und Ziel werden addiert." % [airport["name"], airport["charge_percent"]])
+	for i in range(origin.item_count):
+		if origin.get_item_metadata(i) == "EDDF": origin.select(i)
+		if destination.get_item_metadata(i) == "EDDM": destination.select(i)
 	aircraft = _select("Verfügbares Flugzeug")
 	preview = _label("")
 	add_child(preview)
@@ -261,6 +266,7 @@ func _select(title: String) -> OptionButton:
 	var select := OptionButton.new()
 	select.fit_to_longest_item = false
 	select.clip_text = true
+	select.get_popup().max_size = Vector2i(600, 280)
 	select.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	add_child(select)
 	return select

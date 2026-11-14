@@ -30,3 +30,32 @@ MAP_NO_FLIGHT,Kein Flug ausgewählt · Nur tatsächlich fliegende Flugzeuge werd
 MAP_FLIGHT_DETAILS,"%s  /  %s · %s
 %s → %s   ·   %.1f %%   ·   Ankunft: %s","%s  /  %s · %s
 %s → %s   ·   %.1f %%   ·   Arrival: %s"
+Deutschland,Deutschland,Germany
+Türkei,Türkei,Turkey
+USA,USA,USA
+Vereinigtes Königreich,Vereinigtes Königreich,United Kingdom
+Frankreich,Frankreich,France
+Niederlande,Niederlande,Netherlands
+Spanien,Spanien,Spain
+Italien,Italien,Italy
+Schweiz,Schweiz,Switzerland
+Kanada,Kanada,Canada
+Mexiko,Mexiko,Mexico
+Brasilien,Brasilien,Brazil
+Chile,Chile,Chile
+Argentinien,Argentinien,Argentina
+Peru,Peru,Peru
+Südafrika,Südafrika,South Africa
+Ägypten,Ägypten,Egypt
+Marokko,Marokko,Morocco
+Kenia,Kenia,Kenya
+Vereinigte Arabische Emirate,Vereinigte Arabische Emirate,United Arab Emirates
+Katar,Katar,Qatar
+Indien,Indien,India
+Hongkong,Hongkong,Hong Kong
+Japan,Japan,Japan
+China,China,China
+Singapur,Singapur,Singapore
+Thailand,Thailand,Thailand
+Australien,Australien,Australia
+Neuseeland,Neuseeland,New Zealand

@@ -22,7 +22,15 @@ Reisenden ab. Keine Behauptung, reale O&D-Verkehrszahlen zu prognostizieren.
 ## Plausible, ausdrücklich geschätzte Ausgangsdaten
 
 `data/airports.json` enthält einen kombinierten Größen-/Bedeutungsindex und einen
-Geschäftsreiseanteil, **keine gemessenen Passagierzahlen**:
+Geschäftsreiseanteil, **keine gemessenen Passagierzahlen**. Der weltweite
+Katalog umfasst 40 Flughäfen in 29 Ländern. Alle Größen-/Geschäftsanteile sowie
+`charge_percent` und `daily_departure_slots` sind ausdrücklich plausible
+Spielschätzungen; keine gemessenen Gebühren, Slots oder Passagierstatistiken.
+Frankfurt = 1,00 bleibt der Maßstab, alle acht ursprünglichen Werte bleiben
+unverändert. Neue Hubs liegen etwa bei 0,4–1,2; schwächere Märkte erhalten
+kleinere Werte, Geschäftsstandorte höhere Geschäftsanteile. Identität und
+Koordinaten stammen aus OurAirports (Public Domain), siehe [Datenquellen](../data/README.md).
+Die bisherigen Referenzwerte:
 
 | Flughafen | Index | Geschäft |
 | --- | ---: | ---: |

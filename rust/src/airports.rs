@@ -73,4 +73,43 @@ mod tests {
         assert!(airports.contains(&"EDDF".to_string()));
         assert!(airports.contains(&"LTFM".to_string()));
     }
+
+    #[test]
+    fn worldwide_catalogue_preserves_original_entries_and_connects_each_region() {
+        let current: serde_json::Value =
+            serde_json::from_str(include_str!("../../data/airports.json")).unwrap();
+        let original: serde_json::Value =
+            serde_json::from_str(include_str!("../../tests/fixtures/original_airports.json"))
+                .unwrap();
+        for key in ["countries", "airports"] {
+            for entry in original[key].as_array().unwrap() {
+                assert!(
+                    current[key].as_array().unwrap().contains(entry),
+                    "changed original {entry}"
+                );
+            }
+        }
+        let cat = catalog().unwrap();
+        assert_eq!(cat.airports.len(), 40);
+        assert_eq!(cat.countries.len(), 29);
+        for country in &cat.countries {
+            assert!(cat.airports.iter().any(|a| a.country_code == country.code));
+        }
+        for airport in &cat.airports {
+            let mut game = crate::game::Game::default();
+            game.found("Worldwide", &airport.country_code, &airport.icao)
+                .unwrap();
+            assert!(
+                cat.airports.iter().any(|b| b.icao != airport.icao
+                    && crate::routes::distance_km(&airport.icao, &b.icao).unwrap() <= 6200.0),
+                "isolated airport {}",
+                airport.icao
+            );
+        }
+        for code in [
+            "EGLL", "KORD", "SBGR", "FAOR", "OMDB", "VIDP", "RJTT", "WSSS", "YSSY", "NZAA",
+        ] {
+            assert!(cat.airports.iter().any(|a| a.icao == code));
+        }
+    }
 }

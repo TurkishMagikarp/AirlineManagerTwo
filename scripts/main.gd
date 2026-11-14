@@ -358,7 +358,7 @@ func _refresh_finance() -> void:
 	var finance: Dictionary = simulation.get_financial_summary()
 	var financing: Dictionary = simulation.get_financing()
 	heading.text = airline["name"]
-	description.text = "%s  /  %s · %s" % [airline["airport_icao"], airline["airport_name"], airline["country_name"]]
+	description.text = "%s  /  %s · %s" % [airline["airport_icao"], airline["airport_name"], tr(airline["country_name"])]
 	metrics["balance"].text = UI.money(airline["capital_eur"])
 	metrics["balance"].add_theme_color_override("font_color", UI.NEGATIVE if airline["capital_eur"] < 0 else ThemeTokens.INK)
 	metrics["profit"].text = UI.money(finance["profit_eur"])
@@ -875,14 +875,18 @@ func _build_founding() -> void:
 	form.add_child(_label("Heimatland", ThemeTokens.BODY))
 	country_select = OptionButton.new()
 	country_select.custom_minimum_size.y = 40
-	for country in simulation.get_countries():
-		country_select.add_item(country["name"])
+	country_select.get_popup().max_size = Vector2i(600, 280)
+	var countries: Array = simulation.get_countries()
+	countries.sort_custom(func(a: Dictionary, b: Dictionary): return tr(a["name"]).naturalnocasecmp_to(tr(b["name"])) < 0)
+	for country in countries:
+		country_select.add_item(tr(country["name"]))
 		country_select.set_item_metadata(country_select.item_count - 1, country["code"])
 	country_select.item_selected.connect(_country_changed)
 	form.add_child(country_select)
 	form.add_child(_label("Heimatflughafen", ThemeTokens.BODY))
 	airport_select = OptionButton.new()
 	airport_select.custom_minimum_size.y = 40
+	airport_select.get_popup().max_size = Vector2i(600, 280)
 	airport_select.fit_to_longest_item = false
 	airport_select.clip_text = true
 	airport_select.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
@@ -910,7 +914,9 @@ func _build_founding() -> void:
 	founding_status = _label("Gründen startet pausiert bei Tag 1. Erst Speichern ersetzt den lokalen Spielstand.", ThemeTokens.SMALL, ThemeTokens.INK_MUTED)
 	founding_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	column.add_child(founding_status)
-	_country_changed(0)
+	for i in range(country_select.item_count):
+		if country_select.get_item_metadata(i) == "DE": country_select.select(i)
+	_country_changed(country_select.selected)
 
 
 func _country_changed(index: int) -> void:
@@ -919,9 +925,12 @@ func _country_changed(index: int) -> void:
 		found_button.disabled = true
 		return
 	var country_code: String = country_select.get_item_metadata(index)
-	for airport in simulation.get_airports(country_code):
-		airport_select.add_item("%s · %s (%s)" % [airport["iata"], airport["name"], airport["icao"]])
+	var airports: Array = simulation.get_airports(country_code)
+	airports.sort_custom(func(a: Dictionary, b: Dictionary): return a["iata"].naturalnocasecmp_to(b["iata"]) < 0)
+	for airport in airports:
+		airport_select.add_item("%s · %s (%s)" % [airport["iata"], String(airport["name"]).left(44) + ("…" if String(airport["name"]).length() > 44 else ""), airport["icao"]])
 		airport_select.set_item_metadata(airport_select.item_count - 1, airport["icao"])
+		airport_select.set_item_tooltip(airport_select.item_count - 1, airport["name"])
 	found_button.disabled = airport_select.item_count == 0
 	if airport_select.item_count > 0:
 		airport_select.select(0)
