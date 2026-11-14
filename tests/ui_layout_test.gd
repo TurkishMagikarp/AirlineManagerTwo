@@ -155,6 +155,14 @@ func _run() -> void:
 					if not capture_dir.is_empty():
 						await RenderingServer.frame_post_draw
 						assert(root.get_texture().get_image().save_png(capture_dir.path_join("finance-detail-%d-%dx%d.png" % [i, dimensions.x, dimensions.y])) == OK)
+						if target is Tree:
+							for bar in target.get_children(true):
+								if bar is HScrollBar and bar.visible:
+									bar.value = bar.max_value
+									for frame in range(5): await process_frame
+									await RenderingServer.frame_post_draw
+									assert(root.get_texture().get_image().save_png(capture_dir.path_join("finance-detail-right-%d-%dx%d.png" % [i, dimensions.x, dimensions.y])) == OK)
+									bar.value = 0
 			if page == 5:
 				for target in [main.staff_panel.hire_button, main.staff_panel.staff_tree, main.staff_panel.training_rows, main.staff_panel.train_button]:
 					scroll.ensure_control_visible(target)
@@ -190,6 +198,13 @@ func _run() -> void:
 				if not capture_dir.is_empty():
 					await RenderingServer.frame_post_draw
 					assert(root.get_texture().get_image().save_png(capture_dir.path_join("route-results-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
+					for bar in main.routes_panel.results_tree.get_children(true):
+						if bar is HScrollBar and bar.visible:
+							bar.value = bar.max_value
+							for frame in range(5): await process_frame
+							await RenderingServer.frame_post_draw
+							assert(root.get_texture().get_image().save_png(capture_dir.path_join("route-results-right-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
+							bar.value = 0
 					var table: Tree = main.routes_panel.results_tree
 					var text := table.get_root().get_first_child().get_tooltip_text(4)
 					var tooltip: Control = table._make_custom_tooltip(text)
