@@ -1311,11 +1311,12 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 58 class LegTrack extends Control:
 69 class EmptyFrame extends PanelContainer:
 319 class DecisionDialog extends ColorRect:
-392 const CASH_STYLE = {"family": "mono", "size": 18, "height": 20, "weight": 500, "tracking": 0.0}
-393 const FLAP_STYLE = {"family": "mono", "size": 18, "height": 32, "weight": 500, "tracking": 0.0}
-395 class FlapReadout extends Label:
-528 const AIRCRAFT_PRICE = {"family": "mono", "size": 20, "height": 24, "weight": 500, "tracking": 0.0}
-616 class BreakdownTable extends Tree:
+397 const CASH_STYLE = {"family": "mono", "size": 18, "height": 20, "weight": 500, "tracking": 0.0}
+398 const FLAP_STYLE = {"family": "mono", "size": 18, "height": 32, "weight": 500, "tracking": 0.0}
+400 class FlapReadout extends Label:
+533 const AIRCRAFT_PRICE = {"family": "mono", "size": 20, "height": 24, "weight": 500, "tracking": 0.0}
+623 class ResultValues extends Control:
+655 class BreakdownTable extends Tree:
 
 ## scripts/ui/operations_theme.gd
 1 extends Theme
