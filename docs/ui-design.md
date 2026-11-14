@@ -9,6 +9,25 @@ widerspricht – etwa bei Farben oder dem Verzicht auf externe Schriftarten – 
 das Kit. Die Abschnitte unten beschreiben den Stand vor der Umstellung und werden
 mit jedem umgesetzten Schritt angepasst.
 
+## Übersicht und Flotte
+
+Die Übersicht zeigt nach den Hinweisen vier Kennzahlen (bei kleiner Breite zwei
+Spalten), danach Flottenregister und laufenden Betrieb nebeneinander; unter
+1100px Fensterbreite stehen sie untereinander. Flugposition, Strecke und Ankunft
+kommen aus `get_map_flights()` und erscheinen als Route-Leg ohne eigene Uhr.
+Die bisherige Finanzaufschlüsselung bleibt darunter erreichbar.
+
+Die Flotte beginnt mit dem Register und laufenden Betrieb. Drei Tabs trennen
+Register, Beschaffung und Wartungsbasen. Die Beschaffung vergleicht Modelle als
+AircraftCards: Klasse, Sitze, Reichweite, Reisegeschwindigkeit und Besatzung
+kommen aus dem Rust-Katalog bzw. den bestehenden Personalbedarfen. Die Klasse
+ist ein verpflichtendes, rein beschreibendes Katalogfeld; keine Spielregel nutzt
+sie. Kaufpreis und Leasingbedingungen bleiben unverändert. Bei zu wenig Guthaben
+ist der Kaufbutton gesperrt und ein Satz nennt den Grund. Verkaufs- und
+Rückgabeentscheidungen nutzen den Kit-Dialog mit Abbrechen als erstem Fokus.
+Flugzeug- und Wartungszustände erscheinen als Chips mit Glyphen und Text;
+Wartungsdetails bleiben vollständig im Tooltip und im Auswahlbereich lesbar.
+
 ## Gemeinsames Design
 
 `resources/operations_theme.tres` ist das gemeinsame Godot-Theme. Die Ressource

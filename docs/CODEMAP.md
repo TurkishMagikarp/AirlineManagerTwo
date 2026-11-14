@@ -4,15 +4,17 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 
 ## rust/src/aircraft.rs
 6 pub struct Model
-19 static MODELS: LazyLock<Result<Vec<Model>, String>> = LazyLock::new(||
-51 pub fn models() -> Result<&'static [Model], String>
-55 pub fn model(id: &str) -> Result<&'static Model, String>
-64 pub enum AircraftStatus
-73 pub struct Aircraft
-97 impl Aircraft
-98 pub fn identifier(&self) -> String
-104 mod tests
-108 fn real_model_catalog_and_configured_prices_are_valid()
+21 fn display_class<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<String, D::Error>
+29 static MODELS: LazyLock<Result<Vec<Model>, String>> = LazyLock::new(||
+62 pub fn models() -> Result<&'static [Model], String>
+66 pub fn model(id: &str) -> Result<&'static Model, String>
+75 pub enum AircraftStatus
+84 pub struct Aircraft
+108 impl Aircraft
+109 pub fn identifier(&self) -> String
+115 mod tests
+119 fn display_class_is_required_and_nonempty()
+137 fn real_model_catalog_and_configured_prices_are_valid()
 
 ## rust/src/airport_charge_tests.rs
 3 fn game() -> Game
@@ -620,51 +622,51 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 847 struct Offer<'a>
 922 fn get_routes(&self) -> Array<VarDictionary>
 995 fn get_aircraft_models(&self) -> Array<VarDictionary>
-1010 fn buy_aircraft(&mut self, model_id: GString) -> GString
-1018 fn get_used_market(&self) -> Array<VarDictionary>
-1049 fn buy_used_aircraft(&mut self, listing_id: i64) -> GString
-1059 fn lease_aircraft(&mut self, model_id: GString) -> GString
-1069 fn sell_aircraft(&mut self, aircraft_id: u32) -> GString
-1079 fn return_aircraft(&mut self, aircraft_id: u32) -> GString
-1089 fn get_aircraft_cash_history(&self) -> Array<VarDictionary>
-1113 fn set_cabin_layout(&mut self, aircraft_id: u32, business_seats: u32) -> GString
-1123 fn set_cargo_rate(&mut self, route_id: u32, cents: i64) -> GString
-1133 fn set_service_level(&mut self, route_id: u32, level: GString) -> GString
-1143 fn set_business_ticket_price(&mut self, route_id: u32, price: i64) -> GString
-1153 fn get_fleet(&self) -> Array<VarDictionary>
-1206 fn set_maintenance_base(&mut self, icao: GString, open: bool) -> GString
-1216 fn get_maintenance_airports(&self) -> Array<VarDictionary>
-1237 fn request_maintenance(&mut self, aircraft_id: u32) -> GString
-1248 fn cancel_maintenance(&mut self, aircraft_id: u32) -> GString
-1259 fn get_staff(&self) -> Array<VarDictionary>
-1285 fn get_staff_overview(&self) -> VarDictionary
-1382 fn hire_pilots(&mut self, rating: GString, count: u32) -> GString
-1392 fn train_pilot(&mut self, id: u32, rating: GString) -> GString
-1403 fn hire_staff(&mut self, role: GString, count: i64) -> GString
-1414 fn hire_missing_staff(&mut self) -> GString
-1443 fn dismiss_staff(&mut self, employee_id: u32) -> GString
-1453 fn get_countries(&self) -> Array<VarDictionary>
-1469 fn get_airports(&self, country_code: GString) -> Array<VarDictionary>
-1491 fn get_starting_capital(&self) -> GString
-1499 fn has_airline(&self) -> bool
-1504 fn found_airline(&mut self, name: GString, country: GString, airport: GString) -> GString
-1516 fn get_airline_info(&self) -> VarDictionary
-1543 fn save_game(&self, path: GString) -> GString
-1551 fn load_game(&mut self, path: GString) -> GString
-1562 fn start(&mut self)
-1569 fn pause(&mut self)
-1574 fn is_running(&self) -> bool
-1579 fn set_speed(&mut self, multiplier: i64) -> bool
-1584 fn get_speed(&self) -> i64
-1589 fn advance(&mut self, real_seconds: f64) -> bool
-1594 fn get_elapsed_seconds(&self) -> f64
-1599 fn get_display_time(&self) -> GString
-1604 impl SimulationClock
-1606 fn route_maintenance_status(&self, route: &routes::Route) -> String
-1647 fn idle_crew_demand(&self) -> (u32, u32)
-1664 fn route_staff_status(&self, route: &routes::Route) -> String
-1682 fn maintenance_info(&self, p: usize, plane: &aircraft::Aircraft) -> VarDictionary
-1736 fn flight_dictionary(f: &economy::FlightResult) -> VarDictionary
+1014 fn buy_aircraft(&mut self, model_id: GString) -> GString
+1022 fn get_used_market(&self) -> Array<VarDictionary>
+1053 fn buy_used_aircraft(&mut self, listing_id: i64) -> GString
+1063 fn lease_aircraft(&mut self, model_id: GString) -> GString
+1073 fn sell_aircraft(&mut self, aircraft_id: u32) -> GString
+1083 fn return_aircraft(&mut self, aircraft_id: u32) -> GString
+1093 fn get_aircraft_cash_history(&self) -> Array<VarDictionary>
+1117 fn set_cabin_layout(&mut self, aircraft_id: u32, business_seats: u32) -> GString
+1127 fn set_cargo_rate(&mut self, route_id: u32, cents: i64) -> GString
+1137 fn set_service_level(&mut self, route_id: u32, level: GString) -> GString
+1147 fn set_business_ticket_price(&mut self, route_id: u32, price: i64) -> GString
+1157 fn get_fleet(&self) -> Array<VarDictionary>
+1210 fn set_maintenance_base(&mut self, icao: GString, open: bool) -> GString
+1220 fn get_maintenance_airports(&self) -> Array<VarDictionary>
+1241 fn request_maintenance(&mut self, aircraft_id: u32) -> GString
+1252 fn cancel_maintenance(&mut self, aircraft_id: u32) -> GString
+1263 fn get_staff(&self) -> Array<VarDictionary>
+1289 fn get_staff_overview(&self) -> VarDictionary
+1386 fn hire_pilots(&mut self, rating: GString, count: u32) -> GString
+1396 fn train_pilot(&mut self, id: u32, rating: GString) -> GString
+1407 fn hire_staff(&mut self, role: GString, count: i64) -> GString
+1418 fn hire_missing_staff(&mut self) -> GString
+1447 fn dismiss_staff(&mut self, employee_id: u32) -> GString
+1457 fn get_countries(&self) -> Array<VarDictionary>
+1473 fn get_airports(&self, country_code: GString) -> Array<VarDictionary>
+1495 fn get_starting_capital(&self) -> GString
+1503 fn has_airline(&self) -> bool
+1508 fn found_airline(&mut self, name: GString, country: GString, airport: GString) -> GString
+1520 fn get_airline_info(&self) -> VarDictionary
+1547 fn save_game(&self, path: GString) -> GString
+1555 fn load_game(&mut self, path: GString) -> GString
+1566 fn start(&mut self)
+1573 fn pause(&mut self)
+1578 fn is_running(&self) -> bool
+1583 fn set_speed(&mut self, multiplier: i64) -> bool
+1588 fn get_speed(&self) -> i64
+1593 fn advance(&mut self, real_seconds: f64) -> bool
+1598 fn get_elapsed_seconds(&self) -> f64
+1603 fn get_display_time(&self) -> GString
+1608 impl SimulationClock
+1610 fn route_maintenance_status(&self, route: &routes::Route) -> String
+1651 fn idle_crew_demand(&self) -> (u32, u32)
+1668 fn route_staff_status(&self, route: &routes::Route) -> String
+1686 fn maintenance_info(&self, p: usize, plane: &aircraft::Aircraft) -> VarDictionary
+1740 fn flight_dictionary(f: &economy::FlightResult) -> VarDictionary
 
 ## rust/src/maintenance.rs
 20 const RESUME_DELAY: u64 = 60;
@@ -1169,41 +1171,47 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 8 const StaffPanel = preload("res://scripts/staff_panel.gd")
 9 const UI = preload("res://scripts/ui/components.gd")
 11 const PAGES: Array[Dictionary] = [
-99 func _ready() -> void:
-186 func _add_time_controls(column: VBoxContainer) -> void:
-245 func _save_game() -> void:
-251 func _load_game() -> void:
-264 func _set_speed(speed: int) -> void:
-271 func _process(delta: float) -> void:
-297 func _refresh_time() -> void:
-315 func _show_page(index: int) -> void:
-347 func _refresh_finance() -> void:
-367 func _build_fleet(content: VBoxContainer) -> void:
-452 func _model_selected(index: int) -> void:
-463 func _lease_aircraft() -> void:
-473 func _dispose_aircraft() -> void:
-483 func _buy_aircraft() -> void:
-499 func _refresh_used_market() -> void:
-539 func _buy_used_aircraft(listing_id: int) -> void:
-551 func _refresh_fleet() -> void:
-597 func _maintenance_summary(plane: Dictionary) -> String:
-610 func _build_maintenance(parent: VBoxContainer) -> void:
-646 func _refresh_base_action() -> void:
-658 func _change_maintenance_base() -> void:
-665 func _refresh_maintenance() -> void:
-724 func _request_maintenance() -> void:
-735 func _cancel_maintenance() -> void:
-746 func _build_founding() -> void:
-820 func _country_changed(index: int) -> void:
-834 func _found_airline() -> void:
-846 func _sync_view() -> void:
-866 func _open_founding() -> void:
-875 func _label(text: String, style: Dictionary, color: Color = ThemeTokens.INK) -> Label:
-879 func _build_finance(content: VBoxContainer) -> void:
-906 func _build_attention(parent: VBoxContainer) -> void:
-929 func _refresh_attention() -> void:
-954 func _resize_frame() -> void:
-970 func _open_attention(entry: Dictionary) -> void:
+107 func _ready() -> void:
+194 func _add_time_controls(column: VBoxContainer) -> void:
+253 func _save_game() -> void:
+259 func _load_game() -> void:
+272 func _set_speed(speed: int) -> void:
+279 func _process(delta: float) -> void:
+305 func _refresh_time() -> void:
+323 func _show_page(index: int) -> void:
+356 func _refresh_finance() -> void:
+376 func _build_fleet(content: VBoxContainer) -> void:
+476 func _model_selected(index: int) -> void:
+493 func _fleet_tab_changed(index: int) -> void:
+509 func _refresh_offers() -> void:
+523 func _confirm_disposal() -> void:
+533 func _lease_aircraft() -> void:
+543 func _dispose_aircraft() -> void:
+553 func _buy_aircraft() -> void:
+569 func _refresh_used_market() -> void:
+620 func _buy_used_aircraft(listing_id: int) -> void:
+632 func _refresh_fleet() -> void:
+680 func _maintenance_summary(plane: Dictionary) -> String:
+693 func _build_maintenance(parent: VBoxContainer) -> void:
+730 func _refresh_base_action() -> void:
+742 func _change_maintenance_base() -> void:
+749 func _refresh_maintenance() -> void:
+808 func _confirm_maintenance() -> void:
+820 func _request_maintenance() -> void:
+831 func _cancel_maintenance() -> void:
+842 func _build_founding() -> void:
+916 func _country_changed(index: int) -> void:
+930 func _found_airline() -> void:
+942 func _sync_view() -> void:
+964 func _open_founding() -> void:
+973 func _label(text: String, style: Dictionary, color: Color = ThemeTokens.INK) -> Label:
+977 func _build_finance(content: VBoxContainer) -> void:
+1011 func _build_attention(parent: VBoxContainer) -> void:
+1034 func _refresh_attention() -> void:
+1059 func _resize_frame() -> void:
+1075 func _open_attention(entry: Dictionary) -> void:
+1089 func _refresh_overview_register() -> void:
+1101 func _render_operations(parent: VBoxContainer) -> void:
 
 ## scripts/map_background.gd
 1 extends Control
@@ -1300,6 +1308,7 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 390 const CASH_STYLE = {"family": "mono", "size": 18, "height": 20, "weight": 500, "tracking": 0.0}
 391 const FLAP_STYLE = {"family": "mono", "size": 18, "height": 32, "weight": 500, "tracking": 0.0}
 393 class FlapReadout extends Label:
+526 const AIRCRAFT_PRICE = {"family": "mono", "size": 20, "height": 24, "weight": 500, "tracking": 0.0}
 
 ## scripts/ui/operations_theme.gd
 1 extends Theme

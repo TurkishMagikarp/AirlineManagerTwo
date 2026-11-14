@@ -996,14 +996,18 @@ impl SimulationClock {
         let Ok(models) = aircraft::models() else {
             return Array::new();
         };
-        models.iter().map(|model| vdict! {
+        models.iter().filter_map(|model| {
+            let needs = staff::needs(&model.id).ok()?;
+            Some(vdict! {
             "id" => model.id.as_str(), "name" => model.name.as_str(),
+            "class" => model.class.as_str(), "cruise_kmh" => model.cruise_kmh,
+            "pilots" => needs.pilots, "cabin_crew" => needs.cabin_crew,
             "belly_cargo_kg" => model.belly_cargo_kg, "payload_kg" => model.payload_kg,
             "seats" => model.seats, "range_km" => model.range_km, "price_eur" => model.price_eur,
             "lease_deposit_eur" => trading::lease_terms(&model.id).map(|t| t.0).unwrap_or(0),
             "lease_monthly_eur" => trading::lease_terms(&model.id).map(|t| t.1).unwrap_or(0),
             "lease_period_days" => trading::RULES.lease_period_days as i64
-        }).collect()
+        }) }).collect()
     }
 
     #[func]

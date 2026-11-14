@@ -193,6 +193,9 @@ func _click(button: Button) -> void:
 	await _mouse(visible_rect.get_center())
 
 func _reveal(control: Control) -> void:
+	for i in range(main.fleet_sections.size()):
+		if main.fleet_sections[i].is_ancestor_of(control):
+			main.fleet_tabs.current_tab = i
 	await process_frame
 	# Center a clickable point, not the whole nested scroll container, from
 	# inside out. An entire table/list need not fit in the narrow page viewport.

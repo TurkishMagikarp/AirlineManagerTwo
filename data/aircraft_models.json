@@ -7,7 +7,8 @@
     "cruise_kmh": 830,
     "turnaround_minutes": 45,
     "belly_cargo_kg": 1800,
-    "payload_kg": 18000
+    "payload_kg": 18000,
+    "class": "Narrowbody"
   },
   {
     "id": "b737_800",
@@ -17,7 +18,8 @@
     "cruise_kmh": 840,
     "turnaround_minutes": 45,
     "belly_cargo_kg": 1890,
-    "payload_kg": 18900
+    "payload_kg": 18900,
+    "class": "Narrowbody"
   },
   {
     "id": "atr72_600",
@@ -27,6 +29,7 @@
     "cruise_kmh": 510,
     "turnaround_minutes": 30,
     "belly_cargo_kg": 720,
-    "payload_kg": 7200
+    "payload_kg": 7200,
+    "class": "Turboprop"
   }
 ]

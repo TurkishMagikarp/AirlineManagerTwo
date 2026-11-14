@@ -6,6 +6,8 @@ use std::sync::LazyLock;
 pub struct Model {
     pub id: String,
     pub name: String,
+    #[serde(deserialize_with = "display_class")]
+    pub class: String,
     pub seats: u32,
     pub belly_cargo_kg: u32,
     pub payload_kg: u32,
@@ -14,6 +16,14 @@ pub struct Model {
     pub turnaround_minutes: u32,
     #[serde(skip)]
     pub price_eur: i64,
+}
+
+fn display_class<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<String, D::Error> {
+    let class = String::deserialize(deserializer)?;
+    if class.trim().is_empty() {
+        return Err(serde::de::Error::custom("Flugzeugklasse fehlt."));
+    }
+    Ok(class)
 }
 
 static MODELS: LazyLock<Result<Vec<Model>, String>> = LazyLock::new(|| {
@@ -31,6 +41,7 @@ static MODELS: LazyLock<Result<Vec<Model>, String>> = LazyLock::new(|| {
             .ok_or_else(|| format!("Gültiger Kaufpreis fehlt für {}.", model.id))?;
         if model.id.is_empty()
             || model.name.is_empty()
+            || model.class.trim().is_empty()
             || model.seats == 0
             || model.belly_cargo_kg == 0
             || model.payload_kg < model.belly_cargo_kg
@@ -105,6 +116,24 @@ mod tests {
     use super::*;
 
     #[test]
+    fn display_class_is_required_and_nonempty() {
+        let catalog: serde_json::Value =
+            serde_json::from_str(include_str!("../../data/aircraft_models.json")).unwrap();
+        for class in [
+            serde_json::Value::Null,
+            serde_json::json!(""),
+            serde_json::json!("   "),
+        ] {
+            let mut value = catalog[0].clone();
+            value["class"] = class;
+            assert!(serde_json::from_value::<Model>(value).is_err());
+        }
+        let mut value = catalog[0].clone();
+        value.as_object_mut().unwrap().remove("class");
+        assert!(serde_json::from_value::<Model>(value).is_err());
+    }
+
+    #[test]
     fn real_model_catalog_and_configured_prices_are_valid() {
         assert_eq!(models().unwrap().len(), 3);
         assert_eq!(model("a320_200").unwrap().seats, 180);
@@ -113,6 +142,9 @@ mod tests {
         for model in models().unwrap() {
             assert!(model.price_eur > 0);
         }
+        assert_eq!(model("a320_200").unwrap().class, "Narrowbody");
+        assert_eq!(model("b737_800").unwrap().class, "Narrowbody");
+        assert_eq!(model("atr72_600").unwrap().class, "Turboprop");
         assert!(model("not_a_plane").is_err());
     }
 }

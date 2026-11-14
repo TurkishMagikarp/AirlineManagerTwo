@@ -157,6 +157,9 @@ func _verify_hangar_and_resume(sim) -> bool:
 
 
 func _reveal(control: Control) -> void:
+	for i in range(main.fleet_sections.size()):
+		if main.fleet_sections[i].is_ancestor_of(control):
+			main.fleet_tabs.current_tab = i
 	await process_frame
 	var parent := control.get_parent()
 	while parent != null:
@@ -175,6 +178,9 @@ func _click(button: Button) -> void:
 		event.pressed = pressed
 		Input.parse_input_event(event)
 		await process_frame
+
+	if button == main.maintenance_button and is_instance_valid(main.decision_dialog):
+		await _click(main.decision_dialog.get_ok_button())
 
 
 func _check(condition: bool, message: String) -> bool:

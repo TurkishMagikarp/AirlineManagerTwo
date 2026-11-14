@@ -82,6 +82,10 @@ func _run() -> void:
 
 
 func _reveal(control: Control) -> void:
+	var main = root.get_child(0)
+	for i in range(main.fleet_sections.size()):
+		if main.fleet_sections[i].is_ancestor_of(control):
+			main.fleet_tabs.current_tab = i
 	await process_frame
 	var parent := control.get_parent()
 	while parent != null:

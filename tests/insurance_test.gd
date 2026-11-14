@@ -293,6 +293,9 @@ func _click(button: Button) -> void:
 		Input.parse_input_event(event)
 		await process_frame
 
+	if button == main.maintenance_button and is_instance_valid(main.decision_dialog):
+		await _click(main.decision_dialog.get_ok_button())
+
 func _check(condition: bool, message: String) -> bool:
 	if not condition:
 		push_error("FAIL: " + message)
