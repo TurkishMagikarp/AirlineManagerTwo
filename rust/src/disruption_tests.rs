@@ -415,3 +415,108 @@ fn disruptions_long_delay_cash_runway_never_reuses_a_past_arrival() {
     g.clock.set_running(true);
     assert!(g.advance(365.0 * 86400.0));
 }
+
+/// Pins the inputs used by tests/disruptions_test.gd to the production config.
+#[test]
+fn disruptions_godot_fixture_has_care_backlog_and_natural_recovery() {
+    let mut g = game(90);
+    g.fleet[0].wear.cycles = 570;
+    g.fleet[0].wear.check_cycles = 570;
+    let wear = g.fleet[0].wear.clone();
+    cursor(&mut g).wear = wear;
+    cursor(&mut g).seed = 33364;
+    g = restart(&g);
+    let mut c = cursor(&mut g).clone();
+    let mut legs = Vec::new();
+    for _ in 0..12 {
+        let leg = c.next(&g.routes[0], "atr72_600").unwrap();
+        c.landed(leg.clone()).unwrap();
+        legs.push(leg);
+    }
+    assert_eq!(legs[0].landing, 5104);
+    assert_eq!(legs[1].departure, 9612);
+    assert_eq!(legs[2].departure - legs[2].scheduled, 2664);
+    assert_eq!(legs[11].departure, 59460);
+    assert_eq!(
+        disruptions::technical_delay(0, &g.fleet[0].wear, "atr72_600", 60, 0).unwrap(),
+        0
+    );
+    assert_eq!(legs[0].departure - legs[0].scheduled, 2932);
+    assert!(legs[1].departure - legs[1].scheduled > disruptions::RULES.attention_threshold_seconds);
+    assert!(legs[2].departure - legs[2].scheduled > 0);
+    assert_eq!(legs[11].departure, legs[11].scheduled);
+    assert!(g.advance((legs[1].departure + 1) as f64));
+    assert!(g.attention_snapshot().iter().any(|e| e.kind == "delay"));
+    let saved = restart(&g);
+    assert_eq!(state(&g), state(&saved));
+    let mut saved = saved;
+    assert!(g.advance((legs[11].departure + 1 - g.clock.elapsed().as_secs()) as f64));
+    assert!(!g.attention_snapshot().iter().any(|e| e.kind == "delay"));
+    assert!(saved.advance((g.clock.elapsed().as_secs() - saved.clock.elapsed().as_secs()) as f64));
+    assert_eq!(state(&g), state(&saved));
+    g.validate_history().unwrap();
+}
+
+#[test]
+fn disruptions_godot_restart_families_match_all_owners_after_100_days() {
+    for legacy in [true, false] {
+        let mut g = game(90);
+        g.competitors = crate::competition::initial_competitors().unwrap();
+        g.fleet[0].wear.cycles = 570;
+        g.fleet[0].wear.check_cycles = 570;
+        let wear = g.fleet[0].wear.clone();
+        cursor(&mut g).wear = wear;
+        cursor(&mut g).seed = if legacy { 0 } else { 33364 };
+        assert!(g.advance(if legacy { 120.0 } else { 2993.0 }));
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("family.json");
+        save::save(&path, &g).unwrap();
+        if legacy {
+            fn strip(v: &mut serde_json::Value) {
+                match v {
+                    serde_json::Value::Object(o) => {
+                        for key in ["disruption", "otp", "late", "delay_seconds", "care"] {
+                            o.remove(key);
+                        }
+                        for v in o.values_mut() {
+                            strip(v);
+                        }
+                    }
+                    serde_json::Value::Array(a) => a.iter_mut().for_each(strip),
+                    _ => (),
+                }
+            }
+            let mut v: serde_json::Value =
+                serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+            v["version"] = 25.into();
+            strip(&mut v);
+            std::fs::write(&path, serde_json::to_vec(&v).unwrap()).unwrap();
+            g = save::load(&path).unwrap();
+            assert_eq!(g.finance.totals.punctuality_flights, 0);
+            for ai in &g.competitors {
+                assert_eq!(ai.game.finance.totals.punctuality_flights, 0);
+            }
+        }
+        let mut loaded = save::load(&path).unwrap();
+        assert_eq!(state(&g), state(&loaded));
+        let frozen = g.routes[0].plan.as_ref().unwrap().airborne.clone().unwrap();
+        if !legacy {
+            assert!(frozen.totals.care > 0);
+        }
+        let now = g.clock.elapsed().as_secs();
+        let to_landing = (frozen.landing - now) as f64;
+        assert!(g.advance(to_landing));
+        assert!(loaded.advance(to_landing));
+        assert_eq!(g.finance.recent[0], frozen);
+        assert_eq!(state(&g), state(&loaded));
+        let rest = (now + 100 * 86400 - g.clock.elapsed().as_secs()) as f64;
+        assert!(g.advance(rest));
+        assert!(loaded.advance(rest));
+        assert_eq!(state(&g), state(&loaded));
+        g.validate_history().unwrap();
+        for ai in &g.competitors {
+            ai.game.validate_history().unwrap();
+            assert!(ai.game.finance.totals.punctuality_flights > 0);
+        }
+    }
+}

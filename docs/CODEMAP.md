@@ -244,6 +244,9 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 295 fn disruptions_wear_age_and_corrupt_cursor_validation()
 330 fn disruptions_care_settles_once_reduces_tax_base_and_attention_is_read_only()
 407 fn disruptions_long_delay_cash_runway_never_reuses_a_past_arrival()
+421 fn disruptions_godot_fixture_has_care_backlog_and_natural_recovery()
+461 fn disruptions_godot_restart_families_match_all_owners_after_100_days()
+475 fn strip(v: &mut serde_json::Value)
 
 ## rust/src/disruptions.rs
 15 pub struct Rules
