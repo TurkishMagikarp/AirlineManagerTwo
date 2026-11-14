@@ -254,11 +254,12 @@ func refresh(force: bool = false) -> void:
 	loan_repay.disabled = financing["insolvent"] or financing["debt_eur"] <= 0 or financing["available_cash_eur"] <= 0
 	note.tooltip_text = "Treibstoff: weltweiter Preis, wöchentlich aktualisiert; Kosten bei Abflug fixiert."
 	metrics["balance"].text = UI.money(airline.get("capital_eur", 0))
+	metrics["balance"].add_theme_color_override("font_color", UI.NEGATIVE if airline.get("capital_eur", 0) < 0 else ThemeTokens.INK)
 	for field in ["revenue", "costs", "profit"]:
 		metrics[field].text = UI.money(summary[field + "_eur"])
 	metrics["revenue"].text = UI.money(summary["ticket_revenue_eur"])
 	metrics["cargo"].text = UI.money(summary["cargo_revenue_eur"])
-	metrics["profit"].add_theme_color_override("font_color", UI.POSITIVE if summary["profit_eur"] >= 0 else UI.NEGATIVE)
+	metrics["profit"].add_theme_color_override("font_color", ThemeTokens.INK if summary["profit_eur"] >= 0 else UI.NEGATIVE)
 	var info: Dictionary = simulation.get_finance_history_info()
 	note.text = "Summen: gesamte erfasste Wirtschaft. Routenarchiv und Diagramme ab %s.\nBei älteren Spielständen fehlt frühere Detailhistorie; sie wird nicht nachberechnet. Flugzeugkäufe insgesamt: %s · Wartungschecks insgesamt: %s · Personalaufwand (Gehälter + Umschulung) insgesamt: %s." % [info.get("since", "—"), UI.money(summary["purchases_eur"]), UI.money(summary["maintenance_eur"]), UI.money(summary["payroll_eur"])]
 	note.text += "\nPassagierbetreuung / Entschädigung (in Kosten und Steuerbasis enthalten): %s." % UI.money(summary["care_eur"])

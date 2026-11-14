@@ -1136,11 +1136,11 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 48 func _ready() -> void:
 205 func _process(delta: float) -> void:
 213 func refresh(force: bool = false) -> void:
-314 func _chart() -> void:
-317 func _loan_action(borrowing: bool) -> void:
-322 func _select_route() -> void:
-336 func _reset_flights() -> void:
-341 func _flights() -> void:
+315 func _chart() -> void:
+318 func _loan_action(borrowing: bool) -> void:
+323 func _select_route() -> void:
+337 func _reset_flights() -> void:
+342 func _flights() -> void:
 
 ## scripts/main.gd
 1 extends Control
@@ -1161,28 +1161,28 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 286 func _show_page(index: int) -> void:
 318 func _refresh_finance() -> void:
 338 func _build_fleet(content: VBoxContainer) -> void:
-422 func _model_selected(index: int) -> void:
-433 func _lease_aircraft() -> void:
-443 func _dispose_aircraft() -> void:
-453 func _buy_aircraft() -> void:
-469 func _refresh_fleet() -> void:
-513 func _maintenance_summary(plane: Dictionary) -> String:
-526 func _build_maintenance(parent: VBoxContainer) -> void:
-562 func _refresh_base_action() -> void:
-574 func _change_maintenance_base() -> void:
-581 func _refresh_maintenance() -> void:
-640 func _request_maintenance() -> void:
-651 func _cancel_maintenance() -> void:
-662 func _build_founding() -> void:
-736 func _country_changed(index: int) -> void:
-750 func _found_airline() -> void:
-762 func _sync_view() -> void:
-779 func _open_founding() -> void:
-788 func _label(text: String, style: Dictionary, color: Color = ThemeTokens.INK) -> Label:
-792 func _build_finance(content: VBoxContainer) -> void:
-819 func _build_attention(parent: VBoxContainer) -> void:
-836 func _refresh_attention() -> void:
-858 func _open_attention(entry: Dictionary) -> void:
+415 func _model_selected(index: int) -> void:
+426 func _lease_aircraft() -> void:
+436 func _dispose_aircraft() -> void:
+446 func _buy_aircraft() -> void:
+462 func _refresh_fleet() -> void:
+506 func _maintenance_summary(plane: Dictionary) -> String:
+519 func _build_maintenance(parent: VBoxContainer) -> void:
+555 func _refresh_base_action() -> void:
+567 func _change_maintenance_base() -> void:
+574 func _refresh_maintenance() -> void:
+633 func _request_maintenance() -> void:
+644 func _cancel_maintenance() -> void:
+655 func _build_founding() -> void:
+729 func _country_changed(index: int) -> void:
+743 func _found_airline() -> void:
+755 func _sync_view() -> void:
+772 func _open_founding() -> void:
+781 func _label(text: String, style: Dictionary, color: Color = ThemeTokens.INK) -> Label:
+785 func _build_finance(content: VBoxContainer) -> void:
+812 func _build_attention(parent: VBoxContainer) -> void:
+829 func _refresh_attention() -> void:
+851 func _open_attention(entry: Dictionary) -> void:
 
 ## scripts/map_background.gd
 1 extends Control
@@ -1220,24 +1220,24 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 4 signal changed
 5 const UI = preload("res://scripts/ui/components.gd")
 39 func _ready() -> void:
-205 func _arrange_workspace() -> void:
-247 func _label(text: String) -> Label:
-254 func _select(title: String) -> OptionButton:
-264 func _selected_id(select: OptionButton) -> int:
-268 func _route() -> Dictionary:
-273 func refresh() -> void:
-311 func refresh_operations() -> void:
-368 func _preview() -> void:
-379 func _selection_changed() -> void:
-412 func _update_service_cost(route: Dictionary) -> void:
-418 func _update_schedule_controls(route: Dictionary) -> void:
-433 func _refresh_competition() -> void:
-454 func _assignment_preview() -> void:
-470 func _feedback(error: String, success: String) -> void:
-480 func _create() -> void:
-484 func _assign() -> void:
-494 func _delete() -> void:
-500 func focus_route(id: int) -> void:
+198 func _arrange_workspace() -> void:
+240 func _label(text: String) -> Label:
+247 func _select(title: String) -> OptionButton:
+257 func _selected_id(select: OptionButton) -> int:
+261 func _route() -> Dictionary:
+266 func refresh() -> void:
+304 func refresh_operations() -> void:
+361 func _preview() -> void:
+372 func _selection_changed() -> void:
+405 func _update_service_cost(route: Dictionary) -> void:
+411 func _update_schedule_controls(route: Dictionary) -> void:
+426 func _refresh_competition() -> void:
+447 func _assignment_preview() -> void:
+463 func _feedback(error: String, success: String) -> void:
+473 func _create() -> void:
+477 func _assign() -> void:
+487 func _delete() -> void:
+493 func focus_route(id: int) -> void:
 
 ## scripts/staff_panel.gd
 1 extends VBoxContainer
@@ -1266,6 +1266,16 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 6 const ACCENT = ThemeTokens.ACCENT_TEXT
 7 const POSITIVE = ThemeTokens.GO
 8 const NEGATIVE = ThemeTokens.STOP
+11 const METRIC_MIN_WIDTH = 232
+12 const DIALOG_TITLE = {"family": "display", "size": 24, "height": 28, "weight": 600, "tracking": 0.0}
+13 const EMPTY_TITLE = {"family": "display", "size": 20, "height": 24, "weight": 600, "tracking": 0.0}
+14 const CHIP_STYLE = {"family": "mono", "size": 11, "height": 11, "weight": 500, "tracking": 0.06}
+15 const KINDS = ["go", "info", "neutral", "caution", "stop"]
+19 class MetricValue extends Label:
+51 class Glyph extends Control:
+58 class LegTrack extends Control:
+69 class EmptyFrame extends PanelContainer:
+319 class DecisionDialog extends ColorRect:
 
 ## scripts/ui/operations_theme.gd
 1 extends Theme
@@ -1312,26 +1322,28 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 44 const SHADOW_POP = {"offset": 12, "size": 32, "color": Color(0, 0, 0, 0.55)}
 45 const TRANSPARENT = Color.TRANSPARENT
 47 const CONTROL_HEIGHT = 36
-48 const TAB_HEIGHT = 40
-49 const TABLE_ROW_HEIGHT = 40
-51 const SCREEN_TITLE = {"family": "display", "size": 32, "height": 36, "weight": 600, "tracking": -0.01}
-52 const PANEL_TITLE = {"family": "display", "size": 15, "height": 20, "weight": 600, "tracking": 0.08}
-53 const COLUMN_HEAD = {"family": "display", "size": 12, "height": 16, "weight": 600, "tracking": 0.08}
-54 const LABEL = {"family": "display", "size": 12, "height": 16, "weight": 600, "tracking": 0.08}
-55 const BODY = {"family": "sans", "size": 16, "height": 22, "weight": 400, "tracking": 0.0}
-56 const BODY_STRONG = {"family": "sans", "size": 16, "height": 22, "weight": 600, "tracking": 0.0}
-57 const SMALL = {"family": "sans", "size": 14, "height": 18, "weight": 400, "tracking": 0.0}
-58 const FIGURE = {"family": "mono", "size": 24, "height": 28, "weight": 500, "tracking": 0.0}
-59 const DATA = {"family": "mono", "size": 14, "height": 20, "weight": 400, "tracking": 0.0}
-60 const CODE = {"family": "mono", "size": 12, "height": 16, "weight": 500, "tracking": 0.06}
-62 const DISPLAY_FONT = preload("res://resources/fonts/outfit/Outfit[wght].ttf")
-63 const SANS_FONT = preload("res://resources/fonts/nunito/Nunito[wght].ttf")
-64 const MONO_FONT = preload("res://resources/fonts/dmmono/DMMono-Regular.ttf")
-65 const MONO_MEDIUM_FONT = preload("res://resources/fonts/dmmono/DMMono-Medium.ttf")
-105 func text_style(type: String, style: Dictionary, font_name: String = "font", size_name: String = "font_siz
-109 func floating_box(radius: int, padding: int) -> StyleBoxFlat:
-116 func button_styles(
-144 func _init() -> void:
+48 const HEADER_CONTROL_HEIGHT = 28
+49 const HEADER_BUTTON = {"family": "sans", "size": 14, "height": 18, "weight": 600, "tracking": 0.0}
+50 const TAB_HEIGHT = 40
+51 const TABLE_ROW_HEIGHT = 40
+53 const SCREEN_TITLE = {"family": "display", "size": 32, "height": 36, "weight": 600, "tracking": -0.01}
+54 const PANEL_TITLE = {"family": "display", "size": 15, "height": 20, "weight": 600, "tracking": 0.08}
+55 const COLUMN_HEAD = {"family": "display", "size": 12, "height": 16, "weight": 600, "tracking": 0.08}
+56 const LABEL = {"family": "display", "size": 12, "height": 16, "weight": 600, "tracking": 0.08}
+57 const BODY = {"family": "sans", "size": 16, "height": 22, "weight": 400, "tracking": 0.0}
+58 const BODY_STRONG = {"family": "sans", "size": 16, "height": 22, "weight": 600, "tracking": 0.0}
+59 const SMALL = {"family": "sans", "size": 14, "height": 18, "weight": 400, "tracking": 0.0}
+60 const FIGURE = {"family": "mono", "size": 24, "height": 28, "weight": 500, "tracking": 0.0}
+61 const DATA = {"family": "mono", "size": 14, "height": 20, "weight": 400, "tracking": 0.0}
+62 const CODE = {"family": "mono", "size": 12, "height": 16, "weight": 500, "tracking": 0.06}
+64 const DISPLAY_FONT = preload("res://resources/fonts/outfit/Outfit[wght].ttf")
+65 const SANS_FONT = preload("res://resources/fonts/nunito/Nunito[wght].ttf")
+66 const MONO_FONT = preload("res://resources/fonts/dmmono/DMMono-Regular.ttf")
+67 const MONO_MEDIUM_FONT = preload("res://resources/fonts/dmmono/DMMono-Medium.ttf")
+107 func text_style(type: String, style: Dictionary, font_name: String = "font", size_name: String = "font_siz
+111 func floating_box(radius: int, padding: int) -> StyleBoxFlat:
+118 func button_styles(
+146 func _init() -> void:
 
 ## README.md headings (line text)
 1 # Airline Manager — Neustart

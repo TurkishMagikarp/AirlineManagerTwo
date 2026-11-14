@@ -45,6 +45,8 @@ const SHADOW_POP = {"offset": 12, "size": 32, "color": Color(0, 0, 0, 0.55)}
 const TRANSPARENT = Color.TRANSPARENT
 # Component geometry from bundle.css, in pixels.
 const CONTROL_HEIGHT = 36
+const HEADER_CONTROL_HEIGHT = 28
+const HEADER_BUTTON = {"family": "sans", "size": 14, "height": 18, "weight": 600, "tracking": 0.0}
 const TAB_HEIGHT = 40
 const TABLE_ROW_HEIGHT = 40
 static var _fonts: Dictionary = {}
@@ -154,6 +156,16 @@ func _init() -> void:
 	button_styles("DangerSolidButton", STOP, STOP, STOP, STOP, ON_STOP)
 	button_styles("GhostButton", TRANSPARENT, SURFACE_RAISED, SURFACE_SUNKEN, TRANSPARENT, INK_MUTED)
 	button_styles("OptionButton", SURFACE_RAISED, SURFACE_RAISED, SURFACE_SUNKEN, LINE_STRONG, INK)
+	set_type_variation("PanelActionButton", "Button")
+	text_style("PanelActionButton", HEADER_BUTTON)
+	for state in ["normal", "hover", "pressed", "hover_pressed", "disabled"]:
+		var style := get_stylebox(state, "Button").duplicate() as StyleBoxFlat
+		style.content_margin_left = SPACE_3
+		style.content_margin_right = SPACE_3
+		style.content_margin_top = (HEADER_CONTROL_HEIGHT - HEADER_BUTTON["height"]) / 2
+		style.content_margin_bottom = style.content_margin_top
+		set_stylebox(state, "PanelActionButton", style)
+
 	text_style("OptionButton", BODY)
 	for side in ["normal", "hover", "pressed", "disabled"]:
 		get_stylebox(side, "OptionButton").content_margin_left = SPACE_3
@@ -175,6 +187,10 @@ func _init() -> void:
 	set_type_variation("FieldError", "LineEdit")
 	set_stylebox("normal", "FieldError", box(SURFACE_SUNKEN, STOP, RADIUS_MD, SPACE_3, (CONTROL_HEIGHT - BODY["height"]) / 2))
 	set_stylebox("panel", "PanelContainer", box(SURFACE, LINE, RADIUS_LG, SPACE_4, SPACE_4))
+	for chip in [["Go", GO_WASH], ["Info", SKY_WASH], ["Neutral", SURFACE_RAISED], ["Caution", CAUTION_WASH], ["Stop", STOP_WASH]]:
+		set_type_variation("Chip" + chip[0], "PanelContainer")
+		set_stylebox("panel", "Chip" + chip[0], box(chip[1], TRANSPARENT, RADIUS_SM, SPACE_2, 0))
+
 	set_stylebox("panel", "PopupMenu", floating_box(RADIUS_LG, SPACE_1))
 	set_stylebox("hover", "PopupMenu", box(LINE, TRANSPARENT, RADIUS_SM, SPACE_2, SPACE_1))
 	set_color("font_hover_color", "PopupMenu", INK)

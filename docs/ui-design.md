@@ -40,6 +40,43 @@ verändern keinen Spielzustand. Buttons verwenden bei Bedarf die Theme-Varianten
 Tabellenzellen erhalten über `UI.cell_text` Text-, Daten- oder Code-Schrift.
 Numerische SpinBox-Felder verwenden `NumericInput`.
 
+AIR-118 ergänzt die gemeinsamen Bausteine des Kits:
+
+- `panel(parent, title, accessory, flush)` liefert weiterhin ausschließlich den
+  Body zurück. Darüber stehen ein mindestens 48px hoher Kopf, optional genau eine
+  Aktion (28px) oder ein Status und eine Trennlinie. Der Body hat 16px Innenabstand;
+  `flush` lässt eine alleinstehende Tabelle ohne diesen Abstand zu.
+- `metric` liefert weiterhin ein `Label` mit unverändertem `.text` zurück. Ein
+  RichText-Kind rendert die Zahl in DM Mono 24 und die Einheit in DM Mono 14.
+  Zahlen und Einheiten umbrechen innerhalb der mindestens 232px breiten Karte;
+  lange Beschriftungen ebenfalls. Optional folgt genau eine unterstützende Zeile
+  oder ein Fortschritt. Gute Werte bleiben `ink`, schlechte Werte werden `stop`.
+- `status_chip` zeichnet Kreis, Raute, Strich, Dreieck oder Quadrat zu den fünf
+  Zuständen. Tabellen verwenden über `cell_status` native Icon-/Text-Zellen mit
+  derselben Schrift und Zustandsfläche; auch ausgewählte Zeilen behalten Glyph
+  und ausgeschriebenen Zustand. Lange Zustände erweitern die intern scrollbare
+  Spalte. Deutsche Texte bleiben erhalten.
+- `table` vereinheitlicht auch Flotten- und Routenregister: dunkler Header,
+  40px-Zeilen mit Trennlinien, Zahlen rechts in DM Mono, Codes im Code-Stil.
+  Auswahl, Maus, Tastatur, Metadaten und bestehende Tooltips bleiben im `Tree`.
+- `progress` zeigt einen 8px-Balken und die Zahl; `route_leg` zeichnet die geflogene
+  Strecke und die Flugzeugraute. Ohne Abflug entfällt die Raute. Die Helfer
+  erhalten sämtliche Werte vom Aufrufer und berechnen keine Spielregeln.
+- `dialog` baut einen abgedunkelten Overlay mit einer 440px breiten Fragekarte,
+  Konsequenztext und zwei Buttons. Die sichere Wahl links erhält den Fokus,
+  die gefährliche rechts `DangerSolidButton`. Tab bleibt in der Entscheidung,
+  Escape schließt sie ohne Aktion. Der Helfer steht für spätere Dialogaufrufer
+  bereit; bestehende Spielaktionen werden durch dieses Ticket nicht verändert.
+- `empty_state` ersetzt die leeren Flotten- und Routentabellen durch Titel,
+  vorhandenen Erklärungstext und eine primäre Aktion zum bestehenden Formular.
+  Sein Rahmen ist gestrichelt; lange Texte umbrechen, die Seite bleibt scrollbar.
+
+`ui_kit_test.gd` baut alle Helfer headless auf und prüft deutsche Langtexte,
+Einheitenumbruch bei Mindestbreite, 40px-Zeilen, Schrift/Alignment, Statusglyphen
+und sicheren Dialogfokus. Die Screenshot-Liste enthält zusätzlich leere Flotte
+samt erreichbarer Aktion sowie Bausteine und Dialog bei allen drei Fenstergrößen.
+Die dort gezeigten Zahlen stammen aus derselben regulären Testsimulation.
+
 Für neue Seiten ein Control unter dem bestehenden Root einfügen, Panels mit
 `UI.panel(parent, title)` aufbauen und Standard-Controls verwenden. Keine lokalen
 StyleBoxes kopieren. Tabellen dürfen intern horizontal scrollen; die Seite selbst
@@ -61,7 +98,7 @@ Godot --path . --script res://tests/ui_layout_test.gd -- --capture-dir=docs/scre
 ```
 
 Der zweite Aufruf benötigt einen echten Grafikrenderer. `tools/godot_check.sh
-shots /paperclip/shots/AIR-117` startet diesen unter Linux über Xvfb. Er erzeugt
+shots /paperclip/shots/AIR-118` startet diesen unter Linux über Xvfb. Er erzeugt
 echte Viewport-Aufnahmen für Übersicht, Flotte, Routen, Karte, Finanzen, Personal,
 Gründung sowie gescrollte Inhalte, tieferliegende Routenaktionen und Flugergebnisse bei **1440×1000, 1100×720 und 680×520**.
 Die Test-Airline wird ausschließlich über die bestehenden Rust-APIs gegründet:

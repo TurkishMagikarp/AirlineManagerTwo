@@ -131,7 +131,7 @@ func refresh(force: bool = false) -> void:
 	metrics["payroll"].text = UI.money(overview["monthly_payroll_eur"])
 	metrics["next_pay"].text = overview["next_payroll"]
 	metrics["missing"].text = "Keiner" if overview["missing_total"] == 0 else "%d fehlen" % overview["missing_total"]
-	metrics["missing"].add_theme_color_override("font_color", UI.POSITIVE if overview["missing_total"] == 0 else UI.NEGATIVE)
+	metrics["missing"].add_theme_color_override("font_color", ThemeTokens.INK if overview["missing_total"] == 0 else UI.NEGATIVE)
 	ratings_tree.clear()
 	var rating_root := ratings_tree.create_item()
 	var first_rating := rating_select.item_count == 0
@@ -193,7 +193,7 @@ func _aircraft(overview: Dictionary) -> void:
 		for i in range(values.size()):
 			UI.cell_text(row, i, values[i])
 			row.set_tooltip_text(i, status)
-		row.set_custom_color(5, color)
+		UI.cell_status(row, 5, status, "go" if color == UI.POSITIVE else "stop")
 
 func _staff(staff: Array) -> void:
 	var key := str(staff)
@@ -211,7 +211,7 @@ func _staff(staff: Array) -> void:
 		for i in range(values.size()):
 			UI.cell_text(row, i, values[i])
 			row.set_tooltip_text(i, values[i])
-		row.set_custom_color(3, UI.MUTED if employee["status"] == "available" else UI.ACCENT)
+		UI.cell_status(row, 3, employee["status_text"], "neutral" if employee["status"] == "available" else "info")
 		if employee["id"] == previous_id:
 			selected = row
 	if selected != null:
