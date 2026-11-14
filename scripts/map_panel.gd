@@ -17,6 +17,10 @@ var scale_label: Label
 var route_table: Tree
 var route_rows: Array = []
 var last_card_key := ""
+var competitors: Array = []
+var last_selected_competitor := -1
+var competitor_layer: CheckBox
+var geometry_rebuilds := 0
 
 func _ready() -> void:
 	summary = UI.label("", ThemeTokens.SMALL)
@@ -42,6 +46,14 @@ func _ready() -> void:
 			else: canvas.show_flights = value
 			canvas.queue_redraw())
 		layer_body.add_child(check)
+	competitor_layer = UI.map_layer(tr("MAP_COMPETITORS"), false)
+	competitor_layer.toggled.connect(func(value):
+		canvas.show_competitors = value
+		if not value: canvas.selected_competitor = -1
+		last_selected_id = -2147483648
+		refresh_flights()
+		canvas.queue_redraw())
+	layer_body.add_child(competitor_layer)
 	var zoom_panel := UI.map_float(canvas, 0)
 	zoom_panel.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
 	zoom_panel.offset_left = -52
@@ -56,7 +68,7 @@ func _ready() -> void:
 		button.text = caption
 		button.theme_type_variation = "MapZoomButton"
 		button.custom_minimum_size = Vector2.ONE * ThemeTokens.CONTROL_HEIGHT
-		button.tooltip_text = "Auf Basis zentrieren" if caption == "◎" else "Vergrößern" if caption == "+" else "Verkleinern"
+		button.tooltip_text = tr("Auf Basis zentrieren") if caption == "◎" else tr("Vergrößern") if caption == "+" else tr("Verkleinern")
 		button.pressed.connect(func():
 			if caption == "◎": canvas.center_base()
 			else: canvas.zoom_at(canvas.size / 2, 1.3 if caption == "+" else 1.0 / 1.3))
@@ -78,10 +90,10 @@ func _ready() -> void:
 	route_table.hide_root = true
 	route_table.column_titles_visible = true
 	route_table.custom_minimum_size.y = 140
-	for i in range(3): route_table.set_column_title(i, ["Route", "Entfernung", "Ticketpreis"][i])
+	for i in range(3): route_table.set_column_title(i, ["Route", tr("Entfernung"), tr("Ticketpreis")][i])
 	route_table.item_selected.connect(_select_row)
 	add_child(route_table)
-	var hint := UI.label("Ziehen: verschieben · Mausrad: zoomen · Klick: Details · Natural Earth (Public Domain)", ThemeTokens.CODE, UI.MUTED)
+	var hint := UI.label(tr("Ziehen: verschieben · Mausrad: zoomen · Klick: Details · Natural Earth (Public Domain)"), ThemeTokens.CODE, UI.MUTED)
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	add_child(hint)
 	refresh()
@@ -103,26 +115,38 @@ func refresh() -> void:
 
 func refresh_flights() -> void:
 	if not is_instance_valid(canvas): return
+	var public_routes: Array = simulation.get_competitor_routes()
+	if public_routes != competitors:
+		canvas.airports = simulation.get_map_airports()
+		competitors = public_routes
+		canvas.competitor_paths.clear()
+		for path in simulation.get_map_competitor_routes():
+			canvas.competitor_paths.append(canvas.unwrap_path(path))
+		geometry_rebuilds += 1
+		canvas.selected_competitor = -1
+		last_selected_id = -2147483648
 	canvas.flights = simulation.get_map_flights()
 	canvas.selected_id = selected_id
-	if canvas.flights == last_flights and selected_id == last_selected_id and canvas.selected_route == last_selected_route: return
+	if canvas.flights == last_flights and selected_id == last_selected_id and canvas.selected_route == last_selected_route and canvas.selected_competitor == last_selected_competitor: return
 	last_flights = canvas.flights
 	last_selected_id = selected_id
-	summary.text = "%d unterwegs  /  %d Routen" % [canvas.flights.size(), canvas.routes.size()]
-	details.text = "Kein Flug ausgewählt · Nur tatsächlich fliegende Flugzeuge werden angezeigt."
+	summary.text = tr("%d unterwegs  /  %d Routen") % [canvas.flights.size(), canvas.routes.size()]
+	details.text = tr("Kein Flug ausgewählt · Nur tatsächlich fliegende Flugzeuge werden angezeigt.")
 	for child in card_body.get_children():
 		card_body.remove_child(child)
 		child.queue_free()
-	card.visible = selected_id != 0 or canvas.selected_route != 0
+	card.visible = selected_id != 0 or canvas.selected_route != 0 or canvas.selected_competitor >= 0
 	if selected_id <= 0 and canvas.selected_route == 0: route_table.deselect_all()
 	if selected_id < 0 and -selected_id - 1 < canvas.airports.size():
 		var airport: Dictionary = canvas.airports[-selected_id - 1]
 		details.text = "%s · %s\n%s" % [airport["icao"], airport["name"], airport["slots"]]
-		_card_header(airport["icao"], "Basis" if airport["icao"] == canvas.base_icao else "", "neutral")
+		_card_header(airport["icao"], tr("Basis") if airport["icao"] == canvas.base_icao else "", "neutral")
 		_add_name(airport["name"], ThemeTokens.MAP_CARD_NAME)
 		_add_name(airport["slots"])
-		_action("Route erstellen", 0, airport["icao"])
-		_action("Routen anzeigen", 0)
+		for service in airport["airlines"]:
+			_add_name(tr("MAP_AIRPORT_SERVICE") % [service["airline"], service["departures_per_day"]])
+		_action(tr("Route erstellen"), 0, airport["icao"])
+		_action(tr("Routen anzeigen"), 0)
 	var route_id: int = canvas.selected_route
 	for flight in canvas.flights:
 		if flight["aircraft_id"] == selected_id:
@@ -134,7 +158,7 @@ func refresh_flights() -> void:
 		var airborne := false
 		for flight in canvas.flights:
 			if flight["route_id"] == route_id: airborne = true
-		_card_header("%s–%s" % [route["origin_icao"], route["destination_icao"]], "Im Flug" if airborne else "Aktiv" if route["has_plan"] else "Geplant", "info" if airborne else "neutral")
+		_card_header("%s–%s" % [route["origin_icao"], route["destination_icao"]], tr("Im Flug") if airborne else tr("Aktiv") if route["has_plan"] else tr("Geplant"), "info" if airborne else "neutral")
 		var cities: Array[String] = []
 		for code in [route["origin_icao"], route["destination_icao"]]:
 			for airport in canvas.airports:
@@ -147,22 +171,40 @@ func refresh_flights() -> void:
 			track.percent = flight["progress"] * 100
 			track.custom_minimum_size.y = 12
 			card_body.add_child(track)
-			_fact("Ankunft", "%s · %.1f %%" % [flight["arrival"], flight["progress"] * 100])
+			_fact(tr("Ankunft"), "%s · %.1f %%" % [flight["arrival"], flight["progress"] * 100])
 			break
-		_fact("Entfernung", "%.0f km" % route["distance_km"])
-		_fact("Ticketpreis", UI.money(route["ticket_eur"]))
-		_action("Flugplan bearbeiten", route_id)
+		_fact(tr("Entfernung"), "%.0f km" % route["distance_km"])
+		_fact(tr("Ticketpreis"), UI.money(route["ticket_eur"]))
+		for offer in competitors:
+			if _same_pair(route, offer): _add_name(tr("MAP_CONTESTED") % _offer_values(offer))
+		_action(tr("Flugplan bearbeiten"), route_id)
 		var item := route_table.get_root().get_first_child()
 		while item != null:
 			if item.get_metadata(0) == route_id: item.select(0)
 			item = item.get_next()
+	if canvas.selected_competitor >= 0 and canvas.selected_competitor < competitors.size():
+		var offer: Dictionary = competitors[canvas.selected_competitor]
+		_card_header("%s–%s" % [offer["origin_icao"], offer["destination_icao"]], tr("MAP_COMPETITOR"), "neutral")
+		_add_name(offer["airline"], ThemeTokens.MAP_CARD_NAME)
+		_add_name(offer["model"])
+		_add_name(tr("MAP_FREQUENCY") % offer["departures_per_day_per_direction"])
+		_fact(tr("MAP_ECONOMY"), UI.money(offer["ticket_eur"]))
+		_fact(tr("MAP_BUSINESS"), UI.money(offer["business_ticket_eur"]))
+		details.text = "%s · %s · %s" % [offer["airline"], offer["model"], tr("MAP_CONTESTED") % _offer_values(offer)]
 	card.reset_size()
-	var card_key := "%d/%d" % [selected_id, canvas.selected_route]
+	var card_key := "%d/%d/%d" % [selected_id, canvas.selected_route, canvas.selected_competitor]
 	if card.visible and card_key != last_card_key: _reveal_selected.call_deferred()
 	last_card_key = card_key
+	last_selected_competitor = canvas.selected_competitor
 	last_selected_route = canvas.selected_route
 	_position_overlays.call_deferred()
 	canvas.queue_redraw()
+
+func _same_pair(a: Dictionary, b: Dictionary) -> bool:
+	return (a["origin_icao"] == b["origin_icao"] and a["destination_icao"] == b["destination_icao"]) or (a["origin_icao"] == b["destination_icao"] and a["destination_icao"] == b["origin_icao"])
+
+func _offer_values(offer: Dictionary) -> Array:
+	return [offer["airline"], UI.money(offer["ticket_eur"]), UI.money(offer["business_ticket_eur"]), offer["departures_per_day_per_direction"]]
 
 func _card_header(title: String, status: String, kind: String) -> void:
 	var row := HBoxContainer.new()
@@ -229,6 +271,7 @@ func _select_row() -> void:
 	if canvas.selected_route == id: return
 	selected_id = 0
 	canvas.selected_route = id
+	canvas.selected_competitor = -1
 	for route in canvas.routes:
 		if route["id"] == id: canvas.selection_position = canvas.project(route["points"][64])
 	refresh_flights()
@@ -252,6 +295,7 @@ func _unhandled_key_input(event: InputEvent) -> void:
 	if visible and event.is_action_pressed("ui_cancel"):
 		selected_id = 0
 		canvas.selected_route = 0
+		canvas.selected_competitor = -1
 		refresh_flights()
 		get_viewport().set_input_as_handled()
 

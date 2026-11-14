@@ -4,6 +4,9 @@ const ThemeTokens = preload("res://scripts/ui/operations_theme.gd")
 signal selected(aircraft_id: int)
 signal camera_changed
 var base_icao := ""
+var show_competitors := false
+var competitor_paths: Array = []
+var selected_competitor := -1
 var show_routes := true
 var show_airports := true
 var show_flights := true
@@ -66,6 +69,21 @@ func unwrap_path(points: PackedVector2Array) -> PackedVector2Array:
 	return result
 
 func _draw() -> void:
+	# Competitors are painted first, so own routes always remain on top.
+	for path in competitor_paths if show_competitors else []:
+		for copy in range(-1, 2):
+			var phase := 0.0
+			for i in range(1, path.size()):
+				var a := project(path[i - 1] + Vector2(copy * 360, 0))
+				var b := project(path[i] + Vector2(copy * 360, 0))
+				var length := a.distance_to(b)
+				var cursor := 0.0
+				while cursor < length:
+					var step := minf(maxf(0.001, 6.0 - fmod(phase, 6.0)), length - cursor)
+					if fmod(phase, 12.0) < 6.0:
+						draw_line(a.lerp(b, cursor / length), a.lerp(b, (cursor + step) / length), ThemeTokens.INK_FAINT, 2, true)
+					cursor += step
+					phase += step
 	for route in routes if show_routes else []:
 		var path := unwrap_path(route["points"])
 		for copy in range(-1, 2):
@@ -129,6 +147,7 @@ func hit_test(point: Vector2) -> int:
 					closest = distance
 					id = -i - 1
 	selected_route = 0
+	selected_competitor = -1
 	if id == 0 and show_routes:
 		for route in routes:
 			var path := unwrap_path(route["points"])
@@ -140,6 +159,17 @@ func hit_test(point: Vector2) -> int:
 					if distance < minf(closest, 8):
 						closest = distance
 						selected_route = route["id"]
+	if id == 0 and selected_route == 0 and show_competitors:
+		for index in range(competitor_paths.size()):
+			var path: PackedVector2Array = competitor_paths[index]
+			for copy in range(-1, 2):
+				for i in range(1, path.size()):
+					var a := project(path[i - 1] + Vector2(copy * 360, 0))
+					var b := project(path[i] + Vector2(copy * 360, 0))
+					var distance := point.distance_to(Geometry2D.get_closest_point_to_segment(point, a, b))
+					if distance < minf(closest, 8):
+						closest = distance
+						selected_competitor = index
 	selection_position = point
 	return id
 

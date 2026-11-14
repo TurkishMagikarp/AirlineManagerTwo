@@ -21,6 +21,11 @@ window/size/viewport_height=720
 window/size/window_width_override=1100
 window/size/window_height_override=720
 
+[internationalization]
+
+locale/fallback="de"
+locale/translations=PackedStringArray("res://resources/localization/map.de.translation", "res://resources/localization/map.en.translation")
+
 [rendering]
 
 renderer/rendering_method="gl_compatibility"
