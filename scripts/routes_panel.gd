@@ -295,11 +295,11 @@ func refresh() -> void:
 		if route["id"] == selected_route:
 			row.select(0)
 	_selection_changed()
-	_preview()
 	refresh_operations()
 
 
 func refresh_operations() -> void:
+	_preview()
 	# Refresh live metrics without rebuilding selection or resetting ticket inputs.
 	var metrics: Dictionary = {}
 	for route in simulation.get_routes():
@@ -358,6 +358,7 @@ func refresh_operations() -> void:
 func _preview() -> void:
 	var result: Dictionary = simulation.preview_route(origin.get_selected_metadata(), destination.get_selected_metadata(), _selected_id(aircraft), 0)
 	preview.text = "Entfernung: %.1f km · %s" % [result["distance_km"], "Reichweite ausreichend" if result["error"].is_empty() else result["error"]]
+	preview.text += "\n%s · %s" % [result["origin_slots"], result["destination_slots"]]
 	if result["has_cost_estimate"]:
 		preview.text += "\nPlanung: %d Pax · Kosten %s, davon Flughäfen Start + Ziel %s je Abflug.\nJahresmittel, Standardpreise, 1 Abflug/Tag/Richtung; Personal und Wartungschecks separat." % [result["estimated_passengers"], UI.money(result["estimated_costs_eur"]), UI.money(result["estimated_airport_eur"])]
 	create_button.disabled = not result["error"].is_empty()

@@ -5,12 +5,12 @@
     {"code": "US", "name": "USA"}
   ],
   "airports": [
-    {"icao": "EDDF", "iata": "FRA", "name": "Frankfurt Airport", "country_code": "DE", "latitude": 50.033333, "longitude": 8.570556, "market_size": 1.0, "business_percent": 65, "charge_percent": 60},
+    {"icao": "EDDF", "daily_departure_slots": 120, "iata": "FRA", "name": "Frankfurt Airport", "country_code": "DE", "latitude": 50.033333, "longitude": 8.570556, "market_size": 1.0, "business_percent": 65, "charge_percent": 60},
     {"icao": "EDDM", "iata": "MUC", "name": "Munich Airport", "country_code": "DE", "latitude": 48.353783, "longitude": 11.786086, "market_size": 0.85, "business_percent": 60, "charge_percent": 55},
-    {"icao": "LTFM", "iata": "IST", "name": "Istanbul Airport", "country_code": "TR", "latitude": 41.275278, "longitude": 28.751944, "market_size": 1.1, "business_percent": 45, "charge_percent": 65},
+    {"icao": "LTFM", "daily_departure_slots": 120, "iata": "IST", "name": "Istanbul Airport", "country_code": "TR", "latitude": 41.275278, "longitude": 28.751944, "market_size": 1.1, "business_percent": 45, "charge_percent": 65},
     {"icao": "LTFJ", "iata": "SAW", "name": "Istanbul Sabiha Gökçen International Airport", "country_code": "TR", "latitude": 40.898553, "longitude": 29.309219, "market_size": 0.55, "business_percent": 30, "charge_percent": 45},
-    {"icao": "KJFK", "iata": "JFK", "name": "John F. Kennedy International Airport", "country_code": "US", "latitude": 40.639447, "longitude": -73.779317, "market_size": 1.15, "business_percent": 55, "charge_percent": 65},
-    {"icao": "KLAX", "iata": "LAX", "name": "Los Angeles International Airport", "country_code": "US", "latitude": 33.9425, "longitude": -118.408056, "market_size": 1.1, "business_percent": 45, "charge_percent": 65},
+    {"icao": "KJFK", "daily_departure_slots": 120, "iata": "JFK", "name": "John F. Kennedy International Airport", "country_code": "US", "latitude": 40.639447, "longitude": -73.779317, "market_size": 1.15, "business_percent": 55, "charge_percent": 65},
+    {"icao": "KLAX", "daily_departure_slots": 120, "iata": "LAX", "name": "Los Angeles International Airport", "country_code": "US", "latitude": 33.9425, "longitude": -118.408056, "market_size": 1.1, "business_percent": 45, "charge_percent": 65},
     {"icao": "EDLP", "iata": "PAD", "name": "Paderborn Lippstadt Airport", "country_code": "DE", "latitude": 51.6141, "longitude": 8.6163, "market_size": 0.08, "business_percent": 25, "charge_percent": 25},
     {"icao": "EDFH", "iata": "HHN", "name": "Frankfurt Hahn Airport", "country_code": "DE", "latitude": 49.9487, "longitude": 7.2639, "market_size": 0.12, "business_percent": 15, "charge_percent": 30}
   ]

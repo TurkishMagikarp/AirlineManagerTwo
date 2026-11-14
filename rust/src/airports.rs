@@ -20,6 +20,8 @@ pub struct Airport {
     pub business_percent: u32,
     /// Percentage of the model landing + passenger tariff, charged at this endpoint.
     pub charge_percent: u32,
+    #[serde(default)]
+    pub daily_departure_slots: Option<u32>,
 }
 
 #[derive(Deserialize)]
@@ -64,6 +66,7 @@ mod tests {
             assert!(
                 airport.market_size.is_finite() && (0.01..=10.0).contains(&airport.market_size)
             );
+            assert!(airport.daily_departure_slots.is_none_or(|cap| cap > 0));
             assert!(airport.business_percent <= 100);
             assert!((1..=200).contains(&airport.charge_percent));
         }

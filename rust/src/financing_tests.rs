@@ -532,7 +532,7 @@ fn restructuring_v13_migration_starts_fresh_grace_without_replaying_costs() {
     save::save(&path, &g).unwrap();
     let original: serde_json::Value =
         serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
-    assert_eq!(original["version"], 26);
+    assert_eq!(original["version"], 27);
     let mut old = original.clone();
     old["version"] = serde_json::json!(13);
     old["state"].as_object_mut().unwrap().remove("resolution");

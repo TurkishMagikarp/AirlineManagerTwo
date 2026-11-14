@@ -30,6 +30,11 @@ fn ten_year_scenarios_reconcile_and_survive_annual_restart() {
             assert!(fast.advance(365.0 * 86400.0));
             for _ in 0..365 {
                 assert!(daily.advance(86400.0));
+                for airport in crate::airports::catalog().unwrap().airports.iter() {
+                    if let Some(cap) = airport.daily_departure_slots {
+                        assert!(daily.slot_usage(&airport.icao) <= u64::from(cap));
+                    }
+                }
                 let mut multi = false;
                 for c in &daily.competitors {
                     assert!(

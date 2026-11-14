@@ -1,6 +1,7 @@
 {
   "negative_cash_threshold_eur": 0,
   "priorities": {
+    "slots": 45,
     "negative_cash": 0,
     "crew": 10,
     "delay": 15,

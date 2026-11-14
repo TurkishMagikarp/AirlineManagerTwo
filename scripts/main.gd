@@ -252,6 +252,8 @@ func _process(delta: float) -> void:
 		map_panel.refresh_flights()
 	if second != last_operation_second:
 		last_operation_second = second
+		if current_page == 3:
+			map_panel.refresh()
 		if current_page == 2:
 			routes_panel.refresh_operations()
 		if current_page == 0 and simulation.has_airline():

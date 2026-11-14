@@ -95,6 +95,13 @@ func hit_test(point: Vector2) -> int:
 			if distance < closest:
 				closest = distance
 				id = flight["aircraft_id"]
+	if id == 0:
+		for i in range(airports.size()):
+			for copy in range(-1, 2):
+				var distance := point.distance_to(project(airports[i]["position"] + Vector2(copy * 360, 0)))
+				if distance < closest:
+					closest = distance
+					id = -i - 1
 	return id
 
 func _gui_input(event: InputEvent) -> void:
