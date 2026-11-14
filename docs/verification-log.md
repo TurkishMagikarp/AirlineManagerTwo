@@ -429,3 +429,16 @@ Wartungsende wieder verschwindet. Spielstandversion unverändert (10), neues Fel
   START.bat, tatsächliche PowerShell-Wrapper, native Windows-DLLs/Neustarts
   und Windows-Darstellung/-Skalierung bleiben beim Besitzer.
   Details und reproduzierbare Linux-Befehle: disruptions.md.
+
+
+## 2026-11-14 — Maintenance bases Linux verification (PR #45, merge blocked)
+
+- Added `maintenance_bases_test.gd` and `run_maintenance_bases_restart_test.ps1`; production code is unchanged. The UI regression checks exact Rust base status, setup cost, recurring fee/deadline and reasons, home/outstation estimates, refusal during a check, closure after completion, and frozen active-check prices/end times while opening/closing bases. Both simultaneous checks are explicitly staffed.
+- Fresh locked Rust debug build passed using the server's existing Zig `cc` wrapper. Cached official Godot 4.7.2 Linux reports `4.7.2.stable.official.ed1daf0bf`; the distribution archive matches its SHA-512 manifest.
+- All 34 Godot test scripts passed with appropriate arguments: 33 default scripts, plus all four explicit running/paused save writer/reader modes. The financing test prints `financing_test: PASS`, rather than a `PASS:` prefix; its exit status and assertions passed. A bare save-restart invocation correctly rejected missing mode/path, then all four required modes passed.
+- New v28→v29 and v29 writer/reader modes passed in four separate Linux processes on the final test implementation. Full serialized player/AI worlds and API snapshots match immediately after load and after seven days, including running outstation checks. Legacy fixture construction removes only the new base arrays without re-encoding integer seeds or accounting journals.
+- Linux main-scene headless smoke passed. Xvfb/llvmpipe maintenance captures at 1100×1000 were opened and inspected: EDDM outstation estimate 22,216 EUR / 13 displayed hours, base setup 250,000 EUR, recurring fee 10,000 EUR every 30 game days, and the expanded airport/home-base list are readable. Captures are attached to AIR-107. The rendered map benchmark also completed; the renderer-dependent benchmark is not a headless test.
+- Locked clippy passed. Rust tests remain a merge blocker: 235 passed / 1 failed. `history::tests::million_flight_finance_scenario_stays_within_budget` exceeded its unchanged 300-second bound: 309.242 seconds with overlapping stress runs, then 301.068 seconds with Godot stress paused and Rust tests serial. No further unchanged retries or merge were attempted.
+- An additional sweep of existing restart-wrapper equivalents completed 21 passing cases before it was stopped after the Rust blocker was confirmed. The remaining older wrapper cases were not completed; this is separate from the four new v28/v29 modes above.
+- Owner-only checks remain open: START.bat, execution of PowerShell wrappers, native Windows DLL/process restarts, and Windows rendering/scaling. Linux headless results do not verify those paths or Windows appearance.
+- PR: https://github.com/TurkishMagikarp/AirlineManagerTwo/pull/45 (draft; not merged).
