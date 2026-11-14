@@ -12,7 +12,7 @@ func _run() -> void:
 			path = arg.trim_prefix("--airport-save=")
 		if arg.begins_with("--capture-dir="):
 			capture_dir = arg.trim_prefix("--capture-dir=")
-	if not _check(mode in ["ui", "write-v23", "read-v23", "write-v24", "read-v24"], "Explicit airport mode"):
+	if not _check(mode in ["ui", "write-v23", "read-v23", "write-v25", "read-v25"], "Explicit airport mode"):
 		return
 	probe_path = path + ".probe"
 	root.gui_embed_subwindows = true
@@ -86,9 +86,9 @@ func _run() -> void:
 						return
 					var changed := RegEx.create_from_string('"airport":\\d+').sub(part, '"airport":%d' % tariff)
 					original = original.left(matches[i].get_start()) + changed + original.substr(matches[i].get_end())
-				original = original.replace('"version":24', '"version":23')
+				original = original.replace('"version":25', '"version":23')
 			_write(path, original)
-			if not _check(sim.load_game(path).is_empty() and _snapshot()[0] == original.replace('"version":23', '"version":24'), "v23/v24 identity load preserves every world byte and frozen tariff"):
+			if not _check(sim.load_game(path).is_empty() and _snapshot()[0] == original.replace('"version":23', '"version":25'), "v23/v25 identity load preserves every world byte and frozen tariff"):
 				return
 			_store(path + ".initial", _snapshot())
 	if mode != "ui":

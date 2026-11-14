@@ -7,7 +7,7 @@ $project = Split-Path $PSScriptRoot -Parent
 $directory = Join-Path $env:LOCALAPPDATA ('Temp\opencode\airline-airport-' + [guid]::NewGuid())
 New-Item -ItemType Directory -Path $directory | Out-Null
 # Isolated explicit paths; each writer exits before its fresh reader starts.
-foreach ($version in @('v23', 'v24')) {
+foreach ($version in @('v23', 'v25')) {
     $save = Join-Path $directory ($version + '.json')
     foreach ($action in @('write', 'read')) {
         $mode = $action + '-' + $version
@@ -15,4 +15,4 @@ foreach ($version in @('v23', 'v24')) {
         if ($LASTEXITCODE -ne 0) { throw "Airport charges restart failed: $mode" }
     }
 }
-Write-Output "PASS: v23 frozen tariff migration and v24 player/AI airport continuation in four separate processes; test files: $directory"
+Write-Output "PASS: v23 frozen tariff migration and v25 player/AI airport continuation in four separate processes; test files: $directory"

@@ -51,7 +51,7 @@ func _run() -> void:
 				return
 			_advance(3.345)
 			sim.save_game(path)
-			var contents := FileAccess.get_file_as_string(path).replace('"version":24', '"version":19')
+			var contents := FileAccess.get_file_as_string(path).replace('"version":25', '"version":19')
 			contents = RegEx.create_from_string('"marketing":\\{[^}]*\\},|,"marketing":\\{[^}]*\\}').sub(contents, "", true)
 			if not _check(JSON.parse_string(contents)["version"] == 19 and not '"marketing"' in contents, "True v19 fixture without marketing state, including AI"):
 				return
