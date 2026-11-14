@@ -51,7 +51,7 @@ func _run() -> void:
 				return
 			_advance(3.345)
 			sim.save_game(path)
-			var contents := FileAccess.get_file_as_string(path).replace('"version":23', '"version":19')
+			var contents := FileAccess.get_file_as_string(path).replace('"version":24', '"version":19')
 			contents = RegEx.create_from_string('"marketing":\\{[^}]*\\},|,"marketing":\\{[^}]*\\}').sub(contents, "", true)
 			if not _check(JSON.parse_string(contents)["version"] == 19 and not '"marketing"' in contents, "True v19 fixture without marketing state, including AI"):
 				return
@@ -105,12 +105,16 @@ func _verify_saved_state(legacy: bool) -> bool:
 	var companies: Array = [state]
 	for competitor in state["competitors"]:
 		companies.append(competitor["game"])
+	# A valid AI budget can settle to whole EUR under the current economy.
+	# Keep a nonzero player carry, and compare every owner losslessly on restart.
+	if not legacy and not _check(companies[0]["marketing"]["remainder"] > 0, "Player has nonzero fractional EUR carry"):
+		return false
 	for company in companies:
 		var marketing: Dictionary = company["marketing"]
 		if legacy:
 			if not _check(marketing["budget_eur"] == 0 and marketing["awareness"] == 0 and marketing["remainder"] == 0 and company["history"]["marketing_costs"].is_empty(), "Every v19 owner starts neutral without back-charged spend"):
 				return false
-		elif not _check(marketing["budget_eur"] > 0 and marketing["awareness"] > 0 and marketing["remainder"] > 0, "Mid-month player and AI retain budget, awareness and fractional EUR carry"):
+		elif not _check(marketing["budget_eur"] > 0 and marketing["awareness"] > 0 and marketing["remainder"] >= 0 and marketing["remainder"] < 30 * DAY and not company["history"]["marketing_costs"].is_empty(), "Mid-month player and AI retain budget, awareness, valid fractional carry and booked spend"):
 			return false
 	return true
 
