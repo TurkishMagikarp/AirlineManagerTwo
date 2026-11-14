@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="de" data-theme="night">
+<head><meta charset="utf-8"><link rel="stylesheet" href="../../tokens.css"><link rel="stylesheet" href="../../bundle.css"><title>SettingsScreen</title><style>html,body{margin:0;background:var(--ground)}</style></head>
+<body>
+<div class="am-settings">
+  <h1>Einstellungen</h1>
+  <nav class="am-sidenav" aria-label="Einstellungsbereiche"><a href="#" aria-current="page">Allgemein</a><a href="#">Anzeige</a><a href="#">Audio</a><a href="#">Steuerung</a><a href="#">Spielstände</a></nav>
+  <div class="am-settings__body">
+    <section class="am-panel"><header class="am-panel__head"><h2 class="am-panel__title">Sprache und Speichern</h2></header><div class="am-panel__body" style="gap:0">
+      <div class="am-setting"><div class="am-setting__text"><b>Sprache</b><span>Gilt sofort, ohne Neustart.</span></div><div class="am-setting__ctl"><div class="am-seg" role="group" aria-label="Sprache"><button aria-pressed="true">Deutsch</button><button aria-pressed="false">English</button></div></div></div>
+      <div class="am-setting"><div class="am-setting__text"><b>Automatisch speichern</b><span>Speichert zu Beginn jedes Spieltags.</span></div><div class="am-setting__ctl"><button class="am-switch" role="switch" aria-checked="true"></button><span class="am-state">Ein</span></div></div>
+      <div class="am-setting"><div class="am-setting__text"><b>Vor Verkäufen nachfragen</b><span>Zeigt einen Dialog, bevor ein Flugzeug verkauft oder eine Route gelöscht wird.</span></div><div class="am-setting__ctl"><button class="am-switch" role="switch" aria-checked="true"></button><span class="am-state">Ein</span></div></div>
+    </div></section>
+    <section class="am-panel"><header class="am-panel__head"><h2 class="am-panel__title">Anzeige</h2></header><div class="am-panel__body" style="gap:0">
+      <div class="am-setting"><div class="am-setting__text"><b>Erscheinungsbild</b><span>Nacht ist für lange Sitzungen gedacht, Tag für helle Räume.</span></div><div class="am-setting__ctl"><div class="am-seg" role="group" aria-label="Erscheinungsbild"><button aria-pressed="true">Nacht</button><button aria-pressed="false">Tag</button></div></div></div>
+      <div class="am-setting"><div class="am-setting__text"><b>UI-Skalierung</b><span>Vergrößert Schrift und Bedienelemente gemeinsam.</span></div><div class="am-setting__ctl"><div class="am-slider" role="slider" tabindex="0" aria-label="UI-Skalierung" aria-valuenow="100" aria-valuemin="0" aria-valuemax="100" style="--p:100%"><i></i><b></b></div><span class="am-num" style="min-width:48px;text-align:right">100 %</span></div></div>
+      <div class="am-setting"><div class="am-setting__text"><b>Vollbild</b><span>Umschalten jederzeit mit F11.</span></div><div class="am-setting__ctl"><button class="am-switch" role="switch" aria-checked="false"></button><span class="am-state">Aus</span></div></div>
+    </div></section>
+    <section class="am-panel"><header class="am-panel__head"><h2 class="am-panel__title">Tastatur</h2><button class="am-btn am-btn--ghost am-btn--sm">Auf Standard zurücksetzen</button></header><div class="am-panel__body" style="gap:0">
+      <div class="am-setting"><div class="am-setting__text"><b>Pause</b><span>Hält die Simulation an oder setzt sie fort.</span></div><div class="am-setting__ctl"><span class="am-keys"><kbd class="am-key">Leertaste</kbd></span><button class="am-btn am-btn--sm">Ändern</button></div></div>
+      <div class="am-setting"><div class="am-setting__text"><b>Speichern</b><span>Sichert in den aktuellen Spielstand.</span></div><div class="am-setting__ctl"><span class="am-keys"><kbd class="am-key">Strg</kbd><span>+</span><kbd class="am-key">S</kbd></span><button class="am-btn am-btn--sm">Ändern</button></div></div>
+    </div></section>
+  </div>
+</div>
+</body>
+</html>

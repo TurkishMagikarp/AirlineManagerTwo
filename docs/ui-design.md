@@ -1,5 +1,14 @@
 # Operations Center UI
 
+## Zielbild: UI Kit
+
+Das Zielbild der Oberfläche steht in `docs/ui-kit/` (Regeln in `README.md`, Werte in
+`tokens.json`, Vorgaben je Baustein unter `components/`). Es löst das unten
+beschriebene Navy/Cyan-Design schrittweise ab. Wo dieses Dokument dem Kit
+widerspricht – etwa bei Farben oder dem Verzicht auf externe Schriftarten – gilt
+das Kit. Die Abschnitte unten beschreiben den Stand vor der Umstellung und werden
+mit jedem umgesetzten Schritt angepasst.
+
 ## Gemeinsames Design
 
 `resources/operations_theme.tres` ist das gemeinsame Godot-Theme. Die Ressource
