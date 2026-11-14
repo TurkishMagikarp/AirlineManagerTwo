@@ -1222,31 +1222,42 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 2 const ThemeTokens = preload("res://scripts/ui/operations_theme.gd")
 7 func _ready() -> void:
 28 func _draw() -> void:
+49 func _dotted(a: Vector2, b: Vector2) -> void:
 
 ## scripts/map_canvas.gd
 1 extends Control
 2 const ThemeTokens = preload("res://scripts/ui/operations_theme.gd")
 4 signal selected(aircraft_id: int)
-15 func _ready() -> void:
-24 func _camera_changed() -> void:
-28 func scale_factor() -> float:
-31 func project(point: Vector2) -> Vector2:
-34 func reset_view() -> void:
-39 func zoom_at(cursor: Vector2, factor: float) -> void:
-46 func _constrain() -> void:
-53 func unwrap_path(points: PackedVector2Array) -> PackedVector2Array:
-60 func _draw() -> void:
-90 func hit_test(point: Vector2) -> int:
-108 func _gui_input(event: InputEvent) -> void:
+5 signal camera_changed
+22 func _ready() -> void:
+31 func _camera_changed() -> void:
+36 func scale_factor() -> float:
+39 func project(point: Vector2) -> Vector2:
+42 func reset_view() -> void:
+47 func zoom_at(cursor: Vector2, factor: float) -> void:
+54 func _constrain() -> void:
+61 func unwrap_path(points: PackedVector2Array) -> PackedVector2Array:
+68 func _draw() -> void:
+106 func hit_test(point: Vector2) -> int:
+137 func _gui_input(event: InputEvent) -> void:
+156 func center_base() -> void:
 
 ## scripts/map_panel.gd
 1 extends VBoxContainer
 2 const ThemeTokens = preload("res://scripts/ui/operations_theme.gd")
-5 const MapCanvas = preload("res://scripts/map_canvas.gd")
-6 const UI = preload("res://scripts/ui/components.gd")
-15 func _ready() -> void:
-42 func refresh() -> void:
-49 func refresh_flights() -> void:
+4 const MapCanvas = preload("res://scripts/map_canvas.gd")
+5 const UI = preload("res://scripts/ui/components.gd")
+21 func _ready() -> void:
+89 func refresh() -> void:
+104 func refresh_flights() -> void:
+166 func _card_header(title: String, status: String, kind: String) -> void:
+177 func _add_name(text: String, style: Dictionary = ThemeTokens.SMALL) -> void:
+183 func _fact(caption: String, value: String) -> void:
+191 func _action(caption: String, route_id: int, airport_icao: String = "") -> void:
+224 func _select_row() -> void:
+235 func _position_overlays() -> void:
+250 func _unhandled_key_input(event: InputEvent) -> void:
+257 func _reveal_selected() -> void:
 
 ## scripts/routes_panel.gd
 1 extends VBoxContainer
@@ -1317,6 +1328,8 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 534 const AIRCRAFT_PRICE = {"family": "mono", "size": 20, "height": 24, "weight": 500, "tracking": 0.0}
 624 class ResultValues extends Control:
 656 class BreakdownTable extends Tree:
+721 class MapScale extends Label:
+734 class MapRouteLayer extends CheckBox:
 
 ## scripts/ui/operations_theme.gd
 1 extends Theme
@@ -1362,36 +1375,37 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 43 const RADIUS_LG = 8
 44 const SHADOW_POP = {"offset": 12, "size": 32, "color": Color(0, 0, 0, 0.55)}
 45 const TRANSPARENT = Color.TRANSPARENT
-47 const CONTROL_HEIGHT = 36
-48 const HEADER_CONTROL_HEIGHT = 28
-49 const HEADER_BUTTON = {"family": "sans", "size": 14, "height": 18, "weight": 600, "tracking": 0.0}
-50 const TAB_HEIGHT = 40
-51 const TABLE_ROW_HEIGHT = 40
-53 const CHART_HEIGHT = 248
-54 const CHART_LINE_WIDTH = 2
-55 const CHART_MARKER_RADIUS = 5
-56 const CHART_DASH = 6.0
-57 const CHART_GAP = 4.0
-58 const CHART_AXIS = {"family": "mono", "size": 11, "height": 16, "weight": 500, "tracking": 0.04}
-59 const CHART_VALUE = {"family": "mono", "size": 12, "height": 16, "weight": 500, "tracking": 0.0}
-61 const SCREEN_TITLE = {"family": "display", "size": 32, "height": 36, "weight": 600, "tracking": -0.01}
-62 const PANEL_TITLE = {"family": "display", "size": 15, "height": 20, "weight": 600, "tracking": 0.08}
-63 const COLUMN_HEAD = {"family": "display", "size": 12, "height": 16, "weight": 600, "tracking": 0.08}
-64 const LABEL = {"family": "display", "size": 12, "height": 16, "weight": 600, "tracking": 0.08}
-65 const BODY = {"family": "sans", "size": 16, "height": 22, "weight": 400, "tracking": 0.0}
-66 const BODY_STRONG = {"family": "sans", "size": 16, "height": 22, "weight": 600, "tracking": 0.0}
-67 const SMALL = {"family": "sans", "size": 14, "height": 18, "weight": 400, "tracking": 0.0}
-68 const FIGURE = {"family": "mono", "size": 24, "height": 28, "weight": 500, "tracking": 0.0}
-69 const DATA = {"family": "mono", "size": 14, "height": 20, "weight": 400, "tracking": 0.0}
-70 const CODE = {"family": "mono", "size": 12, "height": 16, "weight": 500, "tracking": 0.06}
-72 const DISPLAY_FONT = preload("res://resources/fonts/outfit/Outfit[wght].ttf")
-73 const SANS_FONT = preload("res://resources/fonts/nunito/Nunito[wght].ttf")
-74 const MONO_FONT = preload("res://resources/fonts/dmmono/DMMono-Regular.ttf")
-75 const MONO_MEDIUM_FONT = preload("res://resources/fonts/dmmono/DMMono-Medium.ttf")
-115 func text_style(type: String, style: Dictionary, font_name: String = "font", size_name: String = "font_siz
-119 func floating_box(radius: int, padding: int) -> StyleBoxFlat:
-126 func button_styles(
-154 func _init() -> void:
+47 const MAP_CARD_NAME = {"family": "display", "size": 15, "height": 20, "weight": 600, "tracking": 0.0}
+48 const CONTROL_HEIGHT = 36
+49 const HEADER_CONTROL_HEIGHT = 28
+50 const HEADER_BUTTON = {"family": "sans", "size": 14, "height": 18, "weight": 600, "tracking": 0.0}
+51 const TAB_HEIGHT = 40
+52 const TABLE_ROW_HEIGHT = 40
+54 const CHART_HEIGHT = 248
+55 const CHART_LINE_WIDTH = 2
+56 const CHART_MARKER_RADIUS = 5
+57 const CHART_DASH = 6.0
+58 const CHART_GAP = 4.0
+59 const CHART_AXIS = {"family": "mono", "size": 11, "height": 16, "weight": 500, "tracking": 0.04}
+60 const CHART_VALUE = {"family": "mono", "size": 12, "height": 16, "weight": 500, "tracking": 0.0}
+62 const SCREEN_TITLE = {"family": "display", "size": 32, "height": 36, "weight": 600, "tracking": -0.01}
+63 const PANEL_TITLE = {"family": "display", "size": 15, "height": 20, "weight": 600, "tracking": 0.08}
+64 const COLUMN_HEAD = {"family": "display", "size": 12, "height": 16, "weight": 600, "tracking": 0.08}
+65 const LABEL = {"family": "display", "size": 12, "height": 16, "weight": 600, "tracking": 0.08}
+66 const BODY = {"family": "sans", "size": 16, "height": 22, "weight": 400, "tracking": 0.0}
+67 const BODY_STRONG = {"family": "sans", "size": 16, "height": 22, "weight": 600, "tracking": 0.0}
+68 const SMALL = {"family": "sans", "size": 14, "height": 18, "weight": 400, "tracking": 0.0}
+69 const FIGURE = {"family": "mono", "size": 24, "height": 28, "weight": 500, "tracking": 0.0}
+70 const DATA = {"family": "mono", "size": 14, "height": 20, "weight": 400, "tracking": 0.0}
+71 const CODE = {"family": "mono", "size": 12, "height": 16, "weight": 500, "tracking": 0.06}
+73 const DISPLAY_FONT = preload("res://resources/fonts/outfit/Outfit[wght].ttf")
+74 const SANS_FONT = preload("res://resources/fonts/nunito/Nunito[wght].ttf")
+75 const MONO_FONT = preload("res://resources/fonts/dmmono/DMMono-Regular.ttf")
+76 const MONO_MEDIUM_FONT = preload("res://resources/fonts/dmmono/DMMono-Medium.ttf")
+116 func text_style(type: String, style: Dictionary, font_name: String = "font", size_name: String = "font_siz
+120 func floating_box(radius: int, padding: int) -> StyleBoxFlat:
+127 func button_styles(
+155 func _init() -> void:
 
 ## README.md headings (line text)
 1 # Airline Manager — Neustart

@@ -2,6 +2,13 @@ extends Control
 const ThemeTokens = preload("res://scripts/ui/operations_theme.gd")
 ## Equirectangular projection; camera state only, never a flight clock.
 signal selected(aircraft_id: int)
+signal camera_changed
+var base_icao := ""
+var show_routes := true
+var show_airports := true
+var show_flights := true
+var selected_route := 0
+var selection_position := Vector2.ZERO
 var airports: Array = []
 var routes: Array = []
 var flights: Array = []
@@ -23,6 +30,7 @@ func _ready() -> void:
 
 func _camera_changed() -> void:
 	queue_redraw()
+	camera_changed.emit()
 	if is_instance_valid(background): background.queue_redraw()
 
 func scale_factor() -> float:
@@ -58,25 +66,33 @@ func unwrap_path(points: PackedVector2Array) -> PackedVector2Array:
 	return result
 
 func _draw() -> void:
-	for route in routes:
+	for route in routes if show_routes else []:
 		var path := unwrap_path(route["points"])
 		for copy in range(-1, 2):
 			var line := PackedVector2Array()
 			for point in path: line.append(project(point + Vector2(copy * 360, 0)))
-			draw_polyline(line, ThemeTokens.ACCENT_TEXT if route["active"] else ThemeTokens.INK_FAINT, 1.5, true)
+			draw_polyline(line, ThemeTokens.ACCENT_TEXT, 3 if route["id"] == selected_route else 2, true)
 	var font := ThemeTokens.font_for(ThemeTokens.CODE)
 	var label_boxes: Array[Rect2] = []
-	for airport in airports:
+	for airport in airports if show_airports else []:
 		for copy in range(-1, 2):
 			var p := project(airport["position"] + Vector2(copy * 360, 0))
-			draw_circle(p, 3, ThemeTokens.INK)
-			if zoom >= 2:
-				var label_position := p + Vector2(6, -6)
+			var base: bool = airport["icao"] == base_icao
+			if base:
+				draw_rect(Rect2(p - Vector2(7, 7), Vector2(14, 14)), ThemeTokens.ACCENT)
+				draw_rect(Rect2(p - Vector2(7, 7), Vector2(14, 14)), ThemeTokens.ON_ACCENT, false, 1.5)
+			else:
+				draw_circle(p, 5, ThemeTokens.MAP_LAND)
+				draw_circle(p, 5, ThemeTokens.INK, false, 2, true)
+			if Rect2(Vector2.ZERO, size).grow(40).has_point(p):
+				var label_position := p + (Vector2(-54, 25) if base else Vector2(12, -6))
 				for box in label_boxes:
 					if box.intersects(Rect2(label_position - Vector2(0, 12), Vector2(40, 16))): label_position.y += 18
 				label_boxes.append(Rect2(label_position - Vector2(0, 12), Vector2(40, 16)))
-				draw_string(font, label_position, airport["icao"], HORIZONTAL_ALIGNMENT_LEFT, -1, ThemeTokens.CODE["size"], ThemeTokens.INK_MUTED)
-	for flight in flights:
+				if base:
+					draw_style_box(ThemeTokens.box(ThemeTokens.SURFACE_RAISED, ThemeTokens.LINE_STRONG, ThemeTokens.RADIUS_SM), Rect2(label_position - Vector2(8, 15), Vector2(50, 22)))
+				draw_string(font, label_position, airport["icao"], HORIZONTAL_ALIGNMENT_LEFT, -1, ThemeTokens.CODE["size"], ThemeTokens.INK)
+	for flight in flights if show_flights else []:
 		for copy in range(-1, 2):
 			var p := project(flight["position"] + Vector2(copy * 360, 0))
 			var direction: Vector2 = flight["ahead"] - flight["position"]
@@ -85,24 +101,37 @@ func _draw() -> void:
 			if flight["aircraft_id"] == selected_id: draw_circle(p, 15, ThemeTokens.ACCENT_TEXT, false, 2, true)
 			var icon := PackedVector2Array()
 			for vertex in [Vector2(11, 0), Vector2(-7, -8), Vector2(-3, 0), Vector2(-7, 8)]: icon.append(p + vertex.rotated(angle))
-			draw_colored_polygon(icon, ThemeTokens.SKY)
+			draw_colored_polygon(icon, ThemeTokens.INK)
 
 func hit_test(point: Vector2) -> int:
 	var closest := 18.0
 	var id := 0
-	for flight in flights:
+	for flight in flights if show_flights else []:
 		for copy in range(-1, 2):
 			var distance := point.distance_to(project(flight["position"] + Vector2(copy * 360, 0)))
 			if distance < closest:
 				closest = distance
 				id = flight["aircraft_id"]
 	if id == 0:
-		for i in range(airports.size()):
+		for i in range(airports.size() if show_airports else 0):
 			for copy in range(-1, 2):
 				var distance := point.distance_to(project(airports[i]["position"] + Vector2(copy * 360, 0)))
 				if distance < closest:
 					closest = distance
 					id = -i - 1
+	selected_route = 0
+	if id == 0 and show_routes:
+		for route in routes:
+			var path := unwrap_path(route["points"])
+			for copy in range(-1, 2):
+				for i in range(1, path.size()):
+					var a := project(path[i - 1] + Vector2(copy * 360, 0))
+					var b := project(path[i] + Vector2(copy * 360, 0))
+					var distance := point.distance_to(Geometry2D.get_closest_point_to_segment(point, a, b))
+					if distance < minf(closest, 8):
+						closest = distance
+						selected_route = route["id"]
+	selection_position = point
 	return id
 
 func _gui_input(event: InputEvent) -> void:
@@ -123,3 +152,12 @@ func _gui_input(event: InputEvent) -> void:
 		_constrain()
 		_camera_changed()
 		accept_event()
+
+func center_base() -> void:
+	for airport in airports:
+		if airport["icao"] == base_icao:
+			zoom = 6.0
+			offset = -Vector2(airport["position"].x, -airport["position"].y) * scale_factor()
+			_constrain()
+			_camera_changed()
+			return

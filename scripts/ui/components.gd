@@ -711,3 +711,33 @@ static func cell_result(item: TreeItem, column: int, amount: int) -> void:
 	tree.set_column_custom_minimum_width(column, minimums[column])
 	item.set_meta("result_amount", amount)
 	item.set_meta("result_column", column)
+
+static func map_float(parent: Control, padding: int) -> PanelContainer:
+	var panel := PanelContainer.new()
+	panel.add_theme_stylebox_override("panel", ThemeTokens.new().floating_box(ThemeTokens.RADIUS_LG, padding))
+	parent.add_child(panel)
+	return panel
+
+class MapScale extends Label:
+	func _draw() -> void:
+		var y := size.y + ThemeTokens.SPACE_1
+		draw_polyline(PackedVector2Array([Vector2(0, y), Vector2(0, y + 6), Vector2(96, y + 6), Vector2(96, y)]), ThemeTokens.INK, 2)
+
+static func map_scale(parent: Control) -> Label:
+	var result := MapScale.new()
+	result.add_theme_font_override("font", ThemeTokens.font_for(ThemeTokens.CODE))
+	result.add_theme_font_size_override("font_size", ThemeTokens.CODE["size"])
+	result.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	parent.add_child(result)
+	return result
+
+class MapRouteLayer extends CheckBox:
+	func _draw() -> void:
+		var y := size.y / 2
+		draw_line(Vector2(26, y), Vector2(42, y), ThemeTokens.ACCENT_TEXT, 2)
+
+static func map_layer(caption: String, own_route: bool) -> CheckBox:
+	var result := MapRouteLayer.new() if own_route else CheckBox.new()
+	result.text = caption
+	if own_route: result.add_theme_constant_override("h_separation", ThemeTokens.SPACE_6)
+	return result

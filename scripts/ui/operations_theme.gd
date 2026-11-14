@@ -44,6 +44,7 @@ const RADIUS_LG = 8
 const SHADOW_POP = {"offset": 12, "size": 32, "color": Color(0, 0, 0, 0.55)}
 const TRANSPARENT = Color.TRANSPARENT
 # Component geometry from bundle.css, in pixels.
+const MAP_CARD_NAME = {"family": "display", "size": 15, "height": 20, "weight": 600, "tracking": 0.0}
 const CONTROL_HEIGHT = 36
 const HEADER_CONTROL_HEIGHT = 28
 const HEADER_BUTTON = {"family": "sans", "size": 14, "height": 18, "weight": 600, "tracking": 0.0}
@@ -152,6 +153,30 @@ func button_styles(
 	set_stylebox("focus", type, focus_box())
 
 func _init() -> void:
+	button_styles("MapZoomButton", TRANSPARENT, LINE, SURFACE_SUNKEN, TRANSPARENT, INK)
+	text_style("MapZoomButton", {"family": "mono", "size": 18, "height": 18, "weight": 500, "tracking": 0.0})
+	for state in ["normal", "hover", "pressed", "disabled"]:
+		var zoom_box := get_stylebox(state, "MapZoomButton").duplicate() as StyleBoxFlat
+		zoom_box.content_margin_left = 0
+		zoom_box.content_margin_right = 0
+		zoom_box.content_margin_top = 0
+		zoom_box.content_margin_bottom = 0
+		set_stylebox(state, "MapZoomButton", zoom_box)
+	text_style("CheckBox", BODY)
+	for state in ["normal", "hover", "pressed", "hover_pressed", "disabled"]:
+		set_stylebox(state, "CheckBox", box(TRANSPARENT, TRANSPARENT, 0, 0, 0))
+	set_stylebox("focus", "CheckBox", focus_box())
+	set_color("font_color", "CheckBox", INK)
+	set_constant("h_separation", "CheckBox", SPACE_2)
+	for checked in [false, true]:
+		var fill: Color = ACCENT if checked else SURFACE_SUNKEN
+		var edge: Color = ACCENT_TEXT if checked else LINE_STRONG
+		var svg := '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18"><rect x="0.5" y="0.5" width="17" height="17" rx="2" fill="#%s" stroke="#%s"/>' % [fill.to_html(false), edge.to_html(false)]
+		if checked: svg += '<path d="M4 9l3 3 7-7" fill="none" stroke="#%s" stroke-width="2"/>' % ON_ACCENT.to_html(false)
+		svg += '</svg>'
+		var image := Image.new()
+		image.load_svg_from_string(svg)
+		set_icon("checked" if checked else "unchecked", "CheckBox", ImageTexture.create_from_image(image))
 	default_font = font_for(BODY)
 	default_font_size = BODY["size"]
 	set_color("font_color", "Label", INK)

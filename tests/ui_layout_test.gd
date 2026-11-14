@@ -77,10 +77,38 @@ func _run() -> void:
 			if not capture_dir.is_empty():
 				var panel: Control = [main.finance_panel, main.fleet_panel, main.routes_panel, main.map_panel, main.finances_panel, main.staff_panel][page]
 				scroll.scroll_vertical = int(panel.position.y)
+				if page == 3: scroll.ensure_control_visible(main.map_panel.canvas)
 				for frame in range(5):
 					await process_frame
+				if page == 3:
+					scroll.ensure_control_visible(main.map_panel.canvas)
+					for frame in range(5): await process_frame
 				await RenderingServer.frame_post_draw
 				assert(root.get_texture().get_image().save_png(capture_dir.path_join("%s-content-%dx%d.png" % [["overview", "fleet", "routes", "map", "finances", "staff"][page], dimensions.x, dimensions.y])) == OK)
+			if page == 3:
+				var map = main.map_panel
+				map.canvas.center_base()
+				for kind in ["airport", "route"]:
+					map.selected_id = 0
+					map.canvas.selected_route = 0
+					if kind == "airport":
+						for i in range(map.canvas.airports.size()):
+							if map.canvas.airports[i]["icao"] == "EDDF": map.selected_id = -i - 1
+					else:
+						map.canvas.selected_route = 1
+						map.canvas.selection_position = map.canvas.size / 2
+					map.refresh_flights()
+					for frame in range(5): await process_frame
+					assert(Rect2(Vector2.ZERO, map.canvas.size).encloses(map.card.get_rect()))
+					scroll.ensure_control_visible(map.canvas)
+					for frame in range(5): await process_frame
+					assert(root.get_visible_rect().encloses(map.card.get_global_rect()))
+					if not capture_dir.is_empty():
+						await RenderingServer.frame_post_draw
+						assert(root.get_texture().get_image().save_png(capture_dir.path_join("map-%s-%dx%d.png" % [kind, dimensions.x, dimensions.y])) == OK)
+				map.selected_id = 0
+				map.canvas.selected_route = 0
+				map.refresh_flights()
 			if page == 1:
 				if not capture_dir.is_empty():
 					for tab in [1, 2]:
