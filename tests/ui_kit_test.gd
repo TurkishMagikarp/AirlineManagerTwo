@@ -39,7 +39,8 @@ func _run() -> void:
 	UI.cell_text(second, 1, "Y 72/72 · J 0/0")
 	var empty := UI.empty_state("Noch keine Flugzeuge beschafft.", "Vorläufige Kaufpreise · Sitzkonfiguration und Reichweite sind vereinfachte Modellangaben.", "Flugzeug kaufen", func(): pass)
 	host.add_child(empty)
-	var dialog := UI.dialog(host, "D-ANFA verkaufen?", "Das Flugzeug wird abgegeben und die Gutschrift gebucht. Der Flugplan kann dieses Flugzeug anschließend nicht mehr verwenden.", "Abbrechen", "Flugzeug verkaufen", func(): pass)
+	var decision := {"confirmed": 0}
+	var dialog := UI.dialog(host, "D-ANFA verkaufen?", "Das Flugzeug wird abgegeben und die Gutschrift gebucht. Der Flugplan kann dieses Flugzeug anschließend nicht mehr verwenden.", "Abbrechen", "Flugzeug verkaufen", func(): decision["confirmed"] += 1)
 	dialog.popup_centered()
 	for i in range(12): await process_frame
 	assert(body.get_child_count() == 1, "Panel returns only the body")
@@ -74,7 +75,17 @@ func _run() -> void:
 	for child in host.get_children():
 		if child is PanelContainer and child.theme_type_variation.begins_with("Chip"):
 			assert(child.get_global_rect().encloses(child.get_child(0).get_global_rect()), "German status text fits its chip")
-	dialog.queue_free()
+	assert(dialog.safe_button.focus_next == dialog.safe_button.get_path_to(dialog.danger_button))
+	dialog.safe_button.pressed.emit()
+	await process_frame
+	assert(decision["confirmed"] == 0 and not is_instance_valid(dialog), "Safe choice closes without confirmation")
+	var second_dialog := UI.dialog(host, "Flugzeug AM-000001 nach Abschluss der laufenden Wartungsarbeiten verkaufen?", "Das Flugzeug wird abgegeben und die Gutschrift gebucht. Der Flugplan kann dieses Flugzeug anschließend nicht mehr verwenden.", "Abbrechen", "Flugzeug verkaufen", func(): decision["confirmed"] += 1)
+	second_dialog.popup_centered()
+	for i in range(8): await process_frame
+	assert(root.get_visible_rect().encloses(second_dialog.get_visible_rect()), "Long German question and consequence fit")
+	second_dialog.danger_button.pressed.emit()
+	await process_frame
+	assert(decision["confirmed"] == 1 and not is_instance_valid(second_dialog), "Only the destructive choice confirms")
 	host.queue_free()
 	await process_frame
 	print("PASS: kit helpers build; German copy, safe dialog focus, numeric columns and minimum-width metric wrapping")
