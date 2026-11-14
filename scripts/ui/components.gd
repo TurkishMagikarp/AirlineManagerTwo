@@ -46,7 +46,8 @@ static func panel(parent: Node, title: String) -> VBoxContainer:
 	return column
 
 static func metric(parent: Node, title: String) -> Label:
-	var column := panel(parent, title)
+	var column := panel(parent, "")
+	column.add_child(label(title, ThemeTokens.LABEL, MUTED))
 	column.custom_minimum_size.x = 220
 	var value := label("—", ThemeTokens.FIGURE)
 	column.add_child(value)
