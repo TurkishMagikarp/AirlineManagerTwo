@@ -56,7 +56,7 @@ var model_select: OptionButton
 var model_details: Label
 var buy_button: Button
 var fleet_status: Label
-var empty_fleet: Label
+var empty_fleet: Control
 var fleet_tree: Tree
 var fleet_rows: Dictionary = {}
 var lease_button: Button
@@ -324,7 +324,7 @@ func _refresh_finance() -> void:
 	metrics["balance"].text = UI.money(airline["capital_eur"])
 	metrics["balance"].add_theme_color_override("font_color", UI.NEGATIVE if airline["capital_eur"] < 0 else ThemeTokens.INK)
 	metrics["profit"].text = UI.money(finance["profit_eur"])
-	metrics["profit"].add_theme_color_override("font_color", UI.POSITIVE if finance["profit_eur"] >= 0 else UI.NEGATIVE)
+	metrics["profit"].add_theme_color_override("font_color", ThemeTokens.INK if finance["profit_eur"] >= 0 else UI.NEGATIVE)
 	metrics["load"].text = "%.1f %%" % finance["load_percent"]
 	metrics["flights"].text = "%d  /  %d Pax" % [finance["flights"], finance["passengers"]]
 	finance_breakdown.text = "Ticketeinnahmen     %s\nBetriebskosten          %s\n\nTreibstoff                    %s\nFlughäfen                   %s\nCrewkosten (historisch) %s\nGehälter                       %s\nWartung / Verwaltung  %s\nWartungschecks           %s\n\nFlugzeugkäufe             %s" % [UI.money(finance["revenue_eur"]), UI.money(finance["costs_eur"]), UI.money(finance["fuel_eur"]), UI.money(finance["airport_eur"]), UI.money(finance["crew_eur"]), UI.money(finance["payroll_eur"]), UI.money(finance["overhead_eur"]), UI.money(finance["maintenance_eur"]), UI.money(finance["purchases_eur"])]
@@ -377,18 +377,11 @@ func _build_fleet(content: VBoxContainer) -> void:
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	shop.add_child(hint)
 	var owned := UI.panel(grid, "FLOTTENREGISTER  /  EIGENTUM & LEASING")
-	empty_fleet = _label("Noch keine Flugzeuge beschafft.", ThemeTokens.BODY, ThemeTokens.INK)
+	empty_fleet = UI.empty_state("Noch keine Flugzeuge beschafft.", hint.text, buy_button.text, func(): buy_button.grab_focus())
 	owned.add_child(empty_fleet)
-	fleet_tree = Tree.new()
-	fleet_tree.columns = 6
-	fleet_tree.hide_root = true
-	fleet_tree.column_titles_visible = true
-	fleet_tree.select_mode = Tree.SELECT_ROW
-	fleet_tree.custom_minimum_size.y = 220
+	fleet_tree = UI.table(["Kennung", "Typ", "Standort", "Status", "Zustand", "Nächste Wartung"], [115, 120, 90, 190, 80, 210], 220)
 	for index in range(6):
-		fleet_tree.set_column_title(index, ["Kennung", "Typ", "Standort", "Status", "Zustand", "Nächste Wartung"][index])
 		fleet_tree.set_column_expand(index, index == 1 or index == 5)
-		fleet_tree.set_column_custom_minimum_width(index, [115, 120, 90, 190, 80, 210][index])
 	fleet_tree.item_selected.connect(_refresh_maintenance)
 	owned.add_child(fleet_tree)
 	disposal_details = _label("", ThemeTokens.BODY)
@@ -415,7 +408,7 @@ func _build_fleet(content: VBoxContainer) -> void:
 	owned.add_child(cabin_button)
 	_build_maintenance(owned)
 	# The operational register takes precedence over procurement.
-	grid.move_child(owned.get_parent(), 0)
+	grid.move_child(owned.get_meta("panel_shell"), 0)
 	_model_selected(model_select.selected)
 
 
@@ -474,6 +467,7 @@ func _refresh_fleet() -> void:
 		description.text = "%d Flugzeuge  /  Verfügbares Guthaben: %s · Pünktlichkeit: %s (%d Flüge)" % [fleet.size(), UI.money(airline.get("capital_eur", 0)), "—" if punctuality["punctuality_percent"] < 0 else "%.1f %%" % punctuality["punctuality_percent"], punctuality["punctuality_flights"]]
 		description.text += " · Pünktlichkeitsruf: %+.1f %% (%s)" % [punctuality["reputation_percent"], punctuality["reputation_trend"]]
 	empty_fleet.visible = fleet.is_empty()
+	buy_button.theme_type_variation = "Button" if fleet.is_empty() else "PrimaryButton"
 	fleet_tree.visible = not fleet.is_empty()
 	maintenance_box.visible = not fleet.is_empty()
 	fleet_rows = {}
@@ -489,7 +483,7 @@ func _refresh_fleet() -> void:
 		var phase: String = {"parked": "Geparkt", "in_flight": "Unterwegs", "ground": "Gelandet · Bodenzeit", "maintenance": "In Wartung"}.get(plane["status"], "Unbekannt")
 		UI.cell_text(row, 3, "%s · Route #%d" % [phase, plane["route_id"]] if plane["route_id"] != 0 else phase)
 		UI.cell_text(row, 3, row.get_text(3) + " · %d min verspätet" % ceili(plane["delay_seconds"] / 60.0))
-		row.set_custom_color(3, UI.ACCENT if plane["status"] == "in_flight" else UI.POSITIVE if plane["status"] == "parked" else ThemeTokens.CAUTION)
+		UI.cell_status(row, 3, row.get_text(3), "info" if plane["status"] in ["in_flight", "maintenance"] else "neutral")
 		if plane["status"] == "in_flight":
 			UI.cell_text(row, 2, "Ab %s (in der Luft)" % plane["location_icao"])
 		var condition: float = plane.get("condition_percent", 100.0)

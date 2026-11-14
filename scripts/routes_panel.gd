@@ -13,7 +13,7 @@ var create_button: Button
 var status: Label
 var season_label: Label
 var route_tree: Tree
-var empty_label: Label
+var empty_label: Control
 var assignment: OptionButton
 var assign_button: Button
 var delete_button: Button
@@ -61,18 +61,11 @@ func _ready() -> void:
 		select.item_selected.connect(func(_index: int): _preview())
 	status = _label("")
 	add_child(status)
-	empty_label = _label("Noch keine Routen erstellt.")
+	empty_label = UI.empty_state("Noch keine Routen erstellt.", hint.text, create_button.text, func(): origin.grab_focus())
 	add_child(empty_label)
-	route_tree = Tree.new()
-	route_tree.columns = 6
-	route_tree.hide_root = true
-	route_tree.select_mode = Tree.SELECT_ROW
-	route_tree.column_titles_visible = true
-	route_tree.custom_minimum_size.y = 180
+	route_tree = UI.table(["Route", "Strecke", "Entfernung", "Flugzeug", "Markt / Wir / Abgewiesen →", "Auslastung"], [65, 140, 110, 170, 220, 100], 180)
 	for i in range(6):
-		route_tree.set_column_title(i, ["Route", "Strecke", "Entfernung", "Flugzeug", "Markt / Wir / Abgewiesen →", "Auslastung"][i])
 		route_tree.set_column_expand(i, i == 1 or i == 3)
-		route_tree.set_column_custom_minimum_width(i, [65, 140, 110, 170, 220, 100][i])
 	route_tree.item_selected.connect(_selection_changed)
 	add_child(route_tree)
 	season_label = _label("")
@@ -284,6 +277,7 @@ func refresh() -> void:
 	aircraft.disabled = aircraft.item_count == 0
 	var routes: Array = simulation.get_routes()
 	empty_label.visible = routes.is_empty()
+	create_button.theme_type_variation = "Button" if routes.is_empty() else "PrimaryButton"
 	route_tree.visible = not routes.is_empty()
 	route_tree.clear()
 	var root_item := route_tree.create_item()
