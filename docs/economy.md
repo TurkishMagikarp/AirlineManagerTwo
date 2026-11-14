@@ -313,3 +313,11 @@ Serverprüfung: Rust-Tests einschließlich Tarifrundung/Leerflug/Rückflug, alte
 Abflugangebote aller Eigentümer und Pause/1×/4×/16×/Save-Load. Godot, GUI/Screenshots
 bei den relevanten Fenstergrößen, START.bat und Windows-Prozessneustarts können
 hier nicht ausgeführt werden. Der ergänzte Godot-Routen-UI-Test bleibt ungetestet.
+
+Der abschließende isolierte Million-Flüge-Test besteht: 293,7 s für den Advance
+bei unverändertem 300-s-Limit; Save 111.396.587 Bytes, einschließlich Laden und
+Fortsetzung 366,2 s. Die übrigen 201 Rust-Tests sowie Build/Clippy bestehen separat.
+Vorherige Gesamtläufe überschritten das Zeitlimit (310/335 s). Der vorbereitete
+Quote-Kontext hält deshalb feste Flughafensätze, Flugzeit, Kabine und Modellraten;
+Rückflüge klonen nicht mehr den ganzen Flugplan samt altem Abflugangebot.
+Zeitabhängige Nachfrage, Nutzlast und Treibstoff bleiben je Abflug berechnet.
