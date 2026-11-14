@@ -252,7 +252,23 @@ impl Game {
         }
         // Transactional across all companies: no partial time or cash updates.
         let mut staged = self.clone();
+        #[cfg(test)]
+        let mut stalled = (0, staged.clock.elapsed());
         while staged.clock.elapsed() < target.elapsed() {
+            #[cfg(test)]
+            {
+                if stalled.1 == staged.clock.elapsed() {
+                    stalled.0 += 1;
+                } else {
+                    stalled = (0, staged.clock.elapsed());
+                }
+                assert!(
+                    stalled.0 < 5,
+                    "Simulation event loop made no progress at {:?}",
+                    staged.clock.elapsed()
+                );
+            }
+
             if staged.initialize_disruptions().is_err()
                 || staged
                     .competitors

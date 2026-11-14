@@ -284,6 +284,9 @@ pub fn landing_at(route: &Route, model: &str, index: u64) -> Result<u64, String>
             return Ok(last.landing);
         }
         let (flight, ground) = operations::timings(route, model)?;
+        if cursor.index == index {
+            return Ok(cursor.next_timed(route, model, flight, ground)?.landing);
+        }
         let key = ForecastKey {
             seed: cursor.seed,
             acquired: cursor.acquired_at,

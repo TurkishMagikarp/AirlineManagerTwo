@@ -173,6 +173,33 @@ pub fn fuel_bill(route: &Route, model: &str, price: i64) -> Result<i64, String> 
 #[cfg(test)]
 thread_local! { pub(crate) static LEGACY_AIRPORT_CHARGES: std::cell::Cell<bool> = const { std::cell::Cell::new(false) }; }
 
+/// Conservative cash runway bound. It needs no passenger market: capacity,
+/// maximum fuel price and nonnegative service/care cover every departure.
+pub fn flight_cost_ceiling(route: &Route, model_id: &str, fuel_price: i64) -> Result<i64, String> {
+    let model = aircraft::model(model_id)?;
+    let rates = &CONFIG.models[model_id];
+    let seconds = i64::try_from(crate::operations::timings(route, model_id)?.0)
+        .map_err(|_| "Zeitüberlauf.")?;
+    let seats = i64::from(model.seats);
+    let overhead = rates.overhead_cycle_eur + (seconds * rates.overhead_eur_per_hour + 3599) / 3600;
+    fuel_bill(route, model_id, fuel_price)?
+        .checked_add(airport_bill(route, model_id, seats)?)
+        .and_then(|v| v.checked_add(overhead))
+        .and_then(|v| {
+            v.checked_add(
+                route
+                    .service_level
+                    .cost(seats, 0)
+                    .max(route.service_level.cost(seats, seats))
+                    .max(0),
+            )
+        })
+        .and_then(|v| {
+            v.checked_add(seats.checked_mul(crate::disruptions::RULES.care_eur_per_passenger)?)
+        })
+        .ok_or("Finanzüberlauf.".into())
+}
+
 /// Both endpoints charge the same model/passenger tariff at their own level.
 /// Round each endpoint up to whole EUR; empty flights still pay landing charges.
 pub fn airport_bill(route: &Route, model: &str, passengers: i64) -> Result<i64, String> {

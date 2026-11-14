@@ -346,6 +346,15 @@ fn disruptions_care_settles_once_reduces_tax_base_and_attention_is_read_only() {
     assert!(g.advance((leg.departure + 1) as f64));
     let frozen = g.routes[0].plan.as_ref().unwrap().airborne.clone().unwrap();
     assert!(frozen.totals.passengers > 0);
+    assert!(
+        frozen.totals.costs()
+            <= crate::economy::flight_cost_ceiling(
+                &g.routes[0],
+                "atr72_600",
+                g.fuel_market.max_price()
+            )
+            .unwrap()
+    );
     assert_eq!(
         frozen.totals.care,
         frozen.totals.passengers * disruptions::RULES.care_eur_per_passenger
@@ -387,4 +396,16 @@ fn disruptions_care_settles_once_reduces_tax_base_and_attention_is_read_only() {
     );
     assert_eq!(before, state(&reloaded));
     restart(&reloaded);
+}
+#[test]
+fn disruptions_long_delay_cash_runway_never_reuses_a_past_arrival() {
+    let mut g = Game::default();
+    g.found("Audit", "DE", "EDDF").unwrap();
+    g.buy_aircraft("atr72_600").unwrap();
+    g.staff_up();
+    g.create_route("EDDF", "EDDM", 1).unwrap();
+    g.set_ticket_price(1, 0).unwrap();
+    g.schedule(1, 1, 120).unwrap();
+    g.clock.set_running(true);
+    assert!(g.advance(365.0 * 86400.0));
 }
