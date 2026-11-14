@@ -1150,7 +1150,7 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 31 func _gui_input(event: InputEvent) -> void:
 39 func _point(index: int, key: String, low: float, high: float) -> Vector2:
 42 func _draw() -> void:
-136 func _dashed(start: Vector2, end: Vector2, ink: Color, phase: float) -> float:
+147 func _dashed(start: Vector2, end: Vector2, ink: Color, phase: float) -> float:
 
 ## scripts/finances_panel.gd
 1 extends VBoxContainer

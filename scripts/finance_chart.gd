@@ -65,6 +65,17 @@ func _draw() -> void:
 	if low < 0:
 		var divisions := 4 if high == 0 else 1 if low > -2 else 2
 		for tick in range(1, divisions + 1): ticks.append(low * tick / divisions)
+	# Keep zero first, then omit ticks whose code labels would overlap it or
+	# another tick (for example a small gain beside a large period loss).
+	var spaced_ticks: Array[float] = []
+	var plot_height := maxf(size.y - ThemeTokens.SPACE_4 - ThemeTokens.SPACE_6, 1)
+	for tick in ticks:
+		var separated := true
+		for kept in spaced_ticks:
+			if absf(tick - kept) / (high - low) * plot_height < ThemeTokens.CHART_AXIS["height"] + ThemeTokens.SPACE_1:
+				separated = false
+		if separated: spaced_ticks.append(tick)
+	ticks = spaced_ticks
 	var axis := ThemeTokens.CHART_AXIS
 	var value_style := ThemeTokens.CHART_VALUE
 	var font := ThemeTokens.font_for(axis)
