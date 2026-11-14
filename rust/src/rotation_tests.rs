@@ -148,7 +148,7 @@ fn rotation_v14_migrates_single_assignment_and_v15_rejects_inconsistent_lists() 
     save::save(&path, &g).unwrap();
     let mut value: serde_json::Value =
         serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
-    assert_eq!(value["version"], 22);
+    assert_eq!(value["version"], 23);
     assert_eq!(
         value["state"]["routes"]["routes"][0]["aircraft_ids"],
         serde_json::json!([1])
@@ -170,6 +170,7 @@ fn rotation_v14_migrates_single_assignment_and_v15_rejects_inconsistent_lists() 
         }
     }
     std::fs::write(&path, serde_json::to_vec(&value).unwrap()).unwrap();
+    g.migrate_insurance_fixture();
     assert_eq!(state(&save::load(&path).unwrap()), state(&g));
     for ids in [
         serde_json::json!([1, 1]),

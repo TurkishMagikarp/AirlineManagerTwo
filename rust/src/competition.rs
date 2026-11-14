@@ -106,6 +106,9 @@ pub fn initial_competitors_at(now: Duration) -> Result<Vec<Competitor>, String> 
         g.tax.since = now.as_secs();
         g.marketing.settled_at = now.as_secs();
         g.buy_aircraft(model)?;
+        g.insurance.settled_at = now.as_secs();
+        g.insurance.renewed_at = now.as_secs();
+        g.set_coverage(crate::insurance::Coverage::Basic)?;
         g.equip_staff_for(model)?;
         g.create_route(origin, destination, 1)?;
         g.set_ticket_price(1, price)?;
@@ -217,6 +220,9 @@ impl Game {
         }
         if self.competitors.is_empty()
             && self
+                .next_insurance_event()
+                .is_none_or(|t| Duration::from_secs(t) > target.elapsed())
+            && self
                 .next_marketing_event()
                 .is_none_or(|t| Duration::from_secs(t) > target.elapsed())
             && self
@@ -285,6 +291,7 @@ impl Game {
                 .chain(std::iter::once(staged.next_financing_event()))
                 .chain(std::iter::once(staged.next_tax_event()))
                 .chain(std::iter::once(staged.next_marketing_event()))
+                .chain(std::iter::once(staged.next_insurance_event()))
                 .chain(staged.competitors.iter().flat_map(|c| {
                     [
                         c.game.next_maintenance_event(),
@@ -293,6 +300,7 @@ impl Game {
                         c.game.next_financing_event(),
                         c.game.next_tax_event(),
                         c.game.next_marketing_event(),
+                        c.game.next_insurance_event(),
                     ]
                 }))
                 .flatten()
@@ -367,13 +375,15 @@ impl Game {
                     }
                 }
             }
-            if staged.apply_rotation_removals().is_err()
+            if staged.apply_insurance().is_err()
+                || staged.apply_rotation_removals().is_err()
                 || staged.apply_maintenance().is_err()
                 || staged.apply_payroll().is_err()
                 || staged.apply_marketing().is_err()
                 || staged.apply_financing().is_err()
                 || staged.competitors.iter_mut().any(|c| {
-                    c.game.apply_rotation_removals().is_err()
+                    c.game.apply_insurance().is_err()
+                        || c.game.apply_rotation_removals().is_err()
                         || c.game.apply_maintenance().is_err()
                         || c.game.apply_payroll().is_err()
                         || c.game.apply_marketing().is_err()
@@ -432,6 +442,15 @@ impl Competitor {
     fn review(&mut self, supply: &[crate::demand::Offer]) -> bool {
         let owned_supply = self.game.prioritize_market(supply);
         let supply = owned_supply.as_slice();
+        if !self.game.distressed()
+            && self.game.insurance.coverage == crate::insurance::Coverage::None
+            && self
+                .game
+                .set_coverage(crate::insurance::Coverage::Basic)
+                .is_err()
+        {
+            return false;
+        }
         self.game.review_fuel_contract();
         if self.game.review_marketing().is_err() {
             return false;
@@ -1838,11 +1857,11 @@ mod tests {
         let mut forced = false;
         for _ in 0..365 {
             assert!(g.advance(86400.0));
-            forced |= g.competitors[0]
-                .game
-                .fleet
-                .iter()
-                .any(|p| p.maintenance.as_ref().is_some_and(|v| v.unscheduled));
+            forced |= g.competitors[0].game.fleet.iter().any(|p| {
+                p.maintenance
+                    .as_ref()
+                    .is_some_and(|v| v.unscheduled && v.cost_eur > 0)
+            });
         }
         assert!(fast.advance(365.0 * 86400.0));
         assert_eq!(state(&g), state(&fast));
@@ -1852,7 +1871,8 @@ mod tests {
         let h = c.history.as_ref().unwrap();
         assert!(!h.maintenance.is_empty());
         let r = crate::maintenance::rules("atr72_600").unwrap();
-        assert!(h.maintenance.iter().all(|m| m.amount >= r.base_cost_eur));
+        assert!(h.maintenance.iter().all(|m| m.amount >= r.base_cost_eur
+            || (m.amount == 0 && c.insurance.recent.iter().any(|claim| claim.time == m.time))));
         assert_eq!(
             h.balance(c.clock.elapsed().as_secs()),
             c.airline.as_ref().unwrap().capital_eur
@@ -1867,11 +1887,11 @@ mod tests {
         for _ in 0..200 {
             assert!(g.advance(86400.0));
             if let Some(c) = g.competitors.first() {
-                forced |= c
-                    .game
-                    .fleet
-                    .iter()
-                    .any(|p| p.maintenance.as_ref().is_some_and(|v| v.unscheduled));
+                forced |= c.game.fleet.iter().any(|p| {
+                    p.maintenance
+                        .as_ref()
+                        .is_some_and(|v| v.unscheduled && v.cost_eur > 0)
+                });
                 assert!(c.game.routes.iter().all(|r| r.plan.is_none()));
             }
         }

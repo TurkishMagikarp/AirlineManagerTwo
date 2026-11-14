@@ -149,6 +149,15 @@ impl Game {
             let fee = price * i128::from(RULES.return_damage_bps) * (1000 - condition) / 10_000_000;
             return Ok((i128::from(l.deposit) - fee).max(0) as i64);
         }
+        self.hull_value(p)
+    }
+
+    pub fn hull_value(&self, p: &Aircraft) -> Result<i64, String> {
+        let price = i128::from(aircraft::model(&p.model_id)?.price_eur);
+        let condition = i128::from(
+            p.wear
+                .condition_permille(crate::maintenance::rules(&p.model_id)?),
+        );
         let age = self
             .clock
             .elapsed()

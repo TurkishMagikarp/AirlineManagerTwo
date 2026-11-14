@@ -17,7 +17,6 @@ use crate::{
     aircraft::{self, AircraftStatus},
     game::Game,
     history::Purchase,
-    maintenance,
 };
 use serde::{Deserialize, Serialize};
 use std::{collections::HashSet, sync::LazyLock};
@@ -548,10 +547,11 @@ impl Game {
                 continue;
             }
             let end = now
-                .checked_add(maintenance::duration(
-                    maintenance::rules(&plane.model_id)?,
-                    v.unscheduled,
-                )?)
+                .checked_add(
+                    v.end
+                        .checked_sub(v.start)
+                        .ok_or("Wartungsdauer ungültig.")?,
+                )
                 .ok_or("Wartungs-Zeitüberlauf.")?;
             let v = self.fleet[p].maintenance.as_mut().unwrap();
             v.staffed = true;

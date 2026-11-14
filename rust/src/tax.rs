@@ -75,7 +75,8 @@ impl History {
                 - self.payroll_through(time)
                 - self.interest_through(time)
                 - self.rent_through(time)
-                - self.marketing_through(time),
+                - self.marketing_through(time)
+                - self.insurance_through(time),
         )
         .map_err(|_| "Gewinnüberlauf.".into())
     }

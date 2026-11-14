@@ -8,9 +8,9 @@ use std::io::{Read, Write};
 use std::path::Path;
 use std::time::Duration;
 
-// v22: route cargo rates default during deserialization; historical cargo
-// totals default to zero, including airborne quotes. Never recompute old income.
-const VERSION: u32 = 22;
+// v23: neutral hull policies and empty claims for every old owner, starting
+// at load time. Never recompute cash, wear, history or frozen flight quotes.
+const VERSION: u32 = 23;
 // Bounded input, including centuries of fuel/seasonal quotes for the player
 // and both AI airlines in the million-flight finance restart scenario.
 // Version 17 retains per-class quotes, which also split more archive batches.
@@ -25,6 +25,8 @@ struct SaveGame {
 // Future simulation data belongs here, not in the UI or a serialized Godot object.
 #[derive(Serialize, Deserialize)]
 struct GameState {
+    #[serde(default)]
+    insurance: Option<crate::insurance::Policy>,
     fuel_contract: Option<crate::fuel_contracts::Contract>,
     #[serde(default)]
     fuel_market: Option<crate::economy::FuelMarket>,
@@ -91,6 +93,7 @@ pub fn save(path: &Path, game: &Game) -> Result<(), String> {
     let data = SaveGame {
         version: VERSION,
         state: GameState {
+            insurance: Some(game.insurance.clone()),
             fuel_contract: game.fuel_contract.clone(),
             fuel_market: Some(game.fuel_market.clone()),
             competitors: Some(game.competitors.clone()),
@@ -169,6 +172,9 @@ pub fn load(path: &Path) -> Result<Game, String> {
     if value["version"].as_u64().is_some_and(|v| v < 21) {
         crate::fuel_contracts::migrate(&mut value["state"]);
     }
+    if value["version"].as_u64().is_some_and(|v| v < 23) {
+        crate::insurance::migrate(&mut value["state"]);
+    }
     let data: SaveGame = serde_json::from_value(value)
         .map_err(|_| "Spielstand ist beschädigt oder unvollständig.".to_string())?;
     if !(1..=VERSION).contains(&data.version) {
@@ -246,6 +252,7 @@ pub fn load(path: &Path) -> Result<Game, String> {
         } else {
             Default::default()
         },
+        insurance: data.state.insurance.ok_or("Versicherungsdaten fehlen.")?,
         fuel_market,
         competitors: if data.version >= 9 {
             data.state
@@ -367,6 +374,13 @@ pub fn load(path: &Path) -> Result<Game, String> {
     game.validate_competitors()?;
     if data.version < 9 && game.airline.is_some() {
         game.competitors = crate::competition::initial_competitors_at(game.clock.elapsed())?;
+        for c in &mut game.competitors {
+            c.game.insurance = crate::insurance::Policy {
+                settled_at: game.clock.elapsed().as_secs(),
+                renewed_at: game.clock.elapsed().as_secs(),
+                ..Default::default()
+            };
+        }
     }
     for c in &mut game.competitors {
         if data.version < 16 {

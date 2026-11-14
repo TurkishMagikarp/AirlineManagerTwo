@@ -39,6 +39,9 @@ var fuel_share: OptionButton
 var fuel_term: OptionButton
 var fuel_start: Button
 var fuel_result: Label
+var insurance_status: Label
+var insurance_choice: OptionButton
+var insurance_result: Label
 var marketing_history: Tree
 
 func _ready() -> void:
@@ -53,6 +56,20 @@ func _ready() -> void:
 	note = UI.label("", 13, UI.MUTED)
 	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	add_child(note)
+	var insurance := UI.panel(self, "FLUGZEUGVERSICHERUNG")
+	insurance_status = UI.label("")
+	insurance_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	insurance.add_child(insurance_status)
+	insurance_choice = OptionButton.new()
+	for title in ["Keine Deckung", "Basis", "Voll"]:
+		insurance_choice.add_item(title)
+	insurance_choice.item_selected.connect(func(index: int):
+		var error: String = simulation.set_insurance(["none", "basic", "full"][index])
+		insurance_result.text = error if not error.is_empty() else "Deckung geändert."
+		refresh(true))
+	insurance.add_child(insurance_choice)
+	insurance_result = UI.label("")
+	insurance.add_child(insurance_result)
 	var fuel := UI.panel(self, "TREIBSTOFF / LIEFERVERTRAG")
 	fuel_status = UI.label("")
 	fuel_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -194,10 +211,16 @@ func refresh(force: bool = false) -> void:
 	var financing: Dictionary = simulation.get_financing()
 	var marketing: Dictionary = simulation.get_marketing()
 	var fuel: Dictionary = simulation.get_fuel_contract()
-	var key := "%s/%s/%s/%s/%s" % [summary, airline, financing, marketing, fuel]
+	var insurance: Dictionary = simulation.get_insurance()
+	var key := "%s/%s/%s/%s/%s/%s" % [summary, airline, financing, marketing, fuel, insurance]
 	if key == signature and not force:
 		return
 	signature = key
+	insurance_choice.select(["none", "basic", "full"].find(insurance["coverage"]))
+	insurance_choice.disabled = not insurance["can_change"]
+	insurance_status.text = "Basis: %s/Jahr · Selbstbehalt %.2f %% · Limit %.2f %% des Zeitwerts\nVoll: %s/Jahr · Selbstbehalt %.2f %% · Limit %.2f %% des Zeitwerts\nAktuelle Jahresprämie: %s · Schadenaufschlag %.2f %%\nPrämien: %s\nSelbstbehalte: %s\nUnversicherte Reparaturen: %s\nPrämien anteilig täglich; Flottenwert täglich aktualisiert. Deckungswechsel sofort, alte Prämie anteilig abgerechnet. Jährliche Schadenprüfung. Betriebskosten können das Konto ins Minus bringen." % [UI.money(insurance["basic_annual"]), insurance["basic_deductible_bps"] / 100.0, insurance["basic_limit_bps"] / 100.0, UI.money(insurance["full_annual"]), insurance["full_deductible_bps"] / 100.0, insurance["full_limit_bps"] / 100.0, UI.money(insurance["annual"]), insurance["loading_bps"] / 100.0, UI.money(insurance["premium"]), UI.money(insurance["deductible"]), UI.money(insurance["uninsured"])]
+	for claim in insurance["claims"]:
+		insurance_status.text += "\n%s · AM-%06d · %s · Reparatur %s · Eigenanteil %s · Versicherer %s" % [claim["time"], claim["aircraft"], claim["kind"], UI.money(claim["repair"]), UI.money(claim["paid"]), UI.money(claim["insurer"])]
 	fuel_status.text = "Markt: %d ct/kg · Aufschlag: %.2f %% · Monat: %d Tage · Vertragseffekt seit Gründung: %s (positiv = Mehrkosten, negativ = Ersparnis)." % [fuel["market_cents"], fuel["premium_bps"] / 100.0, fuel["month_days"], UI.money(fuel["effect_eur"])]
 	if fuel["active"]:
 		fuel_status.text += "\nAktiv: %d %% zu %d ct/kg · Rest: %d Sekunden. Keine vorzeitige Kündigung." % [fuel["share"], fuel["locked_cents"], fuel["remaining_seconds"]]

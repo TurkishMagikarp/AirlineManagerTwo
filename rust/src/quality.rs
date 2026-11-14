@@ -78,6 +78,13 @@ fn ten_year_scenarios_reconcile_and_survive_annual_restart() {
                     "marketing overwhelms AI revenue"
                 );
                 c.game.validate_marketing().unwrap();
+                c.game.validate_insurance().unwrap();
+                let insurance = h.insurance_through(u64::MAX);
+                assert!(
+                    insurance > 0 && insurance * 10 < i128::from(c.game.finance.totals.revenue),
+                    "insurance overwhelms AI revenue"
+                );
+                assert_eq!(c.game.insurance.coverage, crate::insurance::Coverage::Basic);
                 let t = &c.game.finance.totals;
                 assert!(
                     t.service >= 0 && i128::from(t.service) * 5 <= i128::from(t.revenue),
