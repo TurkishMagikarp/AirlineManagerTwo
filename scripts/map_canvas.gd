@@ -84,11 +84,20 @@ func _draw() -> void:
 			else:
 				draw_circle(p, 5, ThemeTokens.MAP_LAND)
 				draw_circle(p, 5, ThemeTokens.INK, false, 2, true)
-			if Rect2(Vector2.ZERO, size).grow(40).has_point(p):
+			if Rect2(Vector2.ZERO, size).has_point(p):
 				var label_position := p + (Vector2(-54, 25) if base else Vector2(12, -6))
-				for box in label_boxes:
-					if box.intersects(Rect2(label_position - Vector2(0, 12), Vector2(40, 16))): label_position.y += 18
-				label_boxes.append(Rect2(label_position - Vector2(0, 12), Vector2(40, 16)))
+				label_position.x = clampf(label_position.x, 8, maxf(8, size.x - 50))
+				label_position.y = clampf(label_position.y, 16, size.y - 8)
+				var label_box := Rect2(label_position - Vector2(4, 16), Vector2(54, 22))
+				for attempt in range(airports.size() + 1):
+					var overlaps := false
+					for box in label_boxes:
+						if box.intersects(label_box): overlaps = true; break
+					if not overlaps: break
+					label_position.y += 22
+					if label_position.y > size.y - 8: label_position.y = 16
+					label_box.position = label_position - Vector2(4, 16)
+				label_boxes.append(label_box)
 				if base:
 					draw_style_box(ThemeTokens.box(ThemeTokens.SURFACE_RAISED, ThemeTokens.LINE_STRONG, ThemeTokens.RADIUS_SM), Rect2(label_position - Vector2(8, 15), Vector2(50, 22)))
 				draw_string(font, label_position, airport["icao"], HORIZONTAL_ALIGNMENT_LEFT, -1, ThemeTokens.CODE["size"], ThemeTokens.INK)

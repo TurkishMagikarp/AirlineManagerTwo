@@ -1238,9 +1238,9 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 54 func _constrain() -> void:
 61 func unwrap_path(points: PackedVector2Array) -> PackedVector2Array:
 68 func _draw() -> void:
-106 func hit_test(point: Vector2) -> int:
-137 func _gui_input(event: InputEvent) -> void:
-156 func center_base() -> void:
+115 func hit_test(point: Vector2) -> int:
+146 func _gui_input(event: InputEvent) -> void:
+165 func center_base() -> void:
 
 ## scripts/map_panel.gd
 1 extends VBoxContainer
@@ -1250,14 +1250,14 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 21 func _ready() -> void:
 89 func refresh() -> void:
 104 func refresh_flights() -> void:
-166 func _card_header(title: String, status: String, kind: String) -> void:
-177 func _add_name(text: String, style: Dictionary = ThemeTokens.SMALL) -> void:
-183 func _fact(caption: String, value: String) -> void:
-191 func _action(caption: String, route_id: int, airport_icao: String = "") -> void:
-224 func _select_row() -> void:
-235 func _position_overlays() -> void:
-250 func _unhandled_key_input(event: InputEvent) -> void:
-257 func _reveal_selected() -> void:
+167 func _card_header(title: String, status: String, kind: String) -> void:
+178 func _add_name(text: String, style: Dictionary = ThemeTokens.SMALL) -> void:
+184 func _fact(caption: String, value: String) -> void:
+192 func _action(caption: String, route_id: int, airport_icao: String = "") -> void:
+225 func _select_row() -> void:
+236 func _position_overlays() -> void:
+251 func _unhandled_key_input(event: InputEvent) -> void:
+258 func _reveal_selected() -> void:
 
 ## scripts/routes_panel.gd
 1 extends VBoxContainer

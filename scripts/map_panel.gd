@@ -114,6 +114,7 @@ func refresh_flights() -> void:
 		card_body.remove_child(child)
 		child.queue_free()
 	card.visible = selected_id != 0 or canvas.selected_route != 0
+	if selected_id <= 0 and canvas.selected_route == 0: route_table.deselect_all()
 	if selected_id < 0 and -selected_id - 1 < canvas.airports.size():
 		var airport: Dictionary = canvas.airports[-selected_id - 1]
 		details.text = "%s · %s\n%s" % [airport["icao"], airport["name"], airport["slots"]]
