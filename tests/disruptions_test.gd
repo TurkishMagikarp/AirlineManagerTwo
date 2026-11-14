@@ -182,6 +182,13 @@ func _disruption_layouts() -> bool:
 		_write(disruption_path, initial_world)
 		if not _restore_disruption(disruption_path):
 			return false
+		await _frame_to(60, 1)
+		if not await _delay_views(2932) or not await _punctuality_view("—", 0):
+			return false
+		for page in [1, 2]:
+			await _click(main.navigation[page])
+			await _reveal(main.description if page == 1 else main.routes_panel.operations_label)
+			await _capture("unobserved-%d" % page, dimensions)
 		await _frame_to(12000, 1)
 		main.attention_expanded = true
 		main._refresh_attention()
@@ -191,7 +198,10 @@ func _disruption_layouts() -> bool:
 			await _reveal(panel)
 			if not _check(main.size.x <= dimensions.x and panel.is_visible_in_tree() and panel.get_global_rect().intersects(root.get_visible_rect()), "Disruption panel reachable at %s" % dimensions):
 				return false
-			await _capture("page-%d" % page, dimensions)
+			if page == 1:
+				await _cell_capture(main.fleet_tree, 3, "page-1", dimensions)
+			else:
+				await _capture("page-%d" % page, dimensions)
 		await _reveal(main.attention_button)
 		await _capture("attention", dimensions)
 		_write(disruption_path, initial_world)
@@ -202,11 +212,33 @@ func _disruption_layouts() -> bool:
 		await _frame_to(5104, 1)
 		if not await _care_views(care):
 			return false
-		await _reveal(main.finances_panel.route_tree)
-		await _capture("route-care", dimensions)
-		await _reveal(main.finances_panel.flights_tree)
-		await _capture("flight-care", dimensions)
+		await _cell_capture(main.finances_panel.route_tree, 3, "route-care", dimensions)
+		await _cell_capture(main.finances_panel.flights_tree, 0, "flight-care", dimensions)
+		await _frame_to(59461, 1)
+		await _click(main.navigation[1])
+		await _reveal(main.description)
+		await _capture("recovered-punctuality", dimensions)
 	return true
+
+func _cell_capture(tree: Tree, column: int, label: String, dimensions: Vector2i) -> void:
+	await _reveal(tree)
+	if not capture_dir.is_empty():
+		var row := tree.get_root().get_first_child()
+		# Scroll the real table to the cell before hovering its native tooltip.
+		for child in tree.get_children(true):
+			if child is HScrollBar:
+				child.value += tree.get_item_area_rect(row, column).get_center().x - tree.size.x / 2.0
+		await process_frame
+		var cell := tree.get_item_area_rect(row, column)
+		var motion := InputEventMouseMotion.new()
+		motion.position = tree.global_position + cell.get_center()
+		Input.parse_input_event(motion)
+		await create_timer(0.8).timeout
+		await _capture(label, dimensions)
+		motion = InputEventMouseMotion.new()
+		motion.position = Vector2(1, 1)
+		Input.parse_input_event(motion)
+		await process_frame
 
 func _capture(label: String, dimensions: Vector2i) -> void:
 	if not capture_dir.is_empty():

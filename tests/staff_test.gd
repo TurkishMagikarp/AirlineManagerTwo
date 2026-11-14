@@ -89,7 +89,7 @@ func _run() -> void:
 		return
 	if not _check(summary["payroll_eur"] == 2 * coarse.get_staff_overview()["monthly_payroll_eur"], "Two payrolls in the finances after 70 days"):
 		return
-	if not _check(summary["crew_eur"] == 0 and summary["costs_eur"] == summary["fuel_eur"] + summary["airport_eur"] + summary["overhead_eur"] + summary["maintenance_eur"] + summary["payroll_eur"], "Company costs include salaries exactly once"):
+	if not _check(summary["crew_eur"] == 0 and summary["costs_eur"] == summary["fuel_eur"] + summary["airport_eur"] + summary["overhead_eur"] + summary["care_eur"] + summary["maintenance_eur"] + summary["payroll_eur"], "Company costs include care and salaries exactly once"):
 		return
 	var chart_costs := 0
 	var chart_profit := 0

@@ -64,11 +64,86 @@ Spieler-/KI-Spielstand und API-Snapshots werden sofort sowie nach 100 Tagen
 verglichen. Die v25-Datei entfernt nur neue Felder ohne JSON-Neukodierung,
 damit große Seeds und Bruchteilsjournale unverändert bleiben. Ein v25-Flug kann
 noch keine technische Verspätung haben. Der Rust-Test prüft beide Familien auch
-ohne Engine; nur der PowerShell-Lauf prüft einen echten Prozessneustart.
+ohne Engine; getrennte Godot-Prozesse prüfen dagegen einen echten Neustart
+(unter Linux direkt, unter Windows über den PowerShell-Wrapper).
 
-Servergrenze für AIR-87: Godot, GUI/Xvfb, START.bat und Windows-Neustarts wurden
-hier nicht ausgeführt; es wurden keine Renderbilder erzeugt oder angehängt.
-Beim Windows-Eigentümer verbleiben der neue Godot-Test samt Bildsichtprüfung,
-der neue und die bestehenden Restart-Wrapper, die bestehenden Godot-Suiten
-und START.bat. Änderungen betreffen ausschließlich Tests und Dokumentation;
-Spielregeln, Wirtschaft, Konfiguration und Speicherformat bleiben unverändert.
+## Linux-Verifikation (AIR-90)
+
+Am 14. November 2026 mit der offiziellen Linux-Version Godot 4.7.2 und einer
+frisch gebauten Rust-Debug-GDExtension geprüft. Build mit `cargo build --locked
+--manifest-path rust/Cargo.toml`, Zig-CC-Wrapper aus `/paperclip/airline/bin`.
+Isolierte neue XDG-Benutzerverzeichnisse; alle Godot-Aufrufe sequenziell,
+Schreiber vollständig beendet vor dem jeweiligen frischen Leser.
+
+Die bisherigen Godot-Migrationsfixtures verwendeten noch v25 als aktuellen
+Versionskopf. Diese Literale und die Resave-Assertions sind auf v26 korrigiert;
+die alten Zielversionen und verlustfreien Welt-/API-Vergleiche bleiben erhalten.
+Die Fleet-Purchase-Assertion erwartet jetzt den bereits vorhandenen Zusatz
+„0 min verspätet“ auch bei geparkten Flugzeugen. Der Personaltest zählt die
+bereits bestehenden Betreuungskosten in seiner vollständigen Kostensumme mit;
+Gehalts-/Schrittgrößen- und Routenabgleich bleiben strikt.
+Der erste Godot-Finanzarchivlauf scheiterte an der alten pauschalen Grenze
+von 100.000 Blöcken (123.997 Blöcke, 3.480 Checks). Technische Verspätungen
+bilden zusätzliche reale Archivgrenzen. Die Assertion entspricht jetzt der
+bereits bestehenden Rust-Regel für dieses gemischte Zwei-Routen-Szenario:
+mindestens 90 % Kompression aller gelandeten Spielerflüge. Check-Untergrenze,
+Buchungsabgleich, Random-Access und Neustartvergleiche bleiben erhalten.
+Historische Modusnamen wie `write-v25` der älteren Testfamilien bleiben
+kompatibel; ihre heutigen Writer speichern v26. Die neue Disruption-Familie
+erzeugt dagegen ausdrücklich einen feldbereinigten v25-Spielstand.
+Keine Änderung an Rust, Spielregeln, Wirtschaft, Konfiguration oder Saveformat.
+
+Renderreproduktion (Zielverzeichnis vorher anlegen):
+
+```sh
+export XDG_DATA_HOME="$(mktemp -d)"
+Godot --headless --path . --editor --import
+Godot --headless --path . --script res://tests/disruptions_test.gd
+export LD_LIBRARY_PATH=/tmp/air33-libs/extracted/usr/lib/x86_64-linux-gnu
+export LIBGL_ALWAYS_SOFTWARE=1 LP_NUM_THREADS=2
+Xvfb :190 -screen 0 1600x1200x24 -nolisten tcp -ac &
+capture_xvfb_pid=$!
+sleep 1
+DISPLAY=:190 Godot --path . --display-driver x11 \
+  --rendering-method gl_compatibility --audio-driver Dummy \
+  --script res://tests/disruptions_test.gd -- --capture-dir=/tmp/disruption-renders
+kill "$capture_xvfb_pid"
+```
+
+`xvfb-run` scheiterte vor dem Engine-Start am fehlenden `xauth`; der
+Renderlauf verwendet deshalb direkt Xvfb (lokaler Display-Socket, kein TCP).
+Der erste direkte Start scheiterte an fehlendem XCursor im System-Suchpfad;
+mit dem vorhandenen Bibliotheksverzeichnis aus den früheren Verifikationen
+und Mesa-Software-Rendering startet die Engine. Diese Startfehler zählen nicht
+als bestandene Renderprüfungen.
+
+Der Test stellt selbst 1440×1000, 1100×720 und 680×520 ein. Zusätzliche
+Renderzustände zeigen Pünktlichkeit „—“ vor der ersten Landung und den späteren
+Anteil nach Erholung; Mausbewegungen zeigen die nativen Fleet-Status- und
+Routen-/Flugkostentooltips. Alle 27 Originale wurden tatsächlich visuell geprüft:
+49/70 Minuten Rückstand im Betrieb, vollständiger 70-Minuten-Fleet-Tooltip,
+„—“, 0.0 % und später 63.6 % (11 Flüge), 336 EUR Betreuung jeweils im Routen-
+und Flugtooltip, Aufmerksamkeitszeile und deren Verschwinden nach Erholung.
+Die Fleet-Zelle kürzt langen Status mit Ellipse; der native Hover zeigt ihn
+vollständig. Kleine Fenster benötigen vertikales/horizontales Scrollen; bei
+680×520 bricht die Prozentzeile um, bleibt aber lesbar. Kein Produktionsfehler
+bestätigt. Originale und Linux-Transkripte sind an
+[AIR-90](https://paperclip.iamsec.de/AIR/issues/AIR-90) gespeichert.
+
+Alle 30 eigenständigen Godot-Tests, Hauptszene, Editor-Import und sämtliche
+18 Neustartfamilien sind sequenziell bestanden (90 erforderliche erfolgreiche
+Aufrufe; zunächst fehlgeschlagene Assertions wurden korrigiert und gezielt
+wiederholt). Die neue Disruption-Familie bestand alle vier Prozesse, inklusive
+vollständigem Spieler-/KI-Abgleich sofort und nach 100 Tagen. Der große
+Godot-Finanzarchiv-Writer bestand in 364,26 s, sein frischer Leser in 131,52 s.
+Der abschließend erweiterte Disruption-Test bestand erneut headless und mit
+Xvfb/Mesa-llvmpipe. Frische isolierte XDG-Verzeichnisse für Suite und Renderlauf.
+
+Locked-Rust-Build, 218 Rust-Tests und Clippy mit `-D warnings` bestanden.
+Testkommando: `cargo test --locked --manifest-path rust/Cargo.toml -- --skip
+million_flight --test-threads=1`. Die zwei Rust-Millionenflugtests wurden wie
+beauftragt ausgelassen, da Rust unverändert ist; kein neuer Benchmarknachweis.
+
+START.bat, die tatsächlichen PowerShell-Wrapper, native Windows-DLLs und
+Windows-Neustarts sowie Windows-Darstellung/-Skalierung bleiben Besitzerchecks.
+Linux-Neustarts und Linux-Renderbilder ersetzen diese Prüfungen nicht.

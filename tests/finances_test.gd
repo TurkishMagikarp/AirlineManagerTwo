@@ -54,7 +54,7 @@ func _run() -> void:
 		if not _check(sim.save_game(path).is_empty(), "Save million-flight archive"):
 			return
 	var routes: Array = sim.get_route_finances()
-	# ~228 years of shuttles, interrupted only by mandatory maintenance checks.
+	# ~228 years of shuttles, including mandatory checks and technical delays.
 	var count: int = routes[0]["flights"]
 	if not _check(routes.size() == 2 and count > 900_000 and routes[0]["profit_eur"] > 0 and routes[1]["profit_eur"] < 0, "Real profitable and loss-making routes"):
 		return
@@ -62,10 +62,10 @@ func _run() -> void:
 	for plane in sim.get_fleet():
 		checks += plane["checks"] + (1 if plane["maintenance_state"] != "none" else 0)
 	var info: Dictionary = sim.get_finance_history_info()
-	# Checks, weekly fuel, seasonal passenger rounding and competitor service
-	# changes legitimately start blocks. The archive still compresses millions
-	# of flights without discarding any departure quote.
-	if not _check(checks > 2000 and info["batch_count"] >= checks and info["batch_count"] < 100_000, "Archive grows only with real interruptions: %d checks, %d blocks" % [checks, info["batch_count"]]):
+	# Checks, fuel, demand, competition and technical delays start blocks.
+	# Match the existing Rust mixed-route stress rule: compress at least 90%
+	# of settled flights without discarding any departure quote.
+	if not _check(checks > 2000 and info["batch_count"] >= checks and info["batch_count"] * 10 < count + routes[1]["flights"], "Archive grows only with real interruptions: %d checks, %d blocks" % [checks, info["batch_count"]]):
 		return
 	var series: Array = sim.get_finance_series(0)
 	if not _check(series.size() <= 64 and series[-1]["balance"] == sim.get_airline_info()["capital_eur"], "Bounded series reconciles to account"):

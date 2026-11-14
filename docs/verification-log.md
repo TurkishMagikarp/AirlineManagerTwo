@@ -395,3 +395,37 @@ Wartungsende wieder verschwindet. Spielstandversion unverändert (10), neues Fel
   Restart-Wrapper. Keine Originalrenders vorhanden/angehängt; Sichtprüfung
   und diese Läufe bleiben beim Windows-Eigentümer. Keine Gameplay-, Wirtschafts-
   oder Speicherformatänderungen. Headless-Rust-Tests belegen kein UI-Layout.
+
+
+### 2026-11-14 — AIR-90 Technische Verspätungen unter Linux verifiziert
+
+- Offizielles Linux-Godot 4.7.2 mit frisch gebauter Debug-GDExtension; alle
+  30 Godot-Tests, Hauptszene, Editor-Import und alle 18 Neustartfamilien in
+  getrennten, sequenziellen Linux-Prozessen bestanden (90 erforderliche
+  erfolgreiche Aufrufe, nach gezielten Wiederholungen korrigierter Tests).
+  Enthalten: Unicode laufend/pausiert, großes Finanzarchiv (Writer 364,26 s,
+  Leser 131,52 s), bisherige Migrationen und beide neuen Disruption-Paare
+  v25→v26 / v26 mitten im verspäteten Flug. Spieler-/KI-Welt und APIs stimmen
+  sofort sowie nach 100 Tagen exakt überein.
+- Veraltete v25-Köpfe/Resave-Assertions in älteren Godot-Fixtures auf v26
+  aktualisiert. Drei initiale Fehlschläge korrigiert: Archivgrenze auf die
+  bereits bestehende Rust-Regel von mindestens 90 % Kompression abgestimmt
+  (123.997 Blöcke / 3.480 Checks statt alter pauschaler 100.000er-Grenze),
+  Fleet-Text mit „0 min verspätet“, Personal-Kostensumme inklusive Betreuung.
+  Buchungs-, Paging-, Determinismus- und Neustartvergleiche bleiben strikt.
+- Abschließender Disruption-Test headless und unter Xvfb/Mesa bestanden.
+  27 unveränderte Original-PNGs in 1440×1000, 1100×720 und 680×520 visuell
+  geprüft und an AIR-90 angehängt: Fleet-Hover / Betrieb 49 bzw. 70 Minuten,
+  „—“, 0.0 % und 63.6 % (11 Flüge), 336 EUR Betreuung im Routen-/Flugtooltip,
+  Aufmerksamkeitszeile und Erholung. Kleine Fenster scrollen und umbrechen;
+  Fleet-Ellipsen sind über den nativen Tooltip vollständig lesbar.
+- Zwei Render-Startfehler zählen nicht als erfolgreiche Läufe: xvfb-run ohne
+  xauth und direkter Start ohne XCursor-Suchpfad. Direkter Xvfb-Start mit den
+  vorhandenen Bibliotheken aus früheren Verifikationen bestand anschließend;
+  der Fleet-Hover-Capture wurde zusätzlich erweitert und erneut geprüft.
+- Locked-Build, 218 Rust-Tests und strenges Clippy bestanden. Die beiden
+  Rust-Millionenflugtests explizit ausgelassen, da kein Rust geändert wurde.
+  Keine Gameplay-, Wirtschafts-, Konfigurations- oder Saveformatänderung.
+  START.bat, tatsächliche PowerShell-Wrapper, native Windows-DLLs/Neustarts
+  und Windows-Darstellung/-Skalierung bleiben beim Besitzer.
+  Details und reproduzierbare Linux-Befehle: disruptions.md.
