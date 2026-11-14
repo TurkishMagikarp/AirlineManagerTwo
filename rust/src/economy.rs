@@ -391,10 +391,14 @@ fn quote_with_time(
     quote_prepared(route, model_id, routes, fuel_cents, departure, &mut market)
 }
 
+/// Bound to one route/model/offer snapshot; rebuild when that snapshot changes.
 pub(crate) struct QuoteMarket {
     // Catalog lookups happen once per prepared market, including return legs.
     airport_levels: [i64; 2],
     pub(crate) flight_seconds: u64,
+    seats: u32,
+    business_seats: u32,
+    rates: &'static Rates,
     cargo: crate::cargo::Market,
     passengers: crate::demand::Prepared,
 }
@@ -404,11 +408,15 @@ impl QuoteMarket {
         model_id: &str,
         routes: &[crate::demand::Offer],
     ) -> Result<Self, String> {
-        let seats = routes
+        let offer = routes
             .iter()
-            .find(|o| crate::demand::same_offer(route, &o.route))
-            .map_or(aircraft::model(model_id)?.seats, |o| o.seats);
+            .find(|o| crate::demand::same_offer(route, &o.route));
+        let seats = offer.map_or(aircraft::model(model_id)?.seats, |o| o.seats);
+        let business_seats = offer.map_or(0, |o| o.business_seats);
         Ok(Self {
+            seats,
+            business_seats,
+            rates: &CONFIG.models[model_id],
             airport_levels: airport_levels(route)?,
             flight_seconds: operations::timings(route, model_id)?.0,
             cargo: crate::cargo::Market::new(route, model_id, routes)?,
@@ -419,26 +427,22 @@ impl QuoteMarket {
 
 pub(crate) fn quote_prepared(
     route: &Route,
-    model_id: &str,
-    routes: &[crate::demand::Offer],
+    _model_id: &str,
+    _routes: &[crate::demand::Offer],
     fuel_cents: i64,
     departure: Option<u64>,
     market: &mut QuoteMarket,
 ) -> Result<Totals, String> {
     let c = &*CONFIG;
-    let model = aircraft::model(model_id)?;
-    let offer = routes
-        .iter()
-        .find(|o| crate::demand::same_offer(route, &o.route));
-    let seats = offer.map_or(model.seats, |o| o.seats);
-    let business_seats = offer.map_or(0, |o| o.business_seats);
+    let seats = market.seats;
+    let business_seats = market.business_seats;
     let (demand, passenger_loads) = market.passengers.estimate(departure);
     let passengers = demand.per_departure;
     let business_revenue = demand.business * route.business_ticket_eur;
     let cargo_kg = market.cargo.estimate(passenger_loads);
     let cargo_revenue = crate::cargo::revenue(cargo_kg, route.cargo_rate_cents);
     let seconds = market.flight_seconds as i64;
-    let rates = &c.models[model_id];
+    let rates = market.rates;
     Ok(Totals {
         cargo_kg,
         cargo_revenue,

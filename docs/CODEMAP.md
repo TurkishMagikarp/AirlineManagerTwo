@@ -252,25 +252,25 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 363 pub fn quote_at_price(
 373 pub fn quote_at_time(
 383 fn quote_with_time(
-394 pub(crate) struct QuoteMarket
-401 impl QuoteMarket
-402 pub fn new(
-420 pub(crate) fn quote_prepared(
-470 impl Game
-473 pub fn planning_quote(
-508 pub fn set_ticket_price(&mut self, id: u32, price: i64) -> Result<(), String>
-518 pub fn validate_finance(&self) -> Result<(), String>
-598 mod tests
-601 fn fuel_checkpoints_match_original_replay_in_any_query_order()
-643 fn game(price: i64) -> Game
-656 fn prices_distance_capacity_and_costs_are_predictable()
-686 fn landing_debits_once_empty_flights_can_create_debt_and_prices_validate()
-726 fn frame_sizes_16x_save_load_and_history_are_identical()
-764 fn v5_migration_never_charges_past_landings_and_new_saves_reject_bad_finance()
-806 fn financial_overflow_rolls_back_clock_flights_and_balance()
-818 fn deleting_routes_preserves_results_and_new_game_resets_finances()
-840 fn calibrated_route_matrix_and_price_sensitivity()
-968 fn historical_v6_costs_and_active_flight_survive_rebalancing()
+395 pub(crate) struct QuoteMarket
+405 impl QuoteMarket
+406 pub fn new(
+428 pub(crate) fn quote_prepared(
+474 impl Game
+477 pub fn planning_quote(
+512 pub fn set_ticket_price(&mut self, id: u32, price: i64) -> Result<(), String>
+522 pub fn validate_finance(&self) -> Result<(), String>
+602 mod tests
+605 fn fuel_checkpoints_match_original_replay_in_any_query_order()
+647 fn game(price: i64) -> Game
+660 fn prices_distance_capacity_and_costs_are_predictable()
+690 fn landing_debits_once_empty_flights_can_create_debt_and_prices_validate()
+730 fn frame_sizes_16x_save_load_and_history_are_identical()
+768 fn v5_migration_never_charges_past_landings_and_new_saves_reject_bad_finance()
+810 fn financial_overflow_rolls_back_clock_flights_and_balance()
+822 fn deleting_routes_preserves_results_and_new_game_resets_finances()
+844 fn calibrated_route_matrix_and_price_sensitivity()
+972 fn historical_v6_costs_and_active_flight_survive_rebalancing()
 
 ## rust/src/financing.rs
 6 const DAY: u64 = 86400;
