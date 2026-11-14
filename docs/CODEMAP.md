@@ -523,6 +523,7 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 129 fn strip(v: &mut serde_json::Value)
 168 fn marketing_choice_is_modest_preserves_ceilings_and_owner_identity()
 206 fn marketing_changed_rates_and_airborne_restart_are_partition_independent()
+243 fn marketing_daily_distress_cut_and_restructuring_stop_spend()
 
 ## rust/src/operations.rs
 10 pub struct FlightPlan
@@ -557,14 +558,14 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 ## rust/src/quality.rs
 5 fn scenario(price: Option<i64>) -> Game
 20 fn ten_year_scenarios_reconcile_and_survive_annual_restart()
-126 fn ten_years_of_daily_fare_changes_remain_saveable_and_lossless()
-172 fn mixed_three_company_markets_remain_bounded_on_every_airport_pair()
-218 fn subsecond_frames_match_single_step_at_every_speed()
-240 fn first_diff(a: &serde_json::Value, b: &serde_json::Value, path: &str) -> Option<String>
-265 fn sustained_high_fuel_keeps_viable_player_and_both_ai_alive()
-266 struct Reset;
-267 impl Drop for Reset
-268 fn drop(&mut self)
+130 fn ten_years_of_daily_fare_changes_remain_saveable_and_lossless()
+176 fn mixed_three_company_markets_remain_bounded_on_every_airport_pair()
+222 fn subsecond_frames_match_single_step_at_every_speed()
+244 fn first_diff(a: &serde_json::Value, b: &serde_json::Value, path: &str) -> Option<String>
+269 fn sustained_high_fuel_keeps_viable_player_and_both_ai_alive()
+270 struct Reset;
+271 impl Drop for Reset
+272 fn drop(&mut self)
 
 ## rust/src/rotation_tests.rs
 3 fn game(planes: u32) -> Game

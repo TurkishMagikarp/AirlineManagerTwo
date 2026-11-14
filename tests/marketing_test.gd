@@ -2,6 +2,8 @@ extends SceneTree
 ## Real keyboard/mouse budget input plus separate-process v19/v20 restart phases.
 const DAY := 86400.0
 var main
+var capture_dir := ""
+var probe_path := ""
 
 func _initialize() -> void:
 	call_deferred("_run")
@@ -14,6 +16,9 @@ func _run() -> void:
 			mode = arg.trim_prefix("--marketing-mode=")
 		if arg.begins_with("--marketing-save="):
 			path = arg.trim_prefix("--marketing-save=")
+		if arg.begins_with("--capture-dir="):
+			capture_dir = arg.trim_prefix("--capture-dir=")
+	probe_path = path + ".probe"
 	if not _check(mode in ["ui", "write-v19", "read-v19", "write-v20", "read-v20"], "Explicit mode"):
 		return
 	root.gui_embed_subwindows = true
@@ -48,16 +53,23 @@ func _run() -> void:
 			sim.save_game(path)
 			var contents := FileAccess.get_file_as_string(path).replace('"version":20', '"version":19')
 			contents = RegEx.create_from_string('"marketing":\\{[^}]*\\},|,"marketing":\\{[^}]*\\}').sub(contents, "", true)
+			if not _check(JSON.parse_string(contents)["version"] == 19 and not '"marketing"' in contents, "True v19 fixture without marketing state, including AI"):
+				return
 			contents = contents.replace('"marketing_costs":[],', '').replace(',"marketing_costs":[]', '')
 			var file := FileAccess.open(path, FileAccess.WRITE)
 			file.store_string(contents)
 			file.close()
 			if not _check(sim.load_game(path).is_empty() and sim.get_marketing()["budget_eur"] == 0 and sim.get_marketing()["awareness"] == 0, "v19 neutral migration"):
 				return
-		FileAccess.open(path + ".initial", FileAccess.WRITE).store_var(_snapshot())
+		_store(path + ".initial", _snapshot())
+	if not _verify_saved_state(legacy):
+		return
 	if legacy and not await _budget(30000):
 		return
+	var growing: float = sim.get_marketing()["awareness"]
 	_advance(20.125)
+	if not _check(sim.get_marketing()["awareness"] > growing and sim.get_marketing()["trend"] > 0, "Daily closes grow awareness and trend") or not _verify_ui():
+		return
 	if not await _budget(0):
 		return
 	var before: float = sim.get_marketing()["awareness"]
@@ -65,18 +77,42 @@ func _run() -> void:
 	if not _check(sim.get_marketing()["awareness"] < before and sim.get_marketing()["trend"] < 0, "Gradual decay"):
 		return
 	if mode.begins_with("write-"):
-		FileAccess.open(path + ".expected", FileAccess.WRITE).store_var(_snapshot())
+		_store(path + ".expected", _snapshot())
 	elif mode.begins_with("read-"):
 		if not _check(_snapshot() == FileAccess.open(path + ".expected", FileAccess.READ).get_var(), "Restart continuation identical"):
 			return
 	if not _verify_ui() or not await _layouts():
 		return
 	print("PASS: marketing " + mode)
+	main.queue_free()
+	await process_frame
 	quit(0)
 
 func _snapshot() -> Array:
 	var sim = main.simulation
-	return [sim.get_marketing(), sim.get_financial_summary(), sim.get_finance_series(0), sim.get_marketing_history(), sim.get_competitors()]
+	_check(sim.save_game(probe_path).is_empty(), "Serialize full player and AI state")
+	return [FileAccess.get_file_as_string(probe_path), sim.get_marketing(), sim.get_financial_summary(), sim.get_finance_series(0), sim.get_marketing_history(), sim.get_competitors()]
+
+func _store(path: String, value: Array) -> void:
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	file.store_var(value)
+	file.close()
+
+func _verify_saved_state(legacy: bool) -> bool:
+	_snapshot()
+	# Parse only for assertions; byte comparisons preserve Rust integer encodings.
+	var state: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(probe_path))["state"]
+	var companies: Array = [state]
+	for competitor in state["competitors"]:
+		companies.append(competitor["game"])
+	for company in companies:
+		var marketing: Dictionary = company["marketing"]
+		if legacy:
+			if not _check(marketing["budget_eur"] == 0 and marketing["awareness"] == 0 and marketing["remainder"] == 0 and company["history"]["marketing_costs"].is_empty(), "Every v19 owner starts neutral without back-charged spend"):
+				return false
+		elif not _check(marketing["budget_eur"] > 0 and marketing["awareness"] > 0 and marketing["remainder"] > 0, "Mid-month player and AI retain budget, awareness and fractional EUR carry"):
+			return false
+	return true
 
 func _advance(days: float) -> void:
 	main.simulation.start()
@@ -89,6 +125,7 @@ func _budget(amount: int) -> bool:
 	await _click(main.navigation[4])
 	var panel = main.finances_panel
 	panel.refresh(true)
+	var before: Dictionary = main.simulation.get_marketing()
 	var edit: LineEdit = panel.marketing_budget.get_line_edit()
 	await _reveal(edit)
 	await _mouse(edit.get_global_rect().get_center())
@@ -104,9 +141,11 @@ func _budget(amount: int) -> bool:
 		Input.parse_input_event(event)
 		await process_frame
 	await _click(panel.marketing_apply)
-	return _check(main.simulation.get_marketing()["budget_eur"] == amount and panel.marketing_result.text == "Marketingbudget übernommen.", "Real input commits budget")
+	var after: Dictionary = main.simulation.get_marketing()
+	return _check(after["awareness"] == before["awareness"] and after["trend"] == before["trend"] and after["budget_eur"] == amount and panel.marketing_result.text == "Marketingbudget übernommen.", "Real input commits budget")
 
 func _verify_ui() -> bool:
+	main._refresh_time()
 	var panel = main.finances_panel
 	panel.refresh(true)
 	var marketing: Dictionary = main.simulation.get_marketing()
@@ -119,7 +158,7 @@ func _verify_ui() -> bool:
 	var total := 0
 	for i in range(rows.size()):
 		total += int(rows[i]["amount_eur"])
-		if not _check(panel.marketing_history.get_root().get_child(i).get_text(1) == main.UI.money(rows[i]["amount_eur"]), "Archive cost rendered"):
+		if not _check(panel.marketing_history.get_root().get_child(i).get_text(0) == rows[i]["time"] and panel.marketing_history.get_root().get_child(i).get_text(1) == main.UI.money(rows[i]["amount_eur"]), "Latest archive booking time and cost rendered"):
 			return false
 	var series_cost := 0
 	for sample in main.simulation.get_finance_series(0):
@@ -132,8 +171,14 @@ func _layouts() -> bool:
 		root.size = dimensions
 		for control in [panel.marketing_budget, panel.marketing_apply, panel.marketing_status, panel.marketing_history]:
 			await _reveal(control)
-			if not _check(root.get_visible_rect().encloses(control.get_global_rect()), "Marketing reachable at %s" % dimensions):
+			if not _check(root.get_visible_rect().encloses(control.get_global_rect()), "Marketing %s reachable at %s: rect=%s viewport=%s" % [control.name, dimensions, control.get_global_rect(), root.get_visible_rect()]):
 				return false
+		if not capture_dir.is_empty():
+			for entry in [[panel.marketing_status, "status"], [panel.marketing_budget, "budget"], [panel.marketing_history, "archive"]]:
+				await _reveal(entry[0])
+				await RenderingServer.frame_post_draw
+				if not _check(root.get_texture().get_image().save_png(capture_dir.path_join("marketing-%s-%dx%d.png" % [entry[1], dimensions.x, dimensions.y])) == OK, "Capture Finances"):
+					return false
 	return true
 
 func _reveal(control: Control) -> void:
