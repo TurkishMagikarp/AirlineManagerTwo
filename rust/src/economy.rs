@@ -184,21 +184,28 @@ pub fn airport_bill(route: &Route, model: &str, passengers: i64) -> Result<i64, 
         return Err("Ungültige Passagierzahl.".into());
     }
     let tariff = rates.airport_base_eur + CONFIG.airport_eur_per_passenger * passengers;
+    Ok(endpoint_bill(tariff, airport_levels(route)?))
+}
+
+fn airport_levels(route: &Route) -> Result<[i64; 2], String> {
+    let catalog = crate::airports::catalog()?;
+    let level = |icao: &str| {
+        catalog
+            .airports
+            .iter()
+            .find(|a| a.icao == icao)
+            .map(|a| i64::from(a.charge_percent))
+            .ok_or_else(|| "Unbekannter Flughafen.".to_string())
+    };
+    Ok([level(&route.origin_icao)?, level(&route.destination_icao)?])
+}
+
+fn endpoint_bill(tariff: i64, levels: [i64; 2]) -> i64 {
     #[cfg(test)]
     if LEGACY_AIRPORT_CHARGES.with(|enabled| enabled.get()) {
-        return Ok(tariff);
+        return tariff;
     }
-    let catalog = crate::airports::catalog()?;
-    [&route.origin_icao, &route.destination_icao]
-        .into_iter()
-        .try_fold(0, |sum, icao| {
-            let airport = catalog
-                .airports
-                .iter()
-                .find(|a| &a.icao == icao)
-                .ok_or("Unbekannter Flughafen.")?;
-            Ok(sum + (tariff * i64::from(airport.charge_percent) + 99) / 100)
-        })
+    (tariff * levels[0] + 99) / 100 + (tariff * levels[1] + 99) / 100
 }
 
 pub fn default_ticket() -> i64 {
@@ -385,6 +392,8 @@ fn quote_with_time(
 }
 
 pub(crate) struct QuoteMarket {
+    // Catalog lookups happen once per prepared market, including return legs.
+    airport_levels: [i64; 2],
     cargo: crate::cargo::Market,
     passengers: crate::demand::Prepared,
 }
@@ -399,6 +408,7 @@ impl QuoteMarket {
             .find(|o| crate::demand::same_offer(route, &o.route))
             .map_or(aircraft::model(model_id)?.seats, |o| o.seats);
         Ok(Self {
+            airport_levels: airport_levels(route)?,
             cargo: crate::cargo::Market::new(route, model_id, routes)?,
             passengers: crate::demand::Prepared::new(route, seats, routes)?,
         })
@@ -444,7 +454,10 @@ pub(crate) fn quote_prepared(
         fuel: ((seconds * rates.fuel_kg_per_hour + rates.fuel_cycle_kg * 3600) * fuel_cents
             + 359999)
             / 360000,
-        airport: airport_bill(route, model_id, passengers)?,
+        airport: endpoint_bill(
+            rates.airport_base_eur + c.airport_eur_per_passenger * passengers,
+            market.airport_levels,
+        ),
         // Personnel is paid through payroll. Keep Totals::crew for immutable
         // historical results and departure snapshots from existing saves.
         crew: 0,

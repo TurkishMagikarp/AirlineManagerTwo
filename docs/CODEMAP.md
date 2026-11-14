@@ -232,43 +232,45 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 160 pub fn fuel_mean() -> i64
 165 pub fn fuel_bill(route: &Route, model: &str, price: i64) -> Result<i64, String>
 178 pub fn airport_bill(route: &Route, model: &str, passengers: i64) -> Result<i64, String>
-204 pub fn default_ticket() -> i64
-208 pub fn rules_text() -> String
-212 pub fn reference_price(km: f64) -> f64
-216 fn zero(value: &i64) -> bool
-221 pub struct Totals
-247 impl Totals
-248 pub fn valid_cabins(&self, economy_fare: i64) -> bool
-274 pub fn costs(&self) -> i64
-277 pub fn profit(&self) -> i64
-280 pub fn load_percent(&self) -> f64
-287 pub fn add(&mut self, other: &Self, count: u64) -> Option<()>
-320 pub struct FlightResult
-329 pub struct Finance
-335 pub fn quote(route: &Route, model_id: &str) -> Result<Totals, String>
-347 pub fn quote_shared(
-356 pub fn quote_at_price(
-366 pub fn quote_at_time(
-376 fn quote_with_time(
-387 pub(crate) struct QuoteMarket
-391 impl QuoteMarket
-392 pub fn new(
-408 pub(crate) fn quote_prepared(
-455 impl Game
-458 pub fn planning_quote(
-493 pub fn set_ticket_price(&mut self, id: u32, price: i64) -> Result<(), String>
-503 pub fn validate_finance(&self) -> Result<(), String>
-583 mod tests
-586 fn fuel_checkpoints_match_original_replay_in_any_query_order()
-628 fn game(price: i64) -> Game
-641 fn prices_distance_capacity_and_costs_are_predictable()
-671 fn landing_debits_once_empty_flights_can_create_debt_and_prices_validate()
-711 fn frame_sizes_16x_save_load_and_history_are_identical()
-749 fn v5_migration_never_charges_past_landings_and_new_saves_reject_bad_finance()
-791 fn financial_overflow_rolls_back_clock_flights_and_balance()
-803 fn deleting_routes_preserves_results_and_new_game_resets_finances()
-825 fn calibrated_route_matrix_and_price_sensitivity()
-953 fn historical_v6_costs_and_active_flight_survive_rebalancing()
+190 fn airport_levels(route: &Route) -> Result<[i64; 2], String>
+203 fn endpoint_bill(tariff: i64, levels: [i64; 2]) -> i64
+211 pub fn default_ticket() -> i64
+215 pub fn rules_text() -> String
+219 pub fn reference_price(km: f64) -> f64
+223 fn zero(value: &i64) -> bool
+228 pub struct Totals
+254 impl Totals
+255 pub fn valid_cabins(&self, economy_fare: i64) -> bool
+281 pub fn costs(&self) -> i64
+284 pub fn profit(&self) -> i64
+287 pub fn load_percent(&self) -> f64
+294 pub fn add(&mut self, other: &Self, count: u64) -> Option<()>
+327 pub struct FlightResult
+336 pub struct Finance
+342 pub fn quote(route: &Route, model_id: &str) -> Result<Totals, String>
+354 pub fn quote_shared(
+363 pub fn quote_at_price(
+373 pub fn quote_at_time(
+383 fn quote_with_time(
+394 pub(crate) struct QuoteMarket
+400 impl QuoteMarket
+401 pub fn new(
+418 pub(crate) fn quote_prepared(
+468 impl Game
+471 pub fn planning_quote(
+506 pub fn set_ticket_price(&mut self, id: u32, price: i64) -> Result<(), String>
+516 pub fn validate_finance(&self) -> Result<(), String>
+596 mod tests
+599 fn fuel_checkpoints_match_original_replay_in_any_query_order()
+641 fn game(price: i64) -> Game
+654 fn prices_distance_capacity_and_costs_are_predictable()
+684 fn landing_debits_once_empty_flights_can_create_debt_and_prices_validate()
+724 fn frame_sizes_16x_save_load_and_history_are_identical()
+762 fn v5_migration_never_charges_past_landings_and_new_saves_reject_bad_finance()
+804 fn financial_overflow_rolls_back_clock_flights_and_balance()
+816 fn deleting_routes_preserves_results_and_new_game_resets_finances()
+838 fn calibrated_route_matrix_and_price_sensitivity()
+966 fn historical_v6_costs_and_active_flight_survive_rebalancing()
 
 ## rust/src/financing.rs
 6 const DAY: u64 = 86400;
