@@ -1036,8 +1036,7 @@ impl Competitor {
                         false,
                         0,
                     ));
-                }
-                {
+                } else {
                     let (deposit, monthly) = crate::trading::lease_terms(&m.id)?;
                     if airline.capital_eur.saturating_sub(deposit) >= RESERVE {
                         let period = crate::trading::RULES.lease_period_days * 86400;
@@ -1060,31 +1059,26 @@ impl Competitor {
         let mut best_week = 0;
         for (used, backlog, plane, model, origin, cost, leased, rent) in options {
             let m = crate::aircraft::model(model)?;
-            // Owned hulls retain value after the existing two-year payback horizon.
-            // Leasing has no residual; use the same age/condition valuation as trading.
-            let residual = if plane.is_some() || leased {
-                0
-            } else if let Some(id) = used {
+            // Preserve the existing new/lease fallback and route ranking. Evaluate
+            // used capital relative to that same-model alternative, over the
+            // existing 104-week horizon, including the residual hull values.
+            let capital_adjustment = if let Some(id) = used {
                 let listing = g.used_market.listings.iter().find(|l| l.id == id).unwrap();
-                crate::trading::hull_value_at(
-                    &listing.aircraft,
-                    g.clock.elapsed().as_secs().saturating_add(104 * REVIEW),
-                )?
-            } else {
-                let valuation = crate::aircraft::Aircraft {
-                    business_seats: 0,
-                    id: 1,
-                    model_id: model.into(),
-                    location_icao: origin.into(),
-                    status: crate::aircraft::AircraftStatus::Parked,
-                    purchase_price_eur: cost,
-                    acquired_at: Some(0),
-                    purchased_at: None,
-                    lease: None,
-                    wear: Default::default(),
-                    maintenance: None,
+                let now = g.clock.elapsed().as_secs();
+                let horizon = now.saturating_add(104 * REVIEW);
+                let residual = crate::trading::hull_value_at(&listing.aircraft, horizon)?;
+                let alternative_net = if airline.capital_eur.saturating_sub(m.price_eur) >= RESERVE
+                {
+                    let mut fresh = listing.aircraft.clone();
+                    fresh.acquired_at = Some(now);
+                    fresh.wear = Default::default();
+                    m.price_eur - crate::trading::hull_value_at(&fresh, horizon)?
+                } else {
+                    crate::trading::lease_terms(model)?.0
                 };
-                crate::trading::hull_value_at(&valuation, 104 * REVIEW)?
+                (cost - residual - alternative_net) / 104
+            } else {
+                0
             };
             let mut candidates = Vec::new();
             for root in g.routes.iter().filter(|r| r.parent_route_id.is_none()) {
@@ -1261,7 +1255,7 @@ impl Competitor {
                         + (t.costs() + maintenance) * (REVIEW / (interval * 60)) as i64)
                         * 4)
                     .max(RESERVE);
-                    let score = week - (cost - residual + 103) / 104;
+                    let score = week - capital_adjustment;
                     if score > best_week
                         && week >= 5_000
                         && week * 104 >= cost

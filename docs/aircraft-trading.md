@@ -52,9 +52,11 @@ bestehende Kreditregel greift. Keine Subventionen.
 - `market_expiry_days` (180 Tage) entfernt Angebote ohne Geldbuchung.
   `market_size_cap` (128) verschrottet beim Einstellen das älteste überschüssige
   Angebot; Angebotskennungen werden nicht wiederverwendet.
-- KI-Wachstum vergleicht Neu-, Gebrauchtkauf und Leasing anhand Wochenmarge
-  abzüglich auf 104 Wochen verteilter Anschaffungskosten nach Abzug des
-  verbleibenden Rumpfwerts (dieselbe Alters-/Zustandsbewertung). Laufende Wartung,
+- KI-Wachstum behält den bisherigen Neukauf-/Leasing-Budgetentscheid bei.
+  Gebrauchtangebote werden gegen diese Alternative desselben Modells anhand
+  der Wochenmarge verglichen, einschließlich des auf 104 Wochen verteilten
+  Unterschieds der Anschaffungskosten nach Abzug des verbleibenden Rumpfwerts
+  (dieselbe Alters-/Zustandsbewertung). Laufende Wartung,
   bereits aufgelaufene Check-Kosten, Personal, Leasingraten und vier Wochen
   Betriebsreserve zählen mit. Bereits wartungsfällige Angebote sowie abweichende
   Business-Kabinen werden von der KI derzeit nicht zur Expansion gekauft.
