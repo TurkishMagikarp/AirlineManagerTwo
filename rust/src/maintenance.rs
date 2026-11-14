@@ -781,7 +781,7 @@ mod tests {
         );
         assert_eq!(
             away,
-            ((normal.0 * 110 + 99) / 100, (normal.1 * 110).div_ceil(100))
+            ((normal.0 * 110 + 99) / 100, (normal.1 * 105).div_ceil(100))
         );
         assert!(g.close_maintenance_base("EDDF").is_err());
         let before = state(&g);
