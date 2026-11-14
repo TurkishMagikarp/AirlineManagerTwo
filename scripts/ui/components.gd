@@ -670,7 +670,8 @@ static func field_error(control: Control, error: String) -> void:
 static func cell_result(item: TreeItem, column: int, amount: int) -> void:
 	item.set_cell_mode(column, TreeItem.CELL_MODE_CUSTOM)
 	cell_text(item, column, money(amount))
-	item.set_custom_color(column, POSITIVE if amount >= 0 else NEGATIVE)
+	# Custom cells also paint their stored text; only the signed renderer is visible.
+	item.set_custom_color(column, ThemeTokens.TRANSPARENT)
 	var tree := item.get_tree()
 	var minimums: Dictionary = tree.get_meta("column_minimums", {})
 	var width := ThemeTokens.font_for(ThemeTokens.DATA).get_string_size(signed_money(amount), HORIZONTAL_ALIGNMENT_LEFT, -1, ThemeTokens.DATA["size"]).x
