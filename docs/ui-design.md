@@ -33,7 +33,10 @@ automatisch. Eigenständig gestartete Szenen erhalten dieselbe Theme-Ressource.
 ## Fester Bildschirmrahmen
 
 Die Navigation steht links mit 208px Breite; unter 900px Fensterbreite wird sie
-56px breit und zeigt die sechs Icons mit deutschen Tooltips. Airline-Name und
+56px breit und zeigt die sechs Icons mit deutschen Tooltips. In der breiten
+Leiste bleiben die Beschriftungen sichtbar und die Tooltips aus: Ein bei
+langsamen Startframes eingeblendeter Tooltip kann dem Button den Hover und
+damit den ersten Mausklick nehmen. Airline-Name und
 Basis kommen aus `get_airline_info()`. Einen Airline-Code liefert die Simulation
 noch nicht: dafür steht ein Gedankenstrich statt erfundener Daten. Badges zählen
 nur die Einträge des vorhandenen Aufmerksamkeitssnapshots je Zielseite.
