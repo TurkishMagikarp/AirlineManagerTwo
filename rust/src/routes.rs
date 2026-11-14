@@ -5,6 +5,8 @@ use std::collections::HashSet;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Route {
+    #[serde(default = "crate::cargo::default_rate")]
+    pub cargo_rate_cents: i64,
     pub service_level: crate::service::Level,
     #[serde(default = "crate::cabins::default_business_fare")]
     pub business_ticket_eur: i64,
@@ -100,6 +102,7 @@ impl Game {
             .checked_add(1)
             .ok_or_else(|| "Keine weitere Routenkennung verfügbar.".to_string())?;
         self.routes.push(Route {
+            cargo_rate_cents: crate::cargo::default_rate(),
             service_level: Default::default(),
             business_ticket_eur: crate::cabins::default_business_fare(),
             id: self.next_route_id,
@@ -368,7 +371,8 @@ impl Game {
         }
         let mut ids = HashSet::new();
         for route in &self.routes {
-            if !(0..=100_000).contains(&route.ticket_eur)
+            if !(0..=crate::cargo::RULES.maximum_rate_cents).contains(&route.cargo_rate_cents)
+                || !(0..=100_000).contains(&route.ticket_eur)
                 || !(0..=100_000).contains(&route.business_ticket_eur)
             {
                 return Err("Ungültiger Ticketpreis im Spielstand.".into());
@@ -412,6 +416,7 @@ impl Game {
                     || root.destination_icao != route.destination_icao
                     || root.ticket_eur != route.ticket_eur
                     || root.business_ticket_eur != route.business_ticket_eur
+                    || root.cargo_rate_cents != route.cargo_rate_cents
                     || root.service_level != route.service_level
                     || route.id <= parent
                 {

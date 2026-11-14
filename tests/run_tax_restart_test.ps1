@@ -7,7 +7,7 @@ $project = Split-Path $PSScriptRoot -Parent
 $directory = Join-Path $env:LOCALAPPDATA ('Temp\opencode\airline-tax-' + [guid]::NewGuid())
 New-Item -ItemType Directory -Path $directory | Out-Null
 # Each process exits before the next starts; never touches user://savegame.json.
-foreach ($version in @('v18', 'v21')) {
+foreach ($version in @('v18', 'v22')) {
     $save = Join-Path $directory ($version + '.json')
     foreach ($action in @('write', 'read')) {
         $mode = $action + '-' + $version
@@ -15,4 +15,4 @@ foreach ($version in @('v18', 'v21')) {
         if ($LASTEXITCODE -ne 0) { throw "Tax restart failed: $mode" }
     }
 }
-Write-Output "PASS: v18 migration and v21 mid-year carryforward/next assessment in four separate processes; test files: $directory"
+Write-Output "PASS: v18 migration and v22 mid-year carryforward/next assessment in four separate processes; test files: $directory"

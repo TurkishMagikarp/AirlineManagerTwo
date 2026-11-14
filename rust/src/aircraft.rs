@@ -7,6 +7,8 @@ pub struct Model {
     pub id: String,
     pub name: String,
     pub seats: u32,
+    pub belly_cargo_kg: u32,
+    pub payload_kg: u32,
     pub range_km: u32,
     pub cruise_kmh: u32,
     pub turnaround_minutes: u32,
@@ -30,6 +32,8 @@ static MODELS: LazyLock<Result<Vec<Model>, String>> = LazyLock::new(|| {
         if model.id.is_empty()
             || model.name.is_empty()
             || model.seats == 0
+            || model.belly_cargo_kg == 0
+            || model.payload_kg < model.belly_cargo_kg
             || model.range_km == 0
             || model.cruise_kmh == 0
             || model.turnaround_minutes == 0

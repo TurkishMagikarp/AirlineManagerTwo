@@ -1016,6 +1016,7 @@ impl Competitor {
                     continue;
                 }
                 let r = Route {
+                    cargo_rate_cents: crate::cargo::default_rate(),
                     service_level: Default::default(),
                     business_ticket_eur: crate::cabins::default_business_fare(),
                     id: g.next_route_id,

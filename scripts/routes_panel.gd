@@ -27,6 +27,9 @@ var service_select: OptionButton
 var service_cost: Label
 var business_input: SpinBox
 var business_button: Button
+var cargo_input: SpinBox
+var cargo_button: Button
+var cargo_status: Label
 var ticket_input: SpinBox
 var ticket_button: Button
 var results_tree: Tree
@@ -116,6 +119,22 @@ func _ready() -> void:
 			_feedback(simulation.set_business_ticket_price(route["id"], int(business_input.value)), "Business-Preis geändert.")
 	)
 	add_child(business_button)
+	add_child(_label("Bauchfracht · EUR pro kg · gilt ab dem nächsten Abflug"))
+	cargo_input = SpinBox.new()
+	cargo_input.min_value = 0
+	cargo_input.step = 0.01
+	add_child(cargo_input)
+	cargo_button = Button.new()
+	cargo_button.text = "Frachtpreis übernehmen"
+	cargo_button.pressed.connect(func():
+		var route := _route()
+		if not route.is_empty():
+			cargo_input.apply()
+			_feedback(simulation.set_cargo_rate(route["id"], roundi(cargo_input.value * 100.0)), "Frachtpreis geändert.")
+	)
+	add_child(cargo_button)
+	cargo_status = _label("")
+	add_child(cargo_status)
 	service_select = _select("Bordservice · gilt ab dem nächsten Abflug")
 	for level in ["Basic", "Standard", "Premium"]:
 		service_select.add_item(level)
@@ -210,7 +229,7 @@ func _arrange_workspace() -> void:
 		if node == operations_label:
 			target = network
 		node.reparent(target)
-	results_tree = UI.table(["Landung / Route", "Strecke", "Pax / Auslastung", "Einnahmen", "Kosten", "Ergebnis"], [170, 145, 135, 110, 110, 110], 240)
+	results_tree = UI.table(["Landung / Route", "Strecke", "Pax / Auslastung", "Tickets", "Kosten", "Ergebnis", "Fracht kg / EUR"], [170, 145, 135, 110, 110, 110, 150], 240)
 	result_panel.add_child(results_tree)
 
 
@@ -321,12 +340,13 @@ func refresh_operations() -> void:
 		empty.set_selectable(0, false)
 	for result in results:
 		var row := results_tree.create_item(root_item)
-		var values := ["%s / #%d" % [result["landing"], result["route_id"]], "%s → %s" % [result["origin"], result["destination"]], "%d/%d · %.1f %%" % [result["passengers"], result["seats"], result["load_percent"]], UI.money(result["revenue_eur"]), UI.money(result["costs_eur"]), UI.money(result["profit_eur"])]
+		var values := ["%s / #%d" % [result["landing"], result["route_id"]], "%s → %s" % [result["origin"], result["destination"]], "%d/%d · %.1f %%" % [result["passengers"], result["seats"], result["load_percent"]], UI.money(result["ticket_revenue_eur"]), UI.money(result["costs_eur"]), UI.money(result["profit_eur"])]
 		for i in range(values.size()):
 			row.set_text(i, values[i])
 			row.set_tooltip_text(i, "Ticket: %s\nTreibstoff: %s\nFlughäfen: %s\nPersonal: %s\nWartung / Verwaltung: %s\nBordservice (± Standard): %s" % [UI.money(result["ticket_eur"]), UI.money(result["fuel_eur"]), UI.money(result["airport_eur"]), UI.money(result["crew_eur"]), UI.money(result["overhead_eur"]), UI.money(result["service_eur"])])
 		row.set_text(2, "Y %d/%d · J %d/%d" % [result["economy_passengers"], result["economy_seats"], result["business_passengers"], result["business_seats"]])
 		row.set_tooltip_text(3, "Economy: %s · Business: %s" % [UI.money(result["economy_revenue_eur"]), UI.money(result["business_revenue_eur"])])
+		row.set_text(6, "%d kg / %s" % [result["cargo_kg"], UI.money(result["cargo_revenue_eur"])])
 		row.set_custom_color(5, UI.POSITIVE if result["profit_eur"] >= 0 else UI.NEGATIVE)
 
 
@@ -345,6 +365,10 @@ func _selection_changed() -> void:
 		ticket_button.disabled = route.is_empty()
 		ticket_input.editable = not ticket_button.disabled
 		ticket_input.value = route.get("ticket_eur", 100)
+		cargo_button.disabled = route.is_empty()
+		cargo_input.editable = not route.is_empty()
+		cargo_input.max_value = route.get("cargo_max_rate_cents", 0) / 100.0
+		cargo_input.value = route.get("cargo_rate_cents", 0) / 100.0
 		business_input.value = route.get("business_ticket_eur", 200)
 		business_button.disabled = route.is_empty()
 		business_input.editable = not route.is_empty()
@@ -368,6 +392,7 @@ func _selection_changed() -> void:
 
 
 func _update_service_cost(route: Dictionary) -> void:
+	cargo_status.text = "" if route.is_empty() else "Frachtmarkt je Richtung: %d kg/Tag · bisher befördert: %d kg · %s Umsatz. Passagiere und Gepäck haben Vorrang; hohe Preise verringern die Nachfrage." % [route["cargo_daily_demand_kg"], route["actual_cargo_kg"], UI.money(route["actual_cargo_revenue_eur"])]
 	service_cost.text = "" if route.is_empty() else "Bordservice gegenüber Standard: Y %s / J %s je Passagier · erwartet %s je Abflug (Ø aktive Flugzeuge) · bisher %s.\nStandard ist in den Grundkosten enthalten; Basic spart, Premium kostet zusätzlich. Laufende Flüge bleiben unverändert." % [UI.money(route["service_economy_eur"]), UI.money(route["service_business_eur"]), UI.money(route["estimated_service_eur"]), UI.money(route["actual_service_eur"])]
 
 

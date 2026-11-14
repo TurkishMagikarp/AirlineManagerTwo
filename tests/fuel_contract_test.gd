@@ -18,7 +18,7 @@ func _run() -> void:
 			path = arg.trim_prefix("--fuel-save=")
 		if arg.begins_with("--capture-dir="):
 			capture_dir = arg.trim_prefix("--capture-dir=")
-	if not _check(mode in ["ui", "write-v20", "read-v20", "write-v21", "read-v21"], "Explicit mode"):
+	if not _check(mode in ["ui", "write-v20", "read-v20", "write-v22", "read-v22"], "Explicit mode"):
 		return
 	probe_path = path + ".probe"
 	root.gui_embed_subwindows = true
@@ -57,7 +57,7 @@ func _run() -> void:
 				return
 			# Pre-contract world: all effects are zero. Strip additive fields with
 			# text edits to preserve Rust u64/nanosecond encodings exactly.
-			var fixture := _strip_fields(original).replace('"version":21', '"version":20')
+			var fixture := _strip_fields(original).replace('"version":22', '"version":20')
 			if not _check(JSON.parse_string(fixture)["version"] == 20 and not '"fuel_contract' in fixture, "True v20 fixture for every owner and historical quote"):
 				return
 			_write(path, fixture)
@@ -83,7 +83,7 @@ func _run() -> void:
 	elif mode.begins_with("read-"):
 		if not _check(_snapshot() == FileAccess.open(path + ".expected", FileAccess.READ).get_var(), "Restart continuation equals uninterrupted world, active terms, AI, cumulative effect and frozen quotes"):
 			return
-		if not _check(sim.save_game(path).is_empty() and JSON.parse_string(FileAccess.get_file_as_string(path))["version"] == 21, "Resave as v21"):
+		if not _check(sim.save_game(path).is_empty() and JSON.parse_string(FileAccess.get_file_as_string(path))["version"] == 22, "Resave as v22"):
 			return
 	if not await _layouts("expired"):
 		return

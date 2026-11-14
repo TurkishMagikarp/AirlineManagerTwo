@@ -1,5 +1,5 @@
 extends SceneTree
-## Real keyboard/mouse budget input plus separate-process v19/v21 restart phases.
+## Real keyboard/mouse budget input plus separate-process v19/v22 restart phases.
 const DAY := 86400.0
 var main
 var capture_dir := ""
@@ -19,7 +19,7 @@ func _run() -> void:
 		if arg.begins_with("--capture-dir="):
 			capture_dir = arg.trim_prefix("--capture-dir=")
 	probe_path = path + ".probe"
-	if not _check(mode in ["ui", "write-v19", "read-v19", "write-v21", "read-v21"], "Explicit mode"):
+	if not _check(mode in ["ui", "write-v19", "read-v19", "write-v22", "read-v22"], "Explicit mode"):
 		return
 	root.gui_embed_subwindows = true
 	main = load("res://scenes/main.tscn").instantiate()
@@ -51,7 +51,7 @@ func _run() -> void:
 				return
 			_advance(3.345)
 			sim.save_game(path)
-			var contents := FileAccess.get_file_as_string(path).replace('"version":21', '"version":19')
+			var contents := FileAccess.get_file_as_string(path).replace('"version":22', '"version":19')
 			contents = RegEx.create_from_string('"marketing":\\{[^}]*\\},|,"marketing":\\{[^}]*\\}').sub(contents, "", true)
 			if not _check(JSON.parse_string(contents)["version"] == 19 and not '"marketing"' in contents, "True v19 fixture without marketing state, including AI"):
 				return

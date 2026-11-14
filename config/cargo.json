@@ -1,0 +1,7 @@
+{
+  "default_rate_cents": 150,
+  "maximum_rate_cents": 10000,
+  "zero_demand_rate_cents": 600,
+  "kg_per_base_passenger": 0.5,
+  "passenger_and_bags_kg": 100
+}

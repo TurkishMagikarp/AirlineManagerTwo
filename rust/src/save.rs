@@ -8,7 +8,9 @@ use std::io::{Read, Write};
 use std::path::Path;
 use std::time::Duration;
 
-const VERSION: u32 = 21;
+// v22: route cargo rates default during deserialization; historical cargo
+// totals default to zero, including airborne quotes. Never recompute old income.
+const VERSION: u32 = 22;
 // Bounded input, including centuries of fuel/seasonal quotes for the player
 // and both AI airlines in the million-flight finance restart scenario.
 // Version 17 retains per-class quotes, which also split more archive batches.

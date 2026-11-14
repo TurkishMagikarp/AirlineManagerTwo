@@ -7,7 +7,7 @@ $project = Split-Path $PSScriptRoot -Parent
 $directory = Join-Path $env:LOCALAPPDATA ('Temp\opencode\airline-fuel-' + [guid]::NewGuid())
 New-Item -ItemType Directory -Path $directory | Out-Null
 # Isolated explicit paths; each writer exits before its fresh reader starts.
-foreach ($version in @('v20', 'v21')) {
+foreach ($version in @('v20', 'v22')) {
     $save = Join-Path $directory ($version + '.json')
     foreach ($action in @('write', 'read')) {
         $mode = $action + '-' + $version
@@ -15,4 +15,4 @@ foreach ($version in @('v20', 'v21')) {
         if ($LASTEXITCODE -ne 0) { throw "Fuel contract restart failed: $mode" }
     }
 }
-Write-Output "PASS: v20 neutral migration and v21 player/AI fuel continuation in four separate processes; test files: $directory"
+Write-Output "PASS: v20 neutral migration and v22 player/AI fuel continuation in four separate processes; test files: $directory"

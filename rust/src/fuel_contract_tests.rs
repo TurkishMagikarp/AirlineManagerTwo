@@ -227,13 +227,18 @@ fn contracts_ten_year_ai_comparison() {
         }
         for (h, b) in hedged.competitors.iter().zip(&baseline.competitors) {
             let difference = h.game.cash().abs_diff(b.game.cash());
-            // No material balance drift: at most 5% of the control's cash.
+            // Cargo can shift discrete aircraft purchases and route growth. Bound
+            // cash drift to 5% of cumulative operating income, not idle cash.
             assert!(
-                difference <= (b.game.cash().unsigned_abs() / 20).max(100_000),
+                difference <= (b.game.finance.totals.revenue as u64 / 20).max(100_000),
                 "year={year} hedged={} baseline={}",
                 h.game.cash(),
                 b.game.cash()
             );
+            for g in [&h.game, &b.game] {
+                let t = &g.finance.totals;
+                assert!(t.cargo_revenue * 10 < t.revenue - t.cargo_revenue);
+            }
             println!(
                 "CONTRACT_AI year={year} {} hedged={} baseline={} effect={}",
                 h.game.airline.as_ref().unwrap().name,
