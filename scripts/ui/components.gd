@@ -366,6 +366,12 @@ static func table(titles: Array, widths: Array, height: int = 200) -> Tree:
 	var result := BreakdownTable.new()
 	result.tooltip_builder = breakdown_tooltip
 	result.result_formatter = signed_money
+	var values := ResultValues.new()
+	values.table = result
+	values.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	values.clip_contents = true
+	result.add_child(values, false, Node.INTERNAL_MODE_FRONT)
+	result.draw.connect(values.sync_layout)
 	result.columns = titles.size()
 	result.hide_root = true
 	result.select_mode = Tree.SELECT_ROW
@@ -613,16 +619,42 @@ static func field_from_label(control: Control, unit: String = "", help: String =
 	parent.remove_child(caption)
 	caption.queue_free()
 
-class BreakdownTable extends Tree:
-	var result_formatter: Callable
-	func _draw_result(item: TreeItem, rect: Rect2) -> void:
-		var amount: int = item.get_meta("result_amount")
-		var display: String = result_formatter.call(amount)
+## Native Tree cells render on an internal canvas. Draw signed results in a
+## clipped child above it, while retaining canonical cell text for consumers.
+class ResultValues extends Control:
+	var table: Tree
+	func sync_layout() -> void:
+		if not is_visible_in_tree(): return
+		var header_font := table.get_theme_font("title_button_font")
+		var header_size := table.get_theme_font_size("title_button_font_size")
+		var top := header_font.get_height(header_size) + table.get_theme_stylebox("title_button_normal").get_minimum_size().y
+		var extent := table.size
+		for child in table.get_children(true):
+			if child is HScrollBar and child.visible: extent.y -= child.size.y
+			if child is VScrollBar and child.visible: extent.x -= child.size.x
+		position = Vector2(0, top)
+		size = Vector2(extent.x, maxf(extent.y - top, 0))
+		queue_redraw()
+
+	func _draw() -> void:
+		var root := table.get_root()
+		if root == null: return
 		var font := ThemeTokens.font_for(ThemeTokens.DATA)
 		var font_size: int = ThemeTokens.DATA["size"]
-		var width := font.get_string_size(display, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
-		var baseline := rect.position.y + (rect.size.y - font.get_height(font_size)) / 2.0 + font.get_ascent(font_size)
-		draw_string(font, Vector2(rect.end.x - ThemeTokens.SPACE_3 - width, baseline), display, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, ThemeTokens.GO if amount >= 0 else ThemeTokens.STOP)
+		for item in root.get_children():
+			if not item.has_meta("result_column"): continue
+			var column: int = item.get_meta("result_column")
+			var amount: int = item.get_meta("result_amount")
+			var rect := table.get_item_area_rect(item, column)
+			rect.position -= position
+			if not Rect2(Vector2.ZERO, size).intersects(rect): continue
+			var display: String = table.result_formatter.call(amount)
+			var width := font.get_string_size(display, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
+			var baseline := rect.position.y + (rect.size.y - font.get_height(font_size)) / 2.0 + font.get_ascent(font_size)
+			draw_string(font, Vector2(rect.end.x - ThemeTokens.SPACE_3 - width, baseline), display, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, ThemeTokens.GO if amount >= 0 else ThemeTokens.STOP)
+
+class BreakdownTable extends Tree:
+	var result_formatter: Callable
 
 	var tooltip_builder: Callable
 	func _make_custom_tooltip(for_text: String) -> Object:
@@ -668,9 +700,8 @@ static func field_error(control: Control, error: String) -> void:
 
 ## Retain canonical money text for existing table consumers; paint the sign.
 static func cell_result(item: TreeItem, column: int, amount: int) -> void:
-	item.set_cell_mode(column, TreeItem.CELL_MODE_CUSTOM)
 	cell_text(item, column, money(amount))
-	# Custom cells also paint their stored text; only the signed renderer is visible.
+	# The clipped child paints the signed display over the native canvas.
 	item.set_custom_color(column, ThemeTokens.TRANSPARENT)
 	var tree := item.get_tree()
 	var minimums: Dictionary = tree.get_meta("column_minimums", {})
@@ -679,4 +710,4 @@ static func cell_result(item: TreeItem, column: int, amount: int) -> void:
 	tree.set_meta("column_minimums", minimums)
 	tree.set_column_custom_minimum_width(column, minimums[column])
 	item.set_meta("result_amount", amount)
-	item.set_custom_draw_callback(column, Callable(item.get_tree(), "_draw_result"))
+	item.set_meta("result_column", column)

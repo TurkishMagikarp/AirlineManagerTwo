@@ -49,6 +49,14 @@ const HEADER_CONTROL_HEIGHT = 28
 const HEADER_BUTTON = {"family": "sans", "size": 14, "height": 18, "weight": 600, "tracking": 0.0}
 const TAB_HEIGHT = 40
 const TABLE_ROW_HEIGHT = 40
+# FinanceChart SVG/CSS geometry and text styles.
+const CHART_HEIGHT = 248
+const CHART_LINE_WIDTH = 2
+const CHART_MARKER_RADIUS = 5
+const CHART_DASH = 6.0
+const CHART_GAP = 4.0
+const CHART_AXIS = {"family": "mono", "size": 11, "height": 16, "weight": 500, "tracking": 0.04}
+const CHART_VALUE = {"family": "mono", "size": 12, "height": 16, "weight": 500, "tracking": 0.0}
 static var _fonts: Dictionary = {}
 const SCREEN_TITLE = {"family": "display", "size": 32, "height": 36, "weight": 600, "tracking": -0.01}
 const PANEL_TITLE = {"family": "display", "size": 15, "height": 20, "weight": 600, "tracking": 0.08}
