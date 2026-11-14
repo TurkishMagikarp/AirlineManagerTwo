@@ -268,3 +268,38 @@ Wartungsende wieder verschwindet. Spielstandversion unverändert (10), neues Fel
   Maus-/Tastaturbedienung, schmale/breite Fenster und Neustart mit laufender
   Reparatur sowie v22-Altstand zu prüfen; Rust beweist keine sichtbare UI.
   Details und Zeitregeln: `docs/insurance.md`.
+
+## AIR-62 – Versicherung in Godot und Prozessneustarts (2026-11-14)
+
+- Offizielles Linux-Godot `4.7.2.stable.official.ed1daf0bf`, frische isolierte
+  `XDG_DATA_HOME`-/`LOCALAPPDATA`-Verzeichnisse. Rust-Debug-GDExtension mit
+  `cargo build --locked --manifest-path rust/Cargo.toml` erfolgreich gebaut
+  (vorhandener Zig-cc-Wrapper in `/paperclip/airline/bin`).
+- `tests/insurance_test.gd` bedient die echten Finanzen-Controls mit Maus und
+  Tastatur: keine → Basis → Voll → keine, auch bei jedem der drei Fensterformate.
+  Jahresangebote, Selbstbehalt, Limit, Aufschlag, aktuelle Jahresprämie, gebuchte
+  Prämien/Selbstbehalte/unversicherte Reparaturen und jede Schadenzeile entsprechen
+  exakt der Rust-API. Ungültige Deckung verändert den Zustand nicht.
+- Deterministischer Seed 1288 für „Insurance UI“/Flugzeug 1: echter Bodenschaden
+  bei der ersten Landung. Ohne Deckung entstehen unversicherte Reparaturkosten;
+  mit Basis entstehen 49.655 EUR Reparatur, 23.988 EUR Eigenanteil und 25.667 EUR
+  Versichererzahlung. Nicht nuller Prämienrest und gebuchte Prämie sowie ein
+  expliziter 15-%-Aufschlag-Fixture prüfen das Abschalten während der Reparatur:
+  Schadenhistorie, Jahreszähler, Restanteil, Aufschlag und Reparaturauftrag bleiben.
+  Versichererzahlung ist sofort erfolgt, ausstehend ist der Reparaturabschluss.
+- Vier getrennte Linux-Prozesse (`write-v22`, `read-v22`, `write-v23`, `read-v23`)
+  bestanden. Echter v22-Fixture ohne Versicherungsfelder: Migration aller Besitzer
+  auf keine Deckung/leere Schäden, übrige vollständige JSON-Datei bytegleich
+  (Geld, Historie, Flotte, laufendes Abflugangebot). v23 enthält eine laufende
+  Reparatur, bezahlten Anspruch und beide KI auf Basis. Vollständige serialisierte
+  Welt plus API-Ausgaben stimmen direkt nach Neustart und nach weiteren 100 Tagen
+  exakt mit dem ununterbrochenen Lauf überein.
+- Xvfb/Mesa llvmpipe: sechs echte Renderbilder bei 1440×1000, 1100×720 und 680×520;
+  vier Finanzen-Bilder am Task angehängt. Deckungswahl erreichbar/anklickbar;
+  zur letzten nur lesbaren Schadenzeile gescrollt und dort echte Mauseingabe
+  ausgeführt. Kleine Fenster benötigen vertikales Scrollen. Bilder manuell
+  geprüft; Headless-Prüfungen allein werden nicht als Sichtprüfung gewertet.
+- Neuer Windows-Einstieg `tests/run_insurance_restart_test.ps1`; Besitzerabläufe
+  in `docs/insurance.md`. START.bat, tatsächlicher PowerShell-Wrapper, native
+  Windows-Neustarts/DLL-Verhalten, Rendering und Skalierung sind auf diesem
+  Linux-Server nicht ausgeführt und bleiben Besitzerprüfungen.
