@@ -1152,13 +1152,13 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 4 const UI = preload("res://scripts/ui/components.gd")
 5 const Chart = preload("res://scripts/finance_chart.gd")
 48 func _ready() -> void:
-205 func _process(delta: float) -> void:
-213 func refresh(force: bool = false) -> void:
-315 func _chart() -> void:
-318 func _loan_action(borrowing: bool) -> void:
-323 func _select_route() -> void:
-337 func _reset_flights() -> void:
-342 func _flights() -> void:
+207 func _process(delta: float) -> void:
+215 func refresh(force: bool = false) -> void:
+317 func _chart() -> void:
+320 func _loan_action(borrowing: bool) -> void:
+325 func _select_route() -> void:
+339 func _reset_flights() -> void:
+344 func _flights() -> void:
 
 ## scripts/main.gd
 1 extends Control
@@ -1169,40 +1169,41 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 8 const StaffPanel = preload("res://scripts/staff_panel.gd")
 9 const UI = preload("res://scripts/ui/components.gd")
 11 const PAGES: Array[Dictionary] = [
-92 func _ready() -> void:
-167 func _add_time_controls(column: VBoxContainer) -> void:
-222 func _save_game() -> void:
-228 func _load_game() -> void:
-241 func _set_speed(speed: int) -> void:
-248 func _process(delta: float) -> void:
-274 func _refresh_time() -> void:
-288 func _show_page(index: int) -> void:
-320 func _refresh_finance() -> void:
-340 func _build_fleet(content: VBoxContainer) -> void:
-425 func _model_selected(index: int) -> void:
-436 func _lease_aircraft() -> void:
-446 func _dispose_aircraft() -> void:
-456 func _buy_aircraft() -> void:
-472 func _refresh_used_market() -> void:
-512 func _buy_used_aircraft(listing_id: int) -> void:
-524 func _refresh_fleet() -> void:
-570 func _maintenance_summary(plane: Dictionary) -> String:
-583 func _build_maintenance(parent: VBoxContainer) -> void:
-619 func _refresh_base_action() -> void:
-631 func _change_maintenance_base() -> void:
-638 func _refresh_maintenance() -> void:
-697 func _request_maintenance() -> void:
-708 func _cancel_maintenance() -> void:
-719 func _build_founding() -> void:
-793 func _country_changed(index: int) -> void:
-807 func _found_airline() -> void:
-819 func _sync_view() -> void:
-836 func _open_founding() -> void:
-845 func _label(text: String, style: Dictionary, color: Color = ThemeTokens.INK) -> Label:
-849 func _build_finance(content: VBoxContainer) -> void:
-876 func _build_attention(parent: VBoxContainer) -> void:
-893 func _refresh_attention() -> void:
-915 func _open_attention(entry: Dictionary) -> void:
+99 func _ready() -> void:
+186 func _add_time_controls(column: VBoxContainer) -> void:
+245 func _save_game() -> void:
+251 func _load_game() -> void:
+264 func _set_speed(speed: int) -> void:
+271 func _process(delta: float) -> void:
+297 func _refresh_time() -> void:
+315 func _show_page(index: int) -> void:
+347 func _refresh_finance() -> void:
+367 func _build_fleet(content: VBoxContainer) -> void:
+452 func _model_selected(index: int) -> void:
+463 func _lease_aircraft() -> void:
+473 func _dispose_aircraft() -> void:
+483 func _buy_aircraft() -> void:
+499 func _refresh_used_market() -> void:
+539 func _buy_used_aircraft(listing_id: int) -> void:
+551 func _refresh_fleet() -> void:
+597 func _maintenance_summary(plane: Dictionary) -> String:
+610 func _build_maintenance(parent: VBoxContainer) -> void:
+646 func _refresh_base_action() -> void:
+658 func _change_maintenance_base() -> void:
+665 func _refresh_maintenance() -> void:
+724 func _request_maintenance() -> void:
+735 func _cancel_maintenance() -> void:
+746 func _build_founding() -> void:
+820 func _country_changed(index: int) -> void:
+834 func _found_airline() -> void:
+846 func _sync_view() -> void:
+866 func _open_founding() -> void:
+875 func _label(text: String, style: Dictionary, color: Color = ThemeTokens.INK) -> Label:
+879 func _build_finance(content: VBoxContainer) -> void:
+906 func _build_attention(parent: VBoxContainer) -> void:
+929 func _refresh_attention() -> void:
+954 func _resize_frame() -> void:
+970 func _open_attention(entry: Dictionary) -> void:
 
 ## scripts/map_background.gd
 1 extends Control
@@ -1296,6 +1297,9 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 58 class LegTrack extends Control:
 69 class EmptyFrame extends PanelContainer:
 319 class DecisionDialog extends ColorRect:
+390 const CASH_STYLE = {"family": "mono", "size": 18, "height": 20, "weight": 500, "tracking": 0.0}
+391 const FLAP_STYLE = {"family": "mono", "size": 18, "height": 32, "weight": 500, "tracking": 0.0}
+393 class FlapReadout extends Label:
 
 ## scripts/ui/operations_theme.gd
 1 extends Theme

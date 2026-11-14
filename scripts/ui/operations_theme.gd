@@ -156,6 +156,38 @@ func _init() -> void:
 	button_styles("DangerSolidButton", STOP, STOP, STOP, STOP, ON_STOP)
 	button_styles("GhostButton", TRANSPARENT, SURFACE_RAISED, SURFACE_SUNKEN, TRANSPARENT, INK_MUTED)
 	button_styles("OptionButton", SURFACE_RAISED, SURFACE_RAISED, SURFACE_SUNKEN, LINE_STRONG, INK)
+	button_styles("NavButton", TRANSPARENT, SURFACE_RAISED, ACCENT_WASH, TRANSPARENT, INK_MUTED)
+	button_styles("SegmentButton", TRANSPARENT, SURFACE_RAISED, ACCENT, TRANSPARENT, INK_MUTED)
+	button_styles("AttentionRow", SURFACE, SURFACE_RAISED, SURFACE_SUNKEN, LINE, INK)
+	button_styles("AttentionHeader", SURFACE, SURFACE_RAISED, SURFACE_SUNKEN, TRANSPARENT, INK)
+	text_style("AttentionHeader", PANEL_TITLE)
+	for state in ["normal", "hover", "pressed", "disabled"]:
+		var style := get_stylebox(state, "AttentionHeader").duplicate() as StyleBoxFlat
+		style.content_margin_top = 12
+		style.content_margin_bottom = 12
+		set_stylebox(state, "AttentionHeader", style)
+	for type in ["NavButton", "SegmentButton"]:
+		var fill := ACCENT_WASH if type == "NavButton" else ACCENT
+		var ink := ACCENT_TEXT if type == "NavButton" else ON_ACCENT
+		for state in ["pressed", "hover_pressed"]:
+			set_stylebox(state, type, box(fill, TRANSPARENT, RADIUS_MD, SPACE_2, SPACE_2))
+			set_color("font_" + state + "_color", type, ink)
+			set_color("icon_" + state + "_color", type, ink)
+		for state in ["normal", "hover", "disabled"]:
+			set_stylebox(state, type, box(SURFACE_RAISED if state == "hover" else TRANSPARENT, TRANSPARENT, RADIUS_MD, SPACE_2, SPACE_2))
+	set_constant("icon_max_width", "NavButton", 20)
+	text_style("SegmentButton", {"family": "mono", "size": 13, "height": 16, "weight": 500, "tracking": 0.0})
+	for state in ["normal", "hover", "pressed", "hover_pressed", "disabled"]:
+		var style := get_stylebox(state, "SegmentButton").duplicate() as StyleBoxFlat
+		style.content_margin_left = SPACE_3
+		style.content_margin_right = SPACE_3
+		style.content_margin_top = 7
+		style.content_margin_bottom = 7
+		style.set_corner_radius_all(RADIUS_SM)
+		set_stylebox(state, "SegmentButton", style)
+	# A paused segment keeps the selected fill even though pausing again is disabled.
+	set_stylebox("disabled", "SegmentButton", get_stylebox("pressed", "SegmentButton"))
+	set_color("font_disabled_color", "SegmentButton", ON_ACCENT)
 	set_type_variation("PanelActionButton", "Button")
 	text_style("PanelActionButton", HEADER_BUTTON)
 	for state in ["normal", "hover", "pressed", "hover_pressed", "disabled"]:
