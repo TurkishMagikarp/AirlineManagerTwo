@@ -360,3 +360,21 @@ Wartungsende wieder verschwindet. Spielstandversion unverändert (10), neues Fel
 - START.bat, tatsächliche PowerShell-Wrapper, native Windows-DLLs/Prozesse
   und Windows-Skalierung bleiben Besitzerprüfungen.
   Details: pilot-ratings-verification.md.
+
+### 2026-11-14 — AIR-80 Aufmerksamkeitsliste in Godot
+
+- Echte Mauswahl unterschiedlicher Routen, Flugzeuge und eines Trainees,
+  Ein-/Ausklappen sowie Seitenaktionen unter der Liste bei 1440×1000,
+  1100×720 und 680×520 geprüft. Sechs Originalaufnahmen an der Aufgabe.
+- Unveränderte Snapshots behalten Zeilen, Fokus und Scrollposition; echte
+  laufende Frames und Klicks bei 1×/4×/16×. Warnungen verschwinden bei
+  Personalbesetzung, Flugplanzuweisung und exakt am Trainingsende.
+  Speichern/Laden stellt Welt/API exakt wieder her; eingeklappt bleibt zu.
+- Alle 29 Godot-Skripte, Hauptszene, Editor-Import und bisherigen
+  Linux-Neustartfamilien bestanden (85 vollständige Serienaufrufe).
+  Locked-Build, 210 Rust-Tests und strenges Clippy bestanden; isolierter
+  Millionenflugtest: 214.168829672 s Fortschreibung unter 300 s.
+- Kein Produktionsfehler bestätigt; nur Testabdeckung und Dokumentation.
+  Gameplay, Ökonomie und Speicherformat v25 unverändert. Native Windows-,
+  START.bat-, PowerShell- und Windows-Neustartprüfungen bleiben beim Besitzer.
+  Details: attention-verification.md.
