@@ -15,6 +15,7 @@ Godot 4.6+ UI over a Rust (godot-rust 0.5.5, edition 2024) simulation core. Docs
 - Design docs: `docs/game-design/` (decisions in `decisions/DECISION-REGISTER.md`); topic docs: `docs/{economy,demand,map,ui-design,staff}.md`; history: `docs/verification-log.md`.
 
 ## Commands
+Use `AIRLINE_ENFORCE_PERF_BUDGET=1 cargo test --locked --manifest-path rust/Cargo.toml million_flight -- --test-threads=1` on a quiet machine after long-advance changes; report the measured time in the PR.
 ```
 cargo build --locked --manifest-path rust/Cargo.toml
 cargo test  --locked --manifest-path rust/Cargo.toml
