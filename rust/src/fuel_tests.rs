@@ -113,7 +113,12 @@ fn fuel_steps_speeds_pause_restart_and_global_price() {
                 price,
             )
             .unwrap();
-            assert_eq!(result.totals.fuel, expected.fuel);
+            // The global market is identical; the signed contract adjustment
+            // explains why an owner's billed fuel can differ from spot.
+            assert_eq!(
+                result.totals.fuel - result.totals.fuel_contract_effect,
+                expected.fuel
+            );
             checked += 1;
         }
         assert!(checked > 0);

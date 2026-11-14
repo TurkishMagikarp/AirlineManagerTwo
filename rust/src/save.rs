@@ -8,7 +8,7 @@ use std::io::{Read, Write};
 use std::path::Path;
 use std::time::Duration;
 
-const VERSION: u32 = 20;
+const VERSION: u32 = 21;
 // Bounded input, including centuries of fuel/seasonal quotes for the player
 // and both AI airlines in the million-flight finance restart scenario.
 // Version 17 retains per-class quotes, which also split more archive batches.
@@ -23,6 +23,7 @@ struct SaveGame {
 // Future simulation data belongs here, not in the UI or a serialized Godot object.
 #[derive(Serialize, Deserialize)]
 struct GameState {
+    fuel_contract: Option<crate::fuel_contracts::Contract>,
     #[serde(default)]
     fuel_market: Option<crate::economy::FuelMarket>,
     competitors: Option<Vec<crate::competition::Competitor>>,
@@ -79,6 +80,7 @@ pub fn save(path: &Path, game: &Game) -> Result<(), String> {
     game.validate_maintenance()?;
     game.validate_staff()?;
     game.validate_financing()?;
+    game.validate_fuel_contract()?;
     game.validate_finance()?;
     game.validate_history()?;
     game.validate_tax()?;
@@ -87,6 +89,7 @@ pub fn save(path: &Path, game: &Game) -> Result<(), String> {
     let data = SaveGame {
         version: VERSION,
         state: GameState {
+            fuel_contract: game.fuel_contract.clone(),
             fuel_market: Some(game.fuel_market.clone()),
             competitors: Some(game.competitors.clone()),
             history: game.history.clone(),
@@ -161,6 +164,9 @@ pub fn load(path: &Path) -> Result<Game, String> {
     if value["version"].as_u64().is_some_and(|v| v < 20) {
         crate::marketing::migrate(&mut value["state"]);
     }
+    if value["version"].as_u64().is_some_and(|v| v < 21) {
+        crate::fuel_contracts::migrate(&mut value["state"]);
+    }
     let data: SaveGame = serde_json::from_value(value)
         .map_err(|_| "Spielstand ist beschädigt oder unvollständig.".to_string())?;
     if !(1..=VERSION).contains(&data.version) {
@@ -231,6 +237,7 @@ pub fn load(path: &Path) -> Result<Game, String> {
         return Err("Ungültiger Treibstoffmarkt.".into());
     }
     let mut game = Game {
+        fuel_contract: data.state.fuel_contract,
         marketing: data.state.marketing.ok_or("Marketingdaten fehlen.")?,
         tax: if data.version >= 19 {
             data.state.tax.ok_or("Steuerdaten fehlen.")?
@@ -351,6 +358,7 @@ pub fn load(path: &Path) -> Result<Game, String> {
     game.validate_maintenance()?;
     game.validate_staff()?;
     game.validate_financing()?;
+    game.validate_fuel_contract()?;
     game.validate_finance()?;
     game.validate_history()?;
     game.validate_tax()?;

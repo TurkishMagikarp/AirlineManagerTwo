@@ -271,3 +271,15 @@ Save-Version 19 speichert Steuerbeginn, Ergebnisbasis und Jahresabschlüsse.
 Ältere Saves beginnen am Ladezeitpunkt ohne Verlustvortrag, mit dem bereits
 aufgelaufenen Vorsteuerergebnis als Basis. Nur die danach erfassten Ergebnisse
 werden beim nächsten 365-Tage-Jahreswechsel besteuert, nie vergangene Jahre.
+
+## Treibstoff-Lieferverträge
+
+Rust-Regeln: `config/fuel_contracts.json`, `rust/src/fuel_contracts.rs`. Eine Airline kann 25/50/75 % ihres Treibstoffs für 3/6/12 Monate (je 30 Tage) zum aktuellen Weltmarktpreis plus 2 % sichern. Der Preis wird auf ganze ct/kg aufgerundet. Keine Vorauszahlung, Lagerhaltung oder Kündigung. Neue Verträge sind bei Zahlungsnot, Restrukturierung oder Insolvenz gesperrt; bestehende Verträge laufen weiter. Nach Ablauf ist ein neuer Abschluss möglich.
+
+Der Anteil gilt für die physische Treibstoffmenge jedes Abflugs in `[Beginn, Ende)`. Markt- und Vertragspreis werden vor der einmaligen Aufrundung auf ganze EUR gewichtet. Ein Abflug genau am Ende nutzt vollständig den Marktpreis. Bereits gestartete Flüge behalten ihre Kosten, auch wenn während des Flugs ein Vertrag beginnt oder endet. Abrechnung erfolgt wie bisher bei Landung. `fuel_contract_effect` dokumentiert die Differenz zur reinen Marktrechnung: positiv = Mehrkosten, negativ = Ersparnis; sie ist bereits in den Treibstoffkosten enthalten und wird nicht nochmals belastet. Finanzen zeigt den kumulierten Effekt gebuchter Landungen.
+
+KI prüft beim bestehenden wöchentlichen Review: unter dem langfristigen Mittelwert und ab 2 Mio. EUR Kasse sichert sie 25 % für 3 Monate. Gleiche Abschluss- und Abrechnungsregeln; keine Sonderkonditionen. Bereits an der Review-Grenze abgeflogene Flüge bleiben unverändert. Bei Insolvenz wird die KI samt Vertrag aus der Welt entfernt, ohne Stornoerlös oder Folgekosten.
+
+Save-Version 21: alte Spielstände erhalten für alle Airlines keinen Vertrag, bestehende Flugkosten bleiben erhalten. Abgelaufene Vertragsdaten bleiben bis zum nächsten Abschluss gespeichert, haben aber keine Preiswirkung. Der Vertrag verwendet ausschließlich die Rust-Spielzeit; Pausen, Geschwindigkeit und Frame-Größe ändern seine Laufzeit nicht.
+
+Rust-Vergleichstest über zehn Jahre, tägliche Schritte und jährliches Save/Load: beide KI-Airlines bleiben ohne Zahlungsnot / Restrukturierung. Jede Jahresprobe bleibt innerhalb 5 % der Kasse des Kontrolllaufs ohne KI-Verträge. Im zehnten Jahr: Regional Wings 166.657.714 EUR mit Vertragspolitik gegenüber 170.261.977 EUR ohne; Continental Sky 172.315.707 gegenüber 177.245.265 EUR. Dies ist ein reproduzierbarer Szenariovergleich, keine Garantie für jede Weltkonfiguration.

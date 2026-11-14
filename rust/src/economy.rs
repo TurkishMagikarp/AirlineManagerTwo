@@ -157,6 +157,19 @@ static CONFIG: LazyLock<Config> = LazyLock::new(|| {
     }
     c
 });
+pub fn fuel_mean() -> i64 {
+    CONFIG.fuel_cents_per_kg
+}
+
+/// Price in hundredths of a cent/kg, preserving the blended share exactly.
+pub fn fuel_bill(route: &Route, model: &str, price: i64) -> Result<i64, String> {
+    let seconds = operations::timings(route, model)?.0 as i128;
+    let r = &CONFIG.models[model];
+    let quantity = seconds * i128::from(r.fuel_kg_per_hour) + i128::from(r.fuel_cycle_kg) * 3600;
+    i64::try_from((quantity * i128::from(price) + 35_999_999) / 36_000_000)
+        .map_err(|_| "Treibstoffüberlauf.".into())
+}
+
 pub fn default_ticket() -> i64 {
     CONFIG.default_ticket_eur
 }
@@ -187,6 +200,8 @@ pub struct Totals {
     pub seats: i64,
     pub revenue: i64,
     pub fuel: i64,
+    #[serde(default)]
+    pub fuel_contract_effect: i64,
     pub airport: i64,
     pub crew: i64,
     // Additive field: historical version-6 results keep their original costs.
@@ -196,6 +211,10 @@ pub struct Totals {
 impl Totals {
     pub fn valid_cabins(&self, economy_fare: i64) -> bool {
         crate::service::valid(self)
+            && self
+                .fuel
+                .checked_sub(self.fuel_contract_effect)
+                .is_some_and(|v| v >= 0)
             && self.business_passengers >= 0
             && self.business_passengers <= self.passengers
             && self.business_seats >= self.business_passengers
@@ -236,6 +255,7 @@ impl Totals {
             seats,
             revenue,
             fuel,
+            fuel_contract_effect,
             airport,
             crew,
             overhead,
@@ -335,6 +355,7 @@ fn quote_with_time(
     let seconds = operations::timings(route, model_id)?.0 as i64;
     let rates = &c.models[model_id];
     Ok(Totals {
+        fuel_contract_effect: 0,
         service: route.service_level.cost(passengers, demand.business),
         flights: 1,
         passengers,
@@ -368,6 +389,9 @@ impl Game {
     pub fn validate_finance(&self) -> Result<(), String> {
         let valid = |t: &Totals| {
             crate::service::valid(t)
+                && t.fuel
+                    .checked_sub(t.fuel_contract_effect)
+                    .is_some_and(|v| v >= 0)
                 && t.business_passengers >= 0
                 && t.business_passengers <= t.passengers
                 && t.business_seats >= t.business_passengers

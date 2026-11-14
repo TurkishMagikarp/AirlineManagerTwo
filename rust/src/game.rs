@@ -8,6 +8,7 @@ use std::collections::HashSet;
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Game {
+    pub fuel_contract: Option<crate::fuel_contracts::Contract>,
     pub clock: Clock,
     #[serde(default)]
     pub fuel_market: crate::economy::FuelMarket,
@@ -35,6 +36,7 @@ pub struct Game {
 impl Default for Game {
     fn default() -> Self {
         Self {
+            fuel_contract: None,
             clock: Clock::default(),
             fuel_market: Default::default(),
             airline: None,
