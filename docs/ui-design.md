@@ -38,6 +38,10 @@ Basis kommen aus `get_airline_info()`. Einen Airline-Code liefert die Simulation
 noch nicht: dafür steht ein Gedankenstrich statt erfundener Daten. Badges zählen
 nur die Einträge des vorhandenen Aufmerksamkeitssnapshots je Zielseite.
 
+Das Flugarchiv lässt die Seitennavigation bei langen, simulationsbasierten
+Flugzahlen umbrechen. So bleiben „Neuere Flüge“ und „Ältere Flüge“ auch im
+680-Pixel-Fenster vollständig erreichbar; die Flugzahlen werden nicht gekürzt.
+
 Die ClockBar bleibt oben außerhalb des vertikalen Inhalts-Scrollbereichs. Jede
 Stelle der unveränderten Rust-Anzeige „Tag N · HH:MM:SS“ hat eine dunkle 22×32px
 Split-Flap-Zelle mit DM Mono und Naht, ohne Animation. Kalenderdatum/Wochentag

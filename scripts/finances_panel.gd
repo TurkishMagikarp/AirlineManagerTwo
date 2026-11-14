@@ -189,7 +189,8 @@ func _ready() -> void:
 	history.add_child(UI.label("Auslastung je Zeitabschnitt · Lücken = keine Landungen · nach Sitzplätzen gewichtet", ThemeTokens.SMALL, UI.MUTED))
 	flights_tree = UI.table(["Landung", "Richtung", "Ticket", "Pax / Sitze", "Auslastung", "Tickets", "Kosten", "Ergebnis", "Fracht kg / EUR"], [170, 140, 90, 95, 90, 110, 110, 110, 150], 250)
 	history.add_child(flights_tree)
-	var paging := HBoxContainer.new()
+	# The archive count grows with the save; wrap actions when its label no longer fits.
+	var paging := HFlowContainer.new()
 	history.add_child(paging)
 	previous_button = Button.new()
 	previous_button.text = "Neuere Flüge"

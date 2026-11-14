@@ -1134,13 +1134,13 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 4 const UI = preload("res://scripts/ui/components.gd")
 5 const Chart = preload("res://scripts/finance_chart.gd")
 48 func _ready() -> void:
-206 func _process(delta: float) -> void:
-214 func refresh(force: bool = false) -> void:
-316 func _chart() -> void:
-319 func _loan_action(borrowing: bool) -> void:
-324 func _select_route() -> void:
-338 func _reset_flights() -> void:
-343 func _flights() -> void:
+207 func _process(delta: float) -> void:
+215 func refresh(force: bool = false) -> void:
+317 func _chart() -> void:
+320 func _loan_action(borrowing: bool) -> void:
+325 func _select_route() -> void:
+339 func _reset_flights() -> void:
+344 func _flights() -> void:
 
 ## scripts/main.gd
 1 extends Control
