@@ -296,27 +296,23 @@ impl Game {
         let mut first_landing = u64::MAX;
         for r in self.routes.iter().filter(|r| r.plan.is_some()) {
             if let Some(p) = self.fleet.iter().find(|p| Some(p.id) == r.aircraft_id)
-                && let Ok(m) = crate::operations::movement(r, &p.model_id, now)
-            {
-                let landing = if m.landing > now {
-                    m.landing
-                } else {
-                    m.landing
-                        .saturating_add(r.plan.as_ref().unwrap().interval_seconds)
-                };
-                first_landing = first_landing.min(landing);
-                let mut free = r.clone();
-                free.ticket_eur = 0;
-                let ceiling = crate::economy::quote_at_price(
-                    &free,
+                && let Ok(landing) = crate::disruptions::landing_at(
+                    r,
                     &p.model_id,
-                    &[crate::demand::Offer::new(
-                        &free,
-                        crate::aircraft::model(&p.model_id).ok()?.seats,
-                    )],
-                    self.fuel_market.max_price(),
+                    r.plan.as_ref().unwrap().completed_flights,
                 )
-                .map_or(i64::MAX, |t| t.costs())
+            {
+                first_landing = first_landing.min(landing);
+                let ceiling = crate::economy::flight_cost_ceiling(
+                    r,
+                    &p.model_id,
+                    self.fuel_contract
+                        .as_ref()
+                        .map_or(self.fuel_market.max_price(), |c| {
+                            self.fuel_market.max_price().max(c.locked_cents)
+                        }),
+                )
+                .unwrap_or(i64::MAX)
                 .max(
                     r.plan
                         .as_ref()
@@ -325,8 +321,11 @@ impl Game {
                         .as_ref()
                         .map_or(0, |f| f.totals.costs()),
                 );
-                let count =
-                    next.saturating_sub(now) / r.plan.as_ref().unwrap().interval_seconds + 1;
+                // Recovering slack can temporarily make actual intervals
+                // shorter than the schedule. Bound flight count by physical
+                // flight + turnaround time, which recovery can never shorten.
+                let (flight, ground) = crate::operations::timings(r, &p.model_id).ok()?;
+                let count = next.saturating_sub(now) / (flight + ground) + 1;
                 worst_costs = worst_costs.saturating_add(i128::from(ceiling) * i128::from(count));
             }
         }

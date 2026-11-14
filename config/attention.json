@@ -3,6 +3,7 @@
   "priorities": {
     "negative_cash": 0,
     "crew": 10,
+    "delay": 15,
     "technicians": 20,
     "salary_reserve": 30,
     "idle": 40,

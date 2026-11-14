@@ -117,7 +117,7 @@ fn hash(mut x: u64) -> u64 {
     x = (x ^ (x >> 27)).wrapping_mul(0x94d049bb133111eb);
     x ^ (x >> 31)
 }
-fn roll(seed: u64, cycle: u64) -> u64 {
+pub(crate) fn roll(seed: u64, cycle: u64) -> u64 {
     hash(seed.wrapping_add(cycle.wrapping_mul(0x9e3779b97f4a7c15)))
 }
 pub(crate) fn incident(seed: u64, cycle: u64) -> bool {
@@ -243,9 +243,15 @@ impl Game {
                 let cycles = next_cycle(self.incident_seed(plane.id), plane.wear.cycles)?
                     .checked_sub(plane.wear.cycles)?;
                 let index = plan.completed_flights.checked_add(cycles)?.checked_sub(1)?;
-                plan.first_departure
-                    .checked_add(index.checked_mul(plan.interval_seconds)?)?
-                    .checked_add(operations::timings(r, &plane.model_id).ok()?.0)
+                let flight = operations::timings(r, &plane.model_id).ok()?.0;
+                if cycles
+                    > plane
+                        .wear
+                        .flights_until_due(crate::maintenance::rules(&plane.model_id).ok()?, flight)
+                {
+                    return None;
+                }
+                crate::disruptions::landing_at(r, &plane.model_id, index).ok()
             })
             .chain(premium)
             .min()
@@ -268,9 +274,8 @@ impl Game {
             if plan.completed_flights == 0 || plane.status == AircraftStatus::InFlight {
                 continue;
             }
-            let landing = plan.first_departure
-                + (plan.completed_flights - 1) * plan.interval_seconds
-                + operations::timings(route, &plane.model_id)?.0;
+            let landing =
+                crate::disruptions::landing_at(route, &plane.model_id, plan.completed_flights - 1)?;
             if landing != now || !incident(self.incident_seed(plane.id), plane.wear.cycles) {
                 continue;
             }

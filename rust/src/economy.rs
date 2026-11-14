@@ -173,6 +173,33 @@ pub fn fuel_bill(route: &Route, model: &str, price: i64) -> Result<i64, String> 
 #[cfg(test)]
 thread_local! { pub(crate) static LEGACY_AIRPORT_CHARGES: std::cell::Cell<bool> = const { std::cell::Cell::new(false) }; }
 
+/// Conservative cash runway bound. It needs no passenger market: capacity,
+/// maximum fuel price and nonnegative service/care cover every departure.
+pub fn flight_cost_ceiling(route: &Route, model_id: &str, fuel_price: i64) -> Result<i64, String> {
+    let model = aircraft::model(model_id)?;
+    let rates = &CONFIG.models[model_id];
+    let seconds = i64::try_from(crate::operations::timings(route, model_id)?.0)
+        .map_err(|_| "Zeitüberlauf.")?;
+    let seats = i64::from(model.seats);
+    let overhead = rates.overhead_cycle_eur + (seconds * rates.overhead_eur_per_hour + 3599) / 3600;
+    fuel_bill(route, model_id, fuel_price)?
+        .checked_add(airport_bill(route, model_id, seats)?)
+        .and_then(|v| v.checked_add(overhead))
+        .and_then(|v| {
+            v.checked_add(
+                route
+                    .service_level
+                    .cost(seats, 0)
+                    .max(route.service_level.cost(seats, seats))
+                    .max(0),
+            )
+        })
+        .and_then(|v| {
+            v.checked_add(seats.checked_mul(crate::disruptions::RULES.care_eur_per_passenger)?)
+        })
+        .ok_or("Finanzüberlauf.".into())
+}
+
 /// Both endpoints charge the same model/passenger tariff at their own level.
 /// Round each endpoint up to whole EUR; empty flights still pay landing charges.
 pub fn airport_bill(route: &Route, model: &str, passengers: i64) -> Result<i64, String> {
@@ -227,6 +254,16 @@ fn zero(value: &i64) -> bool {
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Totals {
     #[serde(default, skip_serializing_if = "zero")]
+    pub care: i64,
+    // Compact archive counters: on-time = tracked minus late. Most flight
+    // batches omit the zero late count entirely.
+    #[serde(default, rename = "otp", skip_serializing_if = "zero")]
+    pub punctuality_flights: i64,
+    #[serde(default, rename = "late", skip_serializing_if = "zero")]
+    pub late_flights: i64,
+    #[serde(default, skip_serializing_if = "zero")]
+    pub delay_seconds: i64,
+    #[serde(default, skip_serializing_if = "zero")]
     pub cargo_kg: i64,
     #[serde(default, skip_serializing_if = "zero")]
     pub cargo_revenue: i64,
@@ -253,7 +290,8 @@ pub struct Totals {
 }
 impl Totals {
     pub fn valid_cabins(&self, economy_fare: i64) -> bool {
-        crate::cargo::valid(self)
+        crate::disruptions::valid(self)
+            && crate::cargo::valid(self)
             && crate::service::valid(self)
             && self
                 .fuel
@@ -279,7 +317,7 @@ impl Totals {
                 == Some(self.revenue)
     }
     pub fn costs(&self) -> i64 {
-        self.fuel + self.airport + self.crew + self.overhead + self.service
+        self.fuel + self.airport + self.crew + self.overhead + self.service + self.care
     }
     pub fn profit(&self) -> i64 {
         self.revenue - self.costs()
@@ -309,14 +347,19 @@ impl Totals {
             business_revenue,
             business_seats,
             cargo_kg,
-            cargo_revenue
+            cargo_revenue,
+            care,
+            punctuality_flights,
+            late_flights,
+            delay_seconds
         );
         let costs = self
             .fuel
             .checked_add(self.airport)?
             .checked_add(self.crew)?
             .checked_add(self.overhead)?
-            .checked_add(self.service)?;
+            .checked_add(self.service)?
+            .checked_add(self.care)?;
         if costs < 0 {
             return None;
         }
@@ -444,6 +487,10 @@ pub(crate) fn quote_prepared(
     let seconds = market.flight_seconds as i64;
     let rates = market.rates;
     Ok(Totals {
+        care: 0,
+        punctuality_flights: 0,
+        late_flights: 0,
+        delay_seconds: 0,
         cargo_kg,
         cargo_revenue,
         fuel_contract_effect: 0,
@@ -522,7 +569,8 @@ impl Game {
     pub fn validate_finance(&self) -> Result<(), String> {
         self.validate_insurance()?;
         let valid = |t: &Totals| {
-            crate::cargo::valid(t)
+            crate::disruptions::valid(t)
+                && crate::cargo::valid(t)
                 && crate::service::valid(t)
                 && t.fuel
                     .checked_sub(t.fuel_contract_effect)
@@ -546,6 +594,7 @@ impl Game {
                     .and_then(|v| v.checked_add(t.crew))
                     .and_then(|v| v.checked_add(t.overhead))
                     .and_then(|v| v.checked_add(t.service))
+                    .and_then(|v| v.checked_add(t.care))
                     .is_some_and(|costs| costs >= 0)
         };
         if !valid(&self.finance.totals)
@@ -578,7 +627,11 @@ impl Game {
         if t.flights <= HISTORY_LIMIT as i64 && sum != *t {
             return Err("Unvollständige Finanzsummen.".into());
         }
-        if sum.cargo_kg > t.cargo_kg
+        if sum.care > t.care
+            || sum.punctuality_flights > t.punctuality_flights
+            || sum.late_flights > t.late_flights
+            || sum.delay_seconds > t.delay_seconds
+            || sum.cargo_kg > t.cargo_kg
             || sum.cargo_revenue > t.cargo_revenue
             || sum.business_passengers > t.business_passengers
             || sum.business_seats > t.business_seats
@@ -921,8 +974,11 @@ mod tests {
                     let balance = g.airline.as_ref().unwrap().capital_eur;
                     g.clock.set_running(true);
                     assert!(g.advance((60 + flight) as f64));
-                    assert_eq!(g.finance.totals, t);
-                    assert_eq!(g.finance.recent[0].totals, t);
+                    let mut operated = t.clone();
+                    operated.punctuality_flights = 1;
+                    operated.late_flights = 0;
+                    assert_eq!(g.finance.totals, operated);
+                    assert_eq!(g.finance.recent[0].totals, operated);
                     assert_eq!(
                         g.airline.as_ref().unwrap().capital_eur,
                         balance + t.profit()

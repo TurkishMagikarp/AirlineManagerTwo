@@ -12,11 +12,13 @@ use std::time::Duration;
 // v24: airport-specific tariffs apply only to new departure quotes.
 // Identity migration: keep all stored money, history and airborne quotes verbatim;
 // no new saved fields are needed because tariffs belong to the world catalog.
-const VERSION: u32 = 25;
+// v26: deterministic delay cursors and punctuality/care totals.
+const VERSION: u32 = 26;
 // Bounded input, including centuries of fuel/seasonal quotes for the player
 // and both AI airlines in the million-flight finance restart scenario.
 // Version 17 retains per-class quotes, which also split more archive batches.
-const MAX_BYTES: u64 = 128 * 1024 * 1024;
+// v26 adds disruption boundaries to centuries of AI/player history.
+const MAX_BYTES: u64 = 256 * 1024 * 1024;
 
 #[derive(Serialize, Deserialize)]
 struct SaveGame {
@@ -126,7 +128,10 @@ pub fn save(path: &Path, game: &Game) -> Result<(), String> {
     let bytes = serde_json::to_vec(&data)
         .map_err(|error| format!("Spielstand konnte nicht erzeugt werden: {error}"))?;
     if bytes.len() as u64 > MAX_BYTES {
-        return Err("Spielstand ist zu groß.".into());
+        return Err(format!(
+            "Spielstand ist zu groß: {} Bytes (Limit {MAX_BYTES}).",
+            bytes.len()
+        ));
     }
     let parent = path
         .parent()
@@ -155,7 +160,10 @@ pub fn load(path: &Path) -> Result<Game, String> {
         .read_to_end(&mut bytes)
         .map_err(|error| format!("Spielstand nicht lesbar: {error}"))?;
     if bytes.len() as u64 > MAX_BYTES {
-        return Err("Spielstand ist zu groß.".into());
+        return Err(format!(
+            "Spielstand ist zu groß: {} Bytes (Limit {MAX_BYTES}).",
+            bytes.len()
+        ));
     }
     let mut value: serde_json::Value = serde_json::from_slice(&bytes)
         .map_err(|_| "Spielstand ist beschädigt oder unvollständig.".to_string())?;
@@ -177,6 +185,10 @@ pub fn load(path: &Path) -> Result<Game, String> {
     if value["version"].as_u64().is_some_and(|v| v < 23) {
         crate::insurance::migrate(&mut value["state"]);
     }
+    // v26 is an additive migration: absent cursors and punctuality/care
+    // fields deserialize to None/zero for every owner and archived result.
+    // Initialize a cursor only when play advances; an existing airborne quote
+    // is then frozen through its original landing, without replaying history.
     let data: SaveGame = serde_json::from_value(value)
         .map_err(|_| "Spielstand ist beschädigt oder unvollständig.".to_string())?;
     if !(1..=VERSION).contains(&data.version) {

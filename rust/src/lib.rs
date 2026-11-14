@@ -14,6 +14,9 @@ mod cargo_tests;
 mod clock;
 mod competition;
 mod demand;
+#[cfg(test)]
+mod disruption_tests;
+mod disruptions;
 mod economy;
 mod financing;
 #[cfg(test)]
@@ -177,7 +180,7 @@ impl SimulationClock {
                     "route_id" => id, "origin" => a, "destination" => b, "active" => active,
                     "business_revenue_eur" => t.business_revenue, "economy_revenue_eur" => t.revenue - t.business_revenue - t.cargo_revenue,
                     "business_passengers" => t.business_passengers, "economy_passengers" => t.passengers - t.business_passengers,
-                    "service_eur" => t.service, "flights" => t.flights, "cargo_kg" => t.cargo_kg, "cargo_revenue_eur" => t.cargo_revenue, "ticket_revenue_eur" => t.revenue - t.cargo_revenue,
+                    "care_eur" => t.care, "punctuality_percent" => disruptions::percent(&t), "punctuality_flights" => t.punctuality_flights, "service_eur" => t.service, "flights" => t.flights, "cargo_kg" => t.cargo_kg, "cargo_revenue_eur" => t.cargo_revenue, "ticket_revenue_eur" => t.revenue - t.cargo_revenue,
                     "revenue_eur" => t.revenue, "costs_eur" => t.costs(),
                     "profit_eur" => t.profit(), "load_percent" => t.load_percent()
                 }
@@ -483,7 +486,7 @@ impl SimulationClock {
         "maintenance_eur" => maintenance, "payroll_eur" => payroll,
         "rent_eur" => rent.min(i128::from(i64::MAX)) as i64,
         "aircraft_cash_eur" => aircraft_cash.clamp(i128::from(i64::MIN), i128::from(i64::MAX)) as i64,
-        "fuel_eur" => t.fuel, "airport_eur" => t.airport, "crew_eur" => t.crew, "overhead_eur" => t.overhead, "service_eur" => t.service,
+        "fuel_eur" => t.fuel, "airport_eur" => t.airport, "crew_eur" => t.crew, "overhead_eur" => t.overhead, "care_eur" => t.care, "punctuality_percent" => disruptions::percent(t), "punctuality_flights" => t.punctuality_flights, "service_eur" => t.service,
         "costs_eur" => costs.min(i128::from(i64::MAX)) as i64,
         "profit_eur" => profit.clamp(i128::from(i64::MIN), i128::from(i64::MAX)) as i64, "purchases_eur" => purchases,
         "load_percent" => t.load_percent() }
@@ -637,7 +640,13 @@ impl SimulationClock {
                         )
                     })
                     .unwrap_or_default();
-                format!("{} · {} Landungen{}", phase, s.completed + prior, hangar)
+                format!(
+                    "{} · {} Landungen{} · {} min Verspätung",
+                    phase,
+                    s.completed + prior,
+                    hangar,
+                    s.delay_seconds.div_ceil(60)
+                )
             } else if let Some(v) = plane
                 .maintenance
                 .as_ref()
@@ -951,6 +960,7 @@ impl SimulationClock {
                     "estimated_service_eur" => service_cost / active_count.max(1),
                     "estimated_airport_eur" => airport_cost / active_count.max(1),
                     "actual_service_eur" => actual.service,
+                    "punctuality_percent" => disruptions::percent(&actual), "punctuality_flights" => actual.punctuality_flights,
                     "season_business_factor" => season.business,
                     "season_leisure_factor" => season.leisure,
                     "daily_demand" => market.total().floor() as i64,
@@ -1106,6 +1116,7 @@ impl SimulationClock {
                     .map(|airport| airport.name.as_str())
                     .unwrap_or("");
                 vdict! {
+                    "delay_seconds" => self.game.planned_route(plane.id).and_then(|i| operations::movement(&self.game.routes[i], &plane.model_id, self.game.clock.elapsed().as_secs()).ok()).map_or(0, |s| s.delay_seconds) as i64,
                     "id" => plane.id, "identifier" => plane.identifier().as_str(),
                     "model_id" => plane.model_id.as_str(), "model_name" => name,
                     "economy_seats" => cabins::layout(plane).map_or(0, |c| c.0),
@@ -1633,5 +1644,5 @@ fn flight_dictionary(f: &economy::FlightResult) -> VarDictionary {
     "business_seats" => t.business_seats, "economy_seats" => t.seats - t.business_seats,
     "cargo_kg" => t.cargo_kg, "cargo_revenue_eur" => t.cargo_revenue, "ticket_revenue_eur" => t.revenue - t.cargo_revenue,
                     "revenue_eur" => t.revenue, "fuel_eur" => t.fuel, "airport_eur" => t.airport,
-    "crew_eur" => t.crew, "overhead_eur" => t.overhead, "service_eur" => t.service, "costs_eur" => t.costs(), "profit_eur" => t.profit() }
+    "crew_eur" => t.crew, "overhead_eur" => t.overhead, "care_eur" => t.care, "punctuality_percent" => disruptions::percent(t), "punctuality_flights" => t.punctuality_flights, "service_eur" => t.service, "costs_eur" => t.costs(), "profit_eur" => t.profit() }
 }

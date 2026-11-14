@@ -189,7 +189,11 @@ fn fuel_departure_boundary_and_identical_company_charges() {
     );
     assert!(g.advance(86400.0));
     assert_eq!(g.finance.recent[0], frozen);
-    let r = &g.routes[0];
+    // Historical quote probes use an isolated schedule, not the live cursor.
+    let mut probe = g.routes[0].clone();
+    probe.plan.as_mut().unwrap().disruption = None;
+    probe.plan.as_mut().unwrap().airborne = None;
+    let r = &probe;
     let exact = crate::operations::departure_quote_in_market(
         r,
         "atr72_600",
@@ -207,9 +211,9 @@ fn fuel_departure_boundary_and_identical_company_charges() {
     .unwrap();
     assert_eq!(exact.totals.fuel, at_price.fuel);
     // Departure exactly on the boundary uses the new week's price too.
-    g.routes[0].plan.as_mut().unwrap().first_departure = WEEK;
+    probe.plan.as_mut().unwrap().first_departure = WEEK;
     let exact = crate::operations::departure_quote_in_market(
-        &g.routes[0],
+        &probe,
         "atr72_600",
         0,
         &g.market_routes(),

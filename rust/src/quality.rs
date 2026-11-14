@@ -86,6 +86,11 @@ fn ten_year_scenarios_reconcile_and_survive_annual_restart() {
                 );
                 assert_eq!(c.game.insurance.coverage, crate::insurance::Coverage::Basic);
                 let t = &c.game.finance.totals;
+                assert!(t.punctuality_flights > 0 && t.late_flights <= t.punctuality_flights);
+                assert!(
+                    t.care >= 0 && i128::from(t.care) * 100 < i128::from(t.revenue),
+                    "passenger care exceeds one percent of AI revenue"
+                );
                 assert!(
                     t.service >= 0 && i128::from(t.service) * 5 <= i128::from(t.revenue),
                     "service overwhelms AI revenue: year={year} price={price:?}"
@@ -104,11 +109,13 @@ fn ten_year_scenarios_reconcile_and_survive_annual_restart() {
                 for c in &fast.competitors {
                     let g = &c.game;
                     println!(
-                        "AUDIT price={price:?} year={year} airline={} cash={} profit={} service={} marketing={} awareness={} tax={} fleet={} routes={} batches={} save_bytes={bytes}",
+                        "AUDIT price={price:?} year={year} airline={} cash={} profit={} service={} care={} punctuality={} marketing={} awareness={} tax={} fleet={} routes={} batches={} save_bytes={bytes}",
                         g.airline.as_ref().unwrap().name,
                         g.airline.as_ref().unwrap().capital_eur,
                         g.finance.totals.profit(),
                         g.finance.totals.service,
+                        g.finance.totals.care,
+                        crate::disruptions::percent(&g.finance.totals),
                         g.history.as_ref().unwrap().marketing_through(u64::MAX),
                         g.marketing.awareness,
                         g.history.as_ref().unwrap().tax_through(u64::MAX),
@@ -153,10 +160,10 @@ fn ten_years_of_daily_fare_changes_remain_saveable_and_lossless() {
     crate::save::save(&path, &g).unwrap();
     let bytes = std::fs::metadata(&path).unwrap().len();
     println!("CHURN save_bytes={bytes}");
-    // Version 22 archives retain separate cargo kg/revenue, and the changed
-    // AI economy creates different batches. Keep the ten-year fixture below
-    // 8 MiB, with at least 120 MiB headroom under the 128 MiB disk limit.
-    assert!(bytes < 8 * 1024 * 1024);
+    // Version 26 retains punctuality/care counters and splits batches at
+    // disruptions. Keep ten years of daily fare churn below 12 MiB, with
+    // at least 244 MiB headroom under the 256 MiB disk limit.
+    assert!(bytes < 12 * 1024 * 1024);
     let mut loaded = crate::save::load(&path).unwrap();
     assert_eq!(
         serde_json::to_value(&g).unwrap(),

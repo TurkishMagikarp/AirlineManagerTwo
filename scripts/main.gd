@@ -459,7 +459,8 @@ func _refresh_fleet() -> void:
 	var fleet: Array = simulation.get_fleet()
 	var airline: Dictionary = simulation.get_airline_info()
 	if current_page == 1:
-		description.text = "%d Flugzeuge  /  Verfügbares Guthaben: %s" % [fleet.size(), UI.money(airline.get("capital_eur", 0))]
+		var punctuality: Dictionary = simulation.get_financial_summary()
+		description.text = "%d Flugzeuge  /  Verfügbares Guthaben: %s · Pünktlichkeit: %s (%d Flüge)" % [fleet.size(), UI.money(airline.get("capital_eur", 0)), "—" if punctuality["punctuality_percent"] < 0 else "%.1f %%" % punctuality["punctuality_percent"], punctuality["punctuality_flights"]]
 	empty_fleet.visible = fleet.is_empty()
 	fleet_tree.visible = not fleet.is_empty()
 	maintenance_box.visible = not fleet.is_empty()
@@ -475,6 +476,7 @@ func _refresh_fleet() -> void:
 		row.set_text(2, plane["location_icao"])
 		var phase: String = {"parked": "Geparkt", "in_flight": "Unterwegs", "ground": "Gelandet · Bodenzeit", "maintenance": "In Wartung"}.get(plane["status"], "Unbekannt")
 		row.set_text(3, "%s · Route #%d" % [phase, plane["route_id"]] if plane["route_id"] != 0 else phase)
+		row.set_text(3, row.get_text(3) + " · %d min verspätet" % ceili(plane["delay_seconds"] / 60.0))
 		row.set_custom_color(3, UI.ACCENT if plane["status"] == "in_flight" else UI.POSITIVE if plane["status"] == "parked" else Color("e4c287"))
 		if plane["status"] == "in_flight":
 			row.set_text(2, "Ab %s (in der Luft)" % plane["location_icao"])
