@@ -394,6 +394,7 @@ fn quote_with_time(
 pub(crate) struct QuoteMarket {
     // Catalog lookups happen once per prepared market, including return legs.
     airport_levels: [i64; 2],
+    pub(crate) flight_seconds: u64,
     cargo: crate::cargo::Market,
     passengers: crate::demand::Prepared,
 }
@@ -409,6 +410,7 @@ impl QuoteMarket {
             .map_or(aircraft::model(model_id)?.seats, |o| o.seats);
         Ok(Self {
             airport_levels: airport_levels(route)?,
+            flight_seconds: operations::timings(route, model_id)?.0,
             cargo: crate::cargo::Market::new(route, model_id, routes)?,
             passengers: crate::demand::Prepared::new(route, seats, routes)?,
         })
@@ -435,7 +437,7 @@ pub(crate) fn quote_prepared(
     let business_revenue = demand.business * route.business_ticket_eur;
     let cargo_kg = market.cargo.estimate(passenger_loads);
     let cargo_revenue = crate::cargo::revenue(cargo_kg, route.cargo_rate_cents);
-    let seconds = operations::timings(route, model_id)?.0 as i64;
+    let seconds = market.flight_seconds as i64;
     let rates = &c.models[model_id];
     Ok(Totals {
         cargo_kg,
