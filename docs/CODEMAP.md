@@ -1057,11 +1057,11 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 47 func _ready() -> void:
 200 func _process(delta: float) -> void:
 208 func refresh(force: bool = false) -> void:
-308 func _chart() -> void:
-311 func _loan_action(borrowing: bool) -> void:
-316 func _select_route() -> void:
-330 func _reset_flights() -> void:
-335 func _flights() -> void:
+309 func _chart() -> void:
+312 func _loan_action(borrowing: bool) -> void:
+317 func _select_route() -> void:
+331 func _reset_flights() -> void:
+336 func _flights() -> void:
 
 ## scripts/main.gd
 1 extends Control

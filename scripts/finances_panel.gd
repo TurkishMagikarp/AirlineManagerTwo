@@ -292,6 +292,7 @@ func refresh(force: bool = false) -> void:
 		for pair in [[2, "revenue_eur"], [3, "costs_eur"], [4, "profit_eur"]]:
 			row.set_text(pair[0], UI.money(r[pair[1]]))
 		row.set_text(2, UI.money(r["ticket_revenue_eur"]))
+		row.set_tooltip_text(3, "Davon Betreuung / Entschädigung: %s" % UI.money(r["care_eur"]))
 		row.set_text(6, "%d kg / %s" % [r["cargo_kg"], UI.money(r["cargo_revenue_eur"])])
 		row.set_text(5, "%.1f %%" % r["load_percent"] if r["flights"] > 0 else "Keine Flüge")
 		row.set_custom_color(4, UI.MUTED if r["flights"] == 0 else UI.POSITIVE if r["profit_eur"] >= 0 else UI.NEGATIVE)
@@ -342,6 +343,7 @@ func _flights() -> void:
 		for i in range(values.size()):
 			row.set_text(i, values[i])
 			row.set_tooltip_text(i, "Ticket: %s\nTreibstoff: %s\nFlughäfen: %s\nPersonal: %s\nWartung / Verwaltung: %s\nBordservice (± Standard): %s" % [UI.money(f["ticket_eur"]), UI.money(f["fuel_eur"]), UI.money(f["airport_eur"]), UI.money(f["crew_eur"]), UI.money(f["overhead_eur"]), UI.money(f["service_eur"])])
+			row.set_tooltip_text(i, row.get_tooltip_text(i) + "\nBetreuung / Entschädigung: %s" % UI.money(f["care_eur"]))
 		row.set_custom_color(7, UI.POSITIVE if f["profit_eur"] >= 0 else UI.NEGATIVE)
 	page_label.text = "%d–%d von %d · neueste zuerst" % [offset + 1 if not rows.is_empty() else 0, offset + rows.size(), flight_count]
 	previous_button.disabled = offset == 0
