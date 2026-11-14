@@ -17,7 +17,8 @@ use std::time::Duration;
 // airports) remain valid; admission checks apply only to new schedules.
 // v28: neutral punctuality reputation for older saves, without history replay.
 // v29: implicit home base, dated extra bases; existing visits remain frozen.
-const VERSION: u32 = 29;
+// v30: bounded shared used market, empty for all older saves.
+const VERSION: u32 = 30;
 // Bounded input, including centuries of fuel/seasonal quotes for the player
 // and both AI airlines in the million-flight finance restart scenario.
 // Version 17 retains per-class quotes, which also split more archive batches.
@@ -33,6 +34,8 @@ struct SaveGame {
 // Future simulation data belongs here, not in the UI or a serialized Godot object.
 #[derive(Serialize, Deserialize)]
 struct GameState {
+    #[serde(default)]
+    used_market: crate::trading::Market,
     #[serde(default)]
     maintenance_bases: Vec<crate::maintenance::Base>,
     #[serde(default)]
@@ -105,6 +108,7 @@ pub fn save(path: &Path, game: &Game) -> Result<(), String> {
     let data = SaveGame {
         version: VERSION,
         state: GameState {
+            used_market: game.used_market.clone(),
             maintenance_bases: game.maintenance_bases.clone(),
             insurance: Some(game.insurance.clone()),
             fuel_contract: game.fuel_contract.clone(),
@@ -203,6 +207,14 @@ pub fn load(path: &Path) -> Result<Game, String> {
         if let Some(owners) = value["state"]["competitors"].as_array_mut() {
             for owner in owners {
                 owner["game"]["maintenance_bases"] = serde_json::json!([]);
+            }
+        }
+    }
+    if value["version"].as_u64().is_some_and(|v| v < 30) {
+        value["state"]["used_market"] = serde_json::json!({"next_id": 1, "listings": []});
+        if let Some(owners) = value["state"]["competitors"].as_array_mut() {
+            for owner in owners {
+                owner["game"]["used_market"] = serde_json::json!({"next_id": 1, "listings": []});
             }
         }
     }
@@ -312,6 +324,7 @@ pub fn load(path: &Path) -> Result<Game, String> {
         },
         finance,
         clock,
+        used_market: data.state.used_market,
         maintenance_bases: data.state.maintenance_bases,
         airline: data.state.airline,
         fleet: fleet.aircraft,

@@ -43,6 +43,9 @@ func _run() -> void:
 	sim.start()
 	sim.advance(3650.0)
 	sim.pause()
+	assert(sim.sell_aircraft(2).is_empty())
+	assert(sim.lease_aircraft("atr72_600").is_empty())
+	assert(sim.return_aircraft(4).is_empty())
 	main._sync_view()
 	var unchanged: Dictionary = sim.get_financial_summary().duplicate(true)
 	for dimensions in [Vector2i(1440, 1000), Vector2i(1100, 720), Vector2i(680, 520)]:
@@ -76,6 +79,28 @@ func _run() -> void:
 					await process_frame
 				await RenderingServer.frame_post_draw
 				assert(root.get_texture().get_image().save_png(capture_dir.path_join("%s-content-%dx%d.png" % [["overview", "fleet", "routes", "map", "finances", "staff"][page], dimensions.x, dimensions.y])) == OK)
+			if page == 1:
+				# Capture the market heading, then prove every nested buy control is reachable.
+				var market_scroll: ScrollContainer = main.used_rows.get_parent()
+				market_scroll.scroll_vertical = 0
+				var market_body: Control = market_scroll.get_parent()
+				var market_shell: Control = market_body.get_meta("panel_shell")
+				scroll.scroll_vertical = int(market_shell.global_position.y - main.fleet_panel.global_position.y + main.fleet_panel.position.y)
+				for frame in range(5): await process_frame
+				if not capture_dir.is_empty():
+					await RenderingServer.frame_post_draw
+					assert(root.get_texture().get_image().save_png(capture_dir.path_join("used-market-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
+				for card in main.used_rows.get_children():
+					if card is HSeparator: continue
+					var buy: Control = card.get_child(card.get_child_count() - 1).get_child(1)
+					market_scroll.ensure_control_visible(buy)
+					for frame in range(3): await process_frame
+					scroll.ensure_control_visible(buy)
+					for frame in range(3): await process_frame
+					assert(root.get_visible_rect().encloses(buy.get_global_rect()))
+					if not capture_dir.is_empty():
+						await RenderingServer.frame_post_draw
+						assert(root.get_texture().get_image().save_png(capture_dir.path_join("used-market-buy-%d-%dx%d.png" % [card.get_index(), dimensions.x, dimensions.y])) == OK)
 			if page == 2:
 				# Verify deep controls stay reachable through the page scroll.
 				scroll.ensure_control_visible(main.routes_panel.schedule_button)

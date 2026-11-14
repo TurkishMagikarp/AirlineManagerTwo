@@ -8,6 +8,8 @@ use std::collections::HashSet;
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Game {
+    #[serde(default)]
+    pub used_market: crate::trading::Market,
     /// Derived snapshot of other owners, refreshed before each AI review.
     #[serde(skip)]
     pub external_slots: std::collections::BTreeMap<String, u64>,
@@ -44,6 +46,7 @@ pub struct Game {
 impl Default for Game {
     fn default() -> Self {
         Self {
+            used_market: Default::default(),
             external_slots: Default::default(),
             maintenance_bases: Vec::new(),
             insurance: Default::default(),
@@ -170,6 +173,7 @@ impl Game {
             status: AircraftStatus::Parked,
             purchase_price_eur: model.price_eur,
             acquired_at: Some(self.clock.elapsed().as_secs()),
+            purchased_at: None,
             lease: None,
             wear: Default::default(),
             maintenance: None,

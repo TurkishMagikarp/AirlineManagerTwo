@@ -51,6 +51,8 @@ var cancel_founding_button: Button
 var founding_status: Label
 var founding_capital: Label
 var new_game_button: Button
+var used_rows: VBoxContainer
+var used_signature := ""
 var fleet_panel: VBoxContainer
 var model_select: OptionButton
 var model_details: Label
@@ -376,6 +378,14 @@ func _build_fleet(content: VBoxContainer) -> void:
 	var hint := _label("Vorläufige Kaufpreise · Sitzkonfiguration und Reichweite sind vereinfachte Modellangaben.", ThemeTokens.SMALL, ThemeTokens.INK_MUTED)
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	shop.add_child(hint)
+	var used := UI.panel(grid, "GEBRAUCHTFLUGZEUGE")
+	var used_scroll := ScrollContainer.new()
+	used_scroll.custom_minimum_size.y = 220
+	used_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	used.add_child(used_scroll)
+	used_rows = VBoxContainer.new()
+	used_rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	used_scroll.add_child(used_rows)
 	var owned := UI.panel(grid, "FLOTTENREGISTER  /  EIGENTUM & LEASING")
 	empty_fleet = UI.empty_state("Noch keine Flugzeuge beschafft.", hint.text, buy_button.text, func(): buy_button.grab_focus())
 	owned.add_child(empty_fleet)
@@ -459,7 +469,60 @@ func _buy_aircraft() -> void:
 		scroll.ensure_control_visible(fleet_status)
 
 
+func _refresh_used_market() -> void:
+	var listings: Array = simulation.get_used_market()
+	var signature := str(listings)
+	if signature == used_signature:
+		return
+	used_signature = signature
+	for child in used_rows.get_children():
+		used_rows.remove_child(child)
+		child.queue_free()
+	if listings.is_empty():
+		var empty := UI.label("Keine Angebote vorhanden. Verkaufte Flugzeuge und Leasingrückgaben erscheinen hier.", ThemeTokens.BODY, ThemeTokens.INK_MUTED)
+		empty.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		used_rows.add_child(empty)
+	for listing in listings:
+		if used_rows.get_child_count() > 0:
+			used_rows.add_child(HSeparator.new())
+		var card := VBoxContainer.new()
+		card.add_theme_constant_override("separation", ThemeTokens.SPACE_2)
+		used_rows.add_child(card)
+		var model := UI.label(listing["model"], ThemeTokens.CODE)
+		model.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		card.add_child(model)
+		var facts := UI.label("%d Tage · %.0f %% Zustand\n%.1f FH / %d Zyklen" % [listing["age_days"], listing["condition_percent"], listing["flight_hours"], listing["cycles"]], ThemeTokens.DATA)
+		facts.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		card.add_child(facts)
+		var seller := UI.label(listing["seller"], ThemeTokens.SMALL, ThemeTokens.INK_MUTED)
+		seller.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		card.add_child(seller)
+		var row := HBoxContainer.new()
+		card.add_child(row)
+		var price := UI.label(UI.money(listing["price_eur"]), ThemeTokens.DATA)
+		price.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		price.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		row.add_child(price)
+		var button := Button.new()
+		button.text = "Gebraucht kaufen"
+		button.pressed.connect(_buy_used_aircraft.bind(listing["id"]))
+		row.add_child(button)
+
+
+func _buy_used_aircraft(listing_id: int) -> void:
+	var error: String = simulation.buy_used_aircraft(listing_id)
+	fleet_status.text = "Gebrauchtflugzeug gekauft. Bitte speichern." if error.is_empty() else error
+	_refresh_fleet()
+	if error.is_empty():
+		save_status.text = "Flotte geändert · bitte Spielstand speichern."
+	await get_tree().process_frame
+	if current_page == 1 and overview.visible:
+		var scroll := fleet_panel.get_parent().get_parent() as ScrollContainer
+		scroll.ensure_control_visible(fleet_status)
+
+
 func _refresh_fleet() -> void:
+	_refresh_used_market()
 	var fleet: Array = simulation.get_fleet()
 	var airline: Dictionary = simulation.get_airline_info()
 	if current_page == 1:

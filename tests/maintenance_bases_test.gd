@@ -40,7 +40,7 @@ func _run() -> void:
 			var pattern := RegEx.create_from_string('"maintenance_bases":\\[[^\\]]*\\],')
 			if not _check(pattern.search_all(world).size() == 3, "Player and both AI have maintenance-base arrays"):
 				return
-			var old := pattern.sub(world, "", true).replace('"version":29', '"version":28')
+			var old := pattern.sub(world, "", true).replace('"version":30', '"version":28')
 			if not _check(not '"maintenance_bases"' in old and '"version":28' in old, "Legacy fixture omits new field for every owner"):
 				return
 			_write(base_path, old)

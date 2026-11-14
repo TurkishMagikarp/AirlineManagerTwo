@@ -6,5 +6,8 @@
   "lease_deposit_bps": 500,
   "monthly_lease_bps": 100,
   "lease_period_days": 30,
-  "return_damage_bps": 500
+  "return_damage_bps": 500,
+  "dealer_markup_bps": 500,
+  "market_expiry_days": 180,
+  "market_size_cap": 128
 }

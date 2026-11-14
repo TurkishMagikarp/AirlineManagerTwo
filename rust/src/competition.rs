@@ -156,6 +156,7 @@ impl Game {
             let g = &c.game;
             if !g.clock.is_valid()
                 || g.fuel_market != self.fuel_market
+                || !g.used_market.listings.is_empty()
                 || !g.competitors.is_empty()
                 || g.clock.elapsed() != self.clock.elapsed()
                 || c.next_review <= self.clock.elapsed().as_secs()
@@ -439,8 +440,12 @@ impl Game {
                 let external = staged.slots_except_competitor(i);
                 let c = &mut staged.competitors[i];
                 c.game.external_slots = external;
-                if c.next_review == end.as_secs() && !c.review(&supply) {
-                    return false;
+                if c.next_review == end.as_secs() {
+                    std::mem::swap(&mut staged.used_market, &mut c.game.used_market);
+                    if !c.review(&supply) {
+                        return false;
+                    }
+                    std::mem::swap(&mut staged.used_market, &mut c.game.used_market);
                 }
             }
             if staged.insolvent() {
@@ -978,6 +983,8 @@ impl Competitor {
             .iter()
             .map(|p| {
                 (
+                    None,
+                    0,
                     Some(p.id),
                     p.model_id.as_str(),
                     p.location_icao.as_str(),
@@ -990,9 +997,38 @@ impl Competitor {
             })
             .collect();
         if free.is_empty() && g.fleet.len() < MAX_FLEET {
+            for l in &g.used_market.listings {
+                let p = &l.aircraft;
+                let rules = crate::maintenance::rules(&p.model_id)?;
+                // A due aircraft needs a check before it can earn; leave these to the player.
+                if p.wear.is_due(rules) || p.business_seats != 0 {
+                    continue;
+                }
+                let cost = g.used_price(l)?;
+                let backlog = crate::maintenance::cost(&p.wear, rules, false)?;
+                if airline
+                    .capital_eur
+                    .saturating_sub(cost)
+                    .saturating_sub(backlog)
+                    >= RESERVE
+                {
+                    options.push((
+                        Some(l.id),
+                        backlog,
+                        None,
+                        p.model_id.as_str(),
+                        airline.home_airport_icao.as_str(),
+                        cost,
+                        false,
+                        0,
+                    ));
+                }
+            }
             for m in crate::aircraft::models()? {
                 if airline.capital_eur.saturating_sub(m.price_eur) >= RESERVE {
                     options.push((
+                        None,
+                        0,
                         None,
                         &m.id,
                         &airline.home_airport_icao,
@@ -1007,6 +1043,8 @@ impl Competitor {
                         let rent = (monthly * REVIEW as i64 + period as i64 - 1) / period as i64;
                         options.push((
                             None,
+                            0,
+                            None,
                             &m.id,
                             &airline.home_airport_icao,
                             deposit,
@@ -1019,8 +1057,29 @@ impl Competitor {
         }
         let mut best = None;
         let mut best_week = 0;
-        for (plane, model, origin, cost, leased, rent) in options {
+        for (used, backlog, plane, model, origin, cost, leased, rent) in options {
             let m = crate::aircraft::model(model)?;
+            // Preserve the existing new/lease fallback and route ranking. Evaluate
+            // used capital relative to that same-model alternative, over the
+            // existing 104-week horizon, including the residual hull values.
+            let capital_adjustment = if let Some(id) = used {
+                let listing = g.used_market.listings.iter().find(|l| l.id == id).unwrap();
+                let now = g.clock.elapsed().as_secs();
+                let horizon = now.saturating_add(104 * REVIEW);
+                let residual = crate::trading::hull_value_at(&listing.aircraft, horizon)?;
+                let alternative_net = if airline.capital_eur.saturating_sub(m.price_eur) >= RESERVE
+                {
+                    let mut fresh = listing.aircraft.clone();
+                    fresh.acquired_at = Some(now);
+                    fresh.wear = Default::default();
+                    m.price_eur - crate::trading::hull_value_at(&fresh, horizon)?
+                } else {
+                    crate::trading::lease_terms(model)?.0
+                };
+                (cost - residual - alternative_net) / 104
+            } else {
+                0
+            };
             let mut candidates = Vec::new();
             for root in g.routes.iter().filter(|r| r.parent_route_id.is_none()) {
                 let services: Vec<_> = g
@@ -1187,7 +1246,8 @@ impl Competitor {
                     let week = (t.profit() - maintenance) * (REVIEW / (interval * 60)) as i64
                         - staffing_per_week(g, model)?
                         - rent
-                        - dilution;
+                        - dilution
+                        - (backlog + 103) / 104;
                     // Reserve also covers four weeks of gross operating costs.
                     let buffer = ((committed_weekly_costs
                         + staffing_per_week(g, model)?
@@ -1195,18 +1255,30 @@ impl Competitor {
                         + (t.costs() + maintenance) * (REVIEW / (interval * 60)) as i64)
                         * 4)
                     .max(RESERVE);
-                    if week > best_week
+                    let score = week - capital_adjustment;
+                    if score > best_week
                         && week >= 5_000
                         && week * 104 >= cost
-                        && airline.capital_eur.saturating_sub(cost) >= buffer
+                        && airline
+                            .capital_eur
+                            .saturating_sub(cost)
+                            .saturating_sub(backlog)
+                            >= buffer
                     {
-                        best_week = week;
-                        best = Some((plane, model.to_string(), r.clone(), interval as u32, leased));
+                        best_week = score;
+                        best = Some((
+                            used,
+                            plane,
+                            model.to_string(),
+                            r.clone(),
+                            interval as u32,
+                            leased,
+                        ));
                     }
                 }
             }
         }
-        let Some((plane, model, route, interval, leased)) = best else {
+        let Some((used, plane, model, route, interval, leased)) = best else {
             self.last_action =
                 "Expansion geprüft · Budget/Reserve oder Markt nicht rentabel".into();
             return Ok(());
@@ -1219,7 +1291,9 @@ impl Competitor {
         let plane = match plane {
             Some(id) => id,
             None => {
-                if leased {
+                if let Some(id) = used {
+                    self.game.buy_used_aircraft(id)?;
+                } else if leased {
                     self.game.lease_aircraft(&model)?;
                 } else {
                     self.game.buy_aircraft(&model)?;
@@ -1248,6 +1322,8 @@ impl Competitor {
             },
             if route.aircraft_id.is_some() {
                 "freie Maschine"
+            } else if used.is_some() {
+                "Gebrauchtflugzeug gekauft"
             } else if leased {
                 "Flugzeug geleast"
             } else {
@@ -1367,6 +1443,43 @@ impl Competitor {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn used_market_ai_growth_uses_shared_purchase_and_wear() {
+        let mut c = initial_competitors().unwrap().remove(0);
+        c.game.stop_schedule(1).unwrap();
+        c.game.routes.clear();
+        c.game.next_route_id = 1;
+        c.game.fleet[0].wear = c.game.fleet[0].wear.added(40, 3600).unwrap();
+        let wear = c.game.fleet[0].wear.clone();
+        c.game.sell_aircraft(1).unwrap();
+        let shift = 100_000_000 - c.game.cash();
+        c.game.history.as_mut().unwrap().opening_balance += shift;
+        c.game.airline.as_mut().unwrap().capital_eur = 100_000_000;
+        for model in ["a320_200", "b737_800"] {
+            c.game.buy_aircraft(model).unwrap();
+            let p = c.game.fleet.last_mut().unwrap();
+            p.wear = wear.clone();
+            let id = p.id;
+            c.game.sell_aircraft(id).unwrap();
+        }
+        let listings = c.game.used_market.listings.clone();
+        let before = c.game.cash();
+        c.expand(&[]).unwrap();
+        assert_eq!(c.game.fleet.len(), 1);
+        let bought = &c.game.fleet[0];
+        let listing = listings
+            .iter()
+            .find(|l| l.aircraft.model_id == bought.model_id)
+            .unwrap();
+        let price = c.game.used_price(listing).unwrap();
+        assert_eq!(bought.wear, wear);
+        assert_eq!(bought.purchase_price_eur, price);
+        assert_eq!(c.game.cash(), before - price);
+        assert_eq!(c.game.used_market.listings.len(), 2);
+        assert!(c.last_action.contains("Gebrauchtflugzeug"));
+        c.game.validate_history().unwrap();
+    }
+
     fn frequency_ai() -> Competitor {
         let mut c = initial_competitors().unwrap().remove(0);
         c.game.stop_schedule(1).unwrap();
