@@ -22,8 +22,9 @@ Pünktlichkeit misst Ankünfte innerhalb der konfigurierten Toleranz (Flugzeiten
 bleiben konstant, deshalb entspricht das der Abflugverspätung). Route und
 Airline zeigen den Anteil der seit Einführung erfassten pünktlichen Flüge;
 „—“ bedeutet keine erfassten Flüge. Flotte und Betrieb zeigen Verspätung, die
-Aufmerksamkeitsliste zeigt große Rückstände. Die Nachfrage erhält keinen
-Pünktlichkeitsfaktor. KI-Airlines verwenden dieselbe Simulation.
+Aufmerksamkeitsliste zeigt große Rückstände. Seit v28 ergänzt der unten
+beschriebene Pünktlichkeitsruf das Angebotsgewicht. KI-Airlines verwenden
+dieselbe Simulation.
 
 Spielstandversion 26 speichert einen kompakten Zeitcursor pro Flugplan sowie
 Pünktlichkeits- und Betreuungssummen im bestehenden Finanzarchiv. Der kompakte
@@ -147,3 +148,37 @@ beauftragt ausgelassen, da Rust unverändert ist; kein neuer Benchmarknachweis.
 START.bat, die tatsächlichen PowerShell-Wrapper, native Windows-DLLs und
 Windows-Neustarts sowie Windows-Darstellung/-Skalierung bleiben Besitzerchecks.
 Linux-Neustarts und Linux-Renderbilder ersetzen diese Prüfungen nicht.
+
+## Pünktlichkeitsruf (Spielstand v28)
+
+Jede Airline beginnt neutral. Rust sammelt nur neu gelandete, erfasste Flüge
+je absolutem Spieltag. Um Mitternacht folgt ein ganzzahliger Rufwert dem
+Tagesergebnis mit 1/21 des Abstands zum Ziel. 90 % pünktliche Ankünfte sind
+neutral; 0 % entsprechen dem negativen, 100 % dem positiven Endpunkt.
+Ein einzelner Flug ändert den Ruf nicht sofort; Tage ohne erfasste Landungen
+halten den Wert und zeigen einen stabilen Trend. Alle Parameter einschließlich
+Warnschwelle stehen in `config/disruptions.json`.
+
+Der Ruf verändert ausschließlich das vorhandene Angebotsgewicht neben Marke
+und Service, höchstens um ±3 %. Zahlungsbereitschaft, Preisgrenzen, Kapazität und
+Fracht bleiben unverändert. Spieler und KI verwenden dieselbe Regel. Abflugzitate
+werden weiterhin eingefroren, auch am Tageswechsel. Die Airlineübersicht zeigt
+den aktuellen Gewichtsbonus/-malus und den letzten Tagestrend; bei deutlich
+negativem und weiter sinkendem Ruf erscheint ein Aufmerksamkeitseintrag.
+
+v28 speichert Ruf, Tagestrend und noch nicht abgeschlossene Tageszähler.
+Fehlende Felder aus v27 und älteren Spielständen beginnen für alle Unternehmen
+neutral, ohne die Finanzhistorie erneut auszuwerten. Bereits fliegende Zitate,
+Flugzeiten und Betreuungskosten bleiben erhalten. Absolute Tagesgrenzen und
+Ganzzahlarithmetik machen Pause, Geschwindigkeit, Schrittgröße und Laden
+unabhängig. Rust-Tests prüfen Migration mit Flügen in der Luft, schlechte Serien
+und Erholung, Grenzen, KI-Parität, Neustart sowie den Zehnjahresvergleich mit
+neutralem Nachfragefaktor. Godot-/Windows-Ausführung und Sichtprüfung dieser
+Erweiterung sind auf dem Entwicklungsserver nicht verifiziert.
+
+Der Rust-Zehnjahresvergleich mit identischem Startzustand und ausgeschaltetem
+Rufgewicht als Kontrolllauf ergibt für Regional Wings −2,65 % und für
+Continental Sky +9,34 % kumulierten Umsatz nach zehn Jahren. Beide KI-Airlines
+bleiben ohne Notlage; wöchentliche Wachstumsentscheidungen können auseinanderlaufen.
+Diese langfristige Umsatzdifferenz ist deshalb nicht mit der harten ±3-%-Grenze
+für ein einzelnes Angebotsgewicht gleichzusetzen.

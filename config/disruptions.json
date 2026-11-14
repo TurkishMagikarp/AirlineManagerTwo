@@ -10,5 +10,9 @@
   "on_time_threshold_seconds": 900,
   "care_threshold_seconds": 1800,
   "care_eur_per_passenger": 12,
-  "attention_threshold_seconds": 3600
+  "attention_threshold_seconds": 3600,
+  "reputation_response_days": 21,
+  "reputation_neutral_otp_per_million": 900000,
+  "reputation_max_choice_bps": 300,
+  "reputation_attention_score": -500000
 }

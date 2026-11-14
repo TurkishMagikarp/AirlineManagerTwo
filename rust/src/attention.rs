@@ -78,6 +78,18 @@ impl Game {
                 0,
             );
         }
+        if self.reputation.score <= crate::disruptions::RULES.reputation_attention_score
+            && self.reputation.trend < 0
+        {
+            add(
+                "reputation",
+                "Pünktlichkeitsruf sinkt: Verspätungen schwächen die Nachfrage.".into(),
+                "fleet",
+                0,
+                0,
+                0,
+            );
+        }
         let nearly_full: Vec<_> = crate::airports::catalog()
             .unwrap()
             .airports

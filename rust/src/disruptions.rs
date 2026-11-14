@@ -13,6 +13,10 @@ use std::sync::LazyLock;
 
 #[derive(Deserialize)]
 pub struct Rules {
+    pub reputation_response_days: i64,
+    pub reputation_neutral_otp_per_million: i64,
+    pub reputation_max_choice_bps: i64,
+    pub reputation_attention_score: i64,
     pub base_probability_per_million: u64,
     pub worn_probability_per_million: u64,
     pub age_probability_per_year_per_million: u64,
@@ -41,6 +45,10 @@ pub static RULES: LazyLock<Rules> = LazyLock::new(|| {
             + r.maximum_age_years * r.age_probability_per_year_per_million
             <= 1_000_000
     );
+    assert!((2..=365).contains(&r.reputation_response_days));
+    assert!((1..1_000_000).contains(&r.reputation_neutral_otp_per_million));
+    assert!((0..=500).contains(&r.reputation_max_choice_bps));
+    assert!((-1_000_000..0).contains(&r.reputation_attention_score));
     assert!((0..=100_000).contains(&r.care_eur_per_passenger));
     r
 });

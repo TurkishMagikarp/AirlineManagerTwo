@@ -34,6 +34,8 @@ pub struct Game {
     pub tax: crate::tax::Tax,
     pub marketing: crate::marketing::Marketing,
     #[serde(default)]
+    pub reputation: crate::reputation::Reputation,
+    #[serde(default)]
     pub resolution: crate::financing::Resolution,
 }
 
@@ -57,6 +59,7 @@ impl Default for Game {
             financing: Default::default(),
             tax: Default::default(),
             marketing: Default::default(),
+            reputation: Default::default(),
             resolution: Default::default(),
         }
     }

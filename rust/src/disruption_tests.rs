@@ -249,7 +249,14 @@ fn disruptions_v25_migrates_all_owners_empty_and_keeps_airborne_times() {
     fn strip(v: &mut serde_json::Value) {
         match v {
             serde_json::Value::Object(o) => {
-                for key in ["disruption", "otp", "late", "delay_seconds", "care"] {
+                for key in [
+                    "reputation",
+                    "disruption",
+                    "otp",
+                    "late",
+                    "delay_seconds",
+                    "care",
+                ] {
                     o.remove(key);
                 }
                 for v in o.values_mut() {
@@ -475,7 +482,14 @@ fn disruptions_godot_restart_families_match_all_owners_after_100_days() {
             fn strip(v: &mut serde_json::Value) {
                 match v {
                     serde_json::Value::Object(o) => {
-                        for key in ["disruption", "otp", "late", "delay_seconds", "care"] {
+                        for key in [
+                            "reputation",
+                            "disruption",
+                            "otp",
+                            "late",
+                            "delay_seconds",
+                            "care",
+                        ] {
                             o.remove(key);
                         }
                         for v in o.values_mut() {

@@ -15,7 +15,8 @@ use std::time::Duration;
 // v26: deterministic delay cursors and punctuality/care totals.
 // v27: identity migration for slots. Existing schedules (including over-capacity
 // airports) remain valid; admission checks apply only to new schedules.
-const VERSION: u32 = 27;
+// v28: neutral punctuality reputation for older saves, without history replay.
+const VERSION: u32 = 28;
 // Bounded input, including centuries of fuel/seasonal quotes for the player
 // and both AI airlines in the million-flight finance restart scenario.
 // Version 17 retains per-class quotes, which also split more archive batches.
@@ -54,6 +55,8 @@ struct GameState {
     tax: Option<crate::tax::Tax>,
     #[serde(default)]
     marketing: Option<crate::marketing::Marketing>,
+    #[serde(default)]
+    reputation: crate::reputation::Reputation,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -109,6 +112,7 @@ pub fn save(path: &Path, game: &Game) -> Result<(), String> {
             resolution: Some(game.resolution.clone()),
             tax: Some(game.tax.clone()),
             marketing: Some(game.marketing.clone()),
+            reputation: game.reputation.clone(),
             finance: Some(game.finance.clone()),
             airline: game.airline.clone(),
             routes: Some(SavedRoutes {
@@ -187,6 +191,9 @@ pub fn load(path: &Path) -> Result<Game, String> {
     if value["version"].as_u64().is_some_and(|v| v < 23) {
         crate::insurance::migrate(&mut value["state"]);
     }
+    if value["version"].as_u64().is_some_and(|v| v < 28) {
+        crate::reputation::migrate(&mut value["state"]);
+    }
     // v26 is an additive migration: absent cursors and punctuality/care
     // fields deserialize to None/zero for every owner and archived result.
     // Initialize a cursor only when play advances; an existing airborne quote
@@ -264,6 +271,7 @@ pub fn load(path: &Path) -> Result<Game, String> {
         external_slots: Default::default(),
         fuel_contract: data.state.fuel_contract,
         marketing: data.state.marketing.ok_or("Marketingdaten fehlen.")?,
+        reputation: data.state.reputation,
         tax: if data.version >= 19 {
             data.state.tax.ok_or("Steuerdaten fehlen.")?
         } else {

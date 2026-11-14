@@ -8,6 +8,7 @@
     "technicians": 20,
     "salary_reserve": 30,
     "idle": 40,
-    "training": 50
+    "training": 50,
+    "reputation": 15
   }
 }

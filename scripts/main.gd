@@ -463,6 +463,7 @@ func _refresh_fleet() -> void:
 	if current_page == 1:
 		var punctuality: Dictionary = simulation.get_financial_summary()
 		description.text = "%d Flugzeuge  /  Verfügbares Guthaben: %s · Pünktlichkeit: %s (%d Flüge)" % [fleet.size(), UI.money(airline.get("capital_eur", 0)), "—" if punctuality["punctuality_percent"] < 0 else "%.1f %%" % punctuality["punctuality_percent"], punctuality["punctuality_flights"]]
+		description.text += " · Pünktlichkeitsruf: %+.1f %% (%s)" % [punctuality["reputation_percent"], punctuality["reputation_trend"]]
 	empty_fleet.visible = fleet.is_empty()
 	fleet_tree.visible = not fleet.is_empty()
 	maintenance_box.visible = not fleet.is_empty()
