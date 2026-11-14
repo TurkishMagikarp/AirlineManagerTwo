@@ -532,7 +532,7 @@ fn restructuring_v13_migration_starts_fresh_grace_without_replaying_costs() {
     save::save(&path, &g).unwrap();
     let original: serde_json::Value =
         serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
-    assert_eq!(original["version"], 19);
+    assert_eq!(original["version"], 20);
     let mut old = original.clone();
     old["version"] = serde_json::json!(13);
     old["state"].as_object_mut().unwrap().remove("resolution");
@@ -541,6 +541,7 @@ fn restructuring_v13_migration_starts_fresh_grace_without_replaying_costs() {
     assert_eq!(restored.fuel_market.started_at, 200 * 86400);
     g.fuel_market = restored.fuel_market.clone();
     g.migrate_tax().unwrap();
+    g.marketing.settled_at = g.clock.elapsed().as_secs();
     assert_eq!(state(&restored), state(&g));
     restored.clock.set_running(true);
     assert!(restored.advance(1.0));

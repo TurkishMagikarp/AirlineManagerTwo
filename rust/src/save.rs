@@ -8,7 +8,7 @@ use std::io::{Read, Write};
 use std::path::Path;
 use std::time::Duration;
 
-const VERSION: u32 = 19;
+const VERSION: u32 = 20;
 // Bounded input, including centuries of fuel/seasonal quotes for the player
 // and both AI airlines in the million-flight finance restart scenario.
 // Version 17 retains per-class quotes, which also split more archive batches.
@@ -41,6 +41,8 @@ struct GameState {
     resolution: Option<crate::financing::Resolution>,
     #[serde(default)]
     tax: Option<crate::tax::Tax>,
+    #[serde(default)]
+    marketing: Option<crate::marketing::Marketing>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -92,6 +94,7 @@ pub fn save(path: &Path, game: &Game) -> Result<(), String> {
             financing: Some(game.financing.clone()),
             resolution: Some(game.resolution.clone()),
             tax: Some(game.tax.clone()),
+            marketing: Some(game.marketing.clone()),
             finance: Some(game.finance.clone()),
             airline: game.airline.clone(),
             routes: Some(SavedRoutes {
@@ -154,6 +157,9 @@ pub fn load(path: &Path) -> Result<Game, String> {
     }
     if value["version"].as_u64().is_some_and(|v| v < 18) {
         crate::service::migrate(&mut value["state"]);
+    }
+    if value["version"].as_u64().is_some_and(|v| v < 20) {
+        crate::marketing::migrate(&mut value["state"]);
     }
     let data: SaveGame = serde_json::from_value(value)
         .map_err(|_| "Spielstand ist beschädigt oder unvollständig.".to_string())?;
@@ -225,6 +231,7 @@ pub fn load(path: &Path) -> Result<Game, String> {
         return Err("Ungültiger Treibstoffmarkt.".into());
     }
     let mut game = Game {
+        marketing: data.state.marketing.ok_or("Marketingdaten fehlen.")?,
         tax: if data.version >= 19 {
             data.state.tax.ok_or("Steuerdaten fehlen.")?
         } else {

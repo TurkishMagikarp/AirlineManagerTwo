@@ -30,6 +30,11 @@ var loan_repay: Button
 var loan_result: Label
 var aircraft_journal: Tree
 var tax_history: Tree
+var marketing_budget: SpinBox
+var marketing_apply: Button
+var marketing_status: Label
+var marketing_result: Label
+var marketing_history: Tree
 
 func _ready() -> void:
 	add_theme_constant_override("separation", 12)
@@ -43,6 +48,30 @@ func _ready() -> void:
 	note = UI.label("", 13, UI.MUTED)
 	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	add_child(note)
+	var marketing := UI.panel(self, "MARKETING / MARKENBEKANNTHEIT")
+	marketing_status = UI.label("")
+	marketing_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	marketing.add_child(marketing_status)
+	var marketing_actions := HFlowContainer.new()
+	marketing.add_child(marketing_actions)
+	marketing_budget = SpinBox.new()
+	marketing_budget.min_value = 0
+	marketing_budget.step = 1
+	marketing_budget.custom_minimum_size.x = 180
+	marketing_actions.add_child(marketing_budget)
+	marketing_apply = Button.new()
+	marketing_apply.text = "Monatsbudget übernehmen"
+	marketing_apply.pressed.connect(func():
+		marketing_budget.apply()
+		var error: String = simulation.set_marketing_budget(int(marketing_budget.value))
+		marketing_result.text = error if not error.is_empty() else "Marketingbudget übernommen."
+		refresh(true))
+	marketing_actions.add_child(marketing_apply)
+	marketing_result = UI.label("")
+	marketing_result.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	marketing.add_child(marketing_result)
+	marketing_history = UI.table(["Zeit", "Marketingkosten · letzte 100"], [170, 260], 140)
+	marketing.add_child(marketing_history)
 	var taxes := UI.panel(self, "ERTRAGSTEUER / JAHRESABSCHLÜSSE")
 	tax_history = UI.table(["Jahr", "Vorsteuerergebnis", "Steuersatz", "Steuer", "Verlustvortrag"], [65, 160, 100, 140, 160], 140)
 	taxes.add_child(tax_history)
@@ -133,10 +162,23 @@ func refresh(force: bool = false) -> void:
 	var summary: Dictionary = simulation.get_financial_summary()
 	var airline: Dictionary = simulation.get_airline_info()
 	var financing: Dictionary = simulation.get_financing()
-	var key := "%s/%s/%s" % [summary, airline, financing]
+	var marketing: Dictionary = simulation.get_marketing()
+	var key := "%s/%s/%s/%s" % [summary, airline, financing, marketing]
 	if key == signature and not force:
 		return
 	signature = key
+	marketing_budget.max_value = marketing["max_budget_eur"]
+	if not marketing_budget.get_line_edit().has_focus():
+		marketing_budget.value = marketing["budget_eur"]
+	marketing_apply.disabled = marketing["insolvent"]
+	marketing_budget.editable = not marketing["insolvent"]
+	marketing_status.text = "Budget: %s je %d Tage · Bekanntheit: %.2f / 100 · letzter Tag: %+.4f Punkte\nSchrittweiser Aufbau mit abnehmendem Nutzen; ohne Budget langsamer Rückgang. Kosten anteilig täglich und bei Budgetwechsel, steuerlich abziehbar.\nMarketingkosten insgesamt: %s" % [UI.money(marketing["budget_eur"]), marketing["month_days"], marketing["awareness"], marketing["trend"], UI.money(summary["marketing_eur"])]
+	marketing_history.clear()
+	var marketing_root := marketing_history.create_item()
+	for entry in simulation.get_marketing_history():
+		var row := marketing_history.create_item(marketing_root)
+		row.set_text(0, entry["time"])
+		row.set_text(1, UI.money(entry["amount_eur"]))
 	loan_status.text = "Verfügbar: %s · Restschuld: %s · Zinsen / Gebühren bisher: %s\nNächste Rate: %s am %s (davon Zinsen: %s) · Überfällige Tilgung: %s\n%s" % [UI.money(financing["available_cash_eur"]), UI.money(financing["debt_eur"]), UI.money(financing["interest_eur"]), UI.money(financing["payment_eur"]), financing["next_due"], UI.money(financing["next_interest_eur"]), UI.money(financing["overdue_eur"]), financing["status"]]
 	loan_status.text += "\nNächste Gehälter: %s am %s · Verfügbares Guthaben ist nicht für künftige Ausgaben reserviert." % [UI.money(financing["payroll_eur"]), financing["payroll_due"]]
 	loan_status.add_theme_color_override("font_color", UI.NEGATIVE if financing["distressed"] else UI.MUTED)
