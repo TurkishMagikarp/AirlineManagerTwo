@@ -19,6 +19,7 @@ const PAGES: Array[Dictionary] = [
 	{"title": "Personal", "heading": "Personalverwaltung", "body": "Piloten, Flugbegleiter und Techniker · Gehälter werden regelmäßig gezahlt"},
 ]
 
+var compact_navigation := -1
 var rail: PanelContainer
 var rail_brand: VBoxContainer
 var airline_name: Label
@@ -890,6 +891,9 @@ func _refresh_attention() -> void:
 
 func _resize_frame() -> void:
 	var compact := size.x < 900
+	# Re-theme only when crossing the breakpoint, not on each layout pass.
+	if compact_navigation == int(compact): return
+	compact_navigation = int(compact)
 	rail.custom_minimum_size.x = 56 if compact else 208
 	UI.rail_padding(rail, ThemeTokens.SPACE_1 if compact else ThemeTokens.SPACE_3)
 	rail_brand.visible = not compact

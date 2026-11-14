@@ -1151,39 +1151,39 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 8 const StaffPanel = preload("res://scripts/staff_panel.gd")
 9 const UI = preload("res://scripts/ui/components.gd")
 11 const PAGES: Array[Dictionary] = [
-96 func _ready() -> void:
-184 func _add_time_controls(column: VBoxContainer) -> void:
-243 func _save_game() -> void:
-249 func _load_game() -> void:
-262 func _set_speed(speed: int) -> void:
-269 func _process(delta: float) -> void:
-295 func _refresh_time() -> void:
-313 func _show_page(index: int) -> void:
-345 func _refresh_finance() -> void:
-365 func _build_fleet(content: VBoxContainer) -> void:
-442 func _model_selected(index: int) -> void:
-453 func _lease_aircraft() -> void:
-463 func _dispose_aircraft() -> void:
-473 func _buy_aircraft() -> void:
-489 func _refresh_fleet() -> void:
-534 func _maintenance_summary(plane: Dictionary) -> String:
-547 func _build_maintenance(parent: VBoxContainer) -> void:
-583 func _refresh_base_action() -> void:
-595 func _change_maintenance_base() -> void:
-602 func _refresh_maintenance() -> void:
-661 func _request_maintenance() -> void:
-672 func _cancel_maintenance() -> void:
-683 func _build_founding() -> void:
-757 func _country_changed(index: int) -> void:
-771 func _found_airline() -> void:
-783 func _sync_view() -> void:
-803 func _open_founding() -> void:
-812 func _label(text: String, style: Dictionary, color: Color = ThemeTokens.INK) -> Label:
-816 func _build_finance(content: VBoxContainer) -> void:
-843 func _build_attention(parent: VBoxContainer) -> void:
-866 func _refresh_attention() -> void:
-891 func _resize_frame() -> void:
-903 func _open_attention(entry: Dictionary) -> void:
+97 func _ready() -> void:
+185 func _add_time_controls(column: VBoxContainer) -> void:
+244 func _save_game() -> void:
+250 func _load_game() -> void:
+263 func _set_speed(speed: int) -> void:
+270 func _process(delta: float) -> void:
+296 func _refresh_time() -> void:
+314 func _show_page(index: int) -> void:
+346 func _refresh_finance() -> void:
+366 func _build_fleet(content: VBoxContainer) -> void:
+443 func _model_selected(index: int) -> void:
+454 func _lease_aircraft() -> void:
+464 func _dispose_aircraft() -> void:
+474 func _buy_aircraft() -> void:
+490 func _refresh_fleet() -> void:
+535 func _maintenance_summary(plane: Dictionary) -> String:
+548 func _build_maintenance(parent: VBoxContainer) -> void:
+584 func _refresh_base_action() -> void:
+596 func _change_maintenance_base() -> void:
+603 func _refresh_maintenance() -> void:
+662 func _request_maintenance() -> void:
+673 func _cancel_maintenance() -> void:
+684 func _build_founding() -> void:
+758 func _country_changed(index: int) -> void:
+772 func _found_airline() -> void:
+784 func _sync_view() -> void:
+804 func _open_founding() -> void:
+813 func _label(text: String, style: Dictionary, color: Color = ThemeTokens.INK) -> Label:
+817 func _build_finance(content: VBoxContainer) -> void:
+844 func _build_attention(parent: VBoxContainer) -> void:
+867 func _refresh_attention() -> void:
+892 func _resize_frame() -> void:
+907 func _open_attention(entry: Dictionary) -> void:
 
 ## scripts/map_background.gd
 1 extends Control
