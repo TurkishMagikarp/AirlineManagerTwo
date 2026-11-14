@@ -324,9 +324,7 @@ impl Game {
             let end = now
                 .checked_add(RULES.downtime_hours * 3600)
                 .ok_or("Reparaturzeitüberlauf.")?;
-            if let Some(v) = &mut self.fleet[i].maintenance {
-                v.end = v.end.max(end);
-            } else {
+            if self.fleet[i].maintenance.is_none() {
                 // A regular check due at this landing is still paid; repairs do not waive it.
                 let plane = &self.fleet[i];
                 let r = crate::maintenance::rules(&plane.model_id)?;
@@ -350,6 +348,13 @@ impl Game {
                 });
             }
             self.begin_visit(i)?;
+            // The requested check freezes its location quote at begin_visit.
+            // Repair downtime is a separate minimum and must survive repricing.
+            let visit = self.fleet[i]
+                .maintenance
+                .as_mut()
+                .ok_or("Reparatur fehlt.")?;
+            visit.end = visit.end.max(end);
         }
         if (self.insurance.coverage != Coverage::None
             || self.insurance.loading_bps > 0

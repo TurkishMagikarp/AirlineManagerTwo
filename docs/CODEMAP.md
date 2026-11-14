@@ -510,9 +510,9 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 213 fn settle_insurance(&mut self) -> Result<(), String>
 231 pub fn next_insurance_event(&self) -> Option<u64>
 259 pub fn apply_insurance(&mut self) -> Result<(), String>
-367 fn renew_insurance(&mut self)
-387 pub fn validate_insurance(&self) -> Result<(), String>
-428 pub fn migrate(v: &mut serde_json::Value)
+372 fn renew_insurance(&mut self)
+392 pub fn validate_insurance(&self) -> Result<(), String>
+433 pub fn migrate(v: &mut serde_json::Value)
 
 ## rust/src/insurance_tests.rs
 2 fn game() -> Game
@@ -520,12 +520,12 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 20 fn insurance_premiums_changes_and_restart()
 50 fn incident_game(coverage: Coverage) -> (Game, u64)
 63 fn insurance_incident_deductible_grounding_speeds_and_saved_request()
-104 fn insurance_insufficient_cash_repairs_are_mandatory_and_disposal_removes_risk()
-129 fn insurance_v22_migration_clears_all_owners_without_changing_cash()
-137 fn strip(v: &mut serde_json::Value)
-174 fn insurance_claim_renewal_clean_year_decay_and_late_purchase()
-206 fn insurance_due_check_and_operated_lease_keep_repair_obligations()
-248 fn insurance_rejects_corrupt_policy_and_pause_four_speed_match()
+120 fn insurance_insufficient_cash_repairs_are_mandatory_and_disposal_removes_risk()
+154 fn insurance_v22_migration_clears_all_owners_without_changing_cash()
+162 fn strip(v: &mut serde_json::Value)
+199 fn insurance_claim_renewal_clean_year_decay_and_late_purchase()
+231 fn insurance_due_check_and_operated_lease_keep_repair_obligations()
+273 fn insurance_rejects_corrupt_policy_and_pause_four_speed_match()
 
 ## rust/src/lib.rs
 1 mod aircraft;
@@ -703,29 +703,29 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 479 pub fn request_maintenance(&mut self, aircraft_id: u32) -> Result<(), String>
 495 pub fn cancel_maintenance(&mut self, aircraft_id: u32) -> Result<(), String>
 516 pub(crate) fn begin_visit(&mut self, p: usize) -> Result<(), String>
-585 fn finish_visit(&mut self, p: usize) -> Result<(), String>
-643 pub(crate) fn apply_maintenance(&mut self) -> Result<(), String>
-683 pub fn validate_maintenance(&self) -> Result<(), String>
-734 mod tests
-737 fn game() -> Game
-749 fn state(g: &Game) -> serde_json::Value
-753 fn flight() -> u64
-759 fn landings(g: &Game) -> u64
-768 fn bases_prices_actions_freeze_and_ai_parity()
-821 fn bases_unscheduled_away_and_running_price_stays_fixed()
-843 fn bases_idle() -> Game
-854 fn bases_fees_speeds_steps_pause_restart_and_migration()
-941 fn bases_v29_process_restart()
-989 fn landings_accumulate_exact_flight_time_and_cycles()
-1003 fn parked_request_debits_once_blocks_departures_and_resumes_from_location()
-1062 fn airborne_request_finishes_the_flight_then_enters_the_hangar()
-1102 fn pending_order_can_be_cancelled_until_the_check_starts()
-1146 fn planned_cost_per_flight_spreads_one_regular_check_over_its_interval()
-1158 fn reaching_the_limit_forces_a_longer_more_expensive_check_at_landing()
-1189 fn repeated_checks_are_identical_for_any_step_size_speed_and_restart()
-1223 fn insufficient_funds_and_fresh_aircraft_leave_state_unchanged()
-1237 fn deleted_route_is_not_resumed_and_corrupt_saves_are_rejected()
-1283 fn version_nine_saves_load_with_fresh_aircraft_and_no_maintenance()
+589 fn finish_visit(&mut self, p: usize) -> Result<(), String>
+647 pub(crate) fn apply_maintenance(&mut self) -> Result<(), String>
+687 pub fn validate_maintenance(&self) -> Result<(), String>
+738 mod tests
+741 fn game() -> Game
+753 fn state(g: &Game) -> serde_json::Value
+757 fn flight() -> u64
+763 fn landings(g: &Game) -> u64
+772 fn bases_prices_actions_freeze_and_ai_parity()
+825 fn bases_unscheduled_away_and_running_price_stays_fixed()
+847 fn bases_idle() -> Game
+858 fn bases_fees_speeds_steps_pause_restart_and_migration()
+945 fn bases_v29_process_restart()
+993 fn landings_accumulate_exact_flight_time_and_cycles()
+1007 fn parked_request_debits_once_blocks_departures_and_resumes_from_location()
+1066 fn airborne_request_finishes_the_flight_then_enters_the_hangar()
+1106 fn pending_order_can_be_cancelled_until_the_check_starts()
+1150 fn planned_cost_per_flight_spreads_one_regular_check_over_its_interval()
+1162 fn reaching_the_limit_forces_a_longer_more_expensive_check_at_landing()
+1193 fn repeated_checks_are_identical_for_any_step_size_speed_and_restart()
+1227 fn insufficient_funds_and_fresh_aircraft_leave_state_unchanged()
+1241 fn deleted_route_is_not_resumed_and_corrupt_saves_are_rejected()
+1287 fn version_nine_saves_load_with_fresh_aircraft_and_no_maintenance()
 
 ## rust/src/map.rs
 5 pub fn position(a: (f64, f64), b: (f64, f64), t: f64) -> (f64, f64)

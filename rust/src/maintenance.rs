@@ -519,18 +519,22 @@ impl Game {
             return Err("Flugzeug ist noch in der Luft.".into());
         }
         let mut visit = plane.maintenance.clone().ok_or("Keine Wartung geplant.")?;
-        // Freeze the location premium at actual start, including airborne orders.
-        let (price, seconds) = self.check_at(
-            &plane.location_icao,
-            &plane.wear,
-            rules(&plane.model_id)?,
-            visit.unscheduled,
-        )?;
-        visit.cost_eur = price;
-        visit.end = visit
-            .start
-            .checked_add(seconds)
-            .ok_or("Wartungs-Zeitüberlauf.")?;
+        // Requested checks are estimates until landing. Forced wear checks are
+        // already priced at creation; insurance repairs also use Visit and must
+        // keep their separately booked cost and repair downtime.
+        if !visit.unscheduled {
+            let (price, seconds) = self.check_at(
+                &plane.location_icao,
+                &plane.wear,
+                rules(&plane.model_id)?,
+                false,
+            )?;
+            visit.cost_eur = price;
+            visit.end = visit
+                .start
+                .checked_add(seconds)
+                .ok_or("Wartungs-Zeitüberlauf.")?;
+        }
         let balance = self
             .airline
             .as_ref()
@@ -661,12 +665,12 @@ impl Game {
                         && self.due_landing(p).is_some_and(|t| t <= now)
                     {
                         let r = rules(&plane.model_id)?;
+                        let (price, seconds) =
+                            self.check_at(&plane.location_icao, &plane.wear, r, true)?;
                         self.fleet[p].maintenance = Some(Visit {
                             start: now,
-                            end: now
-                                .checked_add(duration(r, true)?)
-                                .ok_or("Wartungs-Zeitüberlauf.")?,
-                            cost_eur: cost(&plane.wear, r, true)?,
+                            end: now.checked_add(seconds).ok_or("Wartungs-Zeitüberlauf.")?,
+                            cost_eur: price,
                             unscheduled: true,
                             resume: None,
                             staffed: true,
@@ -777,7 +781,7 @@ mod tests {
         );
         assert_eq!(
             away,
-            ((normal.0 * 125 + 99) / 100, (normal.1 * 125).div_ceil(100))
+            ((normal.0 * 110 + 99) / 100, (normal.1 * 110).div_ceil(100))
         );
         assert!(g.close_maintenance_base("EDDF").is_err());
         let before = state(&g);

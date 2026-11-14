@@ -1,8 +1,8 @@
 {
   "unscheduled_cost_percent": 150,
   "unscheduled_duration_percent": 150,
-  "outstation_cost_percent": 125,
-  "outstation_duration_percent": 125,
+  "outstation_cost_percent": 110,
+  "outstation_duration_percent": 110,
   "base_setup_cost_eur": 250000,
   "base_recurring_fee_eur": 10000,
   "models": {

@@ -12,8 +12,8 @@ sie dar und leitet Eingaben weiter.
 
 - `base_setup_cost_eur`: einmalig 250.000 EUR beim Eröffnen.
 - `base_recurring_fee_eur`: 10.000 EUR alle 30 Spieltage ab Eröffnung.
-- `outstation_cost_percent`: 125 % der normalen Checkkosten außerhalb einer Basis.
-- `outstation_duration_percent`: 125 % der normalen Checkdauer außerhalb einer Basis.
+- `outstation_cost_percent`: 110 % der normalen Checkkosten außerhalb einer Basis.
+- `outstation_duration_percent`: 110 % der normalen Checkdauer außerhalb einer Basis.
 
 Die Außenstationsprozente werden nach den bestehenden Zuschlägen für ungeplante
 Checks angewendet, jeweils auf volle EUR bzw. Sekunden aufgerundet. An einer Basis
@@ -33,6 +33,10 @@ Ein noch fliegendes Flugzeug sperrt das Schließen nicht. Eröffnen benötigt ge
 Bargeld und ein handlungsfähiges, nicht notleidendes Unternehmen. Wiederkehrende
 Gebühren werden auch bei fehlendem Guthaben fällig und wirken wie andere Kosten auf
 die bestehende Insolvenzlogik.
+
+Versicherungsreparaturen behalten ihre separat gebuchten Kosten und ihre eigene
+Ausfallzeit. Treffen Reparatur und Wartungsauftrag zusammen, bleibt die
+Reparaturzeit eine Mindestdauer des Aufenthalts.
 
 ## Buchung, Spielstand und Determinismus
 
