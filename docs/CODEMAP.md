@@ -293,8 +293,8 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 15 fn state(g: &Game) -> serde_json::Value
 20 fn fuel_bounds_seed_and_cadence()
 41 fn fuel_steps_speeds_pause_restart_and_global_price()
-124 fn fuel_migration_keeps_airborne_costs_and_starts_at_base()
-162 fn fuel_departure_boundary_and_identical_company_charges()
+129 fn fuel_migration_keeps_airborne_costs_and_starts_at_base()
+167 fn fuel_departure_boundary_and_identical_company_charges()
 
 ## rust/src/game.rs
 10 pub struct Game
