@@ -38,7 +38,36 @@ static CATALOG: LazyLock<Result<Catalog, String>> = LazyLock::new(|| {
 });
 
 pub fn catalog() -> Result<&'static Catalog, String> {
+    #[cfg(test)]
+    if LEGACY_SCENARIO.with(|active| active.get()) {
+        return Ok(LEGACY_CATALOG.get_or_init(|| {
+            serde_json::from_str(include_str!("../../tests/fixtures/original_airports.json"))
+                .unwrap()
+        }));
+    }
     CATALOG.as_ref().map_err(Clone::clone)
+}
+
+// Route-choice unit scenarios must declare their market universe explicitly.
+// Thread-local selection isolates them from the worldwide audits running in parallel.
+#[cfg(test)]
+thread_local! {
+    static LEGACY_SCENARIO: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+#[cfg(test)]
+static LEGACY_CATALOG: std::sync::OnceLock<Catalog> = std::sync::OnceLock::new();
+
+#[cfg(test)]
+pub struct OriginalCatalogue(bool);
+#[cfg(test)]
+impl Drop for OriginalCatalogue {
+    fn drop(&mut self) {
+        LEGACY_SCENARIO.with(|active| active.set(self.0));
+    }
+}
+#[cfg(test)]
+pub fn original_catalogue_scenario() -> OriginalCatalogue {
+    OriginalCatalogue(LEGACY_SCENARIO.with(|active| active.replace(true)))
 }
 
 #[cfg(test)]
