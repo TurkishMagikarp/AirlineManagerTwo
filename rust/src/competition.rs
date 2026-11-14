@@ -139,6 +139,7 @@ impl Game {
                     let plane = g.fleet.iter().find(|p| Some(p.id) == r.aircraft_id)?;
                     let mut offer = crate::cabins::offer(r, plane).ok()?;
                     offer.awareness = g.marketing.awareness;
+                    offer.reputation = g.reputation.score;
                     offer.owner = g.market_owner_key();
                     Some(offer)
                 })
@@ -218,7 +219,8 @@ impl Game {
             self.clock = target;
             return true;
         }
-        if self.competitors.is_empty()
+        if crate::reputation::next_day(self.clock.elapsed().as_secs()) > target.elapsed().as_secs()
+            && self.competitors.is_empty()
             && self
                 .routes
                 .iter()
@@ -380,7 +382,10 @@ impl Game {
                 .min()
                 .unwrap_or(review)
                 .min(review)
-                .min(maintenance);
+                .min(maintenance)
+                .min(crate::reputation::next_day(
+                    staged.clock.elapsed().as_secs(),
+                ));
             // An event already due (e.g. after loading) never moves the clock back.
             let end = target
                 .elapsed()

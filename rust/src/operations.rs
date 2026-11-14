@@ -508,6 +508,10 @@ impl Game {
             .len()
             .saturating_sub(crate::economy::HISTORY_LIMIT);
         finance.recent.drain(..excess);
+        self.reputation.observe(
+            finance.totals.punctuality_flights - self.finance.totals.punctuality_flights,
+            finance.totals.late_flights - self.finance.totals.late_flights,
+        );
         self.finance = finance;
         if let Some(h) = &mut self.history {
             for batch in archive {
@@ -517,7 +521,18 @@ impl Game {
         if let Some(balance) = balance {
             self.airline.as_mut().unwrap().capital_eur = balance;
         }
+        let previous_time = self.clock.elapsed();
         self.clock = clock;
+        if previous_time < self.clock.elapsed()
+            && self
+                .clock
+                .elapsed()
+                .as_secs()
+                .is_multiple_of(crate::reputation::DAY)
+            && self.clock.elapsed().subsec_nanos() == 0
+        {
+            self.reputation.close_day();
+        }
         self.complete_training();
         for (r, p, projection, airborne, wear) in updates {
             self.fleet[p].wear = wear;

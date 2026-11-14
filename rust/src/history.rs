@@ -315,6 +315,7 @@ impl History {
 impl Game {
     pub fn validate_history(&self) -> Result<(), String> {
         self.validate_marketing()?;
+        self.reputation.validate()?;
         let Some(h) = &self.history else {
             return if self.airline.is_none() {
                 Ok(())

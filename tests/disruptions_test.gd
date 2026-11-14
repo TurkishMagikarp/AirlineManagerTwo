@@ -150,6 +150,9 @@ func _delay_views(delay: int) -> bool:
 
 func _punctuality_view(expected: String, count: int) -> bool:
 	await _click(main.navigation[1])
+	var summary: Dictionary = main.simulation.get_financial_summary()
+	if not _check(("Pünktlichkeitsruf: %+.1f %% (%s)" % [summary["reputation_percent"], summary["reputation_trend"]]) in main.description.text, "Rust reputation and trend rendered next to punctuality"):
+		return false
 	if not _check(("Pünktlichkeit: %s (%d Flüge)" % [expected, count]) in main.description.text, "Airline punctuality text and denominator"):
 		return false
 	await _click(main.navigation[2])
@@ -266,9 +269,9 @@ func _restart_family(mode: String) -> bool:
 			if not _restore_disruption(disruption_path):
 				return false
 			_advance(120)
-			var old := _without_disruptions(_snapshot()[0]).replace('"version":27', '"version":25')
+			var old := _without_disruptions(_snapshot()[0]).replace('"version":28', '"version":25')
 			_write(disruption_path, old)
-			if not _restore_disruption(disruption_path) or not _check(_without_disruptions(_snapshot()[0]) == old.replace('"version":25', '"version":27'), "v25 migration changes only disruption defaults for all owners"):
+			if not _restore_disruption(disruption_path) or not _check(_without_disruptions(_snapshot()[0]) == old.replace('"version":25', '"version":28'), "v25 migration changes only disruption defaults for all owners"):
 				return false
 		else:
 			_advance(2993)

@@ -39,6 +39,9 @@ mod marketing_tests;
 mod operations;
 #[cfg(test)]
 mod quality;
+mod reputation;
+#[cfg(test)]
+mod reputation_tests;
 #[cfg(test)]
 mod rotation_tests;
 mod route_save;
@@ -482,6 +485,8 @@ impl SimulationClock {
         "fuel_month_delta_cents" => self.game.fuel_market.price_at(self.game.clock.elapsed().as_secs()) - self.game.fuel_market.price_at(self.game.clock.elapsed().as_secs().saturating_sub(30 * 86400)),
         "flights" => t.flights, "passengers" => t.passengers, "cargo_kg" => t.cargo_kg, "cargo_revenue_eur" => t.cargo_revenue, "ticket_revenue_eur" => t.revenue - t.cargo_revenue,
                     "revenue_eur" => t.revenue,
+        "reputation_percent" => self.game.reputation.percent(),
+        "reputation_trend" => self.game.reputation.trend_text(),
         "marketing_eur" => marketing.min(i128::from(i64::MAX)) as i64,
         "tax_eur" => tax.min(i128::from(i64::MAX)) as i64,
         "tax_year_eur" => last_tax.map_or(0, |a| a.amount),

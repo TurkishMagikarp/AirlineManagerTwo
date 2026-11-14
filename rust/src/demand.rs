@@ -133,6 +133,7 @@ pub struct Offer {
     pub cargo_model: Option<String>,
     premium: bool,
     pub awareness: i64,
+    pub reputation: i64,
     pub owner: String,
 }
 impl Offer {
@@ -144,6 +145,7 @@ impl Offer {
             cargo_model: None,
             premium: false,
             awareness: 0,
+            reputation: 0,
             owner: String::new(),
         }
     }
@@ -319,6 +321,7 @@ impl Prepared {
                 .then(a.premium.cmp(&b.premium))
                 .then(a.route.service_level.cmp(&b.route.service_level))
                 .then(a.awareness.cmp(&b.awareness))
+                .then(a.reputation.cmp(&b.reputation))
         });
         let own_indices: Vec<_> = matching
             .iter()
@@ -392,6 +395,7 @@ impl Prepared {
                     frequency_sum[i] += f;
                 }
                 weights[j][i] = crate::marketing::attractiveness(o.awareness)
+                    * crate::reputation::attractiveness(o.reputation)
                     * o.route.service_level.rate().attractiveness
                     * f
                     * w
@@ -579,6 +583,7 @@ fn estimate_reference(
             .then(a.premium.cmp(&b.premium))
             .then(a.route.service_level.cmp(&b.route.service_level))
             .then(a.awareness.cmp(&b.awareness))
+            .then(a.reputation.cmp(&b.reputation))
     });
     let own_indices: Vec<_> = matching
         .iter()
@@ -621,6 +626,7 @@ fn estimate_reference(
                 frequency_sum[i] += f;
             }
             weights[j][i] = crate::marketing::attractiveness(o.awareness)
+                * crate::reputation::attractiveness(o.reputation)
                 * o.route.service_level.rate().attractiveness
                 * f
                 * w
@@ -769,6 +775,8 @@ mod tests {
             supply[0].route.ticket_eur = fare;
             supply[1].business_seats = 12;
             supply[1].awareness = 23_000_000;
+            supply[0].reputation = -850_000;
+            supply[1].reputation = 650_000;
             supply[2].route.plan.as_mut().unwrap().interval_seconds = 7 * 86400;
             for own in 0..supply.len() {
                 let o = &supply[own];
