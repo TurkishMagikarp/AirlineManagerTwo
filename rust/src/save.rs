@@ -17,7 +17,8 @@ const VERSION: u32 = 26;
 // Bounded input, including centuries of fuel/seasonal quotes for the player
 // and both AI airlines in the million-flight finance restart scenario.
 // Version 17 retains per-class quotes, which also split more archive batches.
-const MAX_BYTES: u64 = 128 * 1024 * 1024;
+// v26 adds disruption boundaries to centuries of AI/player history.
+const MAX_BYTES: u64 = 256 * 1024 * 1024;
 
 #[derive(Serialize, Deserialize)]
 struct SaveGame {
@@ -127,7 +128,10 @@ pub fn save(path: &Path, game: &Game) -> Result<(), String> {
     let bytes = serde_json::to_vec(&data)
         .map_err(|error| format!("Spielstand konnte nicht erzeugt werden: {error}"))?;
     if bytes.len() as u64 > MAX_BYTES {
-        return Err("Spielstand ist zu groß.".into());
+        return Err(format!(
+            "Spielstand ist zu groß: {} Bytes (Limit {MAX_BYTES}).",
+            bytes.len()
+        ));
     }
     let parent = path
         .parent()
@@ -156,7 +160,10 @@ pub fn load(path: &Path) -> Result<Game, String> {
         .read_to_end(&mut bytes)
         .map_err(|error| format!("Spielstand nicht lesbar: {error}"))?;
     if bytes.len() as u64 > MAX_BYTES {
-        return Err("Spielstand ist zu groß.".into());
+        return Err(format!(
+            "Spielstand ist zu groß: {} Bytes (Limit {MAX_BYTES}).",
+            bytes.len()
+        ));
     }
     let mut value: serde_json::Value = serde_json::from_slice(&bytes)
         .map_err(|_| "Spielstand ist beschädigt oder unvollständig.".to_string())?;

@@ -321,8 +321,11 @@ impl Game {
                         .as_ref()
                         .map_or(0, |f| f.totals.costs()),
                 );
-                let count =
-                    next.saturating_sub(now) / r.plan.as_ref().unwrap().interval_seconds + 1;
+                // Recovering slack can temporarily make actual intervals
+                // shorter than the schedule. Bound flight count by physical
+                // flight + turnaround time, which recovery can never shorten.
+                let (flight, ground) = crate::operations::timings(r, &p.model_id).ok()?;
+                let count = next.saturating_sub(now) / (flight + ground) + 1;
                 worst_costs = worst_costs.saturating_add(i128::from(ceiling) * i128::from(count));
             }
         }

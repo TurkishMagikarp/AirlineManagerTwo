@@ -131,7 +131,7 @@ fn disruptions_restart_midflight_speeds_steps_pause_and_care_reconcile() {
     }
     let t = &reference.finance.totals;
     assert_eq!(t.flights, t.punctuality_flights);
-    assert!(t.on_time_flights < t.flights && t.delay_seconds > 0);
+    assert!(t.late_flights > 0 && t.delay_seconds > 0);
     let mut t = crate::economy::Totals {
         passengers: 10,
         flights: 1,
@@ -237,13 +237,7 @@ fn disruptions_v25_migrates_all_owners_empty_and_keeps_airborne_times() {
     fn strip(v: &mut serde_json::Value) {
         match v {
             serde_json::Value::Object(o) => {
-                for key in [
-                    "disruption",
-                    "punctuality_flights",
-                    "on_time_flights",
-                    "delay_seconds",
-                    "care",
-                ] {
+                for key in ["disruption", "otp", "late", "delay_seconds", "care"] {
                     o.remove(key);
                 }
                 for v in o.values_mut() {

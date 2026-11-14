@@ -86,7 +86,7 @@ fn ten_year_scenarios_reconcile_and_survive_annual_restart() {
                 );
                 assert_eq!(c.game.insurance.coverage, crate::insurance::Coverage::Basic);
                 let t = &c.game.finance.totals;
-                assert!(t.punctuality_flights > 0 && t.on_time_flights <= t.punctuality_flights);
+                assert!(t.punctuality_flights > 0 && t.late_flights <= t.punctuality_flights);
                 assert!(
                     t.care >= 0 && i128::from(t.care) * 100 < i128::from(t.revenue),
                     "passenger care exceeds one percent of AI revenue"
@@ -162,7 +162,7 @@ fn ten_years_of_daily_fare_changes_remain_saveable_and_lossless() {
     println!("CHURN save_bytes={bytes}");
     // Version 26 retains punctuality/care counters and splits batches at
     // disruptions. Keep ten years of daily fare churn below 12 MiB, with
-    // at least 116 MiB headroom under the unchanged 128 MiB disk limit.
+    // at least 244 MiB headroom under the 256 MiB disk limit.
     assert!(bytes < 12 * 1024 * 1024);
     let mut loaded = crate::save::load(&path).unwrap();
     assert_eq!(

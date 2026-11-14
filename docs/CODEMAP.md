@@ -241,9 +241,9 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 195 fn disruptions_sale_and_lease_return_clear_pending_delay()
 229 fn disruptions_v25_migrates_all_owners_empty_and_keeps_airborne_times()
 237 fn strip(v: &mut serde_json::Value)
-289 fn disruptions_wear_age_and_corrupt_cursor_validation()
-324 fn disruptions_care_settles_once_reduces_tax_base_and_attention_is_read_only()
-401 fn disruptions_long_delay_cash_runway_never_reuses_a_past_arrival()
+283 fn disruptions_wear_age_and_corrupt_cursor_validation()
+318 fn disruptions_care_settles_once_reduces_tax_base_and_attention_is_read_only()
+395 fn disruptions_long_delay_cash_runway_never_reuses_a_past_arrival()
 
 ## rust/src/disruptions.rs
 15 pub struct Rules
@@ -294,38 +294,38 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 246 pub fn reference_price(km: f64) -> f64
 250 fn zero(value: &i64) -> bool
 255 pub struct Totals
-289 impl Totals
-290 pub fn valid_cabins(&self, economy_fare: i64) -> bool
-317 pub fn costs(&self) -> i64
-320 pub fn profit(&self) -> i64
-323 pub fn load_percent(&self) -> f64
-330 pub fn add(&mut self, other: &Self, count: u64) -> Option<()>
-368 pub struct FlightResult
-377 pub struct Finance
-383 pub fn quote(route: &Route, model_id: &str) -> Result<Totals, String>
-395 pub fn quote_shared(
-404 pub fn quote_at_price(
-414 pub fn quote_at_time(
-424 fn quote_with_time(
-436 pub(crate) struct QuoteMarket
-446 impl QuoteMarket
-447 pub fn new(
-469 pub(crate) fn quote_prepared(
-519 impl Game
-522 pub fn planning_quote(
-557 pub fn set_ticket_price(&mut self, id: u32, price: i64) -> Result<(), String>
-567 pub fn validate_finance(&self) -> Result<(), String>
-653 mod tests
-656 fn fuel_checkpoints_match_original_replay_in_any_query_order()
-698 fn game(price: i64) -> Game
-711 fn prices_distance_capacity_and_costs_are_predictable()
-741 fn landing_debits_once_empty_flights_can_create_debt_and_prices_validate()
-781 fn frame_sizes_16x_save_load_and_history_are_identical()
-819 fn v5_migration_never_charges_past_landings_and_new_saves_reject_bad_finance()
-861 fn financial_overflow_rolls_back_clock_flights_and_balance()
-873 fn deleting_routes_preserves_results_and_new_game_resets_finances()
-895 fn calibrated_route_matrix_and_price_sensitivity()
-1026 fn historical_v6_costs_and_active_flight_survive_rebalancing()
+291 impl Totals
+292 pub fn valid_cabins(&self, economy_fare: i64) -> bool
+319 pub fn costs(&self) -> i64
+322 pub fn profit(&self) -> i64
+325 pub fn load_percent(&self) -> f64
+332 pub fn add(&mut self, other: &Self, count: u64) -> Option<()>
+370 pub struct FlightResult
+379 pub struct Finance
+385 pub fn quote(route: &Route, model_id: &str) -> Result<Totals, String>
+397 pub fn quote_shared(
+406 pub fn quote_at_price(
+416 pub fn quote_at_time(
+426 fn quote_with_time(
+438 pub(crate) struct QuoteMarket
+448 impl QuoteMarket
+449 pub fn new(
+471 pub(crate) fn quote_prepared(
+521 impl Game
+524 pub fn planning_quote(
+559 pub fn set_ticket_price(&mut self, id: u32, price: i64) -> Result<(), String>
+569 pub fn validate_finance(&self) -> Result<(), String>
+655 mod tests
+658 fn fuel_checkpoints_match_original_replay_in_any_query_order()
+700 fn game(price: i64) -> Game
+713 fn prices_distance_capacity_and_costs_are_predictable()
+743 fn landing_debits_once_empty_flights_can_create_debt_and_prices_validate()
+783 fn frame_sizes_16x_save_load_and_history_are_identical()
+821 fn v5_migration_never_charges_past_landings_and_new_saves_reject_bad_finance()
+863 fn financial_overflow_rolls_back_clock_flights_and_balance()
+875 fn deleting_routes_preserves_results_and_new_game_resets_finances()
+897 fn calibrated_route_matrix_and_price_sensitivity()
+1028 fn historical_v6_costs_and_active_flight_survive_rebalancing()
 
 ## rust/src/financing.rs
 6 const DAY: u64 = 86400;
@@ -352,8 +352,8 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 221 pub fn borrow(&mut self, amount: i64) -> Result<(), String>
 246 pub fn repay(&mut self, amount: i64) -> Result<(), String>
 263 pub fn next_financing_event(&self) -> Option<u64>
-349 pub fn apply_financing(&mut self) -> Result<(), String>
-416 pub fn validate_financing(&self) -> Result<(), String>
+352 pub fn apply_financing(&mut self) -> Result<(), String>
+419 pub fn validate_financing(&self) -> Result<(), String>
 
 ## rust/src/financing_tests.rs
 8 const DAY: f64 = 86400.0;
@@ -829,25 +829,25 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 
 ## rust/src/save.rs
 16 const VERSION: u32 = 26;
-20 const MAX_BYTES: u64 = 128 * 1024 * 1024;
-23 struct SaveGame
-30 struct GameState
-57 struct SavedRoutes
-64 struct SavedFleet
-70 struct SavedClock
-77 pub fn save(path: &Path, game: &Game) -> Result<(), String>
-152 pub fn load(path: &Path) -> Result<Game, String>
-410 mod tests
-414 fn routes_roundtrip_migration_and_rejecting_corrupt_assignments()
-481 fn exact_roundtrip_and_overwrite_for_all_clock_states()
-506 fn rejects_missing_corrupt_truncated_invalid_and_future_saves()
-536 fn rejects_oversized_saves_and_write_errors()
-547 fn migrates_clock_only_v1_without_fabricating_a_company()
-561 fn rejects_invalid_company_data()
-581 fn fleet_and_balance_roundtrip_and_identifiers_continue_after_load()
-607 fn v2_company_migrates_without_buying_aircraft_or_changing_balance()
-625 fn rejects_corrupt_fleet_instead_of_silently_losing_aircraft()
-667 fn oversized_archive_cannot_overwrite_a_loadable_save()
+21 const MAX_BYTES: u64 = 256 * 1024 * 1024;
+24 struct SaveGame
+31 struct GameState
+58 struct SavedRoutes
+65 struct SavedFleet
+71 struct SavedClock
+78 pub fn save(path: &Path, game: &Game) -> Result<(), String>
+156 pub fn load(path: &Path) -> Result<Game, String>
+417 mod tests
+421 fn routes_roundtrip_migration_and_rejecting_corrupt_assignments()
+488 fn exact_roundtrip_and_overwrite_for_all_clock_states()
+513 fn rejects_missing_corrupt_truncated_invalid_and_future_saves()
+543 fn rejects_oversized_saves_and_write_errors()
+554 fn migrates_clock_only_v1_without_fabricating_a_company()
+568 fn rejects_invalid_company_data()
+588 fn fleet_and_balance_roundtrip_and_identifiers_continue_after_load()
+614 fn v2_company_migrates_without_buying_aircraft_or_changing_balance()
+632 fn rejects_corrupt_fleet_instead_of_silently_losing_aircraft()
+674 fn oversized_archive_cannot_overwrite_a_loadable_save()
 
 ## rust/src/seasonal_tests.rs
 3 const DAY: u64 = 86400;

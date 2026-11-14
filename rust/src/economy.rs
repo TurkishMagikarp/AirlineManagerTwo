@@ -255,10 +255,12 @@ fn zero(value: &i64) -> bool {
 pub struct Totals {
     #[serde(default, skip_serializing_if = "zero")]
     pub care: i64,
-    #[serde(default, skip_serializing_if = "zero")]
+    // Compact archive counters: on-time = tracked minus late. Most flight
+    // batches omit the zero late count entirely.
+    #[serde(default, rename = "otp", skip_serializing_if = "zero")]
     pub punctuality_flights: i64,
-    #[serde(default, skip_serializing_if = "zero")]
-    pub on_time_flights: i64,
+    #[serde(default, rename = "late", skip_serializing_if = "zero")]
+    pub late_flights: i64,
     #[serde(default, skip_serializing_if = "zero")]
     pub delay_seconds: i64,
     #[serde(default, skip_serializing_if = "zero")]
@@ -348,7 +350,7 @@ impl Totals {
             cargo_revenue,
             care,
             punctuality_flights,
-            on_time_flights,
+            late_flights,
             delay_seconds
         );
         let costs = self
@@ -487,7 +489,7 @@ pub(crate) fn quote_prepared(
     Ok(Totals {
         care: 0,
         punctuality_flights: 0,
-        on_time_flights: 0,
+        late_flights: 0,
         delay_seconds: 0,
         cargo_kg,
         cargo_revenue,
@@ -627,7 +629,7 @@ impl Game {
         }
         if sum.care > t.care
             || sum.punctuality_flights > t.punctuality_flights
-            || sum.on_time_flights > t.on_time_flights
+            || sum.late_flights > t.late_flights
             || sum.delay_seconds > t.delay_seconds
             || sum.cargo_kg > t.cargo_kg
             || sum.cargo_revenue > t.cargo_revenue
@@ -974,7 +976,7 @@ mod tests {
                     assert!(g.advance((60 + flight) as f64));
                     let mut operated = t.clone();
                     operated.punctuality_flights = 1;
-                    operated.on_time_flights = 1;
+                    operated.late_flights = 0;
                     assert_eq!(g.finance.totals, operated);
                     assert_eq!(g.finance.recent[0].totals, operated);
                     assert_eq!(

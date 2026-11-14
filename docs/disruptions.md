@@ -26,8 +26,16 @@ Aufmerksamkeitsliste zeigt große Rückstände. Die Nachfrage erhält keinen
 Pünktlichkeitsfaktor. KI-Airlines verwenden dieselbe Simulation.
 
 Spielstandversion 26 speichert einen kompakten Zeitcursor pro Flugplan sowie
-Pünktlichkeits- und Betreuungssummen im bestehenden Finanzarchiv. Ältere
+Pünktlichkeits- und Betreuungssummen im bestehenden Finanzarchiv. Der kompakte
+Zähler `otp` erfasst alle beobachteten Flüge, `late` nur verspätete; pünktliche
+Flüge ergeben sich aus der Differenz. Nullwerte werden im Archiv ausgelassen. Ältere
 Spielstände haben durch neutrale Standardwerte keine laufenden Verspätungen und
 keine Pünktlichkeitshistorie. Bereits fliegende Abflugzitate und Flugzeiten bleiben
 unverändert; neue Würfe beginnen danach. Checks und bewusste Neuplanung beginnen
 wie bisher einen neuen Flugplan, erhalten aber Lebenszeitverschleiß und Seed.
+
+Technische Ereignisse erzeugen zusätzliche Archivgrenzen. Der unveränderte
+Millionenflug-Laufzeitgrenzwert beträgt 300 Sekunden für die Simulation; die
+begrenzte maximale Spielstandgröße steigt wegen der jahrhundertelangen
+KI-/Spielerhistorie von 128 auf 256 MiB. Normale Zehnjahresspielstände bleiben
+im einstelligen MiB-Bereich; der Belastungstest umfasst mehrere Millionen Flüge.
