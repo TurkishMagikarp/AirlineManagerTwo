@@ -1143,24 +1143,28 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 1 extends Control
 2 const ThemeTokens = preload("res://scripts/ui/operations_theme.gd")
 4 const UI = preload("res://scripts/ui/components.gd")
-9 func _ready() -> void:
-15 func set_series(rows: Array, key: String, is_percent: bool = false) -> void:
-21 func _gui_input(event: InputEvent) -> void:
-27 func _draw() -> void:
+11 func _ready() -> void:
+17 func set_series(rows: Array, key: String, is_percent: bool = false) -> void:
+24 func set_comparison(key: String) -> void:
+28 func _value(value: Variant, signed: bool = false) -> String:
+31 func _gui_input(event: InputEvent) -> void:
+39 func _point(index: int, key: String, low: float, high: float) -> Vector2:
+42 func _draw() -> void:
+136 func _dashed(start: Vector2, end: Vector2, ink: Color, phase: float) -> float:
 
 ## scripts/finances_panel.gd
 1 extends VBoxContainer
 2 const ThemeTokens = preload("res://scripts/ui/operations_theme.gd")
 4 const UI = preload("res://scripts/ui/components.gd")
 5 const Chart = preload("res://scripts/finance_chart.gd")
-48 func _ready() -> void:
-207 func _process(delta: float) -> void:
-215 func refresh(force: bool = false) -> void:
-317 func _chart() -> void:
-320 func _loan_action(borrowing: bool) -> void:
-325 func _select_route() -> void:
-339 func _reset_flights() -> void:
-344 func _flights() -> void:
+49 func _ready() -> void:
+216 func _process(delta: float) -> void:
+224 func refresh(force: bool = false) -> void:
+330 func _chart() -> void:
+337 func _loan_action(borrowing: bool) -> void:
+342 func _select_route() -> void:
+356 func _reset_flights() -> void:
+361 func _flights() -> void:
 
 ## scripts/main.gd
 1 extends Control
@@ -1362,24 +1366,31 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 49 const HEADER_BUTTON = {"family": "sans", "size": 14, "height": 18, "weight": 600, "tracking": 0.0}
 50 const TAB_HEIGHT = 40
 51 const TABLE_ROW_HEIGHT = 40
-53 const SCREEN_TITLE = {"family": "display", "size": 32, "height": 36, "weight": 600, "tracking": -0.01}
-54 const PANEL_TITLE = {"family": "display", "size": 15, "height": 20, "weight": 600, "tracking": 0.08}
-55 const COLUMN_HEAD = {"family": "display", "size": 12, "height": 16, "weight": 600, "tracking": 0.08}
-56 const LABEL = {"family": "display", "size": 12, "height": 16, "weight": 600, "tracking": 0.08}
-57 const BODY = {"family": "sans", "size": 16, "height": 22, "weight": 400, "tracking": 0.0}
-58 const BODY_STRONG = {"family": "sans", "size": 16, "height": 22, "weight": 600, "tracking": 0.0}
-59 const SMALL = {"family": "sans", "size": 14, "height": 18, "weight": 400, "tracking": 0.0}
-60 const FIGURE = {"family": "mono", "size": 24, "height": 28, "weight": 500, "tracking": 0.0}
-61 const DATA = {"family": "mono", "size": 14, "height": 20, "weight": 400, "tracking": 0.0}
-62 const CODE = {"family": "mono", "size": 12, "height": 16, "weight": 500, "tracking": 0.06}
-64 const DISPLAY_FONT = preload("res://resources/fonts/outfit/Outfit[wght].ttf")
-65 const SANS_FONT = preload("res://resources/fonts/nunito/Nunito[wght].ttf")
-66 const MONO_FONT = preload("res://resources/fonts/dmmono/DMMono-Regular.ttf")
-67 const MONO_MEDIUM_FONT = preload("res://resources/fonts/dmmono/DMMono-Medium.ttf")
-107 func text_style(type: String, style: Dictionary, font_name: String = "font", size_name: String = "font_siz
-111 func floating_box(radius: int, padding: int) -> StyleBoxFlat:
-118 func button_styles(
-146 func _init() -> void:
+53 const CHART_HEIGHT = 248
+54 const CHART_LINE_WIDTH = 2
+55 const CHART_MARKER_RADIUS = 5
+56 const CHART_DASH = 6.0
+57 const CHART_GAP = 4.0
+58 const CHART_AXIS = {"family": "mono", "size": 11, "height": 16, "weight": 500, "tracking": 0.04}
+59 const CHART_VALUE = {"family": "mono", "size": 12, "height": 16, "weight": 500, "tracking": 0.0}
+61 const SCREEN_TITLE = {"family": "display", "size": 32, "height": 36, "weight": 600, "tracking": -0.01}
+62 const PANEL_TITLE = {"family": "display", "size": 15, "height": 20, "weight": 600, "tracking": 0.08}
+63 const COLUMN_HEAD = {"family": "display", "size": 12, "height": 16, "weight": 600, "tracking": 0.08}
+64 const LABEL = {"family": "display", "size": 12, "height": 16, "weight": 600, "tracking": 0.08}
+65 const BODY = {"family": "sans", "size": 16, "height": 22, "weight": 400, "tracking": 0.0}
+66 const BODY_STRONG = {"family": "sans", "size": 16, "height": 22, "weight": 600, "tracking": 0.0}
+67 const SMALL = {"family": "sans", "size": 14, "height": 18, "weight": 400, "tracking": 0.0}
+68 const FIGURE = {"family": "mono", "size": 24, "height": 28, "weight": 500, "tracking": 0.0}
+69 const DATA = {"family": "mono", "size": 14, "height": 20, "weight": 400, "tracking": 0.0}
+70 const CODE = {"family": "mono", "size": 12, "height": 16, "weight": 500, "tracking": 0.06}
+72 const DISPLAY_FONT = preload("res://resources/fonts/outfit/Outfit[wght].ttf")
+73 const SANS_FONT = preload("res://resources/fonts/nunito/Nunito[wght].ttf")
+74 const MONO_FONT = preload("res://resources/fonts/dmmono/DMMono-Regular.ttf")
+75 const MONO_MEDIUM_FONT = preload("res://resources/fonts/dmmono/DMMono-Medium.ttf")
+115 func text_style(type: String, style: Dictionary, font_name: String = "font", size_name: String = "font_siz
+119 func floating_box(radius: int, padding: int) -> StyleBoxFlat:
+126 func button_styles(
+154 func _init() -> void:
 
 ## README.md headings (line text)
 1 # Airline Manager — Neustart

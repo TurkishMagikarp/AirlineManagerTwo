@@ -50,6 +50,27 @@ keine Zeit und greift nicht auf Spielstände zu. Leere Mitarbeiter- und
 Flugzeugtabellen führen zum Einstellen bzw. zur Flotte. Tabellen scrollen im
 Rahmen; Formulare und Aktionen bleiben über den Seiten-Scroll erreichbar.
 
+## Finanzen
+
+Die fünf bestehenden Kennzahlen nutzen MetricCards mit getrennt gedämpfter
+Einheit; vier Spalten wechseln bei fehlendem Platz auf zwei. Buchungen,
+Steuerabschlüsse, Routencontrolling und Flugarchiv nutzen DataTables mit
+DM-Mono-Zahlen, rechtsbündigen Beträgen, EUR in jeder Geldzelle und echtem
+Minuszeichen. Ergebnisse tragen ein explizites Vorzeichen. Reine Tabellenpanels
+sitzen bündig im Rahmen. Alle bisherigen deutschen Texte und Aktionen bleiben.
+
+Das Diagramm zeichnet die unveränderten Rust-Zeitpunkte als Linien mit
+horizontalem Raster und DM-Mono-Achsen. Einnahmen erscheinen durchgezogen in
+`go`, Kosten gestrichelt (6/4px) in `stop`, die Fläche dazwischen in `go-wash`.
+Die Auswahl von Einnahmen oder Kosten zeigt beide Reihen auf derselben Skala;
+Kontostand, Ergebnis, Ertragsteuer und Routenauslastung bleiben erreichbar.
+Nichtnegative Reihen beginnen bei null; negative Kontostände und Ergebnisse
+erweitern die Skala unter null, damit Verluste sichtbar bleiben. Nur der letzte
+vorhandene Zeitpunkt erhält Marker und Wert; fehlende Landungen unterbrechen
+die Auslastungslinie. Zeitstempel und Werte bleiben per Tooltip abrufbar.
+Es gibt keine Zeitraumumschaltung; die bestehende lange Kennzahlenauswahl bleibt
+ein Select. Die Darstellung liest ausschließlich Simulationsdaten.
+
 ## Gemeinsames Design
 
 `resources/operations_theme.tres` ist das gemeinsame Godot-Theme. Die Ressource

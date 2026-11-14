@@ -8,6 +8,7 @@ var metrics: Dictionary = {}
 var note: Label
 var chart: Control
 var load_chart: Control
+var chart_comparison: Label
 var chart_select: OptionButton
 var route_tree: Tree
 var flights_tree: Tree
@@ -46,12 +47,13 @@ var insurance_result: Label
 var marketing_history: Tree
 
 func _ready() -> void:
-	add_theme_constant_override("separation", 12)
+	add_theme_constant_override("separation", ThemeTokens.SPACE_4)
 	var grid := GridContainer.new()
-	grid.add_theme_constant_override("h_separation", 12)
-	grid.add_theme_constant_override("v_separation", 12)
+	grid.add_theme_constant_override("h_separation", ThemeTokens.SPACE_4)
+	grid.add_theme_constant_override("v_separation", ThemeTokens.SPACE_4)
 	add_child(grid)
-	grid.resized.connect(func(): grid.columns = 4 if grid.size.x >= 1150 else 2)
+	get_viewport().size_changed.connect(func(): grid.columns = 4 if get_viewport_rect().size.x >= 1280 else 2)
+	grid.columns = 4 if get_viewport_rect().size.x >= 1280 else 2
 	for item in [["balance", "KONTOSTAND"], ["revenue", "TICKETUMSÄTZE"], ["cargo", "FRACHTUMSÄTZE"], ["costs", "GESAMTKOSTEN"], ["profit", "GEWINN / VERLUST"]]:
 		metrics[item[0]] = UI.metric(grid, item[1])
 	note = UI.label("", ThemeTokens.SMALL, UI.MUTED)
@@ -122,7 +124,7 @@ func _ready() -> void:
 	marketing.add_child(marketing_result)
 	marketing_history = UI.table(["Zeit", "Marketingkosten · letzte 100"], [170, 260], 140)
 	marketing.add_child(marketing_history)
-	var taxes := UI.panel(self, "ERTRAGSTEUER / JAHRESABSCHLÜSSE")
+	var taxes := UI.panel(self, "ERTRAGSTEUER / JAHRESABSCHLÜSSE", null, true)
 	tax_history = UI.table(["Jahr", "Vorsteuerergebnis", "Steuersatz", "Steuer", "Verlustvortrag"], [65, 160, 100, 140, 160], 140)
 	taxes.add_child(tax_history)
 	var loans := UI.panel(self, "KREDITE / LIQUIDITÄT")
@@ -161,7 +163,7 @@ func _ready() -> void:
 	loan_result = UI.label("")
 	loan_result.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	loans.add_child(loan_result)
-	var aircraft := UI.panel(self, "FLUGZEUGBUCHUNGEN / LETZTE 100")
+	var aircraft := UI.panel(self, "FLUGZEUGBUCHUNGEN / LETZTE 100", null, true)
 	aircraft_journal = UI.table(["Zeit", "Buchung", "Geldbewegung"], [170, 330, 140], 160)
 	aircraft.add_child(aircraft_journal)
 	var company := UI.panel(self, "WIRTSCHAFTLICHE ENTWICKLUNG")
@@ -171,12 +173,15 @@ func _ready() -> void:
 		chart_select.add_item(title)
 	chart_select.item_selected.connect(func(_i: int): _chart())
 	company.add_child(chart_select)
+	chart_comparison = UI.label("", ThemeTokens.CODE)
+	chart_comparison.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	company.add_child(chart_comparison)
 	chart = Chart.new()
 	company.add_child(chart)
 	chart_range = UI.label("", ThemeTokens.SMALL, UI.MUTED)
 	chart_range.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	company.add_child(chart_range)
-	var routes := UI.panel(self, "ROUTENCONTROLLING  /  ROUTE ANKLICKEN")
+	var routes := UI.panel(self, "ROUTENCONTROLLING  /  ROUTE ANKLICKEN", null, true)
 	route_tree = UI.table(["Route / Strecke", "Flüge", "Tickets", "Kosten", "Ergebnis", "Auslastung", "Fracht kg / EUR"], [190, 65, 115, 115, 115, 95, 150], 210)
 	route_tree.item_selected.connect(_select_route)
 	routes.add_child(route_tree)
@@ -203,6 +208,10 @@ func _ready() -> void:
 	next_button.text = "Ältere Flüge"
 	next_button.pressed.connect(func(): offset += 50; _flights())
 	paging.add_child(next_button)
+	# Numeric headers stay aligned even before the archive has any entries.
+	for definition in [[marketing_history, [1]], [tax_history, [0, 1, 2, 3, 4]], [aircraft_journal, [2]], [route_tree, [1, 2, 3, 4, 5, 6]], [flights_tree, [2, 3, 4, 5, 6, 7, 8]]]:
+		for column in definition[1]:
+			definition[0].set_column_title_alignment(column, HORIZONTAL_ALIGNMENT_RIGHT)
 
 func _process(delta: float) -> void:
 	if not is_visible_in_tree():
@@ -258,7 +267,7 @@ func refresh(force: bool = false) -> void:
 	metrics["balance"].text = UI.money(airline.get("capital_eur", 0))
 	metrics["balance"].add_theme_color_override("font_color", UI.NEGATIVE if airline.get("capital_eur", 0) < 0 else ThemeTokens.INK)
 	for field in ["revenue", "costs", "profit"]:
-		metrics[field].text = UI.money(summary[field + "_eur"])
+		metrics[field].text = UI.signed_money(summary[field + "_eur"]) if field == "profit" else UI.money(summary[field + "_eur"])
 	metrics["revenue"].text = UI.money(summary["ticket_revenue_eur"])
 	metrics["cargo"].text = UI.money(summary["cargo_revenue_eur"])
 	metrics["profit"].add_theme_color_override("font_color", ThemeTokens.INK if summary["profit_eur"] >= 0 else UI.NEGATIVE)
@@ -277,6 +286,7 @@ func refresh(force: bool = false) -> void:
 		var tax_values := [str(assessment["year"]), UI.money(assessment["profit_eur"]), "%.2f %%" % (assessment["rate_bps"] / 100.0), UI.money(assessment["tax_eur"]), UI.money(assessment["loss_eur"])]
 		for column in range(tax_values.size()):
 			UI.cell_text(tax_row, column, tax_values[column])
+		UI.cell_result(tax_row, 1, assessment["profit_eur"])
 	aircraft_journal.clear()
 	var journal_root := aircraft_journal.create_item()
 	for entry in simulation.get_aircraft_cash_history():
@@ -303,7 +313,10 @@ func refresh(force: bool = false) -> void:
 		row.set_tooltip_text(3, "Davon Betreuung / Entschädigung: %s" % UI.money(r["care_eur"]))
 		UI.cell_text(row, 6, "%d kg / %s" % [r["cargo_kg"], UI.money(r["cargo_revenue_eur"])])
 		UI.cell_text(row, 5, "%.1f %%" % r["load_percent"] if r["flights"] > 0 else "Keine Flüge")
-		row.set_custom_color(4, UI.MUTED if r["flights"] == 0 else UI.POSITIVE if r["profit_eur"] >= 0 else UI.NEGATIVE)
+		if r["flights"] > 0:
+			UI.cell_result(row, 4, r["profit_eur"])
+		else:
+			row.set_custom_color(4, UI.MUTED)
 		if r["route_id"] == route_id:
 			selected = row
 	if selected != null:
@@ -316,6 +329,10 @@ func refresh(force: bool = false) -> void:
 
 func _chart() -> void:
 	chart.set_series(company_series, ["balance", "revenue", "costs", "profit", "tax"][chart_select.selected])
+	chart.set_comparison("costs" if chart_select.selected == 1 else "revenue" if chart_select.selected == 2 else "")
+	chart_comparison.visible = chart_select.selected in [1, 2]
+	chart_comparison.text = chart_select.get_item_text(2 if chart_select.selected == 1 else 1)
+	chart_comparison.add_theme_color_override("font_color", ThemeTokens.STOP if chart_select.selected == 1 else ThemeTokens.GO)
 
 func _loan_action(borrowing: bool) -> void:
 	var error: String = simulation.borrow_money(int(loan_amount.value)) if borrowing else simulation.repay_loan(int(loan_amount.value))
@@ -352,7 +369,7 @@ func _flights() -> void:
 			UI.cell_text(row, i, values[i])
 			row.set_tooltip_text(i, "Ticket: %s\nTreibstoff: %s\nFlughäfen: %s\nPersonal: %s\nWartung / Verwaltung: %s\nBordservice (± Standard): %s" % [UI.money(f["ticket_eur"]), UI.money(f["fuel_eur"]), UI.money(f["airport_eur"]), UI.money(f["crew_eur"]), UI.money(f["overhead_eur"]), UI.money(f["service_eur"])])
 			row.set_tooltip_text(i, row.get_tooltip_text(i) + "\nBetreuung / Entschädigung: %s" % UI.money(f["care_eur"]))
-		row.set_custom_color(7, UI.POSITIVE if f["profit_eur"] >= 0 else UI.NEGATIVE)
+		UI.cell_result(row, 7, f["profit_eur"])
 	page_label.text = "%d–%d von %d · neueste zuerst" % [offset + 1 if not rows.is_empty() else 0, offset + rows.size(), flight_count]
 	previous_button.disabled = offset == 0
 	next_button.disabled = offset + 50 >= flight_count
