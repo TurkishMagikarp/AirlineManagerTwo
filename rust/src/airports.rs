@@ -18,6 +18,8 @@ pub struct Airport {
     /// Provisional catchment/importance index, not observed route traffic.
     pub market_size: f64,
     pub business_percent: u32,
+    /// Percentage of the model landing + passenger tariff, charged at this endpoint.
+    pub charge_percent: u32,
 }
 
 #[derive(Deserialize)]
@@ -63,6 +65,7 @@ mod tests {
                 airport.market_size.is_finite() && (0.01..=10.0).contains(&airport.market_size)
             );
             assert!(airport.business_percent <= 100);
+            assert!((1..=200).contains(&airport.charge_percent));
         }
         assert!(airports.contains(&"EDDF".to_string()));
         assert!(airports.contains(&"LTFM".to_string()));

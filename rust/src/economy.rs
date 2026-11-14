@@ -170,6 +170,37 @@ pub fn fuel_bill(route: &Route, model: &str, price: i64) -> Result<i64, String> 
         .map_err(|_| "Treibstoffüberlauf.".into())
 }
 
+#[cfg(test)]
+thread_local! { pub(crate) static LEGACY_AIRPORT_CHARGES: std::cell::Cell<bool> = const { std::cell::Cell::new(false) }; }
+
+/// Both endpoints charge the same model/passenger tariff at their own level.
+/// Round each endpoint up to whole EUR; empty flights still pay landing charges.
+pub fn airport_bill(route: &Route, model: &str, passengers: i64) -> Result<i64, String> {
+    let rates = CONFIG
+        .models
+        .get(model)
+        .ok_or("Unbekanntes Flugzeugmodell.")?;
+    if !(0..=i64::from(aircraft::model(model)?.seats)).contains(&passengers) {
+        return Err("Ungültige Passagierzahl.".into());
+    }
+    let tariff = rates.airport_base_eur + CONFIG.airport_eur_per_passenger * passengers;
+    #[cfg(test)]
+    if LEGACY_AIRPORT_CHARGES.with(|enabled| enabled.get()) {
+        return Ok(tariff);
+    }
+    let catalog = crate::airports::catalog()?;
+    [&route.origin_icao, &route.destination_icao]
+        .into_iter()
+        .try_fold(0, |sum, icao| {
+            let airport = catalog
+                .airports
+                .iter()
+                .find(|a| &a.icao == icao)
+                .ok_or("Unbekannter Flughafen.")?;
+            Ok(sum + (tariff * i64::from(airport.charge_percent) + 99) / 100)
+        })
+}
+
 pub fn default_ticket() -> i64 {
     CONFIG.default_ticket_eur
 }
@@ -413,7 +444,7 @@ pub(crate) fn quote_prepared(
         fuel: ((seconds * rates.fuel_kg_per_hour + rates.fuel_cycle_kg * 3600) * fuel_cents
             + 359999)
             / 360000,
-        airport: rates.airport_base_eur + c.airport_eur_per_passenger * passengers,
+        airport: airport_bill(route, model_id, passengers)?,
         // Personnel is paid through payroll. Keep Totals::crew for immutable
         // historical results and departure snapshots from existing saves.
         crew: 0,
@@ -422,6 +453,43 @@ pub(crate) fn quote_prepared(
 }
 
 impl Game {
+    /// Planning preview before creating a route: annual demand, one departure per
+    /// day and direction, default fares, selected cabin, and existing competition.
+    pub fn planning_quote(
+        &self,
+        origin: &str,
+        destination: &str,
+        aircraft_id: u32,
+    ) -> Result<Totals, String> {
+        self.check_route(origin, destination, aircraft_id, None)?;
+        let plane = self
+            .fleet
+            .iter()
+            .find(|p| p.id == aircraft_id)
+            .ok_or("Flugzeug fehlt.")?;
+        let route = Route {
+            id: self.next_route_id,
+            origin_icao: origin.into(),
+            destination_icao: destination.into(),
+            aircraft_id: Some(aircraft_id),
+            parent_route_id: None,
+            remove_at: None,
+            rotation_phase: None,
+            plan: None,
+            ticket_eur: default_ticket(),
+            business_ticket_eur: crate::cabins::default_business_fare(),
+            cargo_rate_cents: crate::cargo::default_rate(),
+            service_level: crate::service::Level::Standard,
+        };
+        let mut supply = self.market_routes();
+        supply.push(crate::cabins::offer(&route, plane)?);
+        quote_at_price(
+            &route,
+            &plane.model_id,
+            &supply,
+            self.fuel_market.price_at(self.clock.elapsed().as_secs()),
+        )
+    }
     pub fn set_ticket_price(&mut self, id: u32, price: i64) -> Result<(), String> {
         if !(0..=100_000).contains(&price) {
             return Err("Ticketpreis muss zwischen 0 und 100000 EUR liegen.".into());
