@@ -47,8 +47,12 @@ No production Rust, economy/configuration, UI or save-format changes were needed
 - `cargo build --locked --manifest-path rust/Cargo.toml`: passed.
 - `cargo test --locked --manifest-path rust/Cargo.toml`: 226 passed, zero failures.
 - `cargo clippy --locked --manifest-path rust/Cargo.toml`: passed without warnings.
-- Godot runtime scripts, Linux main-scene smoke (`--headless --quit-after 10`),
-  and Linux separate-process restart coverage were run against that debug build.
+- All 32 runnable `*_test.gd` scripts passed (save/restart scripts use their
+  explicit modes). Linux main-scene smoke (`--headless --quit-after 10`) passed.
+- All 19 restart families passed with 62 successful separate Linux process
+  invocations: airport, cabin, cargo, competition, disruption, economy, finances,
+  financing, flight, fuel contract, insurance, maintenance, marketing, pilot,
+  save, service, slots, staff and tax. The PowerShell wrappers were not executed.
 - Both slot restart pairs passed immediately and after seven days; the updated
   live-release UI probes also passed in the default test and both restart pairs.
 - Real Xvfb preview/map captures passed and were visually inspected. The map
@@ -60,7 +64,10 @@ on editor shutdown with a Godot `cowdata.h` bounds error. Runtime test processes
 use the imported project directly. The first rendered startup lacked XCursor;
 after supplying the missing Linux libraries, rendering succeeded (audio fell
 back to Dummy; V-Sync is unsupported under this Xvfb driver). Initial 150-second
-finance stress-test attempts timed out without an assertion failure.
+finance stress-test attempts timed out without an assertion failure; the longer
+900-second-budget writer and fresh reader both passed. The resulting archive
+was 223,100,603 bytes. The same finance script passed in explicit writer mode
+instead of repeating the timed-out default invocation.
 
 Owner checks remain **unrun**: `START.bat`, every PowerShell restart wrapper,
 native Windows DLL/process restart behavior, and Windows rendering/scaling.
