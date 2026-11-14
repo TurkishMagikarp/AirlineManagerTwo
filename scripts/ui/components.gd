@@ -371,6 +371,7 @@ static func table(titles: Array, widths: Array, height: int = 200) -> Tree:
 	values.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	values.clip_contents = true
 	result.add_child(values, false, Node.INTERNAL_MODE_FRONT)
+	result.draw.connect(values.sync_layout)
 	result.columns = titles.size()
 	result.hide_root = true
 	result.select_mode = Tree.SELECT_ROW
@@ -622,7 +623,7 @@ static func field_from_label(control: Control, unit: String = "", help: String =
 ## clipped child above it, while retaining canonical cell text for consumers.
 class ResultValues extends Control:
 	var table: Tree
-	func _process(_delta: float) -> void:
+	func sync_layout() -> void:
 		if not is_visible_in_tree(): return
 		var header_font := table.get_theme_font("title_button_font")
 		var header_size := table.get_theme_font_size("title_button_font_size")
