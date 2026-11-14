@@ -67,3 +67,29 @@ Windows, Godot 4.7.2, Compatibility-Renderer (NVIDIA RTX 3080):
 - `START.bat --headless --quit-after 10`: Build, Import und Spielstart erfolgreich.
 - Echte Grafikaufnahmen und Sichtprüfung der drei Fenstergrößen erfolgreich.
 - Rust-Code, Wirtschaftskonfiguration, Spielstandformat und Launcher unverändert.
+
+## Priorisierte Aufmerksamkeit
+
+Oberhalb jeder Seite zeigt eine einklappbare, scrollbar begrenzte Liste die
+aktuellen Hinweise der Spieler-Airline. `SimulationClock.get_attention_snapshot()`
+leitet alle Einträge ausschließlich in Rust aus dem aktuellen Zustand ab; es gibt
+keinen zusätzlichen Speicherstand und keine neue Save-Version.
+
+`config/attention.json` legt Prioritäten (kleinere Zahl zuerst) und die Grenze für
+negatives Guthaben fest. Bei gleicher Priorität sortieren Art, öffentliche Route,
+Flugzeug-ID und Mitarbeiter-ID stabil. Die Personalreserve verwendet dieselben
+Perioden aus `config/staff.json` wie die Einstellung und enthält offene Gehälter.
+Negatives Guthaben ersetzt den weniger dringenden Reservehinweis.
+
+Angezeigt werden zugewiesene Routen ohne startbaren Flugplan bei fehlender
+Besatzung (inklusive Musterberechtigung), auf Techniker wartende Wartungen,
+Guthabenwarnungen, geparkte Flugzeuge ohne Flugplan sowie laufende Umschulungen
+mit Endzeit. Ein Klick öffnet Routen/Flotte/Finanzen/Personal und selektiert, sofern
+vorhanden, das betroffene Objekt. Die Liste wird auch während Pause nach Änderungen
+aktualisiert. KI-Entscheidungen und Wirtschaft verwenden diese Anzeige nicht.
+
+Rust: `cargo test --locked --manifest-path rust/Cargo.toml attention_`.
+Godot-Mauseingabe: `Godot --headless --path . --script res://tests/attention_test.gd`.
+Der Godot-Test sowie GUI, Screenshots, START.bat und Windows-Neustarts wurden auf
+dem Linux-Implementierungsserver nicht ausgeführt; Rust-Tests sind kein visueller
+Layoutnachweis.

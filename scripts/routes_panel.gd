@@ -480,3 +480,15 @@ func _delete() -> void:
 	var route := _route()
 	if not route.is_empty():
 		_feedback(simulation.delete_route(route["id"]), "Route gelöscht; Flugzeug freigegeben.")
+
+
+func focus_route(id: int) -> void:
+	var row := route_tree.get_root().get_first_child()
+	while row != null:
+		if row.get_metadata(0)["id"] == id:
+			row.select(0)
+			_selection_changed()
+			route_tree.ensure_cursor_is_visible()
+			route_tree.grab_focus()
+			return
+		row = row.get_next()
