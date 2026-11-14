@@ -6,24 +6,27 @@ MAP_CONTESTED,%s · Eco %s / Business %s · %.1f/Tag je Richtung,%s · Eco %s / 
 MAP_FREQUENCY,%.1f Abflüge/Tag je Richtung,%.1f departures/day each way
 MAP_ECONOMY,Economy,Economy
 MAP_BUSINESS,Business,Business
-Ebenen,Ebenen,Layers
-Eigene Routen,Eigene Routen,Own routes
-Flughäfen,Flughäfen,Airports
-Flugzeuge,Flugzeuge,Aircraft
-Basis,Basis,Base
-Route erstellen,Route erstellen,Create route
-Routen anzeigen,Routen anzeigen,Show routes
-Flugplan bearbeiten,Flugplan bearbeiten,Edit schedule
-Im Flug,Im Flug,In flight
-Aktiv,Aktiv,Active
-Geplant,Geplant,Planned
-Entfernung,Entfernung,Distance
-Ticketpreis,Ticketpreis,Ticket price
-Ankunft,Ankunft,Arrival
-Route,Route,Route
-Auf Basis zentrieren,Auf Basis zentrieren,Center on base
-Vergrößern,Vergrößern,Zoom in
-Verkleinern,Verkleinern,Zoom out
-Ziehen: verschieben · Mausrad: zoomen · Klick: Details · Natural Earth (Public Domain),Ziehen: verschieben · Mausrad: zoomen · Klick: Details · Natural Earth (Public Domain),Drag: pan · Wheel: zoom · Click: details · Natural Earth (Public Domain)
-%d unterwegs  /  %d Routen,%d unterwegs  /  %d Routen,%d airborne  /  %d routes
-Kein Flug ausgewählt · Nur tatsächlich fliegende Flugzeuge werden angezeigt.,Kein Flug ausgewählt · Nur tatsächlich fliegende Flugzeuge werden angezeigt.,No flight selected · Only aircraft actually in flight are shown.
+MAP_LAYERS,Ebenen,Layers
+MAP_OWN_ROUTES,Eigene Routen,Own routes
+MAP_AIRPORTS,Flughäfen,Airports
+MAP_AIRCRAFT,Flugzeuge,Aircraft
+MAP_BASE,Basis,Base
+MAP_CREATE_ROUTE,Route erstellen,Create route
+MAP_SHOW_ROUTES,Routen anzeigen,Show routes
+MAP_EDIT_SCHEDULE,Flugplan bearbeiten,Edit schedule
+MAP_IN_FLIGHT,Im Flug,In flight
+MAP_ACTIVE,Aktiv,Active
+MAP_PLANNED,Geplant,Planned
+MAP_DISTANCE,Entfernung,Distance
+MAP_TICKET_PRICE,Ticketpreis,Ticket price
+MAP_ARRIVAL,Ankunft,Arrival
+MAP_ROUTE,Route,Route
+MAP_CENTER_BASE,Auf Basis zentrieren,Center on base
+MAP_ZOOM_IN,Vergrößern,Zoom in
+MAP_ZOOM_OUT,Verkleinern,Zoom out
+MAP_HINT,Ziehen: verschieben · Mausrad: zoomen · Klick: Details · Natural Earth (Public Domain),Drag: pan · Wheel: zoom · Click: details · Natural Earth (Public Domain)
+MAP_SUMMARY,%d unterwegs  /  %d Routen,%d airborne  /  %d routes
+MAP_NO_FLIGHT,Kein Flug ausgewählt · Nur tatsächlich fliegende Flugzeuge werden angezeigt.,No flight selected · Only aircraft actually in flight are shown.
+MAP_FLIGHT_DETAILS,"%s  /  %s · %s
+%s → %s   ·   %.1f %%   ·   Ankunft: %s","%s  /  %s · %s
+%s → %s   ·   %.1f %%   ·   Arrival: %s"

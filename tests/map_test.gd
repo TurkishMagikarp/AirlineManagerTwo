@@ -48,6 +48,10 @@ func _run() -> void:
 		var keys: Array = offer.keys()
 		keys.sort()
 		check(keys == expected_keys, "Public dictionary allowlist excludes confidential fields")
+	var map_scroll: ScrollContainer = panel.get_parent().get_parent()
+	map_scroll.ensure_control_visible(panel.competitor_layer)
+	for _frame in range(3): await process_frame
+	check(root.get_visible_rect().encloses(panel.competitor_layer.get_global_rect()), "Layer checkbox visible for real input: %s" % panel.competitor_layer.get_global_rect())
 	await click_at(panel.competitor_layer.get_global_rect().get_center())
 	check(canvas.show_competitors, "Layer checkbox enables competitors")
 	main._show_page(2)

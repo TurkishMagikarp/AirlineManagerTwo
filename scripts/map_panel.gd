@@ -36,13 +36,13 @@ func _ready() -> void:
 	var layer_body := VBoxContainer.new()
 	layer_body.add_theme_constant_override("separation", ThemeTokens.SPACE_2)
 	layers.add_child(layer_body)
-	layer_body.add_child(UI.label("Ebenen", ThemeTokens.LABEL, UI.MUTED))
-	for caption in ["Eigene Routen", "Flughäfen", "Flugzeuge"]:
-		var check := UI.map_layer(caption, caption == "Eigene Routen")
+	layer_body.add_child(UI.label(tr("MAP_LAYERS"), ThemeTokens.LABEL, UI.MUTED))
+	for caption in ["MAP_OWN_ROUTES", "MAP_AIRPORTS", "MAP_AIRCRAFT"]:
+		var check := UI.map_layer(tr(caption), caption == "MAP_OWN_ROUTES")
 		check.button_pressed = true
 		check.toggled.connect(func(value):
-			if caption == "Eigene Routen": canvas.show_routes = value
-			elif caption == "Flughäfen": canvas.show_airports = value
+			if caption == "MAP_OWN_ROUTES": canvas.show_routes = value
+			elif caption == "MAP_AIRPORTS": canvas.show_airports = value
 			else: canvas.show_flights = value
 			canvas.queue_redraw())
 		layer_body.add_child(check)
@@ -68,7 +68,7 @@ func _ready() -> void:
 		button.text = caption
 		button.theme_type_variation = "MapZoomButton"
 		button.custom_minimum_size = Vector2.ONE * ThemeTokens.CONTROL_HEIGHT
-		button.tooltip_text = tr("Auf Basis zentrieren") if caption == "◎" else tr("Vergrößern") if caption == "+" else tr("Verkleinern")
+		button.tooltip_text = tr("MAP_CENTER_BASE") if caption == "◎" else tr("MAP_ZOOM_IN") if caption == "+" else tr("MAP_ZOOM_OUT")
 		button.pressed.connect(func():
 			if caption == "◎": canvas.center_base()
 			else: canvas.zoom_at(canvas.size / 2, 1.3 if caption == "+" else 1.0 / 1.3))
@@ -90,10 +90,10 @@ func _ready() -> void:
 	route_table.hide_root = true
 	route_table.column_titles_visible = true
 	route_table.custom_minimum_size.y = 140
-	for i in range(3): route_table.set_column_title(i, ["Route", tr("Entfernung"), tr("Ticketpreis")][i])
+	for i in range(3): route_table.set_column_title(i, [tr("MAP_ROUTE"), tr("MAP_DISTANCE"), tr("MAP_TICKET_PRICE")][i])
 	route_table.item_selected.connect(_select_row)
 	add_child(route_table)
-	var hint := UI.label(tr("Ziehen: verschieben · Mausrad: zoomen · Klick: Details · Natural Earth (Public Domain)"), ThemeTokens.CODE, UI.MUTED)
+	var hint := UI.label(tr("MAP_HINT"), ThemeTokens.CODE, UI.MUTED)
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	add_child(hint)
 	refresh()
@@ -130,8 +130,8 @@ func refresh_flights() -> void:
 	if canvas.flights == last_flights and selected_id == last_selected_id and canvas.selected_route == last_selected_route and canvas.selected_competitor == last_selected_competitor: return
 	last_flights = canvas.flights
 	last_selected_id = selected_id
-	summary.text = tr("%d unterwegs  /  %d Routen") % [canvas.flights.size(), canvas.routes.size()]
-	details.text = tr("Kein Flug ausgewählt · Nur tatsächlich fliegende Flugzeuge werden angezeigt.")
+	summary.text = tr("MAP_SUMMARY") % [canvas.flights.size(), canvas.routes.size()]
+	details.text = tr("MAP_NO_FLIGHT")
 	for child in card_body.get_children():
 		card_body.remove_child(child)
 		child.queue_free()
@@ -140,25 +140,25 @@ func refresh_flights() -> void:
 	if selected_id < 0 and -selected_id - 1 < canvas.airports.size():
 		var airport: Dictionary = canvas.airports[-selected_id - 1]
 		details.text = "%s · %s\n%s" % [airport["icao"], airport["name"], airport["slots"]]
-		_card_header(airport["icao"], tr("Basis") if airport["icao"] == canvas.base_icao else "", "neutral")
+		_card_header(airport["icao"], tr("MAP_BASE") if airport["icao"] == canvas.base_icao else "", "neutral")
 		_add_name(airport["name"], ThemeTokens.MAP_CARD_NAME)
 		_add_name(airport["slots"])
 		for service in airport["airlines"]:
 			_add_name(tr("MAP_AIRPORT_SERVICE") % [service["airline"], service["departures_per_day"]])
-		_action(tr("Route erstellen"), 0, airport["icao"])
-		_action(tr("Routen anzeigen"), 0)
+		_action(tr("MAP_CREATE_ROUTE"), 0, airport["icao"])
+		_action(tr("MAP_SHOW_ROUTES"), 0)
 	var route_id: int = canvas.selected_route
 	for flight in canvas.flights:
 		if flight["aircraft_id"] == selected_id:
 			route_id = flight["route_id"]
-			details.text = "%s  /  %s · %s\n%s → %s   ·   %.1f %%   ·   Ankunft: %s" % [flight["flight_number"], flight["model"], flight["identifier"], flight["origin"], flight["destination"], flight["progress"] * 100, flight["arrival"]]
+			details.text = tr("MAP_FLIGHT_DETAILS") % [flight["flight_number"], flight["model"], flight["identifier"], flight["origin"], flight["destination"], flight["progress"] * 100, flight["arrival"]]
 	for route in route_rows:
 		if route["id"] != route_id: continue
 		canvas.selected_route = route_id
 		var airborne := false
 		for flight in canvas.flights:
 			if flight["route_id"] == route_id: airborne = true
-		_card_header("%s–%s" % [route["origin_icao"], route["destination_icao"]], tr("Im Flug") if airborne else tr("Aktiv") if route["has_plan"] else tr("Geplant"), "info" if airborne else "neutral")
+		_card_header("%s–%s" % [route["origin_icao"], route["destination_icao"]], tr("MAP_IN_FLIGHT") if airborne else tr("MAP_ACTIVE") if route["has_plan"] else tr("MAP_PLANNED"), "info" if airborne else "neutral")
 		var cities: Array[String] = []
 		for code in [route["origin_icao"], route["destination_icao"]]:
 			for airport in canvas.airports:
@@ -171,13 +171,13 @@ func refresh_flights() -> void:
 			track.percent = flight["progress"] * 100
 			track.custom_minimum_size.y = 12
 			card_body.add_child(track)
-			_fact(tr("Ankunft"), "%s · %.1f %%" % [flight["arrival"], flight["progress"] * 100])
+			_fact(tr("MAP_ARRIVAL"), "%s · %.1f %%" % [flight["arrival"], flight["progress"] * 100])
 			break
-		_fact(tr("Entfernung"), "%.0f km" % route["distance_km"])
-		_fact(tr("Ticketpreis"), UI.money(route["ticket_eur"]))
+		_fact(tr("MAP_DISTANCE"), "%.0f km" % route["distance_km"])
+		_fact(tr("MAP_TICKET_PRICE"), UI.money(route["ticket_eur"]))
 		for offer in competitors:
 			if _same_pair(route, offer): _add_name(tr("MAP_CONTESTED") % _offer_values(offer))
-		_action(tr("Flugplan bearbeiten"), route_id)
+		_action(tr("MAP_EDIT_SCHEDULE"), route_id)
 		var item := route_table.get_root().get_first_child()
 		while item != null:
 			if item.get_metadata(0) == route_id: item.select(0)
