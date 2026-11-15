@@ -23,7 +23,8 @@ use std::time::Duration;
 // Old airborne quotes and all historical amounts remain unchanged.
 // v33: player milestones; missing legacy state is sampled at the load instant.
 // v34: shared world economic cycle. Legacy timelines start neutral at load.
-pub(crate) const VERSION: u32 = 34;
+// v35: route fare autopilot; old saves have no enabled routes or change history.
+pub(crate) const VERSION: u32 = 35;
 // Bounded input, including centuries of fuel/seasonal quotes for the player
 // and both AI airlines in the million-flight finance restart scenario.
 // Version 17 retains per-class quotes, which also split more archive batches.
@@ -39,6 +40,8 @@ struct SaveGame {
 // Future simulation data belongs here, not in the UI or a serialized Godot object.
 #[derive(Serialize, Deserialize)]
 struct GameState {
+    #[serde(default)]
+    pricing: Vec<crate::pricing::Autopilot>,
     #[serde(default)]
     world_economy: Option<crate::world_economy::Cycle>,
     #[serde(default)]
@@ -122,6 +125,7 @@ pub fn save(path: &Path, game: &Game) -> Result<(), String> {
     let data = SaveGame {
         version: VERSION,
         state: GameState {
+            pricing: game.pricing.clone(),
             world_economy: Some(game.world_economy),
             milestones: game.milestones.clone(),
             ferries: game.ferries.clone(),
@@ -239,6 +243,14 @@ pub(crate) fn load_versioned(path: &Path) -> Result<(Game, u32), String> {
             }
         }
     }
+    if value["version"].as_u64().is_some_and(|v| v < 35) {
+        value["state"]["pricing"] = serde_json::json!([]);
+        if let Some(owners) = value["state"]["competitors"].as_array_mut() {
+            for owner in owners {
+                owner["game"]["pricing"] = serde_json::json!([]);
+            }
+        }
+    }
     // v26 is an additive migration: absent cursors and punctuality/care
     // fields deserialize to None/zero for every owner and archived result.
     // Initialize a cursor only when play advances; an existing airborne quote
@@ -323,6 +335,11 @@ pub(crate) fn load_versioned(path: &Path) -> Result<(Game, u32), String> {
     };
     world_economy.validate(clock.elapsed().as_secs())?;
     let mut game = Game {
+        pricing: if data.version < 35 {
+            Vec::new()
+        } else {
+            data.state.pricing
+        },
         world_economy,
         milestones: data.state.milestones,
         departure_markets: Default::default(),

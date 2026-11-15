@@ -38,6 +38,15 @@ var competition_label: Label
 var connections_label: Label
 var connections_empty: Control
 var connections_chip: Control
+var fare_box: VBoxContainer
+var fare_value: Label
+var fare_support: Label
+var fare_business: Label
+var fare_apply: Button
+var fare_switch: CheckButton
+var fare_last: Label
+var fare_key: Array = []
+var fare_cached: Dictionary = {}
 var results_empty: Control
 
 
@@ -76,7 +85,7 @@ func _ready() -> void:
 		origin.grab_focus()
 	)
 	add_child(empty_label)
-	route_tree = UI.table(["Route", "Strecke", "Entfernung", "Flugzeug", tr("TRANSFER_MARKET_HEADER"), "Auslastung"], [65, 140, 110, 170, 220, 100], 180)
+	route_tree = UI.table(["Route", "Strecke", "Entfernung", "Flugzeug", tr("TRANSFER_MARKET_HEADER"), "Auslastung", tr("FARE_AUTOPILOT")], [65, 140, 110, 170, 220, 100, 145], 180)
 	for i in range(6):
 		route_tree.set_column_expand(i, i == 1 or i == 3)
 	route_tree.item_selected.connect(_selection_changed)
@@ -121,6 +130,32 @@ func _ready() -> void:
 			_feedback(simulation.set_ticket_price(route["id"], int(ticket_input.value)), "Ticketpreis geändert.", ticket_input)
 	)
 	add_child(ticket_button)
+	fare_box = VBoxContainer.new()
+	add_child(fare_box)
+	fare_support = _label("")
+	fare_value = UI.metric(fare_box, tr("FARE_TITLE"), fare_support)
+	fare_business = _label("")
+	fare_box.add_child(fare_business)
+	fare_apply = Button.new()
+	fare_apply.text = tr("FARE_APPLY")
+	fare_apply.pressed.connect(func():
+		var route := _route()
+		if not route.is_empty():
+			var error: String = simulation.set_ticket_price(route["id"], fare_cached["fare"])
+			if error.is_empty() and fare_cached.get("business", -1) >= 0:
+				error = simulation.set_business_ticket_price(route["id"], fare_cached["business"])
+			_feedback(error, tr("FARE_APPLIED"))
+	)
+	fare_box.add_child(fare_apply)
+	fare_switch = CheckButton.new()
+	fare_switch.toggled.connect(func(enabled: bool):
+		var route := _route()
+		if not route.is_empty():
+			_feedback(simulation.set_pricing_autopilot(route["id"], enabled), "")
+	)
+	fare_box.add_child(fare_switch)
+	fare_last = _label("")
+	fare_box.add_child(fare_last)
 	add_child(_label("Business-Preis · EUR pro Passagier und Einzelflug"))
 	business_input = SpinBox.new()
 	business_input.get_line_edit().theme_type_variation = "NumericInput"
@@ -312,6 +347,7 @@ func refresh() -> void:
 	for route in routes:
 		var row := route_tree.create_item(root_item)
 		row.set_metadata(0, route)
+		UI.cell_status(row, 6, tr("FARE_ON") if route.get("pricing_autopilot", false) else "—", "info" if route.get("pricing_autopilot", false) else "neutral")
 		UI.cell_text(row, 0, "#%d" % route["id"])
 		UI.cell_text(row, 1, "%s–%s" % [route["origin_icao"], route["destination_icao"]])
 		UI.cell_text(row, 2, "%.1f km" % route["distance_km"])
@@ -350,6 +386,7 @@ func refresh_operations() -> void:
 			if route.get("aircraft_ids", []) != row.get_metadata(0).get("aircraft_ids", []):
 				refresh.call_deferred()
 				return
+			UI.cell_status(row, 6, tr("FARE_ON") if route.get("pricing_autopilot", false) else "—", "info" if route.get("pricing_autopilot", false) else "neutral")
 			var reason: String = route["maintenance_status"] if not String(route["maintenance_status"]).is_empty() else route["staff_status"]
 			var names: PackedStringArray = []
 			for plane in simulation.get_fleet():
@@ -368,6 +405,7 @@ func refresh_operations() -> void:
 				row.set_tooltip_text(3, row.get_text(3) + "\n" + route["maintenance_status"])
 			elif not String(route["staff_status"]).is_empty():
 				row.set_tooltip_text(3, row.get_text(3) + "\n" + route["staff_status"])
+	_update_fare(metrics.get(_route().get("id", 0), {}))
 	_update_connections(metrics.get(_route().get("id", 0), {}))
 	_update_schedule_controls(metrics.get(_route().get("id", 0), {}))
 	_update_service_cost(metrics.get(_route().get("id", 0), {}))
@@ -418,6 +456,7 @@ func _preview() -> void:
 
 
 func _selection_changed() -> void:
+	fare_key.clear()
 	var route := _route()
 	status.text = ""
 	if ticket_button != null:
@@ -446,6 +485,7 @@ func _selection_changed() -> void:
 			assignment.set_item_metadata(assignment.item_count - 1, plane["id"])
 	assignment.disabled = route.is_empty()
 	delete_button.disabled = route.is_empty()
+	_update_fare(route)
 	_update_connections(route)
 	_assignment_preview()
 	_refresh_competition()
@@ -562,3 +602,31 @@ func focus_route(id: int) -> void:
 			route_tree.grab_focus()
 			return
 		row = row.get_next()
+
+
+func _update_fare(route: Dictionary) -> void:
+	var key := [route.get("id", 0), route.get("ticket_eur", -1), route.get("business_ticket_eur", -1), route.get("has_plan", false), route.get("aircraft_ids", []), route.get("service_level", ""), route.get("cargo_rate_cents", 0)]
+	if key != fare_key:
+		if not route.is_empty():
+			if not ticket_input.get_line_edit().has_focus(): ticket_input.value = route["ticket_eur"]
+			if not business_input.get_line_edit().has_focus(): business_input.value = route["business_ticket_eur"]
+		fare_key = key.duplicate(true)
+		fare_cached = simulation.get_fare_suggestion(route.get("id", 0))
+	fare_value.text = "—" if fare_cached.is_empty() else UI.money(fare_cached["fare"])
+	fare_support.text = tr("FARE_NONE") if fare_cached.is_empty() else tr("FARE_PROFIT") % [UI.money(fare_cached["current_profit"]), UI.money(fare_cached["profit"])]
+	fare_business.text = "" if fare_cached.get("business", -1) < 0 else tr("FARE_BUSINESS") % UI.money(fare_cached["business"])
+	var explanation := tr("FARE_TOOLTIP")
+	if not fare_cached.is_empty(): explanation += "\n" + tr("FARE_ASOF") % _fare_date(fare_cached["at"])
+	fare_value.get_parent().get_parent().tooltip_text = explanation
+	fare_apply.tooltip_text = explanation
+	fare_apply.disabled = fare_cached.is_empty()
+	var enabled: bool = route.get("pricing_autopilot", false)
+	fare_switch.set_pressed_no_signal(enabled)
+	fare_switch.disabled = route.is_empty()
+	fare_switch.text = tr("FARE_AUTOPILOT") + " · " + tr("FARE_ON" if enabled else "FARE_OFF")
+	fare_switch.tooltip_text = tr("FARE_AUTO_TOOLTIP")
+	fare_last.text = "" if route.get("pricing_last", "").is_empty() else tr("FARE_LAST") % (route["pricing_last"] + " · " + _fare_date(route["pricing_changed_at"]))
+
+
+func _fare_date(seconds: int) -> String:
+	return tr("FARE_DATE") % [seconds / 86400 + 1, "%02d:%02d" % [seconds / 3600 % 24, seconds / 60 % 60]]

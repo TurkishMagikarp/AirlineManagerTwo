@@ -45,6 +45,9 @@ mod marketing_tests;
 mod milestone_tests;
 mod milestones;
 mod operations;
+mod pricing;
+#[cfg(test)]
+mod pricing_tests;
 #[cfg(test)]
 mod quality;
 mod reputation;
@@ -416,6 +419,36 @@ impl SimulationClock {
     fn set_ticket_price(&mut self, route_id: u32, price: i64) -> GString {
         self.game
             .set_ticket_price(route_id, price)
+            .err()
+            .unwrap_or_default()
+            .as_str()
+            .into()
+    }
+
+    #[func]
+    fn get_fare_suggestion(&self, id: u32) -> VarDictionary {
+        match self.game.fare_suggestion(id) {
+            Ok(Some(s)) => {
+                vdict! { "fare" => s.fare, "business" => s.business.unwrap_or(-1), "current_profit" => s.current_profit, "profit" => s.profit, "at" => self.game.clock.elapsed().as_secs() as i64 }
+            }
+            _ => VarDictionary::new(),
+        }
+    }
+
+    #[func]
+    fn apply_fare_suggestion(&mut self, id: u32) -> GString {
+        self.game
+            .apply_fare_suggestion(id)
+            .err()
+            .unwrap_or_default()
+            .as_str()
+            .into()
+    }
+
+    #[func]
+    fn set_pricing_autopilot(&mut self, id: u32, enabled: bool) -> GString {
+        self.game
+            .set_pricing_autopilot(id, enabled)
             .err()
             .unwrap_or_default()
             .as_str()
@@ -1108,6 +1141,9 @@ impl SimulationClock {
                     .map(|h| h.totals(r.id, now))
                     .unwrap_or_default();
                 Some(vdict! {
+                    "pricing_changed_at" => self.game.pricing.iter().find(|p| p.route_id == r.id).and_then(|p| p.last_change.as_ref()).map_or(-1, |c| c.at as i64),
+                    "pricing_autopilot" => self.game.pricing.iter().any(|p| p.route_id == r.id && p.next_review.is_some()),
+                    "pricing_last" => self.game.pricing.iter().find(|p| p.route_id == r.id).and_then(|p| p.last_change.as_ref()).map(|c| format!("{} → {} EUR{}", c.old, c.new, c.new_business.zip(c.old_business).map(|(new, old)| format!(" · J {old} → {new} EUR")).unwrap_or_default())).unwrap_or_default().as_str(),
                     "id" => r.id, "origin_icao" => r.origin_icao.as_str(),
                     "destination_icao" => r.destination_icao.as_str(),
                     "distance_km" => routes::distance_km(&r.origin_icao, &r.destination_icao).unwrap_or(0.0),

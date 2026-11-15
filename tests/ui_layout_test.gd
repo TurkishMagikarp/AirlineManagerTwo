@@ -33,6 +33,13 @@ func _run() -> void:
 		quit(0)
 		return
 	assert(sim.found_airline("Meridian Air", "DE", "EDDF").is_empty())
+	if OS.get_environment("AIRLINE_UI_CAPTURE_FARES_ONLY") == "1":
+		await _fare_views(sim)
+		main.queue_free()
+		await process_frame
+		print("PASS: fare advisor, autopilot switch, route chip in both sizes and languages")
+		quit(0)
+		return
 	if OS.get_environment("AIRLINE_UI_CAPTURE_ECONOMY_ONLY") == "1":
 		await _economy_views(sim)
 		main.queue_free()
@@ -775,3 +782,50 @@ func _economy_views(sim: RefCounted) -> void:
 		assert(sim.advance(7.0 * 86400.0))
 		sim.pause()
 	assert(captured.size() == 3)
+
+
+func _fare_views(sim: RefCounted) -> void:
+	assert(sim.buy_aircraft("atr72_600").is_empty())
+	assert(sim.set_cabin_layout(1, 12).is_empty())
+	sim.hire_missing_staff()
+	assert(sim.create_route("EDDF", "EDDM", 1).is_empty())
+	assert(sim.set_ticket_price(1, 150).is_empty())
+	assert(sim.schedule_route(1, 1, 120).is_empty())
+	assert(sim.set_pricing_autopilot(1, true).is_empty())
+	sim.start()
+	assert(sim.advance(604800.0))
+	sim.pause()
+	main._sync_view()
+	for locale in ["de", "en"]:
+		TranslationServer.set_locale(locale)
+		# Recreate the presentation to exercise translated captions and controls.
+		var old: Control = main.routes_panel
+		var panel = load("res://scripts/routes_panel.gd").new()
+		panel.simulation = sim
+		var parent: Node = old.get_parent()
+		parent.remove_child(old)
+		old.queue_free()
+		parent.add_child(panel)
+		main.routes_panel = panel
+		main._show_page(2)
+		panel.refresh()
+		panel.route_tree.get_root().get_first_child().select(0)
+		panel._selection_changed()
+		assert(not panel.fare_cached.is_empty())
+		assert(panel.fare_switch.button_pressed)
+		for dimensions in [Vector2i(1440, 1000), Vector2i(680, 520)]:
+			root.size = dimensions
+			for frame in range(5): await process_frame
+			var scroll: ScrollContainer = panel.get_parent().get_parent()
+			for entry in [[panel.fare_box, "advisor"], [panel.route_tree, "chip"], [panel.ticket_input.get_parent(), "fare-inputs"]]:
+				scroll.ensure_control_visible(entry[0])
+				for frame in range(5): await process_frame
+				if entry[1] == "advisor": scroll.ensure_control_visible(panel.fare_last)
+				if entry[1] == "chip":
+					for child in panel.route_tree.get_children(true):
+						if child is HScrollBar: child.value = child.max_value
+				if entry[1] != "chip": scroll.scroll_vertical += 24
+				for frame in range(5): await process_frame
+				await RenderingServer.frame_post_draw
+				if not capture_dir.is_empty():
+					assert(root.get_texture().get_image().save_png(capture_dir.path_join("routes-%s-%s-%dx%d.png" % [entry[1], locale, dimensions.x, dimensions.y])) == OK)

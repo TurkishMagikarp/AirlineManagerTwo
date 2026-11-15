@@ -377,10 +377,12 @@ impl Game {
             .ok_or_else(|| "Unbekannte Route.".to_string())?;
         self.commercial_changed();
         self.routes.retain(|r| r.public_id() != route_id);
+        self.pricing.retain(|p| p.route_id != route_id);
         Ok(())
     }
 
     pub fn validate_routes(&self) -> Result<(), String> {
+        self.validate_pricing()?;
         if self.next_route_id == 0 || (self.airline.is_none() && !self.routes.is_empty()) {
             return Err("Ungültige Routendaten im Spielstand.".into());
         }
