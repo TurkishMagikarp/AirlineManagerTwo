@@ -31,5 +31,27 @@
     "belly_cargo_kg": 720,
     "payload_kg": 7200,
     "class": "Turboprop"
+  },
+  {
+    "id": "a330_300",
+    "name": "Airbus A330-300",
+    "seats": 300,
+    "range_km": 11750,
+    "cruise_kmh": 871,
+    "turnaround_minutes": 90,
+    "belly_cargo_kg": 12000,
+    "payload_kg": 45000,
+    "class": "Widebody"
+  },
+  {
+    "id": "b777_300er",
+    "name": "Boeing 777-300ER",
+    "seats": 396,
+    "range_km": 13650,
+    "cruise_kmh": 905,
+    "turnaround_minutes": 120,
+    "belly_cargo_kg": 18000,
+    "payload_kg": 65000,
+    "class": "Widebody"
   }
 ]

@@ -153,9 +153,12 @@ func _run() -> void:
 						assert(root.get_texture().get_image().save_png(capture_dir.path_join("fleet-tab-%d-%dx%d.png" % [tab, dimensions.x, dimensions.y])) == OK)
 						if tab == 1:
 							for i in range(main.aircraft_cards.size()):
-								for action in ["buy", "lease"]:
-									var button: Control = main.aircraft_cards[i][action]
-									scroll.ensure_control_visible(button)
+								for action in ["header", "buy", "lease"]:
+									var button: Control = main.aircraft_cards[i]["shell"].get_child(0).get_child(0) if action == "header" else main.aircraft_cards[i][action]
+									if action == "header":
+										scroll.scroll_vertical += int(button.global_position.y - scroll.global_position.y) - 16
+									else:
+										scroll.ensure_control_visible(button)
 									for frame in range(5): await process_frame
 									assert(root.get_visible_rect().encloses(button.get_global_rect()))
 									await RenderingServer.frame_post_draw
@@ -290,6 +293,9 @@ func _run() -> void:
 		main._sync_view()
 		if not capture_dir.is_empty(): await _capture_components(dimensions, sim)
 	assert(sim.get_financial_summary() == unchanged, "Navigation/layout must never change finances")
+	if not await _widebody_views(sim):
+		quit(1)
+		return
 	main.queue_free()
 	await process_frame
 	print("PASS: populated overview/fleet/routes/map/finances/staff and founding at 1440x1000, 1100x720, 680x520; deep controls reachable; no financial changes")
@@ -348,3 +354,60 @@ func _capture_picker(select: OptionButton, prefix: String, dimensions: Vector2i)
 	assert(root.get_texture().get_image().save_png(capture_dir.path_join("%s-end-%dx%d.png" % [prefix, dimensions.x, dimensions.y])) == OK)
 	popup.hide()
 	for frame in range(3): await process_frame
+
+
+## Ordinary deposits and staff rules, with fresh companies for Atlantic and Pacific views.
+func _widebody_views(sim: RefCounted) -> bool:
+	for region in [["DE", "EDDF", "KJFK", "RJTT"], ["JP", "RJTT", "KLAX", "KJFK"]]:
+		if not _widebody_action(sim.found_airline("Widebody Air", region[0], region[1])): return false
+		if not _widebody_action(sim.lease_aircraft("a330_300")): return false
+		if not _widebody_action(sim.hire_missing_staff()): return false
+		if not _widebody_action(sim.lease_aircraft("b777_300er")): return false
+		if not _widebody_action(sim.hire_missing_staff()): return false
+		if not _widebody_action(sim.set_cabin_layout(1, 60)): return false
+		if not _widebody_action(sim.set_cabin_layout(2, 80)): return false
+		for i in range(2):
+			if not _widebody_action(sim.create_route(region[1], region[2 + i], i + 1)): return false
+			if not _widebody_action(sim.set_ticket_price(i + 1, 450)): return false
+			if not _widebody_action(sim.set_business_ticket_price(i + 1, 900)): return false
+			if not _widebody_action(sim.schedule_route(i + 1, 1, 1440)): return false
+		sim.set_speed(1)
+		sim.start()
+		sim.advance(5.0 * 3600.0)
+		sim.pause()
+		main._sync_view()
+		for dimensions in [Vector2i(1440, 1000), Vector2i(680, 520)]:
+			root.size = dimensions
+			for page in [1, 3]:
+				main._show_page(page)
+				main.fleet_tabs.current_tab = 0
+				var scroll: ScrollContainer = main.fleet_panel.get_parent().get_parent()
+				if page == 1:
+					scroll.scroll_vertical = int(main.fleet_panel.position.y)
+				else:
+					main.map_panel.canvas.reset_view()
+					main.map_panel.canvas.selected_route = 1
+					main.map_panel.canvas.selection_position = main.map_panel.canvas.size / 2
+					main.map_panel.refresh_flights()
+					for frame in range(5): await process_frame
+					scroll.ensure_control_visible(main.map_panel.canvas)
+				for frame in range(5): await process_frame
+				if page == 1:
+					scroll.ensure_control_visible(main.fleet_tree)
+					for frame in range(5): await process_frame
+					if not root.get_visible_rect().encloses(main.fleet_tree.get_global_rect()):
+						push_error("Widebody fleet table outside viewport")
+						return false
+				if not capture_dir.is_empty():
+					await RenderingServer.frame_post_draw
+					if root.get_texture().get_image().save_png(capture_dir.path_join("widebody-%s-%s-%dx%d.png" % [region[1], "fleet" if page == 1 else "map", dimensions.x, dimensions.y])) != OK:
+						push_error("Widebody screenshot could not be saved")
+						return false
+	return true
+
+
+func _widebody_action(error: String) -> bool:
+	if not error.is_empty():
+		push_error("Widebody fixture: " + error)
+		return false
+	return true

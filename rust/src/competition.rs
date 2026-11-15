@@ -1566,6 +1566,44 @@ impl Competitor {
 
 #[cfg(test)]
 mod tests {
+    /// Diagnostic only: quotes use the exact unchanged expansion search.
+    #[test]
+    #[ignore]
+    fn widebody_ai_expansion_quote_audit() {
+        for (country, home) in [("DE", "EDDF"), ("BR", "SBGR"), ("JP", "RJTT")] {
+            let mut world = crate::game::Game::default();
+            world.found("Worldwide audit", country, home).unwrap();
+            world.clock.set_running(true);
+            assert!(world.advance(730.0 * 86400.0));
+            let supply = world.market_routes();
+            for c in &world.competitors {
+                let origin = &c.game.airline.as_ref().unwrap().home_airport_icao;
+                for model in ["a330_300", "b777_300er"] {
+                    let quotes = c.expansion_quotes(&supply, model, origin, None).unwrap();
+                    let best_long = quotes
+                        .iter()
+                        .filter(|q| {
+                            crate::routes::distance_km(origin, &q.route.destination_icao).unwrap()
+                                > 6200.0
+                        })
+                        .max_by_key(|q| q.profit);
+                    println!(
+                        "AI_WIDEBODY player={home} company={} model={model} cash={} fleet={} best_longhaul={:?}",
+                        c.game.airline.as_ref().unwrap().name,
+                        c.game.cash(),
+                        c.game.fleet.len(),
+                        best_long.map(|q| (
+                            &q.route.destination_icao,
+                            q.route.ticket_eur,
+                            q.interval,
+                            q.profit
+                        ))
+                    );
+                }
+            }
+        }
+    }
+
     #[test]
     fn configured_starters_cover_running_costs_even_at_maximum_fuel() {
         for hub in &FREQUENCY.starter_hubs {

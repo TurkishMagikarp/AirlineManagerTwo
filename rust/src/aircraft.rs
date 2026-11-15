@@ -135,7 +135,7 @@ mod tests {
 
     #[test]
     fn real_model_catalog_and_configured_prices_are_valid() {
-        assert_eq!(models().unwrap().len(), 3);
+        assert_eq!(models().unwrap().len(), 5);
         assert_eq!(model("a320_200").unwrap().seats, 180);
         assert_eq!(model("b737_800").unwrap().seats, 189);
         assert_eq!(model("atr72_600").unwrap().range_km, 1370);

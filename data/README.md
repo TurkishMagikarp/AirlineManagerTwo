@@ -39,7 +39,7 @@ Istanbul Sabiha Gökçen **LTFJ/SAW**, New York JFK **KJFK/JFK**, Los Angeles
 
 ## Flugzeugmodelle
 
-`aircraft_models.json` enthält drei reale Modelle mit stabilen Modell-IDs.
+`aircraft_models.json` enthält fünf reale Modelle mit stabilen Modell-IDs.
 Sitzplätze sind jeweils eine fest gewählte Konfiguration, keine Behauptung,
 dass jede reale Airline diese Bestuhlung nutzt. Reichweiten sind vereinfachte
 Hersteller-Referenzwerte, keine berechnete Reichweite für eine konkrete Beladung,
@@ -69,3 +69,31 @@ Hersteller-Listenpreise, Marktpreise oder endgültigen Wirtschaftsregeln. Änder
 werden beim nächsten Build über `START.bat` übernommen; bereits bezahlte Kaufpreise
 und Guthaben in Spielständen bleiben unverändert. Für bestehende Spielstände
 referenzierte Modell-IDs beibehalten, auch wenn später weitere Varianten hinzukommen.
+
+### Widebodies
+
+`a330_300` (300 Sitze, 11.750 km) und `b777_300er` (396 Sitze, 13.650 km)
+ergänzen die Klasse `Widebody`. Quellen, abgerufen am 15.11.2026:
+[Airbus A330-300](https://www.aircraft.airbus.com/en/aircraft/a330/a330-300)
+und [Boeing 777 Design Highlights](https://www.boeing.com/commercial/777/design-highlights).
+Airbus nennt 250–290 typische Sitze und maximal 440; 300 ist unsere feste,
+dichtere Ausgangskabine. Boeing nennt 396 Sitze in zwei Klassen; im Spiel sind
+396 die Economy-Flächeneinheiten, aus denen die bestehende Kabinenregel
+Business-Sitze bildet. Keine zusätzliche Sitzkonfiguration oder Reichweitenkurve.
+
+871/905 km/h sind gerundete typische Reisegeschwindigkeiten. 90/120 Minuten
+Bodenzeit, 12/18 t freie Bauchfracht und 45/65 t Gesamt-Nutzlast sind vereinfachte
+Spielannahmen für Passagiere einschließlich Gepäck und zusätzliche Fracht,
+keine garantierten Herstellerwerte bei maximaler Reichweite. Wie bisher zieht
+die Frachtregel 100 kg pro Passagier von der Nutzlast ab und begrenzt dann auf
+Bauchfracht. Volle Tanks, Wetter und konkrete Triebwerksvarianten werden nicht modelliert.
+
+Die neuen Modellregeln stehen ausschließlich in `config/`: 24/36 Mio. EUR
+Spielkaufpreis, 5.500/7.500 kg stündlicher Reisefuel, eigene Zykluskosten,
+Flughafentarife, Overhead, Wartungsintervalle und Personalbedarf. Die Besatzungen
+(6/8 Piloten mit Rating A330/777, 12/16 Kabinenkräfte) sind Flotten-Personalbedarf
+mit vereinfachter Reserve für lange Umläufe; keine neue Dienstzeitregel.
+Leasing, Gebrauchtmarkt, Restwert, Versicherung, Kabine und Gebührenmultiplikatoren
+nutzen unverändert die gemeinsamen konfigurierten Regeln. Alte Modelle und alle
+bestehenden Werte bleiben erhalten. Keine neuen Save-Felder und keine Migration;
+Spielstandversion 30 bleibt unverändert.
