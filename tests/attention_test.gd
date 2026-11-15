@@ -135,11 +135,11 @@ func _live_updates(speed: int) -> bool:
 	if not _check(not main.attention_scroll.visible, "Collapse while running"):
 		return false
 	main.save_path = fixture + ".running"
-	await _click(main.save_button)
+	main._save_legacy_game()
 	var expected: String = _snapshot()[0]
 	var entries: Array = sim.get_attention_snapshot()
 	main._process(1.0)
-	await _click(main.load_button)
+	main._load_legacy_game()
 	if not _check(main.save_status.text == "Spielstand geladen." and _snapshot()[0] == expected and sim.get_attention_snapshot() == entries and not main.attention_scroll.visible, "Real save/load restores exact player/AI world, rows and collapsed view at %dx" % speed):
 		return false
 	var ends := 0

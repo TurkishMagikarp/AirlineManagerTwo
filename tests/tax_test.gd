@@ -29,7 +29,7 @@ func _run() -> void:
 	var legacy := mode.ends_with("v18")
 	if mode.begins_with("read-"):
 		main.save_path = path
-		await _click(main.founding_load_button)
+		main._load_legacy_game()
 		if not _check(main.save_status.text == "Spielstand geladen.", "Load through UI in fresh process"):
 			return
 		var initial: Dictionary = FileAccess.open(path + ".initial", FileAccess.READ).get_var()

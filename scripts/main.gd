@@ -45,6 +45,8 @@ var speed_buttons: Array[Button] = []
 var jump_buttons: Array[Button] = []
 var jump_status: Label
 var jump_in_progress := false
+var save_slots_dialog: Control
+var save_user_dir := ProjectSettings.globalize_path("user://")
 var save_button: Button
 var load_button: Button
 var save_status: Label
@@ -335,15 +337,15 @@ func _add_time_controls(column: VBoxContainer) -> void:
 	load_button.theme_type_variation = "GhostButton"
 	load_button.pressed.connect(_load_game)
 	controls.add_child(load_button)
-	save_status = _label("Ein lokaler Spielstand · manuell speichern und laden", ThemeTokens.SMALL, ThemeTokens.INK_MUTED)
+	save_status = _label(tr("Speicherplätze · manuell speichern und laden"), ThemeTokens.SMALL, ThemeTokens.INK_MUTED)
 	save_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	save_status.tooltip_text = save_path
+	save_status.tooltip_text = save_user_dir.path_join("saves")
 	panel.add_child(save_status)
 	_refresh_time()
 
 
 func _jump(seconds: int) -> void:
-	if jump_in_progress or not simulation.begin_jump(seconds): return
+	if jump_in_progress or is_instance_valid(save_slots_dialog) or not simulation.begin_jump(seconds): return
 	jump_in_progress = true
 	var return_focus := get_viewport().gui_get_focus_owner()
 	var progress := _jump_progress()
@@ -381,12 +383,40 @@ func _jump_progress() -> Window:
 
 
 func _save_game() -> void:
+	_open_save_slots(true)
+
+
+func _load_game() -> void:
+	_open_save_slots(false)
+
+
+func _open_save_slots(saving: bool) -> void:
+	if jump_in_progress or is_instance_valid(save_slots_dialog): return
+	var layer := CanvasLayer.new()
+	layer.layer = 90
+	add_child(layer)
+	save_slots_dialog = preload("res://scripts/save_slots_dialog.gd").new()
+	layer.add_child(save_slots_dialog)
+	save_slots_dialog.tree_exited.connect(layer.queue_free)
+	save_slots_dialog.finished.connect(func(message: String, loaded: bool):
+		save_status.text = message
+		founding_status.text = message
+		if loaded:
+			last_clock_view = ""
+			_sync_view()
+			_refresh_time()
+	)
+	save_slots_dialog.open(simulation, save_user_dir, saving)
+
+
+# Single-file compatibility entry points for the Windows restart fixtures.
+func _save_legacy_game() -> void:
 	var error: String = simulation.save_game(save_path)
 	save_status.text = "Spielstand gespeichert." if error.is_empty() else error
 	save_status.tooltip_text = save_path
 
 
-func _load_game() -> void:
+func _load_legacy_game() -> void:
 	var error: String = simulation.load_game(save_path)
 	save_status.text = "Spielstand geladen." if error.is_empty() else error
 	save_status.add_theme_color_override("font_color", ThemeTokens.INK_MUTED)

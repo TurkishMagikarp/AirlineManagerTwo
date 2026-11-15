@@ -19,12 +19,12 @@ use std::time::Duration;
 // v29: implicit home base, dated extra bases; existing visits remain frozen.
 // v30: bounded shared used market, empty for all older saves.
 // v31: one-way ferry dispatches; older saves default to no ferries.
-const VERSION: u32 = 31;
+pub(crate) const VERSION: u32 = 31;
 // Bounded input, including centuries of fuel/seasonal quotes for the player
 // and both AI airlines in the million-flight finance restart scenario.
 // Version 17 retains per-class quotes, which also split more archive batches.
 // v26 adds disruption boundaries to centuries of AI/player history.
-const MAX_BYTES: u64 = 256 * 1024 * 1024;
+pub(crate) const MAX_BYTES: u64 = 256 * 1024 * 1024;
 
 #[derive(Serialize, Deserialize)]
 struct SaveGame {
@@ -172,6 +172,10 @@ pub fn save(path: &Path, game: &Game) -> Result<(), String> {
 }
 
 pub fn load(path: &Path) -> Result<Game, String> {
+    load_versioned(path).map(|(game, _)| game)
+}
+
+pub(crate) fn load_versioned(path: &Path) -> Result<(Game, u32), String> {
     let file = File::open(path).map_err(|error| format!("Spielstand nicht lesbar: {error}"))?;
     let mut bytes = Vec::new();
     file.take(MAX_BYTES + 1)
@@ -452,7 +456,7 @@ pub fn load(path: &Path) -> Result<Game, String> {
             return Err("Abweichender Treibstoffmarkt.".into());
         }
     }
-    Ok(game)
+    Ok((game, data.version))
 }
 
 #[cfg(test)]

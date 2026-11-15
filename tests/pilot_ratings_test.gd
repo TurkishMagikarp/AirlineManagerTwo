@@ -69,7 +69,7 @@ func _run() -> void:
 		_store(path + ".initial", _snapshot())
 	else:
 		main.save_path = path
-		await _click(main.founding_load_button)
+		main._load_legacy_game()
 		if not _check(main.save_status.text == "Spielstand geladen." and _snapshot() == _read(path + ".initial"), "Fresh reader matches uninterrupted full world and APIs immediately"):
 			return
 	if mode != "ui":

@@ -37,7 +37,7 @@ func _run() -> void:
 			return
 	if mode.begins_with("read-"):
 		main.save_path = path
-		await _click(main.founding_load_button)
+		main._load_legacy_game()
 		if not _check(main.save_status.text == "Spielstand geladen.", "Load through UI in fresh process"):
 			return
 		if not _check(_snapshot() == FileAccess.open(path + ".initial", FileAccess.READ).get_var(), "Full state restored byte-identically, including player/AI contracts and history"):
