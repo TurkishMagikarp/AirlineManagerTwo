@@ -24,7 +24,7 @@ func _run() -> void:
 	main.milestones_panel.notify_reached()
 	assert(is_instance_valid(main.milestones_panel.notification))
 	assert(sim.take_milestone_notifications().is_empty())
-	var path := "user://milestones-test.json"
+	var path := ProjectSettings.globalize_path("user://milestones-test.json")
 	assert(sim.save_game(path).is_empty())
 	assert(sim.load_game(path).is_empty())
 	assert(sim.get_milestones() == entries)
