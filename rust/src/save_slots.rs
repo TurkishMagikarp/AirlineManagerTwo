@@ -138,7 +138,11 @@ fn read_header(slot: &Path, id: &str) -> Result<Header, String> {
     let h = read_header_metadata(slot, id)?;
     let path = generation(slot, id)?.join("save.json");
     reject_link(&path)?;
-    let m = fs::metadata(path).map_err(error)?;
+    // Opening without reading also detects permission errors cheaply.
+    let m = fs::File::open(path)
+        .map_err(error)?
+        .metadata()
+        .map_err(error)?;
     // Cheap integrity indication without parsing/reading the simulation archive.
     // Full semantic validation still runs transactionally on explicit load.
     if m.len() != h.bytes || modified_ns(&m)? != h.modified_ns {
@@ -317,10 +321,10 @@ pub fn store(root: &Path, id: u32, name: &str, game: &Game, overwrite: bool) -> 
         return Err(e);
     }
     for old in [Some(previous.main), previous.backup].into_iter().flatten() {
-        if Some(&old) != next.backup.as_ref() {
-            if let Ok(dir) = generation(&path, &old) {
-                let _ = fs::remove_dir_all(dir);
-            }
+        if Some(&old) != next.backup.as_ref()
+            && let Ok(dir) = generation(&path, &old)
+        {
+            let _ = fs::remove_dir_all(dir);
         }
     }
     Ok(())
@@ -341,6 +345,9 @@ pub fn load(root: &Path, id: u32, backup: bool) -> Result<Game, String> {
 }
 pub fn delete(root: &Path, id: u32) -> Result<(), String> {
     let path = slot_path(root, id)?;
+    if !path.exists() {
+        return Err("Speicherplatz ist leer.".into());
+    }
     // Commit the import marker before deleting slot zero; never resurrect legacy.
     if id == 0 {
         atomic_json(&root.join("legacy-imported"), &true)?;

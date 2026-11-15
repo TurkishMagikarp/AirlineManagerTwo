@@ -42,10 +42,12 @@ fn save_slots_roundtrip_backup_corruption_delete_and_jump() {
     let temp = tempfile::tempdir().unwrap();
     let root = temp.path().join("Spielstände 日本語");
     let mut a = game();
+    let first = state(&a);
     slots::store(&root, 0, "Vor dem Sprung 日本語", &a, false).unwrap();
     a.jump(86400.0).unwrap();
     slots::store(&root, 1, "Nach dem Sprung", &a, false).unwrap();
     let original = slots::load(&root, 0, false).unwrap();
+    assert_eq!(state(&original), first);
     assert_ne!(state(&original), state(&a));
     assert_eq!(state(&slots::load(&root, 1, false).unwrap()), state(&a));
     slots::store(&root, 0, "Umbenannt", &a, true).unwrap();
@@ -212,4 +214,25 @@ fn save_slots_reject_symlinks_and_manifest_path_traversal() {
     )
     .unwrap();
     assert!(slots::load(&root, 1, false).is_err());
+}
+
+#[cfg(unix)]
+#[test]
+fn save_slots_unreadable_main_is_reported_without_reading_the_archive() {
+    use std::os::unix::fs::PermissionsExt;
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().join("saves");
+    let g = game();
+    slots::store(&root, 0, "Before", &g, false).unwrap();
+    slots::store(&root, 0, "After", &g, true).unwrap();
+    let path = main_file(&root, 0);
+    fs::set_permissions(&path, fs::Permissions::from_mode(0o000)).unwrap();
+    let rows = slots::list(&root, &temp.path().join("missing")).unwrap();
+    assert!(!rows[0].error.is_empty());
+    assert!(rows[0].header.is_some() && rows[0].backup.is_some());
+    assert_eq!(state(&slots::load(&root, 0, true).unwrap()), state(&g));
+    fs::set_permissions(path, fs::Permissions::from_mode(0o600)).unwrap();
+    let before = files(&root);
+    assert!(slots::delete(&root, 1).is_err());
+    assert_eq!(files(&root), before);
 }

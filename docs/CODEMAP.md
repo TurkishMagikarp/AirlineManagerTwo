@@ -1024,10 +1024,11 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 16 fn visit(base: &Path, dir: &Path, out: &mut Vec<(String, Vec<u8>)>)
 34 fn main_file(root: &Path, id: u32) -> std::path::PathBuf
 41 fn save_slots_roundtrip_backup_corruption_delete_and_jump()
-87 fn save_slots_names_boundaries_and_failed_writes_are_transactional()
-127 fn save_slots_legacy_import_is_once_and_byte_preserving()
-147 fn save_slots_listing_is_bounded_header_only_and_tolerates_bad_headers()
-197 fn save_slots_reject_symlinks_and_manifest_path_traversal()
+89 fn save_slots_names_boundaries_and_failed_writes_are_transactional()
+129 fn save_slots_legacy_import_is_once_and_byte_preserving()
+149 fn save_slots_listing_is_bounded_header_only_and_tolerates_bad_headers()
+199 fn save_slots_reject_symlinks_and_manifest_path_traversal()
+221 fn save_slots_unreadable_main_is_reported_without_reading_the_archive()
 
 ## rust/src/save_slots.rs
 14 pub struct Rules
@@ -1045,13 +1046,13 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 115 fn modified_ns(m: &fs::Metadata) -> Result<u128, String>
 122 fn read_header_metadata(slot: &Path, id: &str) -> Result<Header, String>
 137 fn read_header(slot: &Path, id: &str) -> Result<Header, String>
-151 fn atomic_json(path: &Path, value: &impl Serialize) -> Result<(), String>
-166 fn write_generation(
-223 fn import_legacy(root: &Path, legacy: &Path) -> Result<(), String>
-244 pub fn list(root: &Path, legacy: &Path) -> Result<Vec<Slot>, String>
-279 pub fn store(root: &Path, id: u32, name: &str, game: &Game, overwrite: bool) -> Result<(), String>
-328 pub fn load(root: &Path, id: u32, backup: bool) -> Result<Game, String>
-342 pub fn delete(root: &Path, id: u32) -> Result<(), String>
+155 fn atomic_json(path: &Path, value: &impl Serialize) -> Result<(), String>
+170 fn write_generation(
+227 fn import_legacy(root: &Path, legacy: &Path) -> Result<(), String>
+248 pub fn list(root: &Path, legacy: &Path) -> Result<Vec<Slot>, String>
+283 pub fn store(root: &Path, id: u32, name: &str, game: &Game, overwrite: bool) -> Result<(), String>
+332 pub fn load(root: &Path, id: u32, backup: bool) -> Result<Game, String>
+346 pub fn delete(root: &Path, id: u32) -> Result<(), String>
 
 ## rust/src/seasonal_tests.rs
 3 const DAY: u64 = 86400;
