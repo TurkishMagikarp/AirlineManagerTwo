@@ -615,8 +615,8 @@ impl Prepared {
             .iter()
             .find(|o| same_offer(route, &o.route))
             .map(|o| &o.owner);
-        let network = if route.plan.is_some() && market_has_transfers(route, routes)? {
-            transfer_network(routes)?
+        let network = if route.plan.is_some() {
+            transfer_network(route, routes)?
         } else {
             None
         };
@@ -712,9 +712,10 @@ struct TransferMarket {
     paths: Vec<usize>,
     local_indices: Vec<Option<usize>>,
     weights: Vec<[[f64; 2]; 2]>,
-    denominators: [f64; 2],
+    outside_weights: [f64; 2],
 }
 struct TransferNetwork {
+    reputation_factors: Vec<f64>,
     offers: Vec<Offer>,
     paths: Vec<TransferPath>,
     markets: Vec<TransferMarket>,
@@ -735,52 +736,143 @@ thread_local! {
     // same network allocation, independent of supply/airline iteration order.
     static TRANSFERS: std::cell::RefCell<Vec<std::rc::Rc<std::cell::RefCell<TransferNetwork>>>> = const { std::cell::RefCell::new(Vec::new()) };
 }
-/// Unrelated networks cannot affect this market's passengers or cargo payload.
-/// In particular, an isolated Asian route need not allocate a Brazilian hub.
-fn market_has_transfers(route: &Route, offers: &[Offer]) -> Result<bool, String> {
-    for a in offers.iter().filter(|a| {
-        a.route.plan.is_some() && same_market(route, &a.route) && a.seats > a.business_seats
-    }) {
-        for b in offers.iter().filter(|b| {
-            b.route.plan.is_some()
-                && b.owner == a.owner
-                && b.seats > b.business_seats
-                && !same_market(&a.route, &b.route)
-        }) {
-            for (hub, origin) in [
-                (&a.route.origin_icao, &a.route.destination_icao),
-                (&a.route.destination_icao, &a.route.origin_icao),
-            ] {
-                let destination = if *hub == b.route.origin_icao {
-                    &b.route.destination_icao
-                } else if *hub == b.route.destination_icao {
-                    &b.route.origin_icao
-                } else {
-                    continue;
-                };
-                let d1 = MarketInputs::new(&a.route, 0)?.km;
-                let d2 = MarketInputs::new(&b.route, 0)?.km;
-                if d1.min(d2) < CONFIG.transfer_min_leg_km {
+/// Structural connection data survives fare, awareness and reputation changes.
+/// Bounded independently of economic snapshots, including networks with no paths.
+#[derive(Clone, PartialEq, Eq)]
+struct TopologyLeg {
+    owner: String,
+    id: u32,
+    origin: String,
+    destination: String,
+    interval: u64,
+    economy: bool,
+}
+struct ConnectionGeometry {
+    legs: [usize; 2],
+    origin: String,
+    hub: String,
+    destination: String,
+    distances: [f64; 2],
+    direct: MarketInputs,
+}
+struct TransferTopology {
+    legs: Vec<TopologyLeg>,
+    paths: Vec<ConnectionGeometry>,
+    by_market: std::collections::HashMap<String, std::collections::HashMap<String, Vec<usize>>>,
+}
+impl TransferTopology {
+    fn paths_for(&self, route: &Route) -> &[usize] {
+        let (a, b) = if route.origin_icao < route.destination_icao {
+            (&route.origin_icao, &route.destination_icao)
+        } else {
+            (&route.destination_icao, &route.origin_icao)
+        };
+        self.by_market
+            .get(a)
+            .and_then(|destinations| destinations.get(b))
+            .map_or(&[], Vec::as_slice)
+    }
+}
+thread_local! {
+    static TOPOLOGIES: std::cell::RefCell<Vec<std::rc::Rc<TransferTopology>>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+fn transfer_topology(offers: &[Offer]) -> Result<std::rc::Rc<TransferTopology>, String> {
+    let legs: Vec<_> = offers
+        .iter()
+        .map(|o| TopologyLeg {
+            owner: o.owner.clone(),
+            id: o.route.id,
+            origin: o.route.origin_icao.clone(),
+            destination: o.route.destination_icao.clone(),
+            interval: o.route.plan.as_ref().map_or(0, |p| p.interval_seconds),
+            economy: o.seats > o.business_seats,
+        })
+        .collect();
+    TOPOLOGIES.with(|cache| {
+        let mut cache = cache.borrow_mut();
+        if let Some(t) = cache.iter().find(|t| t.legs == legs) {
+            return Ok(t.clone());
+        }
+        let mut paths = Vec::new();
+        for (i, a) in offers.iter().enumerate() {
+            for (j, b) in offers.iter().enumerate().skip(i + 1) {
+                if a.owner != b.owner
+                    || same_market(&a.route, &b.route)
+                    || !legs[i].economy
+                    || !legs[j].economy
+                    || legs[i].interval == 0
+                    || legs[j].interval == 0
+                {
                     continue;
                 }
-                let mut od = a.route.clone();
-                od.origin_icao = origin.clone();
-                od.destination_icao = destination.clone();
-                let direct = MarketInputs::new(&od, 0)?;
-                if (d1 + d2) / direct.km <= CONFIG.transfer_max_detour
-                    && ((a.route.ticket_eur + b.route.ticket_eur) as f64)
-                        < direct.reference
-                            * CONFIG.business_price_limit.max(CONFIG.leisure_price_limit)
-                {
-                    return Ok(true);
+                for (hub, origin) in [
+                    (&a.route.origin_icao, &a.route.destination_icao),
+                    (&a.route.destination_icao, &a.route.origin_icao),
+                ] {
+                    let destination = if *hub == b.route.origin_icao {
+                        &b.route.destination_icao
+                    } else if *hub == b.route.destination_icao {
+                        &b.route.origin_icao
+                    } else {
+                        continue;
+                    };
+                    let d1 = MarketInputs::new(&a.route, 0)?.km;
+                    let d2 = MarketInputs::new(&b.route, 0)?.km;
+                    let mut endpoints = a.route.clone();
+                    endpoints.origin_icao = origin.clone();
+                    endpoints.destination_icao = destination.clone();
+                    let direct = MarketInputs::new(&endpoints, 0)?;
+                    if d1.min(d2) < CONFIG.transfer_min_leg_km
+                        || (d1 + d2) / direct.km > CONFIG.transfer_max_detour
+                    {
+                        continue;
+                    }
+                    paths.push(ConnectionGeometry {
+                        legs: [i, j],
+                        origin: origin.clone(),
+                        hub: hub.clone(),
+                        destination: destination.clone(),
+                        distances: [d1, d2],
+                        direct,
+                    });
                 }
             }
         }
-    }
-    Ok(false)
+        let mut by_market: std::collections::HashMap<
+            String,
+            std::collections::HashMap<String, Vec<usize>>,
+        > = Default::default();
+        for (p, path) in paths.iter().enumerate() {
+            for leg in path.legs {
+                let route = &offers[leg].route;
+                let (a, b) = if route.origin_icao < route.destination_icao {
+                    (&route.origin_icao, &route.destination_icao)
+                } else {
+                    (&route.destination_icao, &route.origin_icao)
+                };
+                by_market
+                    .entry(a.clone())
+                    .or_default()
+                    .entry(b.clone())
+                    .or_default()
+                    .push(p);
+            }
+        }
+        let topology = std::rc::Rc::new(TransferTopology {
+            legs,
+            paths,
+            by_market,
+        });
+        if cache.len() == 128 {
+            cache.remove(0);
+        }
+        cache.push(topology.clone());
+        Ok(topology)
+    })
 }
 
 fn transfer_network(
+    route: &Route,
     routes: &[Offer],
 ) -> Result<Option<std::rc::Rc<std::cell::RefCell<TransferNetwork>>>, String> {
     let mut offers: Vec<_> = routes
@@ -806,9 +898,26 @@ fn transfer_network(
             .then(a.route.ticket_eur.cmp(&b.route.ticket_eur))
             .then(a.seats.cmp(&b.seats))
     });
+    let topology = transfer_topology(&offers)?;
+    // Departures and cargo quotes only need networks touching their own market.
+    if !topology.paths_for(route).iter().any(|&p| {
+        let p = &topology.paths[p];
+        let [a, b] = p.legs.map(|i| &offers[i]);
+        ((a.route.ticket_eur + b.route.ticket_eur) as f64)
+            < p.direct.reference * CONFIG.business_price_limit.max(CONFIG.leisure_price_limit)
+    }) {
+        return Ok(None);
+    }
     TRANSFERS.with(|cache| {
         let mut cache = cache.borrow_mut();
-        if let Some(n) = cache.iter().find(|n| n.borrow().offers == offers) {
+        if let Some(n) = cache.iter().find(|n| {
+            let n = n.borrow();
+            n.offers == offers
+                && n.reputation_factors
+                    .iter()
+                    .zip(&offers)
+                    .all(|(factor, o)| *factor == crate::reputation::attractiveness(o.reputation))
+        }) {
             return Ok(Some(n.clone()));
         }
         let network = TransferNetwork::new(offers)?;
@@ -825,62 +934,44 @@ fn transfer_network(
 }
 impl TransferNetwork {
     fn new(offers: Vec<Offer>) -> Result<Self, String> {
+        let reputation_factors: Vec<_> = offers
+            .iter()
+            .map(|o| crate::reputation::attractiveness(o.reputation))
+            .collect();
+        let topology = transfer_topology(&offers)?;
         let mut paths = Vec::new();
-        for (i, a) in offers.iter().enumerate() {
-            for (j, b) in offers.iter().enumerate().skip(i + 1) {
-                if a.owner != b.owner
-                    || same_market(&a.route, &b.route)
-                    || a.seats == a.business_seats
-                    || b.seats == b.business_seats
-                {
-                    continue;
-                }
-                for (hub, origin) in [
-                    (&a.route.origin_icao, &a.route.destination_icao),
-                    (&a.route.destination_icao, &a.route.origin_icao),
-                ] {
-                    let destination = if *hub == b.route.origin_icao {
-                        &b.route.destination_icao
-                    } else if *hub == b.route.destination_icao {
-                        &b.route.origin_icao
-                    } else {
-                        continue;
-                    };
-                    let d1 = crate::routes::distance_km(origin, hub)?;
-                    let d2 = crate::routes::distance_km(hub, destination)?;
-                    let direct = crate::routes::distance_km(origin, destination)?;
-                    if d1.min(d2) < CONFIG.transfer_min_leg_km
-                        || (d1 + d2) / direct > CONFIG.transfer_max_detour
-                    {
-                        continue;
-                    }
-                    let mut endpoints = a.route.clone();
-                    endpoints.origin_icao = origin.clone();
-                    endpoints.destination_icao = destination.clone();
-                    let total_fare = a.route.ticket_eur + b.route.ticket_eur;
-                    let first_fare = (total_fare as f64 * d1 / (d1 + d2)).floor() as i64;
-                    let (mut x, mut y) = (
-                        a.route.plan.as_ref().unwrap().interval_seconds,
-                        b.route.plan.as_ref().unwrap().interval_seconds,
-                    );
-                    while y != 0 {
-                        (x, y) = (y, x % y);
-                    }
-                    paths.push(TransferPath {
-                        legs: [i, j],
-                        origin: origin.clone(),
-                        hub: hub.clone(),
-                        destination: destination.clone(),
-                        inputs: MarketInputs::new(&endpoints, total_fare)?,
-                        frequency: frequency(&a.route).min(frequency(&b.route)),
-                        quantum: 43200.0 / x as f64,
-                        fare: [first_fare, total_fare - first_fare],
-                    });
-                }
+        for geometry in &topology.paths {
+            let [i, j] = geometry.legs;
+            let a = &offers[i];
+            let b = &offers[j];
+            let [d1, d2] = geometry.distances;
+            let total_fare = a.route.ticket_eur + b.route.ticket_eur;
+            let inputs = geometry.direct.with_price(total_fare);
+            if inputs.business == 0.0 && inputs.leisure == 0.0 {
+                continue;
             }
+            let first_fare = (total_fare as f64 * d1 / (d1 + d2)).floor() as i64;
+            let (mut x, mut y) = (
+                a.route.plan.as_ref().unwrap().interval_seconds,
+                b.route.plan.as_ref().unwrap().interval_seconds,
+            );
+            while y != 0 {
+                (x, y) = (y, x % y);
+            }
+            paths.push(TransferPath {
+                legs: [i, j],
+                origin: geometry.origin.clone(),
+                hub: geometry.hub.clone(),
+                destination: geometry.destination.clone(),
+                inputs,
+                frequency: frequency(&a.route).min(frequency(&b.route)),
+                quantum: 43200.0 / x as f64,
+                fare: [first_fare, total_fare - first_fare],
+            });
         }
         if paths.is_empty() {
             return Ok(Self {
+                reputation_factors,
                 offers,
                 paths,
                 markets: Vec::new(),
@@ -914,12 +1005,16 @@ impl TransferNetwork {
                     paths: vec![i],
                     local_indices: Vec::new(),
                     weights: Vec::new(),
-                    denominators: [1.0; 2],
+                    outside_weights: [1.0; 2],
                 });
             }
         }
         // Also prepare leg markets to reserve their local economy passengers.
-        for o in &offers {
+        for (_, o) in offers
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| paths.iter().any(|p| p.legs.contains(i)))
+        {
             if !markets.iter().any(|m| same_market(&m.endpoints, &o.route)) {
                 markets.push(TransferMarket {
                     endpoints: o.route.clone(),
@@ -928,7 +1023,7 @@ impl TransferNetwork {
                     paths: Vec::new(),
                     local_indices: Vec::new(),
                     weights: Vec::new(),
-                    denominators: [1.0; 2],
+                    outside_weights: [1.0; 2],
                 });
             }
         }
@@ -954,7 +1049,6 @@ impl TransferNetwork {
                     .collect();
             }
             let mut frequencies = [0.0_f64; 2];
-            let mut sums = [0.0; 2];
             for &p in &m.paths {
                 let path = &paths[p];
                 let mut weights = [[0.0; 2]; 2];
@@ -965,7 +1059,6 @@ impl TransferNetwork {
                     let w = willingness * CONFIG.transfer_penalty;
                     let weight = path.frequency * w / (1.0 - w).max(1e-9);
                     weights[segment] = [w, weight];
-                    sums[segment] += weight;
                     if w > 0.0 {
                         frequencies[segment] += path.frequency;
                     }
@@ -973,12 +1066,13 @@ impl TransferNetwork {
                 m.weights.push(weights);
             }
             for s in 0..2 {
-                m.denominators[s] = frequencies[s].max(1.0) + sums[s];
+                m.outside_weights[s] = frequencies[s].max(1.0);
             }
         }
         let count = offers.len();
         let path_count = paths.len();
         Ok(Self {
+            reputation_factors,
             offers,
             paths,
             markets,
@@ -1029,9 +1123,17 @@ impl TransferNetwork {
                 }
             }
             for (s, remaining) in residual.into_iter().enumerate() {
+                // One airline factor for the whole journey, as for a direct offer.
+                let denominator = m.outside_weights[s]
+                    + m.paths
+                        .iter()
+                        .zip(&m.weights)
+                        .map(|(&p, w)| w[s][1] * self.reputation_factors[self.paths[p].legs[0]])
+                        .sum::<f64>();
                 for (&p, weights) in m.paths.iter().zip(&m.weights) {
                     let [w, weight] = weights[s];
-                    self.daily[p] += (remaining * weight / m.denominators[s])
+                    let weight = weight * self.reputation_factors[self.paths[p].legs[0]];
+                    self.daily[p] += (remaining * weight / denominator)
                         .min(remaining * w * self.paths[p].frequency.min(1.0));
                 }
             }
@@ -1365,6 +1467,116 @@ mod tests {
             o
         })
         .collect()
+    }
+
+    #[test]
+    fn transfer_topology_survives_quotes_and_invalidates_structural_changes() {
+        let offers = transfer_offers();
+        let topology = transfer_topology(&offers).unwrap();
+        assert_eq!(topology.paths.len(), 1);
+        assert_eq!(topology.paths_for(&offers[0].route), &[0]);
+        assert_eq!(topology.paths_for(&offers[1].route), &[0]);
+        assert!(topology.paths_for(&offers[2].route).is_empty());
+        let mut reversed = offers[0].route.clone();
+        std::mem::swap(&mut reversed.origin_icao, &mut reversed.destination_icao);
+        assert_eq!(topology.paths_for(&reversed), &[0]);
+        let mut changed = offers.clone();
+        changed[0].route.ticket_eur += 10;
+        changed[0].reputation = 1_000_000;
+        changed[0].awareness = 100;
+        changed[0].route.plan.as_mut().unwrap().completed_flights = 20;
+        assert!(std::rc::Rc::ptr_eq(
+            &topology,
+            &transfer_topology(&changed).unwrap()
+        ));
+        changed[0].route.plan.as_mut().unwrap().interval_seconds *= 2;
+        assert!(!std::rc::Rc::ptr_eq(
+            &topology,
+            &transfer_topology(&changed).unwrap()
+        ));
+        for case in 0..4 {
+            let mut changed = offers.clone();
+            match case {
+                0 => changed[1].route.plan = None,
+                1 => changed[1].owner = "different airline".into(),
+                2 => changed[1].business_seats = changed[1].seats,
+                _ => changed[1].route.origin_icao = "KLAX".into(),
+            }
+            assert!(
+                transfer_topology(&changed).unwrap().paths.is_empty(),
+                "case={case}"
+            );
+        }
+    }
+
+    #[test]
+    fn transfer_reputation_is_one_gentle_journey_factor_and_cache_respects_neutral_choice() {
+        struct Reset;
+        impl Drop for Reset {
+            fn drop(&mut self) {
+                crate::reputation::NEUTRAL_CHOICE.with(|v| v.set(false));
+            }
+        }
+        let _reset = Reset;
+        let mut offers = transfer_offers();
+        offers.truncate(2);
+        offers[0].route.origin_icao = "EGLL".into();
+        offers[1].route.destination_icao = "LTFM".into();
+        offers[1].route.ticket_eur = 100;
+        for o in &mut offers {
+            o.seats = 100_000;
+            o.reputation = crate::reputation::SCALE;
+        }
+        let mut rival = offers.clone();
+        for o in &mut rival {
+            o.owner = "another hub airline".into();
+            o.reputation = 0;
+        }
+        offers.extend(rival);
+        let mut od = offers[0].route.clone();
+        od.destination_icao = "LTFM".into();
+        let base = market(&od, 0).unwrap();
+        // Two uncapped paths share this O&D. Select a fare where integer
+        // rounding distinguishes a single factor from a squared factor.
+        let expected = |fare, factor| {
+            let willing = market(&od, fare).unwrap();
+            [
+                (base.business, willing.business),
+                (base.leisure, willing.leisure),
+            ]
+            .iter()
+            .map(|(b, n)| {
+                let w = n / b * CONFIG.transfer_penalty;
+                let weight = w / (1.0 - w);
+                b * weight * factor / (2.0 + weight + weight * factor)
+            })
+            .sum::<f64>()
+            .floor() as i64
+        };
+        let fare = (1..=200)
+            .find(|fare| expected(fare + 100, 1.03) != expected(fare + 100, 1.03 * 1.03))
+            .expect("fixture must detect a squared factor");
+        offers[0].route.ticket_eur = fare;
+        offers[2].route.ticket_eur = fare;
+        let positive = estimate(&offers[0].route, offers[0].seats, &offers)
+            .unwrap()
+            .connecting;
+        assert_eq!(positive, expected(fare + 100, 1.03));
+        crate::reputation::NEUTRAL_CHOICE.with(|v| v.set(true));
+        let neutral = estimate(&offers[0].route, offers[0].seats, &offers)
+            .unwrap()
+            .connecting;
+        let mut fresh = TransferNetwork::new(offers.clone()).unwrap();
+        fresh.estimate(None);
+        assert_eq!(neutral, fresh.passengers[0]);
+        assert_eq!(neutral, expected(fare + 100, 1.0));
+        crate::reputation::NEUTRAL_CHOICE.with(|v| v.set(false));
+        assert_eq!(
+            estimate(&offers[0].route, offers[0].seats, &offers)
+                .unwrap()
+                .connecting,
+            positive
+        );
     }
 
     #[test]

@@ -126,8 +126,11 @@ wird diese zugeteilte Tagesmenge (vor Abrundung) vom bestehenden A–C-Markt B
 abgezogen. Umsteigeangebote konkurrieren ausschließlich um diesen Rest; sie
 verdrängen keine direkten Reisenden und erzeugen keinen zweiten Markt.
 Für die Restverteilung gelten dieselbe Außenoption und Kaufbereitschaftsgrenze:
-`w = Kaufbereitschaft(Summe beider Economy-Tarife) × transfer_penalty` (**0,25**),
-`f = min(Frequenz beider Teilstrecken)`, `a = f × w / max(1e-9, 1 − w)`.
+`w = Kaufbereitschaft(Summe beider Economy-Tarife) × transfer_penalty` (**0,10**),
+`f = min(Frequenz beider Teilstrecken)`,
+`a = Reputationsfaktor der Airline × f × w / max(1e-9, 1 − w)`.
+Der Reputationsfaktor gilt genau einmal für die gesamte Reise, nicht je Teilstrecke.
+Er verändert wie beim Direktangebot das Gewicht, nicht die Kaufbereitschaftsgrenze.
 Jeder Pfad erhält pro Segment höchstens
 `min(Rest × a / (max(1, Summe f mit w>0) + Summe a), Rest × w × min(1,f))`.
 Business- und Leisure-Preisgrenzen beziehen sich auf den **direkten A–C-Referenzpreis**.
@@ -169,7 +172,12 @@ ein Status markiert überwiegend umsteigegeprägte Routen. Ergebnisse zeigen die
 realisierte Aufteilung im Tooltip; der Umsatzanteil geht in alle Finanzsummen ein.
 
 Abgeleitete Netze werden für höchstens vier Angebotsschnappschüsse pro Thread
-geteilt. Unveränderliche Geografie wird je Flughafenpaar wiederverwendet.
+geteilt. Zusätzlich bleiben bis zu 128 Topologien (einschließlich leerer Netze)
+erhalten: Pfadpaare und Umwegprüfung ändern sich nur mit Strecken, Eigentümer,
+Flugplan oder verfügbarer Economy-Kabine, nicht mit Tarif oder Reputation.
+Abflüge prüfen nur Pfade, die ihren eigenen Streckenmarkt berühren. Lokale
+Sitzreservierungen werden nur für tatsächlich beteiligte Teilstrecken vorbereitet.
+Unveränderliche Geografie wird je Flughafenpaar wiederverwendet.
 Bis zu 256 exakte Abflugzeitpunkte je Netz werden vorübergehend wiederverwendet;
 Saison und Kapazitätsverteilung werden bei einem neuen Zeitpunkt neu berechnet; der Cache ist weder Spielzustand noch Bestandteil eines Spielstands.
 Keine Uhr in Godot, keine zeitlich abgestimmten Anschlüsse, Mindestumsteigezeiten,
