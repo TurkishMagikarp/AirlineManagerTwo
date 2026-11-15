@@ -446,9 +446,9 @@ pub(crate) struct QuoteMarket {
     passengers: crate::demand::Prepared,
 }
 impl QuoteMarket {
-    /// Only fares change within a single-offer economy expansion sweep.
-    pub(crate) fn reprice_single_economy(&mut self, route: &Route) {
-        self.passengers.reprice_single_economy(route);
+    /// Only fares change within a single-service expansion sweep (fixed cabin).
+    pub(crate) fn reprice_single(&mut self, route: &Route) {
+        self.passengers.reprice_single(route);
     }
 
     pub fn new(

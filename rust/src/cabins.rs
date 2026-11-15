@@ -16,6 +16,7 @@ pub struct Rules {
     pub business_preference: f64,
     pub ai_business_share_min: f64,
     pub ai_business_space_percent: u32,
+    pub ai_expansion_business_space_percent: Vec<u32>,
 }
 pub static RULES: LazyLock<Rules> = LazyLock::new(|| {
     let r: Rules =
@@ -29,6 +30,18 @@ pub static RULES: LazyLock<Rules> = LazyLock::new(|| {
     assert!(r.business_preference.is_finite() && (1.0..=10.0).contains(&r.business_preference));
     assert!((0.0..=1.0).contains(&r.ai_business_share_min));
     assert!(r.ai_business_space_percent <= 50);
+    assert!((1..=4).contains(&r.ai_expansion_business_space_percent.len()));
+    assert_eq!(r.ai_expansion_business_space_percent[0], 0);
+    assert!(
+        r.ai_expansion_business_space_percent
+            .iter()
+            .all(|p| *p <= 50)
+    );
+    assert!(
+        r.ai_expansion_business_space_percent
+            .windows(2)
+            .all(|w| w[0] < w[1])
+    );
     r
 });
 

@@ -263,16 +263,40 @@ pub(crate) struct Prepared {
     frequency: f64,
 }
 impl Prepared {
-    /// With one economy cabin there is no price-dependent sort order. Keep the
+    /// With one service and ordered cabin fares, keep the
     /// same geography, capacities and allocation storage; refresh willingness.
-    pub(crate) fn reprice_single_economy(&mut self, route: &Route) {
-        assert_eq!(self.matching.len(), 1);
-        assert_eq!(self.own_indices, [0]);
-        assert!(!self.matching[0].premium && self.matching[0].business_seats == 0);
+    pub(crate) fn reprice_single(&mut self, route: &Route) {
+        assert_eq!(self.loads.len(), 1);
+        assert_eq!(self.own_indices.len(), self.matching.len());
         debug_assert_eq!(self.frequency, frequency(route));
-        self.matching[0].route.ticket_eur = route.ticket_eur;
-        self.matching[0].route.business_ticket_eur = route.business_ticket_eur;
-        self.inputs[0] = self.base.with_price(route.ticket_eur);
+        // A single service has at most economy + business. Other offer keys
+        // (frequency, quality, awareness, reputation) remain identical.
+        assert!(route.business_ticket_eur >= route.ticket_eur);
+        for offer in &mut self.matching {
+            offer.route.ticket_eur = if offer.premium {
+                route.business_ticket_eur
+            } else {
+                route.ticket_eur
+            };
+            offer.route.business_ticket_eur = route.business_ticket_eur;
+        }
+        // Zero/equal fares can swap the two cabins' canonical order.
+        self.matching.sort_by(|a, b| {
+            a.route
+                .ticket_eur
+                .cmp(&b.route.ticket_eur)
+                .then(a.seats.cmp(&b.seats))
+                .then(a.premium.cmp(&b.premium))
+        });
+        for (i, offer) in self.matching.iter().enumerate() {
+            self.capacities[i] = self.frequency * f64::from(offer.seats);
+            self.inputs[i] = self.base.with_price(if offer.premium {
+                (route.business_ticket_eur as f64 / crate::cabins::RULES.business_price_multiplier)
+                    .ceil() as i64
+            } else {
+                route.ticket_eur
+            });
+        }
     }
 
     pub fn new(route: &Route, seats: u32, routes: &[Offer]) -> Result<Self, String> {
