@@ -324,7 +324,10 @@ fn sustained_high_fuel_keeps_viable_player_and_both_ai_alive() {
                 // Permit one idle sample, never a multi-month service collapse.
                 assert!(
                     inactive_samples[i] <= 1,
-                    "prolonged inactivity year={year} ai={i}"
+                    "prolonged inactivity year={year} ai={i} cash={} action={} routes={:?}",
+                    c.game.cash(),
+                    c.last_action,
+                    c.game.routes
                 );
             }
         }
@@ -349,66 +352,129 @@ fn sustained_high_fuel_keeps_viable_player_and_both_ai_alive() {
     }
 }
 
-/// Same audit is run against the eight-airport baseline and the expanded catalogue.
+/// Three regions, weekly/daily steps, every speed, pause and annual restart.
 #[test]
 fn two_year_catalogue_ai_audit() {
-    let mut game = scenario(Some(90));
-    let started = Instant::now();
-    let mut max_week = std::time::Duration::ZERO;
-    for week in 0..104 {
-        let start = Instant::now();
-        assert!(game.advance(7.0 * 86400.0));
-        max_week = max_week.max(start.elapsed());
-        for c in &game.competitors {
-            assert!(!c.game.distressed(), "week={week}");
-            assert!(c.game.cash() > 0);
-        }
-    }
-    assert!(game.advance(2.0 * 86400.0));
-    game.validate_competitors().unwrap();
-    assert_eq!(game.competitors.len(), 2);
-    let elapsed = started.elapsed();
-    let expected = serde_json::to_value(&game).unwrap();
-    let dir = tempfile::tempdir().unwrap();
-    for speed in [1, 4, 16] {
-        let mut replay = scenario(Some(90));
-        replay.clock.set_speed(speed);
-        for day in 0..730 {
-            assert!(replay.advance(86400.0 / f64::from(speed)));
-            if day == 364 {
-                let path = dir.path().join("catalogue-restart.json");
-                crate::save::save(&path, &replay).unwrap();
-                replay = crate::save::load(&path).unwrap();
+    for (country, home) in [("DE", "EDDF"), ("BR", "SBGR"), ("JP", "RJTT")] {
+        let mut initial = Game::default();
+        initial
+            .found("Worldwide determinism", country, home)
+            .unwrap();
+        initial.clock.set_running(true);
+        let mut game = initial.clone();
+        let started = Instant::now();
+        let mut max_week = std::time::Duration::ZERO;
+        for week in 0..104 {
+            let start = Instant::now();
+            assert!(game.advance(7.0 * 86400.0));
+            max_week = max_week.max(start.elapsed());
+            for c in &game.competitors {
+                assert!(!c.game.distressed(), "week={week}");
+                assert!(c.game.cash() > 0);
             }
         }
-        replay.clock.set_speed(1);
-        assert_eq!(
-            first_diff(&expected, &serde_json::to_value(&replay).unwrap(), ""),
-            None,
-            "speed={speed}"
-        );
-    }
-    println!(
-        "CATALOGUE airports={} total_ms={} max_week_ms={}",
-        crate::airports::catalog().unwrap().airports.len(),
-        elapsed.as_millis(),
-        max_week.as_millis()
-    );
-    for c in &game.competitors {
-        assert!(c.game.fleet.len() > 1 && c.game.fleet.len() <= 6);
-        c.game.validate_history().unwrap();
-        let pairs: Vec<_> = c
-            .game
-            .routes
-            .iter()
-            .map(|r| format!("{}-{}", r.origin_icao, r.destination_icao))
-            .collect();
+        assert!(game.advance(2.0 * 86400.0));
+        game.validate_competitors().unwrap();
+        assert_eq!(game.competitors.len(), 2);
+        let elapsed = started.elapsed();
+        let expected = serde_json::to_value(&game).unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        for speed in [1, 4, 16] {
+            let mut replay = initial.clone();
+            replay.clock.set_running(false);
+            assert!(replay.advance(86400.0));
+            assert_eq!(replay.clock.elapsed(), std::time::Duration::ZERO);
+            replay.clock.set_running(true);
+            replay.clock.set_speed(speed);
+            for day in 0..730 {
+                assert!(replay.advance(86400.0 / f64::from(speed)));
+                if day == 364 {
+                    let path = dir.path().join("catalogue-restart.json");
+                    crate::save::save(&path, &replay).unwrap();
+                    replay = crate::save::load(&path).unwrap();
+                }
+            }
+            replay.clock.set_speed(1);
+            assert_eq!(
+                first_diff(&expected, &serde_json::to_value(&replay).unwrap(), ""),
+                None,
+                "speed={speed}"
+            );
+        }
         println!(
-            "CATALOGUE {} cash={} profit={} fleet={} routes={pairs:?}",
-            c.game.airline.as_ref().unwrap().name,
-            c.game.cash(),
-            c.game.finance.totals.profit(),
-            c.game.fleet.len()
+            "CATALOGUE airports={} total_ms={} max_week_ms={}",
+            crate::airports::catalog().unwrap().airports.len(),
+            elapsed.as_millis(),
+            max_week.as_millis()
         );
+        for c in &game.competitors {
+            assert!(c.game.fleet.len() > 1 && c.game.fleet.len() <= 6);
+            c.game.validate_history().unwrap();
+            let pairs: Vec<_> = c
+                .game
+                .routes
+                .iter()
+                .map(|r| format!("{}-{}", r.origin_icao, r.destination_icao))
+                .collect();
+            println!(
+                "CATALOGUE {} cash={} profit={} fleet={} routes={pairs:?}",
+                c.game.airline.as_ref().unwrap().name,
+                c.game.cash(),
+                c.game.finance.totals.profit(),
+                c.game.fleet.len()
+            );
+        }
+    }
+}
+
+/// Opt-in wall-clock budget; always exercises the full worldwide catalogue.
+#[test]
+#[ignore = "two-year worldwide AI timing audit; run serially on a quiet machine"]
+fn worldwide_ai_two_year_budget() {
+    for (country, home) in [("DE", "EDDF"), ("BR", "SBGR"), ("JP", "RJTT")] {
+        let mut g = Game::default();
+        g.found("Worldwide audit", country, home).unwrap();
+        g.clock.set_running(true);
+        let start = Instant::now();
+        let mut slowest = std::time::Duration::ZERO;
+        for _ in 0..104 {
+            let week = Instant::now();
+            assert!(g.advance(7.0 * 86400.0));
+            slowest = slowest.max(week.elapsed());
+            assert_eq!(g.competitors.len(), 2);
+            for c in &g.competitors {
+                assert!(!c.game.distressed() && c.game.resolution.deadline.is_none());
+                assert!(c.game.fleet.len() <= 6);
+            }
+        }
+        assert!(g.advance(2.0 * 86400.0));
+        let elapsed = start.elapsed();
+        println!("WORLD_AI home={home} advance={elapsed:?} slowest_week={slowest:?}");
+        for c in &g.competitors {
+            assert!(c.game.fleet.len() > 1);
+            println!(
+                "WORLD_AI {} cash={} fleet={} routes={:?} action={}",
+                c.game.airline.as_ref().unwrap().name,
+                c.game.cash(),
+                c.game.fleet.len(),
+                c.game
+                    .routes
+                    .iter()
+                    .map(|r| format!("{}–{}", r.origin_icao, r.destination_icao))
+                    .collect::<Vec<_>>(),
+                c.last_action
+            );
+        }
+        g.validate_competitors().unwrap();
+        if std::env::var_os("AIRLINE_ENFORCE_AI_BUDGET").is_some() {
+            assert!(
+                elapsed < std::time::Duration::from_secs(2),
+                "two-year AI advance regressed: {elapsed:?}"
+            );
+            assert!(
+                slowest.as_millis() < 150,
+                "weekly AI review regressed: {slowest:?}"
+            );
+        }
     }
 }

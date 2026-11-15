@@ -33,7 +33,7 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 28 pub struct Catalog
 35 static CATALOG: LazyLock<Result<Catalog, String>> = LazyLock::new(||
 40 pub fn catalog() -> Result<&'static Catalog, String>
-55 static LEGACY_SCENARIO: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+55 pub(crate) static LEGACY_SCENARIO: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 58 static LEGACY_CATALOG: std::sync::OnceLock<Catalog> = std::sync::OnceLock::new();
 61 pub struct OriginalCatalogue(bool);
 63 impl Drop for OriginalCatalogue
@@ -143,54 +143,62 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 11 const MAX_FLEET: usize = 6;
 12 const RESERVE: i64 = 1_000_000;
 15 struct FrequencyRules
-20 static FREQUENCY: LazyLock<FrequencyRules> = LazyLock::new(||
-29 pub struct RouteReview
-41 fn maintenance_per_flight(route: &Route, model: &str) -> Result<i64, String>
-48 fn staffing_per_week(game: &Game, model: &str) -> Result<i64, String>
-65 pub struct Competitor
-80 pub fn initial_competitors() -> Result<Vec<Competitor>, String>
-84 pub fn initial_competitors_at(now: Duration) -> Result<Vec<Competitor>, String>
-133 impl Game
-134 pub fn market_routes(&self) -> Vec<crate::demand::Offer>
-150 pub fn validate_competitors(&self) -> Result<(), String>
-202 pub fn advance(&mut self, seconds: f64) -> bool
-463 impl Competitor
-464 fn close_loss_route(
-487 fn review(&mut self, supply: &[crate::demand::Offer]) -> bool
-785 fn review_rotations(&mut self, supply: &[crate::demand::Offer]) -> Result<Vec<u32>, String>
-926 fn plan_maintenance(&mut self, next_review: u64)
-939 fn expand(&mut self, supply: &[crate::demand::Offer]) -> Result<(), String>
-1339 fn retry(&mut self, i: usize, supply: &[crate::demand::Offer]) -> bool
-1445 mod tests
-1447 fn used_market_ai_growth_uses_shared_purchase_and_wear()
-1483 fn frequency_ai() -> Competitor
-1495 fn seasonal_ai_growth_uses_annual_view_and_weak_weeks_keep_viable_rotations()
-1552 fn frequency_growth_uses_shared_assignment_and_respects_cap()
-1588 fn frequency_growth_can_buy_or_lease_and_weak_loads_reduce_service()
-1654 fn frequency_review_keeps_a_service_during_maintenance()
-1674 fn frequency_growth_skips_maintenance_wrong_location_and_weak_market()
-1695 fn frequency_weak_airborne_service_retires_once_across_steps_speeds_and_restart()
-1766 fn trading_ai_leases_only_affordable_profitable_growth_and_sells_in_distress()
-1817 fn trading_ai_lease_economy_is_bounded_and_deterministic_over_two_years()
-1859 fn game() -> Game
-1871 fn state(g: &Game) -> serde_json::Value
-1876 fn airborne_loss_reviews_close_after_ground_time_even_across_restart()
-1932 fn previous_v9_saves_default_new_review_fields_and_reject_corruption()
-1953 fn expansion_reuses_parked_aircraft_and_competes_for_existing_market()
-1994 fn expansion_spends_real_cash_and_obeys_budget_range_and_fleet_limit()
-2032 fn ai_airlines_pay_for_regular_checks_before_reaching_the_limit()
-2089 fn route_reviews_charge_the_planned_maintenance_share_per_landing()
-2136 fn losses_are_measured_per_route_not_hidden_by_profitable_routes()
-2162 fn common_market_price_frequency_capacity_and_separate_ledgers()
-2216 fn mixed_fares_and_frequencies_never_duplicate_the_base_market()
-2250 fn speed_steps_reviews_and_restart_produce_identical_results()
-2279 fn losses_close_service_without_erasing_aircraft_or_finances()
-2312 fn unprofitable_markets_keep_rivals_idle_until_the_next_retry()
-2348 fn old_saves_keep_departure_snapshot_and_start_rivals_only_at_load_time()
-2379 fn price_reviews_preserve_airborne_quotes_for_both_owners()
-2406 fn invalid_ai_saves_and_overflow_cannot_partially_commit()
-2464 mod slot_admission_tests
-2466 fn slots_ai_full_hub_skips_purchase_and_full_destination_uses_other_markets()
+23 struct StarterHub
+30 static FREQUENCY: LazyLock<FrequencyRules> = LazyLock::new(||
+42 struct ExpansionQuote
+50 pub struct RouteReview
+62 fn maintenance_per_flight(route: &Route, model: &str) -> Result<i64, String>
+69 fn staffing_per_week(game: &Game, model: &str) -> Result<i64, String>
+86 pub struct Competitor
+102 pub fn initial_competitors() -> Result<Vec<Competitor>, String>
+108 pub fn new_competitors(player_home: &str) -> Result<Vec<Competitor>, String>
+157 pub fn initial_competitors_at(now: Duration) -> Result<Vec<Competitor>, String>
+167 fn starter_competitors(
+222 impl Game
+223 pub fn market_routes(&self) -> Vec<crate::demand::Offer>
+239 pub fn validate_competitors(&self) -> Result<(), String>
+291 pub fn advance(&mut self, seconds: f64) -> bool
+552 impl Competitor
+553 fn close_loss_route(
+576 fn review(&mut self, supply: &[crate::demand::Offer]) -> bool
+874 fn review_rotations(&mut self, supply: &[crate::demand::Offer]) -> Result<Vec<u32>, String>
+1015 fn plan_maintenance(&mut self, next_review: u64)
+1030 fn expansion_quotes(
+1223 fn expand(&mut self, supply: &[crate::demand::Offer]) -> Result<(), String>
+1462 fn retry(&mut self, i: usize, supply: &[crate::demand::Offer]) -> bool
+1568 mod tests
+1570 fn configured_starters_cover_running_costs_even_at_maximum_fuel()
+1604 fn worldwide_starters_are_local_and_distant_and_old_companies_load_verbatim()
+1656 fn worldwide_quote_refactor_keeps_legacy_growth_choices()
+1699 fn used_market_ai_growth_uses_shared_purchase_and_wear()
+1735 fn frequency_ai() -> Competitor
+1747 fn seasonal_ai_growth_uses_annual_view_and_weak_weeks_keep_viable_rotations()
+1804 fn frequency_growth_uses_shared_assignment_and_respects_cap()
+1840 fn frequency_growth_can_buy_or_lease_and_weak_loads_reduce_service()
+1906 fn frequency_review_keeps_a_service_during_maintenance()
+1926 fn frequency_growth_skips_maintenance_wrong_location_and_weak_market()
+1947 fn frequency_weak_airborne_service_retires_once_across_steps_speeds_and_restart()
+2018 fn trading_ai_leases_only_affordable_profitable_growth_and_sells_in_distress()
+2069 fn trading_ai_lease_economy_is_bounded_and_deterministic_over_two_years()
+2111 fn game() -> Game
+2123 fn state(g: &Game) -> serde_json::Value
+2128 fn airborne_loss_reviews_close_after_ground_time_even_across_restart()
+2184 fn previous_v9_saves_default_new_review_fields_and_reject_corruption()
+2205 fn expansion_reuses_parked_aircraft_and_competes_for_existing_market()
+2246 fn expansion_spends_real_cash_and_obeys_budget_range_and_fleet_limit()
+2284 fn ai_airlines_pay_for_regular_checks_before_reaching_the_limit()
+2341 fn route_reviews_charge_the_planned_maintenance_share_per_landing()
+2388 fn losses_are_measured_per_route_not_hidden_by_profitable_routes()
+2414 fn common_market_price_frequency_capacity_and_separate_ledgers()
+2468 fn mixed_fares_and_frequencies_never_duplicate_the_base_market()
+2502 fn speed_steps_reviews_and_restart_produce_identical_results()
+2531 fn losses_close_service_without_erasing_aircraft_or_finances()
+2564 fn unprofitable_markets_keep_rivals_idle_until_the_next_retry()
+2600 fn old_saves_keep_departure_snapshot_and_start_rivals_only_at_load_time()
+2631 fn price_reviews_preserve_airborne_quotes_for_both_owners()
+2658 fn invalid_ai_saves_and_overflow_cannot_partially_commit()
+2716 mod slot_admission_tests
+2718 fn slots_ai_full_hub_skips_purchase_and_full_destination_uses_other_markets()
 
 ## rust/src/demand.rs
 7 struct Config
@@ -205,40 +213,41 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 72 pub fn market_at(route: &Route, price: i64, time: u64) -> Result<Market, String>
 76 fn market_with_season(route: &Route, price: i64, time: Option<u64>) -> Result<Market, String>
 86 struct MarketInputs
-92 impl MarketInputs
-93 fn new(route: &Route, price: i64) -> Result<Self, String>
-119 fn at(&self, season: &Market) -> Market
-129 pub struct Offer
-139 impl Offer
-140 pub fn new(route: &Route, seats: u32) -> Self
-155 pub struct Estimate
-162 fn frequency(route: &Route) -> f64
-169 pub(crate) fn same_offer(a: &Route, b: &Route) -> bool
-184 pub fn estimate(route: &Route, seats: u32, routes: &[Offer]) -> Result<Estimate, String>
-188 pub fn estimate_at(
-200 pub fn market_passengers(routes: &[Offer], time: Option<u64>) -> Result<Vec<i64>, String>
-209 fn rounded_passengers(daily: f64, offer: &Offer) -> i64
-219 fn estimate_with_season(
-237 pub(crate) struct Prepared
-250 impl Prepared
-251 pub fn new(route: &Route, seats: u32, routes: &[Offer]) -> Result<Self, String>
-368 pub fn estimate(&mut self, time: Option<u64>) -> (Estimate, &[i64])
-507 fn estimate_reference(
-736 pub fn passengers(route: &Route, routes: &[Offer]) -> Result<i64, String>
-745 pub fn same_market(a: &Route, b: &Route) -> bool
-751 mod tests
-755 fn game(count: u32, interval: u32) -> Game
-771 fn prepared_market_matches_original_allocator_exactly_across_seasons()
-804 fn seat_spill_reaches_cheaper_and_pricier_offers_but_respects_limits()
-855 fn all_full_and_single_offer_are_capacity_bounded_without_inventing_demand()
-875 fn spilling_service_matches_pause_speeds_steps_and_restart()
-914 fn unrelated_market_does_not_dilute_supply()
-927 fn airport_size_distance_and_segments_define_market_not_seats()
-961 fn actual_landings_cover_large_mixed_and_regional_airports_at_different_prices()
-995 fn multiple_flights_share_daily_market_instead_of_multiplying_it()
-1013 fn reversed_routes_share_market_and_unplanned_routes_do_not_dilute_it()
-1036 fn rare_flights_do_not_bank_days_of_demand()
-1045 fn shared_market_survives_restart_and_schedule_changes_without_rewriting_history()
+93 impl MarketInputs
+94 fn new(route: &Route, price: i64) -> Result<Self, String>
+123 fn with_price(&self, price: i64) -> Self
+134 fn at(&self, season: &Market) -> Market
+144 pub struct Offer
+154 impl Offer
+155 pub fn new(route: &Route, seats: u32) -> Self
+170 pub struct Estimate
+177 fn frequency(route: &Route) -> f64
+184 pub(crate) fn same_offer(a: &Route, b: &Route) -> bool
+199 pub fn estimate(route: &Route, seats: u32, routes: &[Offer]) -> Result<Estimate, String>
+203 pub fn estimate_at(
+215 pub fn market_passengers(routes: &[Offer], time: Option<u64>) -> Result<Vec<i64>, String>
+224 fn rounded_passengers(daily: f64, offer: &Offer) -> i64
+234 fn estimate_with_season(
+252 pub(crate) struct Prepared
+265 impl Prepared
+266 pub fn new(route: &Route, seats: u32, routes: &[Offer]) -> Result<Self, String>
+380 pub fn estimate(&mut self, time: Option<u64>) -> (Estimate, &[i64])
+519 fn estimate_reference(
+748 pub fn passengers(route: &Route, routes: &[Offer]) -> Result<i64, String>
+757 pub fn same_market(a: &Route, b: &Route) -> bool
+763 mod tests
+767 fn game(count: u32, interval: u32) -> Game
+783 fn prepared_market_matches_original_allocator_exactly_across_seasons()
+816 fn seat_spill_reaches_cheaper_and_pricier_offers_but_respects_limits()
+867 fn all_full_and_single_offer_are_capacity_bounded_without_inventing_demand()
+887 fn spilling_service_matches_pause_speeds_steps_and_restart()
+926 fn unrelated_market_does_not_dilute_supply()
+939 fn airport_size_distance_and_segments_define_market_not_seats()
+973 fn actual_landings_cover_large_mixed_and_regional_airports_at_different_prices()
+1007 fn multiple_flights_share_daily_market_instead_of_multiplying_it()
+1025 fn reversed_routes_share_market_and_unplanned_routes_do_not_dilute_it()
+1048 fn rare_flights_do_not_bank_days_of_demand()
+1057 fn shared_market_survives_restart_and_schedule_changes_without_rewriting_history()
 
 ## rust/src/disruption_tests.rs
 7 fn tight_interval() -> u32
@@ -406,6 +415,10 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 199 struct Reset;
 200 impl Drop for Reset
 201 fn drop(&mut self)
+286 fn contracts_worldwide_cash_drift_tracks_discrete_growth()
+287 struct Reset;
+288 impl Drop for Reset
+289 fn drop(&mut self)
 
 ## rust/src/fuel_contracts.rs
 6 pub struct Rules
@@ -832,7 +845,8 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 290 struct Reset;
 291 impl Drop for Reset
 292 fn drop(&mut self)
-354 fn two_year_catalogue_ai_audit()
+357 fn two_year_catalogue_ai_audit()
+433 fn worldwide_ai_two_year_budget()
 
 ## rust/src/reputation.rs
 5 pub const DAY: u64 = 86400;
@@ -1439,6 +1453,6 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 185 ## Erster Flugbetrieb
 216 ## Vereinfachte Wirtschaftssimulation
 275 ## Erste KI-Fluggesellschaften
-323 ## Finanzen und Routencontrolling
-357 ## Speichern und Laden
-434 ## Tests
+331 ## Finanzen und Routencontrolling
+365 ## Speichern und Laden
+442 ## Tests

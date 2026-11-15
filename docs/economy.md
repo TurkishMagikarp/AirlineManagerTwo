@@ -111,6 +111,10 @@ Zeitgrenzen bleiben gültig. Persönliche Spielstände werden von Tests nicht be
 
 Zwei erste KI-Konkurrenten nutzen dieselben Kosten- und Nachfrageregeln wie der
 Spieler; Details: [README](../README.md#erste-ki-fluggesellschaften).
+Neue Spiele verteilen die zwei Firmen auf konfigurierbare Startregionen: Regional Wings nutzt den dem Spieler nächstgelegenen Starter-Hub; Continental Sky den entferntesten freigegebenen Fern-Hub. ICAO löst Entfernungsgleichstände deterministisch auf. `config/competition.json` enthält Hub, erste Strecke, Modell und Startpreis sowie die Fern-Hub-Auswahl. Die tatsächlichen Käufe, Besatzungen, Versicherung, Flugpläne, Gebühren, Slots, Reichweiten und Kredite bleiben dieselben Spieler-APIs. Kein zweiter KI-Stützpunkt, keine zusätzliche Firma und keine Subvention.
+
+Vorhandene KI werden beim Laden vollständig übernommen; weder Basis noch Geld, Flotte, Tarife, Verträge oder laufende Flüge werden neu erzeugt. Kein neues Save-Feld, keine neue Version. Für Spielstände vor Einführung der KI bleibt auch der vorhandene Frankfurt-Migrationsstart unverändert. Messungen, Grenzen und Verifikation: [weltweite KI](worldwide-ai-verification.md).
+
 Saisonale Segmentnachfrage: [Nachfrage](demand.md#saisonale-nachfrage-365-tage-jahr).
 Weiterhin kein Wetter oder Kosten für
 geparkte Flugzeuge. Beide Richtungen sind symmetrisch; parallele Routen teilen
@@ -293,7 +297,9 @@ KI prüft beim bestehenden wöchentlichen Review: unter dem langfristigen Mittel
 
 Save-Version 21: alte Spielstände erhalten für alle Airlines keinen Vertrag, bestehende Flugkosten bleiben erhalten. Abgelaufene Vertragsdaten bleiben bis zum nächsten Abschluss gespeichert, haben aber keine Preiswirkung. Der Vertrag verwendet ausschließlich die Rust-Spielzeit; Pausen, Geschwindigkeit und Frame-Größe ändern seine Laufzeit nicht.
 
-Rust-Vergleichstest über zehn Jahre, tägliche Schritte und jährliches Save/Load: beide KI-Airlines bleiben ohne Zahlungsnot / Restrukturierung. Jede Jahresprobe bleibt innerhalb 5 % der Kasse des Kontrolllaufs ohne KI-Verträge. Im zehnten Jahr: Regional Wings 166.657.714 EUR mit Vertragspolitik gegenüber 170.261.977 EUR ohne; Continental Sky 172.315.707 gegenüber 177.245.265 EUR. Dies ist ein reproduzierbarer Szenariovergleich, keine Garantie für jede Weltkonfiguration.
+Rust-Vergleichstest über zehn Jahre, tägliche Schritte und jährliches Save/Load: beide KI-Airlines bleiben mit und ohne Vertragspolitik ohne Zahlungsnot / Restrukturierung. Der gebuchte **reine Treibstoffeffekt** bleibt je Jahresprobe unter 5 % der tatsächlich erzielten Betriebserlöse (mindestens 100.000 EUR). Monatliche Gegenproben betreiben dieselbe kopierte Firma einen Tag mit und ohne Vertrag: Flüge, Passagiere und Erlöse bleiben gleich, Treibstoff- und Kassendifferenz entsprechen exakt dem Vertragseffekt. Ein messbarer Effekt muss tatsächlich auftreten. Die bisherigen Rundungs-, Ablauf- und Abfluggrenztests bleiben bestehen.
+
+Die Kassen zweier unabhängig expandierender KI sind dafür kein verlässlicher Maßstab: im 40-Flughafen-Katalog kann schon eine kleine Ersparnis eine andere Flugzeug-/Routenwahl auslösen. Im reproduzierten Frankfurt-Altbestand unterscheiden sich die ersten Routen am Tag 56 (Amsterdam gegenüber Zürich); nach einem Jahr stehen 24.979.183 EUR mit und 32.276.657 EUR ohne Verträge gegenüber, obwohl die tatsächliche Treibstoffersparnis nur 143.234 EUR beträgt. Keine Änderung der Vertragspolitik oder Erhöhung der 5-%-Grenze. Details: [weltweite KI](worldwide-ai-verification.md).
 
 ## Flughafenentgelte: Vergleich AIR-65
 

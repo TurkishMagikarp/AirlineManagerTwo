@@ -52,7 +52,7 @@ pub fn catalog() -> Result<&'static Catalog, String> {
 // Thread-local selection isolates them from the worldwide audits running in parallel.
 #[cfg(test)]
 thread_local! {
-    static LEGACY_SCENARIO: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    pub(crate) static LEGACY_SCENARIO: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 #[cfg(test)]
 static LEGACY_CATALOG: std::sync::OnceLock<Catalog> = std::sync::OnceLock::new();

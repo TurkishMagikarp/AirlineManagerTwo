@@ -137,7 +137,7 @@ impl Game {
             capital_eur: starting_capital()?,
         };
         airline.validate()?;
-        let competitors = crate::competition::initial_competitors()?;
+        let competitors = crate::competition::new_competitors(airport)?;
         *self = Self {
             competitors,
             history: Some(crate::history::History::new(0, airline.capital_eur)),

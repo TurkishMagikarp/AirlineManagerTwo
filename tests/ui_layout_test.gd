@@ -122,12 +122,15 @@ func _run() -> void:
 						for i in range(map.canvas.airports.size()):
 							if map.canvas.airports[i]["icao"] == "EGLL": map.selected_id = -i - 1
 					elif kind == "competitor":
-						map.canvas.selected_competitor = 1
+						map.canvas.selected_competitor = 1 # Zero-based distant rival index.
 						map.canvas.selection_position = map.canvas.size / 2
 					else:
 						map.canvas.selected_route = 1
 						map.canvas.selection_position = map.canvas.size / 2
 					map.refresh_flights()
+					if kind == "competitor":
+						var offer: Dictionary = sim.get_competitor_routes()[1]
+						assert(offer["airline"] in map.details.text)
 					for frame in range(5): await process_frame
 					assert(Rect2(Vector2.ZERO, map.canvas.size).encloses(map.card.get_rect()))
 					scroll.ensure_control_visible(map.canvas)

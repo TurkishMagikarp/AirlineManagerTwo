@@ -84,6 +84,7 @@ fn market_with_season(route: &Route, price: i64, time: Option<u64>) -> Result<Ma
 /// Geography and price response are constant within an offer snapshot. Keep
 /// factors separate to preserve the original floating-point evaluation order.
 struct MarketInputs {
+    reference: f64,
     base: f64,
     share: f64,
     business: f64,
@@ -108,13 +109,27 @@ impl MarketInputs {
             / (1.0 + km / c.distance_decay_km);
         let share = f64::from(a.business_percent + b.business_percent) / 200.0;
         let reference = crate::economy::reference_price(km);
-        let willingness = |limit: f64| (1.0 - price as f64 / (reference * limit)).clamp(0.0, 1.0);
         Ok(Self {
+            reference,
             base,
             share,
-            business: willingness(c.business_price_limit),
-            leisure: willingness(c.leisure_price_limit),
-        })
+            business: 0.0,
+            leisure: 0.0,
+        }
+        .with_price(price))
+    }
+    /// All offers in a prepared market have the same endpoints. Reuse their
+    /// geography, preserving the exact willingness and allocation arithmetic.
+    fn with_price(&self, price: i64) -> Self {
+        let willingness =
+            |limit: f64| (1.0 - price as f64 / (self.reference * limit)).clamp(0.0, 1.0);
+        Self {
+            reference: self.reference,
+            base: self.base,
+            share: self.share,
+            business: willingness(CONFIG.business_price_limit),
+            leisure: willingness(CONFIG.leisure_price_limit),
+        }
     }
     fn at(&self, season: &Market) -> Market {
         Market {
@@ -334,17 +349,14 @@ impl Prepared {
         let inputs = matching
             .iter()
             .map(|o| {
-                MarketInputs::new(
-                    &o.route,
-                    if o.premium {
-                        (o.route.ticket_eur as f64 / crate::cabins::RULES.business_price_multiplier)
-                            .ceil() as i64
-                    } else {
-                        o.route.ticket_eur
-                    },
-                )
+                base.with_price(if o.premium {
+                    (o.route.ticket_eur as f64 / crate::cabins::RULES.business_price_multiplier)
+                        .ceil() as i64
+                } else {
+                    o.route.ticket_eur
+                })
             })
-            .collect::<Result<Vec<_>, _>>()?;
+            .collect();
         let capacities = matching
             .iter()
             .map(|o| frequency(&o.route) * f64::from(o.seats))
