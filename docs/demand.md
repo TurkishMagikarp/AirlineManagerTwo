@@ -178,8 +178,8 @@ Ergebnisse beeinflussen ihn nicht. Ein ungespeicherter Revisionszähler wird an
 den Änderungsereignissen erhöht; Betriebsereignisse vergleichen nur diese Nummer
 und kopieren keine unveränderte Angebotsliste. Die gespeicherten Nachfrageangebote gehören
 zu diesem Schnappschuss und werden nicht wegen einer Eintragsgrenze verdrängt.
-Die Saison bleibt sekundengenau; identische Saisonzeitpunkte wiederholen sich
-nach einem Modelljahr. Ladezustände bauen diese abgeleiteten Daten neu auf.
+Nur die Umsteigeallokation nutzt die Saison am Tagesanfang (`t − t % 86400`); lokale Direktnachfrage bleibt sekundengenau.
+Die Tagesangebote wiederholen sich nach einem Modelljahr; Ladezustände bauen diese abgeleiteten Daten neu auf.
 
 Zusätzlich bleiben bis zu 128 Topologien (einschließlich leerer Netze) erhalten:
 Pfadpaare und Umwegprüfung ändern sich nur mit Strecken, Eigentümer, Flugplan

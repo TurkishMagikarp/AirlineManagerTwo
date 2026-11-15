@@ -906,7 +906,7 @@ impl Prepared {
             reputation_scores,
             quotes: Default::default(),
             transfer_services,
-            local: None,
+            local: Some(LocalPrepared::prepare(route, seats, routes, false)?),
             network,
             target,
             loads: Vec::new(),
@@ -966,47 +966,54 @@ impl Prepared {
             return self.local.as_mut().unwrap().estimate(time);
         }
 
-        // Season repeats exactly each model year. Quotes belong to this
-        // commercial snapshot; only an input change invalidates them.
-        let time = time.map(|t| t % YEAR_SECONDS);
-        if !display
-            && self.network.is_some()
-            && let Some((quote, loads)) = self.quotes.get(&time)
-        {
-            self.loads.clone_from(loads);
-            return (quote.clone(), &self.loads);
-        }
-        let mut result = Estimate::default();
+        // Only transfers use a daily season. Direct demand keeps the exact
+        // departure time, including when a daily transfer quote is reused.
+        let (mut result, local_loads) = self.local.as_mut().unwrap().estimate(time);
         self.loads.clear();
-        if let (Some(network), Some(target)) = (&self.network, self.target) {
-            let mut n = network.lock().unwrap();
-            n.estimate_for(time, self.reputation_revision, &self.reputation_scores);
-            result = n.locals[target].clone();
-            result.connecting = n.passengers[target];
-            result.connecting_revenue = n.revenue[target];
-            result.daily_connecting = result.connecting as f64 * frequency(&n.offers[target].route);
-            result.per_departure += result.connecting;
-            result.daily_passengers += result.daily_connecting;
-            for index in &self.transfer_services {
-                let j = index.expect("network service");
-                self.loads.push(n.locals[j].per_departure + n.passengers[j]);
-            }
-            if display {
-                for (p, daily) in n.paths.iter().zip(&n.daily) {
-                    if *daily > 0.0 && (p.legs[0] == target || p.legs[1] == target) {
-                        result.connections.push(Connection {
-                            origin: p.origin.clone(),
-                            hub: p.hub.clone(),
-                            destination: p.destination.clone(),
-                            daily: *daily,
-                        });
+        self.loads.extend_from_slice(local_loads);
+        let day = time.map(|t| (t - t % 86400) % YEAR_SECONDS);
+        let (transfer, transfer_loads) = if !display && let Some(cached) = self.quotes.get(&day) {
+            cached.clone()
+        } else {
+            let mut transfer = Estimate::default();
+            let mut transfer_loads = Vec::new();
+            if let (Some(network), Some(target)) = (&self.network, self.target) {
+                let mut n = network.lock().unwrap();
+                n.estimate_for(day, self.reputation_revision, &self.reputation_scores);
+                transfer.connecting = n.passengers[target];
+                transfer.connecting_revenue = n.revenue[target];
+                transfer.daily_connecting =
+                    transfer.connecting as f64 * frequency(&n.offers[target].route);
+                for index in &self.transfer_services {
+                    transfer_loads.push(n.passengers[index.expect("network service")]);
+                }
+                if display {
+                    for (p, daily) in n.paths.iter().zip(&n.daily) {
+                        if *daily > 0.0 && (p.legs[0] == target || p.legs[1] == target) {
+                            transfer.connections.push(Connection {
+                                origin: p.origin.clone(),
+                                hub: p.hub.clone(),
+                                destination: p.destination.clone(),
+                                daily: *daily,
+                            });
+                        }
                     }
                 }
             }
-        }
-        if !display && self.network.is_some() {
-            self.quotes
-                .insert(time, (result.clone(), self.loads.clone()));
+            if !display {
+                self.quotes
+                    .insert(day, (transfer.clone(), transfer_loads.clone()));
+            }
+            (transfer, transfer_loads)
+        };
+        result.connecting = transfer.connecting;
+        result.connecting_revenue = transfer.connecting_revenue;
+        result.daily_connecting = transfer.daily_connecting;
+        result.connections = transfer.connections;
+        result.per_departure += result.connecting;
+        result.daily_passengers += result.daily_connecting;
+        for (load, connecting) in self.loads.iter_mut().zip(transfer_loads) {
+            *load += connecting;
         }
         (result, &self.loads)
     }
@@ -1515,7 +1522,7 @@ impl TransferNetwork {
     }
 
     fn estimate(&mut self, time: Option<u64>) {
-        let time = time.map(|t| t % YEAR_SECONDS);
+        let time = time.map(|t| (t - t % 86400) % YEAR_SECONDS);
         if self.last == Some(time) {
             return;
         }
@@ -1950,6 +1957,45 @@ mod tests {
             o
         })
         .collect()
+    }
+
+    #[test]
+    fn transfer_daily_cache_preserves_exact_local_quotes_and_day_boundaries() {
+        let offers = transfer_offers();
+        let mut stored = Prepared::new(&offers[0].route, offers[0].seats, &offers).unwrap();
+        let mut direct = Prepared::direct(&offers[0].route, offers[0].seats, &offers).unwrap();
+        let mut local_changes = 0;
+        for day in 0..365 {
+            let start = day * 86400;
+            let morning = direct.estimate(Some(start)).0;
+            let first = stored.estimate(Some(start)).0;
+            for offset in [1, 43200, 86399] {
+                let time = Some(start + offset);
+                let local = direct.estimate(time).0;
+                let quote = stored.estimate(time).0;
+                assert_eq!(quote.per_departure - quote.connecting, local.per_departure);
+                assert_eq!(quote.business, local.business);
+                assert_eq!(quote.daily_spill, local.daily_spill);
+                assert_eq!(
+                    quote.daily_passengers - quote.daily_connecting,
+                    local.daily_passengers
+                );
+                assert_eq!(quote.connecting, first.connecting);
+                assert_eq!(quote.connecting_revenue, first.connecting_revenue);
+                assert_eq!(quote.daily_connecting, first.daily_connecting);
+                local_changes += usize::from(local != morning);
+            }
+        }
+        assert!(
+            local_changes > 0,
+            "fixture must expose intraday local season changes"
+        );
+        assert_eq!(stored.quotes.len(), 365);
+        let at_start = stored.estimate(Some(0)).0;
+        assert_eq!(stored.estimate(Some(YEAR_SECONDS)).0, at_start);
+        assert_eq!(stored.quotes.len(), 365);
+        let network = stored.network.as_ref().unwrap().lock().unwrap();
+        assert_eq!(network.recent.len(), 365);
     }
 
     #[test]

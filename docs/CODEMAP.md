@@ -264,60 +264,61 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 958 pub fn estimate(&mut self, time: Option<u64>) -> (Estimate, &[i64])
 961 fn estimate_display(&mut self, time: Option<u64>) -> (Estimate, &[i64])
 964 fn estimate_inner(&mut self, time: Option<u64>, display: bool) -> (Estimate, &[i64])
-1017 struct TransferPath
-1027 struct TransferMarket
-1036 struct TransferNetwork
-1049 struct TransferAllocation
-1058 static TRANSFERS: std::cell::RefCell<Vec<std::sync::Arc<std::sync::Mutex<TransferNetwork>>>> = const { st
-1063 struct TopologyLeg
-1071 struct ConnectionGeometry
-1082 impl ConnectionGeometry
-1083 fn can_fill(&self, offers: &[Offer]) -> bool
-1089 static MAXIMUM: LazyLock<Market> = LazyLock::new(||
-1108 struct TransferTopology
-1113 impl TransferTopology
-1114 fn paths_for(&self, route: &Route) -> &[usize]
-1127 static TOPOLOGIES: std::cell::RefCell<Vec<std::sync::Arc<TransferTopology>>> = const { std::cell::RefCell
-1129 fn transfer_topology(offers: &[Offer]) -> Result<std::sync::Arc<TransferTopology>, String>
-1231 pub(crate) type SharedTransferSupply = std::sync::Arc<std::sync::Mutex<TransferSupply>>;
-1235 static DISPATCH_SUPPLY: std::cell::RefCell<Option<(u64, SharedTransferSupply)>> = const { std::cell::RefC
-1237 fn dispatch_transfer_supply(
-1257 pub(crate) struct TransferSupply
-1262 impl TransferSupply
-1263 fn new(routes: &[Offer]) -> Result<Self, String>
-1285 fn network_for(
-1328 impl TransferNetwork
-1329 fn new(offers: Vec<Offer>) -> Result<Self, String>
-1473 fn estimate_for(&mut self, time: Option<u64>, revision: Option<u64>, scores: &[i64])
-1517 fn estimate(&mut self, time: Option<u64>)
-1628 fn estimate_reference(
-1858 pub fn passengers(route: &Route, routes: &[Offer]) -> Result<i64, String>
-1868 pub fn same_market(a: &Route, b: &Route) -> bool
-1874 mod tests
-1878 fn game(count: u32, interval: u32) -> Game
-1894 fn direct_fare_sweep_matches_fresh_quotes_with_competing_cabins()
-1932 fn transfer_offers() -> Vec<Offer>
-1956 fn transfer_zero_ceiling_and_stored_quotes_match_fresh_after_cache_churn()
-1986 fn transfer_topology_survives_quotes_and_invalidates_structural_changes()
-2026 fn transfer_reputation_is_one_gentle_journey_factor_and_cache_respects_neutral_choice()
-2027 struct Reset;
-2028 impl Drop for Reset
-2029 fn drop(&mut self)
-2096 fn transfers_conserve_od_markets_reserve_locals_and_split_revenue()
-2139 fn transfers_require_active_same_owner_sensible_geometry_and_economy_seats()
-2163 fn transfers_limit_both_legs_and_unequal_frequencies_with_no_owner_bonus()
-2197 fn transfers_five_airline_overlapping_networks_remain_bounded_in_every_market()
-2253 fn prepared_market_matches_original_allocator_exactly_across_seasons()
-2286 fn seat_spill_reaches_cheaper_and_pricier_offers_but_respects_limits()
-2337 fn all_full_and_single_offer_are_capacity_bounded_without_inventing_demand()
-2357 fn spilling_service_matches_pause_speeds_steps_and_restart()
-2396 fn unrelated_market_does_not_dilute_supply()
-2409 fn airport_size_distance_and_segments_define_market_not_seats()
-2443 fn actual_landings_cover_large_mixed_and_regional_airports_at_different_prices()
-2477 fn multiple_flights_share_daily_market_instead_of_multiplying_it()
-2495 fn reversed_routes_share_market_and_unplanned_routes_do_not_dilute_it()
-2518 fn rare_flights_do_not_bank_days_of_demand()
-2527 fn shared_market_survives_restart_and_schedule_changes_without_rewriting_history()
+1024 struct TransferPath
+1034 struct TransferMarket
+1043 struct TransferNetwork
+1056 struct TransferAllocation
+1065 static TRANSFERS: std::cell::RefCell<Vec<std::sync::Arc<std::sync::Mutex<TransferNetwork>>>> = const { st
+1070 struct TopologyLeg
+1078 struct ConnectionGeometry
+1089 impl ConnectionGeometry
+1090 fn can_fill(&self, offers: &[Offer]) -> bool
+1096 static MAXIMUM: LazyLock<Market> = LazyLock::new(||
+1115 struct TransferTopology
+1120 impl TransferTopology
+1121 fn paths_for(&self, route: &Route) -> &[usize]
+1134 static TOPOLOGIES: std::cell::RefCell<Vec<std::sync::Arc<TransferTopology>>> = const { std::cell::RefCell
+1136 fn transfer_topology(offers: &[Offer]) -> Result<std::sync::Arc<TransferTopology>, String>
+1238 pub(crate) type SharedTransferSupply = std::sync::Arc<std::sync::Mutex<TransferSupply>>;
+1242 static DISPATCH_SUPPLY: std::cell::RefCell<Option<(u64, SharedTransferSupply)>> = const { std::cell::RefC
+1244 fn dispatch_transfer_supply(
+1264 pub(crate) struct TransferSupply
+1269 impl TransferSupply
+1270 fn new(routes: &[Offer]) -> Result<Self, String>
+1292 fn network_for(
+1335 impl TransferNetwork
+1336 fn new(offers: Vec<Offer>) -> Result<Self, String>
+1480 fn estimate_for(&mut self, time: Option<u64>, revision: Option<u64>, scores: &[i64])
+1524 fn estimate(&mut self, time: Option<u64>)
+1635 fn estimate_reference(
+1865 pub fn passengers(route: &Route, routes: &[Offer]) -> Result<i64, String>
+1875 pub fn same_market(a: &Route, b: &Route) -> bool
+1881 mod tests
+1885 fn game(count: u32, interval: u32) -> Game
+1901 fn direct_fare_sweep_matches_fresh_quotes_with_competing_cabins()
+1939 fn transfer_offers() -> Vec<Offer>
+1963 fn transfer_daily_cache_preserves_exact_local_quotes_and_day_boundaries()
+2002 fn transfer_zero_ceiling_and_stored_quotes_match_fresh_after_cache_churn()
+2032 fn transfer_topology_survives_quotes_and_invalidates_structural_changes()
+2072 fn transfer_reputation_is_one_gentle_journey_factor_and_cache_respects_neutral_choice()
+2073 struct Reset;
+2074 impl Drop for Reset
+2075 fn drop(&mut self)
+2142 fn transfers_conserve_od_markets_reserve_locals_and_split_revenue()
+2185 fn transfers_require_active_same_owner_sensible_geometry_and_economy_seats()
+2209 fn transfers_limit_both_legs_and_unequal_frequencies_with_no_owner_bonus()
+2243 fn transfers_five_airline_overlapping_networks_remain_bounded_in_every_market()
+2299 fn prepared_market_matches_original_allocator_exactly_across_seasons()
+2332 fn seat_spill_reaches_cheaper_and_pricier_offers_but_respects_limits()
+2383 fn all_full_and_single_offer_are_capacity_bounded_without_inventing_demand()
+2403 fn spilling_service_matches_pause_speeds_steps_and_restart()
+2442 fn unrelated_market_does_not_dilute_supply()
+2455 fn airport_size_distance_and_segments_define_market_not_seats()
+2489 fn actual_landings_cover_large_mixed_and_regional_airports_at_different_prices()
+2523 fn multiple_flights_share_daily_market_instead_of_multiplying_it()
+2541 fn reversed_routes_share_market_and_unplanned_routes_do_not_dilute_it()
+2564 fn rare_flights_do_not_bank_days_of_demand()
+2573 fn shared_market_survives_restart_and_schedule_changes_without_rewriting_history()
 
 ## rust/src/disruption_tests.rs
 7 fn tight_interval() -> u32
