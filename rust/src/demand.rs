@@ -322,6 +322,15 @@ fn estimate_with_season(
     Ok(estimate)
 }
 
+// Keep each cabin's allocation scratch together instead of allocating and
+// repeatedly indexing three parallel vectors in every spill round.
+#[derive(Clone, Default)]
+struct LocalAllocation {
+    weights: [f64; 2],
+    limits: [f64; 2],
+    allocated: [f64; 2],
+}
+
 /// Local, unsaved quote workspace for one route and immutable supply snapshot.
 /// Every seasonal quantity and spill result is recomputed at departure time.
 #[derive(Clone)]
@@ -334,9 +343,7 @@ struct LocalPrepared {
     inputs: Vec<MarketInputs>,
     base: MarketInputs,
     capacities: Vec<f64>,
-    weights: Vec<[f64; 2]>,
-    limits: Vec<[f64; 2]>,
-    allocated: Vec<[f64; 2]>,
+    allocations: Vec<LocalAllocation>,
     loads: Vec<i64>,
     frequency: f64,
     frequencies: Vec<f64>,
@@ -603,9 +610,7 @@ impl LocalPrepared {
             inputs,
             base,
             capacities,
-            weights: vec![[0.0; 2]; len],
-            limits: vec![[0.0; 2]; len],
-            allocated: vec![[0.0; 2]; len],
+            allocations: vec![LocalAllocation::default(); len],
             loads: vec![0; service_count],
             frequency: frequency(route),
         };
@@ -619,7 +624,7 @@ impl LocalPrepared {
         let mut business = 0;
         for (j, offer) in self.matching.iter().enumerate() {
             if self.service_indices[j] == service {
-                let allocated = self.allocated[j][0] + self.allocated[j][1];
+                let allocated = self.allocations[j].allocated[0] + self.allocations[j].allocated[1];
                 daily += allocated;
                 let count = rounded_passengers(allocated, offer);
                 per_departure += count;
@@ -648,12 +653,10 @@ impl LocalPrepared {
         });
         let base = self.base.at(&season);
         let matching = &self.matching;
-        let weights = &mut self.weights;
-        let limits = &mut self.limits;
-        let allocated = &mut self.allocated;
+        let allocations = &mut self.allocations;
         let mut frequency_sum = [0.0_f64; 2];
         let mut weight_sum = [0.0_f64; 2];
-        for (j, o) in matching.iter().enumerate() {
+        for (j, (o, allocation)) in matching.iter().zip(allocations.iter_mut()).enumerate() {
             let f = self.frequencies[j];
             let choice = self.choices[j];
             let mut m = self.inputs[j].at(&season);
@@ -668,83 +671,91 @@ impl LocalPrepared {
                 if w > 0.0 && !o.premium {
                     frequency_sum[i] += f;
                 }
-                weights[j][i] = choice * w / (1.0 - w).max(1e-9)
+                allocation.weights[i] = choice * w / (1.0 - w).max(1e-9)
                     * if o.premium {
                         crate::cabins::RULES.business_preference
                     } else {
                         1.0
                     };
-                weight_sum[i] += weights[j][i];
+                weight_sum[i] += allocation.weights[i];
                 // Rare flights cannot bank days of willing demand.
-                limits[j][i] = n * f.min(1.0);
+                allocation.limits[i] = n * f.min(1.0);
             }
         }
-        for j in 0..matching.len() {
+        for allocation in allocations.iter_mut() {
             for (i, b) in [base.business, base.leisure].into_iter().enumerate() {
-                allocated[j][i] = (b * weights[j][i] / (frequency_sum[i].max(1.0) + weight_sum[i]))
-                    .min(limits[j][i]);
+                allocation.allocated[i] = (b * allocation.weights[i]
+                    / (frequency_sum[i].max(1.0) + weight_sum[i]))
+                    .min(allocation.limits[i]);
             }
         }
         let matching = &self.matching;
         let own_indices = &self.own_indices;
         let service_indices = &self.service_indices;
         let capacities = &self.capacities;
-        let weights = &mut self.weights;
-        let limits = &mut self.limits;
-        let allocated = &mut self.allocated;
+
         self.requested.fill(0.0);
         if !self.requested.is_empty() {
-            for j in 0..matching.len() {
-                self.requested[service_indices[j]] += allocated[j][0] + allocated[j][1];
+            for (allocation, &service) in allocations.iter().zip(service_indices) {
+                self.requested[service] += allocation.allocated[0] + allocation.allocated[1];
             }
         }
         let requested = own_indices
             .iter()
-            .map(|&j| allocated[j][0] + allocated[j][1])
+            .map(|&j| allocations[j].allocated[0] + allocations[j].allocated[1])
             .sum::<f64>();
         let mut spill = [0.0; 2];
-        for j in 0..matching.len() {
-            let total = allocated[j][0] + allocated[j][1];
-            let scale = if total > capacities[j] {
-                capacities[j] / total
+        let mut has_spare = false;
+        for (allocation, &capacity) in allocations.iter_mut().zip(capacities) {
+            let total = allocation.allocated[0] + allocation.allocated[1];
+            let scale = if total > capacity {
+                capacity / total
             } else {
                 1.0
             };
             for (i, excess) in spill.iter_mut().enumerate() {
-                *excess += allocated[j][i] * (1.0 - scale);
-                allocated[j][i] *= scale;
+                *excess += allocation.allocated[i] * (1.0 - scale);
+                allocation.allocated[i] *= scale;
             }
+            has_spare |= capacity - (allocation.allocated[0] + allocation.allocated[1]) > 1e-9;
         }
         // Each non-final round saturates at least one seat/segment ceiling.
         for _ in 0..matching.len() * 3 + 1 {
+            // Empty spill or no eligible spare capacity makes the original
+            // round a no-op. Keep tiny nonzero spills and eligible capacity on
+            // the original path, including all its rounding.
+            if spill == [0.0; 2] || !has_spare {
+                break;
+            }
             let mut sums = [0.0; 2];
-            for j in 0..matching.len() {
-                if capacities[j] - (allocated[j][0] + allocated[j][1]) > 1e-9 {
+            for (allocation, &capacity) in allocations.iter().zip(capacities) {
+                if capacity - (allocation.allocated[0] + allocation.allocated[1]) > 1e-9 {
                     for (i, sum) in sums.iter_mut().enumerate() {
-                        if limits[j][i] - allocated[j][i] > 1e-9 {
-                            *sum += weights[j][i];
+                        if allocation.limits[i] - allocation.allocated[i] > 1e-9 {
+                            *sum += allocation.weights[i];
                         }
                     }
                 }
             }
             let mut accepted = [0.0; 2];
-            for j in 0..matching.len() {
-                let spare = (capacities[j] - (allocated[j][0] + allocated[j][1])).max(0.0);
+            for (allocation, &capacity) in allocations.iter_mut().zip(capacities) {
+                let spare =
+                    (capacity - (allocation.allocated[0] + allocation.allocated[1])).max(0.0);
                 if spare <= 1e-9 {
                     continue;
                 }
                 let mut add = [0.0; 2];
                 for i in 0..2 {
-                    if sums[i] > 0.0 && limits[j][i] - allocated[j][i] > 1e-9 {
-                        add[i] = (spill[i] * weights[j][i] / sums[i])
-                            .min(limits[j][i] - allocated[j][i]);
+                    if sums[i] > 0.0 && allocation.limits[i] - allocation.allocated[i] > 1e-9 {
+                        add[i] = (spill[i] * allocation.weights[i] / sums[i])
+                            .min(allocation.limits[i] - allocation.allocated[i]);
                     }
                 }
                 let total = add[0] + add[1];
                 let scale = if total > spare { spare / total } else { 1.0 };
                 for i in 0..2 {
                     let n = add[i] * scale;
-                    allocated[j][i] += n;
+                    allocation.allocated[i] += n;
                     accepted[i] += n;
                 }
             }
@@ -757,12 +768,15 @@ impl LocalPrepared {
         }
         let daily = own_indices
             .iter()
-            .map(|&j| allocated[j][0] + allocated[j][1])
+            .map(|&j| allocations[j].allocated[0] + allocations[j].allocated[1])
             .sum::<f64>();
         let mut business = 0;
         let mut per_departure = 0;
         for &j in own_indices {
-            let n = rounded_passengers(allocated[j][0] + allocated[j][1], &matching[j]);
+            let n = rounded_passengers(
+                allocations[j].allocated[0] + allocations[j].allocated[1],
+                &matching[j],
+            );
             per_departure += n;
             if matching[j].premium {
                 business += n;
@@ -770,8 +784,10 @@ impl LocalPrepared {
         }
         self.loads.fill(0);
         for (j, offer) in matching.iter().enumerate() {
-            self.loads[service_indices[j]] +=
-                rounded_passengers(allocated[j][0] + allocated[j][1], offer);
+            self.loads[service_indices[j]] += rounded_passengers(
+                allocations[j].allocated[0] + allocations[j].allocated[1],
+                offer,
+            );
         }
         (
             Estimate {
@@ -1561,14 +1577,15 @@ impl TransferNetwork {
                 }
                 for (j, o) in local.matching.iter().enumerate() {
                     for (s, r) in residual.iter_mut().enumerate() {
-                        *r = (*r - local.allocated[j][s]).max(0.0);
+                        *r = (*r - local.allocations[j].allocated[s]).max(0.0);
                     }
                     if !o.premium {
                         let k = m.services[local.service_indices[j]];
-                        spare[k] -=
-                            rounded_passengers(local.allocated[j][0] + local.allocated[j][1], o)
-                                as f64
-                                * frequency(&o.route);
+                        spare[k] -= rounded_passengers(
+                            local.allocations[j].allocated[0] + local.allocations[j].allocated[1],
+                            o,
+                        ) as f64
+                            * frequency(&o.route);
                     }
                 }
             }
@@ -2284,7 +2301,7 @@ mod tests {
             for m in &mut n.markets {
                 let local = m.local.as_mut().map_or(0.0, |p| {
                     p.estimate(time);
-                    p.allocated.iter().flatten().sum::<f64>()
+                    p.allocations.iter().flat_map(|a| a.allocated).sum::<f64>()
                 });
                 let transfer = m.paths.iter().map(|&p| n.daily[p]).sum::<f64>();
                 assert!(

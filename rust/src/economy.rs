@@ -43,6 +43,7 @@ impl FuelMarket {
                     timelines.push(FuelTimeline {
                         seed: self.seed,
                         checkpoints: vec![CONFIG.fuel_cents_per_kg],
+                        recent: None,
                     });
                     timelines.len() - 1
                 }
@@ -69,10 +70,18 @@ const FUEL_CHECKPOINT_WEEKS: u64 = 64;
 struct FuelTimeline {
     seed: u64,
     checkpoints: Vec<i64>,
+    recent: Option<(u64, i64)>,
 }
 thread_local! { static FUEL_TIMELINES: std::cell::RefCell<Vec<FuelTimeline>> = const { std::cell::RefCell::new(Vec::new()) }; }
 impl FuelTimeline {
     fn price_at(&mut self, week: u64) -> i64 {
+        // Dispatch, contracts and reviews repeatedly request the same week.
+        // Cache the exact recurrence result, leaving random access unchanged.
+        if let Some((cached_week, price)) = self.recent
+            && cached_week == week
+        {
+            return price;
+        }
         let checkpoint = (week / FUEL_CHECKPOINT_WEEKS).min((self.checkpoints.len() - 1) as u64);
         let mut step = checkpoint * FUEL_CHECKPOINT_WEEKS;
         let mut price = self.checkpoints[checkpoint as usize];
@@ -97,6 +106,7 @@ impl FuelTimeline {
                 self.checkpoints.push(price);
             }
         }
+        self.recent = Some((week, price));
         price
     }
 }

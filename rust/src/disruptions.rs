@@ -269,7 +269,7 @@ pub fn project(route: &Route, model: &str, now: u64) -> Result<Projection, Strin
 // A plan's immutable seed, baseline wear and schedule completely determine
 // its future landings. Retain a few forecasts across frames; this cache is
 // disposable and never serialized or consulted for settlement.
-#[derive(PartialEq, Eq, Hash)]
+#[derive(PartialEq, Eq)]
 struct ForecastKey {
     seed: u64,
     acquired: u64,
@@ -282,8 +282,9 @@ struct ForecastKey {
     index: u64,
     frozen: Option<Leg>,
 }
+type Forecasts = std::collections::HashMap<(u64, u64), (ForecastKey, u64)>;
 thread_local! {
-    static FORECASTS: std::cell::RefCell<std::collections::HashMap<ForecastKey, u64>> = std::cell::RefCell::new(std::collections::HashMap::new());
+    static FORECASTS: std::cell::RefCell<Forecasts> = std::cell::RefCell::new(Forecasts::new());
 }
 
 /// Actual arrival of an outstanding landing, used by maintenance and insurance.
@@ -311,7 +312,15 @@ pub fn landing_at(route: &Route, model: &str, index: u64) -> Result<u64, String>
             index,
             frozen: cursor.frozen.clone(),
         };
-        if let Some(landing) = FORECASTS.with(|f| f.borrow().get(&key).copied()) {
+        // Hash only the plan seed and requested index on this hot path. The
+        // complete immutable key still guards hits across reschedules and saves.
+        let bucket = (key.seed, key.index);
+        if let Some(landing) = FORECASTS.with(|f| {
+            f.borrow()
+                .get(&bucket)
+                .filter(|(stored, _)| *stored == key)
+                .map(|(_, landing)| *landing)
+        }) {
             return Ok(landing);
         }
         while cursor.index <= index {
@@ -322,7 +331,7 @@ pub fn landing_at(route: &Route, model: &str, index: u64) -> Result<u64, String>
                     if f.len() >= 128 {
                         f.clear();
                     }
-                    f.insert(key, leg.landing);
+                    f.insert(bucket, (key, leg.landing));
                 });
                 return Ok(leg.landing);
             }
