@@ -1051,9 +1051,9 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 194 pub fn set_pricing_autopilot(&mut self, id: u32, enabled: bool) -> Result<(), String>
 220 pub fn next_pricing_event(&self) -> Option<u64>
 223 pub fn apply_pricing(&mut self) -> Result<(), String>
-268 pub fn validate_pricing(&self) -> Result<(), String>
-295 mod tests
-297 fn pricing_ties_keep_current_and_other_ties_choose_lower()
+276 pub fn validate_pricing(&self) -> Result<(), String>
+303 mod tests
+305 fn pricing_ties_keep_current_and_other_ties_choose_lower()
 
 ## rust/src/pricing_tests.rs
 2 const DAY: u64 = 86400;
@@ -1065,6 +1065,7 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 107 fn pricing_autopilot_weekly_manual_override_and_identical_speeds_restart()
 151 fn pricing_autopilot_jump_does_not_add_attention_or_stop()
 167 fn pricing_two_year_player_comparison()
+186 fn pricing_terminal_boundary_cancels_reviews_and_remains_saveable()
 
 ## rust/src/quality.rs
 5 fn scenario(price: Option<i64>) -> Game

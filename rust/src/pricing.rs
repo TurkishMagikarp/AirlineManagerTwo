@@ -221,6 +221,14 @@ impl Game {
         self.pricing.iter().filter_map(|p| p.next_review).min()
     }
     pub fn apply_pricing(&mut self) -> Result<(), String> {
+        // Financing can end the company at this same event boundary. Do not
+        // let a now-forbidden fare write roll back the terminal transition.
+        if self.insolvent() {
+            for p in &mut self.pricing {
+                p.next_review = None;
+            }
+            return Ok(());
+        }
         let now = self.clock.elapsed().as_secs();
         for i in 0..self.pricing.len() {
             if !self.pricing[i].next_review.is_some_and(|t| t <= now) {

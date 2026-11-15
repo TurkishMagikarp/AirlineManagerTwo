@@ -181,3 +181,18 @@ fn pricing_two_year_player_comparison() {
         g.validate_routes().unwrap();
     }
 }
+
+#[test]
+fn pricing_terminal_boundary_cancels_reviews_and_remains_saveable() {
+    let mut g = game();
+    g.competitors.clear();
+    g.set_ticket_price(1, 100_000).unwrap();
+    g.set_pricing_autopilot(1, true).unwrap();
+    let cash = g.cash();
+    g.airline.as_mut().unwrap().capital_eur = -1;
+    g.history.as_mut().unwrap().opening_balance -= cash + 1;
+    assert!(g.advance(180.0 * DAY as f64));
+    assert!(g.insolvent());
+    assert!(g.next_pricing_event().is_none());
+    assert_eq!(state(&restart(&g)), state(&g));
+}
