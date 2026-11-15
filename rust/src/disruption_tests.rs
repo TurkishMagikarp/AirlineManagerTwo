@@ -29,6 +29,43 @@ fn restart(g: &Game) -> Game {
 fn state(g: &Game) -> serde_json::Value {
     serde_json::to_value(g).unwrap()
 }
+
+#[test]
+fn forecast_buckets_check_full_schedule_key_after_rescheduling() {
+    let g = game(180);
+    let original = g.routes[0].clone();
+    let index = 100;
+    let expected = |r: &crate::routes::Route| {
+        let mut c = r.plan.as_ref().unwrap().disruption.clone().unwrap();
+        loop {
+            let leg = c.next(r, "atr72_600").unwrap();
+            if leg.index == index {
+                break leg.landing;
+            }
+            c.landed(leg).unwrap();
+        }
+    };
+    let arrival = expected(&original);
+    assert_eq!(
+        disruptions::landing_at(&original, "atr72_600", index).unwrap(),
+        arrival
+    );
+    let mut rescheduled = original.clone();
+    let plan = rescheduled.plan.as_mut().unwrap();
+    plan.first_departure += 1000;
+    plan.interval_seconds += 60;
+    let later = expected(&rescheduled);
+    assert_ne!(later, arrival);
+    // Identical seed/index buckets deliberately collide; neither schedule may
+    // reuse the other's forecast, including after loading an older snapshot.
+    for route in [&rescheduled, &original, &rescheduled, &original] {
+        assert_eq!(
+            disruptions::landing_at(route, "atr72_600", index).unwrap(),
+            expected(route)
+        );
+    }
+}
+
 fn cursor(g: &mut Game) -> &mut Cursor {
     g.routes[0]
         .plan

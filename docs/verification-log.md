@@ -442,3 +442,76 @@ Wartungsende wieder verschwindet. Spielstandversion unverändert (10), neues Fel
 - An additional sweep of existing restart-wrapper equivalents completed 21 passing cases before it was stopped after the Rust blocker was confirmed. The remaining older wrapper cases were not completed; this is separate from the four new v28/v29 modes above.
 - Owner-only checks remain open: START.bat, execution of PowerShell wrappers, native Windows DLL/process restarts, and Windows rendering/scaling. Linux headless results do not verify those paths or Windows appearance.
 - PR: https://github.com/TurkishMagikarp/AirlineManagerTwo/pull/45 (draft; not merged).
+
+
+## AIR-210 — Deterministische Langzeitsimulation beschleunigt (15.11.2026)
+
+Vorab gebaute Debug-Testprogramme, Basis `877661a` zuerst, abschließender PR-Lauf
+später auf demselben Agent-Server; während jeder Messung liefen keine anderen
+Prüfungen/Builds von uns. Bash `time` umfasst nur den exakten Test
+`history::tests::million_flight_finance_scenario_stays_within_budget --nocapture --test-threads=1`,
+nicht Cargo. User-/System-CPU beziehen sich auf den **gesamten** Test inklusive
+Save/Reload/Fortsetzung; Fortschritt ist dessen bestehende Instant-Wandzeit.
+Fremde Serverlast wurde nicht unterbunden; keine Zusage für andere Hardware.
+
+| Stand | User-CPU gesamt | System-CPU | Wall gesamt | Wall Fortschritt |
+| --- | ---: | ---: | ---: | ---: |
+| main `877661a` | 354,436 s | 13,916 s | 377,807 s | 253,631726 s |
+| PR final | 266,032 s | 11,917 s | 281,410 s | 175,445444 s |
+
+**−24,94 % User-CPU; −30,83 % Fortschrittszeit.** Das 200-s-Ziel ist erreicht;
+124,55 s Reserve zur unveränderten 300-s-Assertion. Im finalen Lauf war
+`AIRLINE_ENFORCE_PERF_BUDGET=1` gesetzt (main: nicht gesetzt). Beide Tests bestanden
+inklusive Save/Reload/Fortsetzung: identische 5.784.017 verbuchte Flüge,
+28.560 Netzaufbauten, 99.061 Allokationen und 244.704.783 Save-Bytes.
+
+Profilierung vor Änderungen mit temporären, verschachtelten Zeitproben im
+bestehenden `profile_twenty_thousand_flights`: 492.987 Timing-Abfragen,
+7.743 Finanzkopien, 163.682 Angebote und 476 KI-Reviews bei 111.206 verbuchten
+Flügen. Firmenfortschritt kostete 5,16 von 7,71 s, Marktzugriff/-vorbereitung
+1,45 s, Abflugangebote 1,15 s, Finanzkopien 0,25 s, Wartungsgrenzen 0,54 s.
+Die inklusiven Zeiten überlappen und enthalten Messaufwand. Ein Langprofil
+bestätigte 22,8 Mio. Timing- und 7,0 Mio. Landungsprognose-Abfragen.
+
+Änderungen: nur neue Finanzresultate bis zum atomaren Commit zwischenspeichern;
+Kabinen-Allokationsdaten zusammenhalten und nachweislich wirkungslose Spillrunden
+überspringen; exakte Flugzeiten und den zuletzt angefragten Treibstoffwochenwert
+wiederverwenden; Prognosen mit kurzem Hashschlüssel suchen, Treffer weiterhin
+gegen den vollständigen alten Schlüssel prüfen. Keine Regel-/Tuningänderung,
+neue Quantisierung, Save-Formatänderung oder Migration; keine Logikfehler gefunden.
+Im finalen Kurzprofil verbleiben vor allem Marktzugriff/-vorbereitung (1,11 s),
+Angebote (1,17 s), KI-Reviews (0,80 s) und Wartungsgrenzen (0,41 s), gegenüber
+Archivierung (0,24 s) und Payroll/Training zusammen (0,03 s). Proben und temporäre
+Snapshot-Ausgaben wurden entfernt; die Messung oben verwendet den frisch
+gebauten, uninstrumentierten Test. Kein neues Benchmark-Framework/Repo-Werkzeug.
+
+Frische main-Ausgaben gegen die vollständige PR-Suite verglichen: alle sechs
+Zweijahreszeilen einschließlich Routen sind identisch; Werte in ganzen EUR:
+
+| Spielerbasis / Rival | Cash main = PR | Betriebsgewinn main = PR | Flotte main = PR |
+| --- | ---: | ---: | ---: |
+| FRA / Regional Wings | 107.809.067 | 194.364.701 | 6 |
+| FRA / Continental Sky | 34.207.235 | 79.143.280 | 5 |
+| GRU / Regional Wings | 34.317.471 | 79.079.356 | 5 |
+| GRU / Continental Sky | 107.310.890 | 200.481.789 | 6 |
+| HND / Regional Wings | 106.286.287 | 199.009.463 | 6 |
+| HND / Continental Sky | 34.406.772 | 79.379.183 | 5 |
+
+Alle 20 Zehnjahres-Reputationszeilen (Umsatz, neutrale Referenz, Delta, Cash)
+sind ebenfalls identisch; SHA-256 der mit Newline verbundenen Ergebniszeilen:
+`4ba678d4e1e492c3471cf5e411e58a80c40877b08ce54366f4207ab53d993083`.
+Zusätzlich ist der komplette serialisierte 20.000-Flüge-Zustand byteidentisch
+zu main, SHA-256 `07f7d0ffc633fcff5db7c553dd3cb9baf650cccc3a43c5cf9dfc2d8434878214`.
+
+Abschlussprüfungen: `cargo test --locked --manifest-path rust/Cargo.toml -- --nocapture`
+**295 bestanden, 4 bestehende Diagnosen ignoriert, 0 Fehler** (349,04 s);
+`cargo clippy --locked --manifest-path rust/Cargo.toml` sauber;
+`cargo build --locked --manifest-path rust/Cargo.toml` bestanden.
+`AIRLINE_GODOT=/paperclip/airline/godot/godot tools/godot_check.sh tests`:
+**44 bestanden, 0 Fehler**, Windows-Restarttreiber wie vorgesehen übersprungen.
+Original-Allokatorvergleich, volle Prognoseschlüssel bei Bucket-Kollisionen,
+Finanz-Rollback bei Folgefehlern, Altspeicher, Pause/1×/4×/16×, Schrittgrößen und
+Save/Reload sind abgedeckt. Die Finanzprobe innerhalb der parallelen Rust-Suite
+brauchte 215,34 s Fortschritt; sie ist nicht die isolierte Vergleichsmessung oben.
+Keine UI-Änderungen oder Bildprüfungen. START.bat, PowerShell-Restarttreiber und
+echte GPU-Darstellung bleiben hier ungeprüft; Godot läuft auf Linux mit Software-Rendering.

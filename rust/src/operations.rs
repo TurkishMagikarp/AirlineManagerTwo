@@ -441,13 +441,50 @@ pub fn display_time(seconds: u64) -> String {
     )
 }
 
+// Immutable catalog inputs only: route IDs, schedules and commercial revisions
+// must not alias timings for another route or save. Keep this disposable cache
+// small; the test fixture catalog has a distinct identity from the world catalog.
+struct Timing {
+    catalog: &'static crate::airports::Catalog,
+    model: &'static aircraft::Model,
+    origin: String,
+    destination: String,
+    value: (u64, u64),
+}
+thread_local! {
+    static TIMINGS: std::cell::RefCell<Vec<Timing>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
 pub fn timings(route: &Route, model_id: &str) -> Result<(u64, u64), String> {
     let model = aircraft::model(model_id)?;
-    let seconds = (crate::routes::distance_km(&route.origin_icao, &route.destination_icao)?
-        / f64::from(model.cruise_kmh)
-        * 3600.0)
-        .ceil() as u64;
-    Ok((seconds.max(1), u64::from(model.turnaround_minutes) * 60))
+    let catalog = crate::airports::catalog()?;
+    TIMINGS.with(|cache| {
+        let mut cache = cache.borrow_mut();
+        if let Some(timing) = cache.iter().find(|t| {
+            std::ptr::eq(t.catalog, catalog)
+                && std::ptr::eq(t.model, model)
+                && t.origin == route.origin_icao
+                && t.destination == route.destination_icao
+        }) {
+            return Ok(timing.value);
+        }
+        let seconds = (crate::routes::distance_km(&route.origin_icao, &route.destination_icao)?
+            / f64::from(model.cruise_kmh)
+            * 3600.0)
+            .ceil() as u64;
+        let value = (seconds.max(1), u64::from(model.turnaround_minutes) * 60);
+        if cache.len() >= 64 {
+            cache.clear();
+        }
+        cache.push(Timing {
+            catalog,
+            model,
+            origin: route.origin_icao.clone(),
+            destination: route.destination_icao.clone(),
+            value,
+        });
+        Ok(value)
+    })
 }
 
 pub fn movement(route: &Route, model: &str, now: u64) -> Result<Movement, String> {
@@ -673,7 +710,10 @@ impl Game {
             });
         }
         let mut updates = Vec::new();
-        let mut finance = self.finance.clone();
+        // Stage only new results. The bounded recent ledger stays untouched
+        // until every route and the cash posting have passed their checks.
+        let mut totals = self.finance.totals.clone();
+        let mut recent = Vec::new();
         let mut delta = 0i64;
         let mut archive = Vec::new();
         for (i, route) in self
@@ -748,7 +788,7 @@ impl Game {
                 let Ok(f) = quote(leg, &mut market) else {
                     return false;
                 };
-                if finance.totals.add(&f.totals, 1).is_none() {
+                if totals.add(&f.totals, 1).is_none() {
                     return false;
                 }
                 let Some(change) = delta.checked_add(f.totals.profit()) else {
@@ -765,7 +805,7 @@ impl Game {
                     ticket_eur: f.ticket_eur,
                     totals: f.totals.clone(),
                 });
-                finance.recent.push(f);
+                recent.push(f);
             }
             let airborne = match &projection.active {
                 Some(leg) => match quote(leg, &mut market) {
@@ -785,17 +825,19 @@ impl Game {
             None if delta == 0 => None,
             None => return false,
         };
-        finance.recent.sort_by_key(|f| (f.landing, f.route_id));
-        let excess = finance
+        self.finance.recent.append(&mut recent);
+        self.finance.recent.sort_by_key(|f| (f.landing, f.route_id));
+        let excess = self
+            .finance
             .recent
             .len()
             .saturating_sub(crate::economy::HISTORY_LIMIT);
-        finance.recent.drain(..excess);
+        self.finance.recent.drain(..excess);
         self.reputation.observe(
-            finance.totals.punctuality_flights - self.finance.totals.punctuality_flights,
-            finance.totals.late_flights - self.finance.totals.late_flights,
+            totals.punctuality_flights - self.finance.totals.punctuality_flights,
+            totals.late_flights - self.finance.totals.late_flights,
         );
-        self.finance = finance;
+        self.finance.totals = totals;
         if let Some(h) = &mut self.history {
             for batch in archive {
                 h.record(batch);
@@ -918,6 +960,71 @@ mod tests {
         g.create_route("EDDF", "EDDM", 1).unwrap();
         g.schedule(1, 1, 120).unwrap();
         g
+    }
+
+    #[test]
+    fn timing_cache_separates_endpoints_models_and_catalogs() {
+        let mut route = game().routes.remove(0);
+        let shuttle = timings(&route, "atr72_600").unwrap();
+        route.destination_icao = "RJTT".into();
+        let long_haul = timings(&route, "a330_300").unwrap();
+        assert!(long_haul.0 > shuttle.0);
+        assert_ne!(timings(&route, "atr72_600").unwrap(), long_haul);
+        {
+            let _original = crate::airports::original_catalogue_scenario();
+            // A warm world-catalog hit must not make an absent airport valid.
+            assert!(timings(&route, "a330_300").is_err());
+        }
+        assert_eq!(timings(&route, "a330_300").unwrap(), long_haul);
+        for airport in &crate::airports::catalog().unwrap().airports {
+            if airport.icao == route.origin_icao {
+                continue;
+            }
+            route.destination_icao.clone_from(&airport.icao);
+            for model in ["atr72_600", "a330_300"] {
+                timings(&route, model).unwrap();
+            }
+        }
+        TIMINGS.with(|c| assert!(c.borrow().len() <= 64));
+        route.destination_icao = "EDDM".into();
+        assert_eq!(timings(&route, "atr72_600").unwrap(), shuttle);
+        assert!(timings(&route, "unknown").is_err());
+        route.destination_icao.clone_from(&route.origin_icao);
+        assert!(timings(&route, "atr72_600").is_err());
+    }
+
+    #[test]
+    fn staged_settlements_keep_recent_ledger_on_later_route_or_cash_failure() {
+        let mut g = game();
+        g.buy_aircraft("atr72_600").unwrap();
+        g.staff_up();
+        g.create_route("EDDF", "EDDM", 2).unwrap();
+        g.schedule(2, 1, 120).unwrap();
+        g.clock.set_running(true);
+        assert!(g.advance(2.0 * 86400.0));
+        assert!(!g.finance.recent.is_empty());
+        let clock = crate::clock::Clock::from_state(
+            g.clock.elapsed() + std::time::Duration::from_secs(86400),
+            true,
+            1,
+        )
+        .unwrap();
+        let model = std::mem::replace(&mut g.fleet[1].model_id, "unknown".into());
+        let supply = g.market_routes();
+        let before = serde_json::to_value(&g).unwrap();
+        assert!(!g.advance_company_to(clock.clone(), &supply, 0, 0));
+        assert_eq!(serde_json::to_value(&g).unwrap(), before);
+
+        g.fleet[1].model_id = model;
+        let supply = g.market_routes();
+        let mut probe = g.clone();
+        assert!(probe.advance_company_to(clock.clone(), &supply, 1, 1));
+        let delta = probe.finance.totals.profit() - g.finance.totals.profit();
+        assert_ne!(delta, 0);
+        g.airline.as_mut().unwrap().capital_eur = if delta > 0 { i64::MAX } else { i64::MIN };
+        let before = serde_json::to_value(&g).unwrap();
+        assert!(!g.advance_company_to(clock, &supply, 1, 1));
+        assert_eq!(serde_json::to_value(&g).unwrap(), before);
     }
 
     #[test]
