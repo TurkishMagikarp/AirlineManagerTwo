@@ -35,6 +35,9 @@ var ticket_input: SpinBox
 var ticket_button: Button
 var results_tree: Tree
 var competition_label: Label
+var connections_label: Label
+var connections_empty: Control
+var connections_chip: Control
 var results_empty: Control
 
 
@@ -73,11 +76,17 @@ func _ready() -> void:
 		origin.grab_focus()
 	)
 	add_child(empty_label)
-	route_tree = UI.table(["Route", "Strecke", "Entfernung", "Flugzeug", "Markt / Wir / Abgewiesen →", "Auslastung"], [65, 140, 110, 170, 220, 100], 180)
+	route_tree = UI.table(["Route", "Strecke", "Entfernung", "Flugzeug", tr("TRANSFER_MARKET_HEADER"), "Auslastung"], [65, 140, 110, 170, 220, 100], 180)
 	for i in range(6):
 		route_tree.set_column_expand(i, i == 1 or i == 3)
 	route_tree.item_selected.connect(_selection_changed)
 	add_child(route_tree)
+	connections_chip = UI.status_chip(tr("TRANSFER_FED"), "info")
+	add_child(connections_chip)
+	connections_label = _label("")
+	add_child(connections_label)
+	connections_empty = UI.empty_state(tr("TRANSFER_EMPTY"), tr("TRANSFER_HINT"), tr("TRANSFER_SELECT"), func(): route_tree.grab_focus())
+	add_child(connections_empty)
 	season_label = _label("")
 	season_label.tooltip_text = "Skaliert den Basismarkt vor Preisreaktion und Sitzverteilung. 1,00 = Jahresmittel."
 	add_child(season_label)
@@ -346,15 +355,18 @@ func refresh_operations() -> void:
 			var assigned := ", ".join(names) if not names.is_empty() else "Nicht zugewiesen"
 			var state := reason if not reason.is_empty() else "Flugplan aktiviert." if route["has_plan"] else "Reichweite ausreichend"
 			UI.cell_status(row, 3, assigned + (" · " + state if not names.is_empty() else ""), "stop" if not reason.is_empty() or names.is_empty() else "go" if route["has_plan"] else "neutral")
-			UI.cell_text(row, 4, "%d / %d / %d" % [route["base_daily_market"], route["expected_daily_passengers"], route["daily_spill"]])
+			UI.cell_text(row, 4, "%d / %d / %d" % [route["base_daily_market"], route["expected_daily_local"], route["expected_daily_connecting"]])
 			row.set_tooltip_text(0, "Pünktlichkeit: %s · %d erfasste Flüge" % ["—" if route["punctuality_percent"] < 0 else "%.1f %%" % route["punctuality_percent"], route["punctuality_flights"]])
-			row.set_tooltip_text(4, "Pro Tag und Richtung: gemeinsamer Markt / erwartete eigene Passagiere / wegen Sitzmangel abgewiesen.\nAbgewiesen = eigener anfänglicher Anteil minus Beförderung vor Rundung; diese Reisenden können zur Konkurrenz wechseln.\nOhne eigenen Flugplan: keine Beförderung, kein Sitzmangel.\nDurchschnitt pro Abflug: %d Pax" % route["estimated_passengers"])
+			row.set_tooltip_text(4, "Pro Tag und Richtung: lokaler Basismarkt / erwartete lokale Passagiere / Umsteiger (aus ihren eigenen O&D-Märkten).\nOhne eigenen Flugplan: keine Beförderung, kein Sitzmangel.\nDurchschnitt pro Abflug: %d Pax" % route["estimated_passengers"])
+			for connection in route["connections"]:
+				row.set_tooltip_text(4, row.get_tooltip_text(4) + "\n%s – %s – %s · %.1f Pax/Tag" % [connection["origin"], connection["hub"], connection["destination"], connection["daily"]])
 			UI.cell_text(row, 5, "%.1f %%" % route["actual_load_percent"] if route["actual_flights"] > 0 else "Keine Flüge")
 			row.set_tooltip_text(5, "Tatsächlich beförderte Passagiere / angebotene Sitze aller archivierten Landungen dieser Route. Bei alten Spielständen ab Archivbeginn.")
 			if not String(route["maintenance_status"]).is_empty():
 				row.set_tooltip_text(3, row.get_text(3) + "\n" + route["maintenance_status"])
 			elif not String(route["staff_status"]).is_empty():
 				row.set_tooltip_text(3, row.get_text(3) + "\n" + route["staff_status"])
+	_update_connections(metrics.get(_route().get("id", 0), {}))
 	_update_schedule_controls(metrics.get(_route().get("id", 0), {}))
 	_update_service_cost(metrics.get(_route().get("id", 0), {}))
 	var lines: PackedStringArray = ["Flugbetrieb · nächste Abflüge (sortiert)"]
@@ -385,7 +397,8 @@ func refresh_operations() -> void:
 		var breakdowns: Dictionary = results_tree.get_meta("breakdowns")
 		breakdowns[tooltip] = parts
 		UI.cell_text(row, 2, "Y %d/%d · J %d/%d" % [result["economy_passengers"], result["economy_seats"], result["business_passengers"], result["business_seats"]])
-		row.set_tooltip_text(3, "Economy: %s · Business: %s" % [UI.money(result["economy_revenue_eur"]), UI.money(result["business_revenue_eur"])])
+		row.set_tooltip_text(2, tr("TRANSFER_RESULT") % [result["local_passengers"], result["connecting_passengers"]])
+		row.set_tooltip_text(3, tr("TRANSFER_REVENUE") % UI.money(result["connecting_revenue_eur"]) + "\n" + "Economy: %s · Business: %s" % [UI.money(result["economy_revenue_eur"]), UI.money(result["business_revenue_eur"])])
 		UI.cell_text(row, 6, "%d kg / %s" % [result["cargo_kg"], UI.money(result["cargo_revenue_eur"])])
 		UI.cell_result(row, 5, result["profit_eur"])
 
@@ -431,8 +444,20 @@ func _selection_changed() -> void:
 			assignment.set_item_metadata(assignment.item_count - 1, plane["id"])
 	assignment.disabled = route.is_empty()
 	delete_button.disabled = route.is_empty()
+	_update_connections(route)
 	_assignment_preview()
 	_refresh_competition()
+
+
+func _update_connections(route: Dictionary) -> void:
+	var connections: Array = route.get("connections", [])
+	connections_chip.visible = route.get("transfer_fed", false)
+	connections_empty.visible = connections.is_empty()
+	connections_label.visible = not connections.is_empty()
+	var lines: PackedStringArray = [tr("TRANSFER_COUNTS") % [route.get("origin_icao", ""), route.get("destination_icao", ""), route.get("expected_daily_local", 0), route.get("expected_daily_connecting", 0)], tr("TRANSFER_FEEDS")]
+	for connection in connections:
+		lines.append(tr("TRANSFER_PATH") % [connection["origin"], connection["hub"], connection["destination"], connection["daily"]])
+	connections_label.text = "\n".join(lines)
 
 
 func _update_service_cost(route: Dictionary) -> void:
@@ -472,7 +497,8 @@ func _refresh_competition() -> void:
 			live_route = current
 	var lines: PackedStringArray = ["%s ↔ %s · Schätzung pro Tag und Richtung\nGemeinsamer Basismarkt: ca. %d Pax/Tag vor Preisreaktion" % [route["origin_icao"], route["destination_icao"], live_route["base_daily_market"]]]
 	for offer in simulation.get_route_competition(route["id"]):
-		lines.append("%s · %s · %d Sitze · %d EUR\n%.1f Abflüge/Tag je Richtung → ca. %.0f Pax/Tag · %.1f %% der beförderten Pax%s\n%s" % [offer["airline"], offer["model"], offer["seats"], offer["ticket_eur"], offer["departures_per_day_per_direction"], offer["passengers_per_day"], offer["share_percent"], "" if offer["active"] else " · inaktiv", offer["last_action"]])
+		lines.append("%s · %s · %d Sitze · %d EUR\n%.1f Abflüge/Tag je Richtung → ca. %.0f Pax/Tag · %.1f %% der lokalen Pax%s\n%s" % [offer["airline"], offer["model"], offer["seats"], offer["ticket_eur"], offer["departures_per_day_per_direction"], offer["passengers_per_day"], offer["share_percent"], "" if offer["active"] else " · inaktiv", offer["last_action"]])
+		lines.append(tr("TRANSFER_COMPETITION") % [offer["local_per_day"], offer["connecting_per_day"]])
 	lines.append("Ein Markt für alle Airlines. Preis und Frequenz verteilen Nachfrage; Sitze begrenzen Buchungen. Nicht bediente Nachfrage verfällt. Schätzung, keine garantierten Buchungen. KI prüft wöchentlich Preise und Verluste.")
 	competition_label.text = "\n\n".join(companies) + "\n\n" + "\n\n".join(lines)
 

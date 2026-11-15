@@ -391,6 +391,7 @@ impl Game {
                     {
                         self.fleet[p].status = AircraftStatus::Parked;
                         self.fleet[p].location_icao = m.destination;
+                        self.commercial_changed();
                         self.routes[i].plan = None;
                         self.routes[i].rotation_phase = None;
                         self.routes[i].remove_at = None;

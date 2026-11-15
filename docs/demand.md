@@ -111,10 +111,94 @@ Referenzpreis/Kosten in `config/economy.json`. Anschließend über `START.bat` n
 Jeder künftige Abflug wird mit seinem eigenen saisonalen Faktor berechnet;
 das Archiv fasst weiterhin aufeinanderfolgende identische Flugergebnisse zusammen.
 
+## Umsteiger: eine Airline, ein Zwischenstopp
+
+Zwei aktive Pendelflugpläne derselben Airline bilden A–H–C in beiden Richtungen.
+Jeder gemeinsame Flughafen kann H sein; Heimatbasis und Eigentümer erhalten
+keinen Bonus. Ohne beide aktiven Pläne gibt es kein Angebot. Die Geometrie prüft
+`transfer_min_leg_km` (**150 km je Teilstrecke**) und `transfer_max_detour`
+(**1,6 × direkte A–C-Entfernung**). Extrem kurze Zubringer und große Umwege entfallen.
+Alle Stellwerte stehen in `config/demand.json`.
+
+**Lokale Nachfrage hat Vorrang.** Zuerst läuft die bisherige direkte Verteilung
+unverändert, einschließlich beider Kabinen und Sitzüberlauf. Für jedes Segment
+wird diese zugeteilte Tagesmenge (vor Abrundung) vom bestehenden A–C-Markt B
+abgezogen. Umsteigeangebote konkurrieren ausschließlich um diesen Rest; sie
+verdrängen keine direkten Reisenden und erzeugen keinen zweiten Markt.
+Für die Restverteilung gelten dieselbe Außenoption und Kaufbereitschaftsgrenze:
+`w = Kaufbereitschaft(Summe beider Economy-Tarife) × transfer_penalty` (**0,10**),
+`f = min(Frequenz beider Teilstrecken)`,
+`a = Reputationsfaktor der Airline × f × w / max(1e-9, 1 − w)`.
+Der Reputationsfaktor gilt genau einmal für die gesamte Reise, nicht je Teilstrecke.
+Er verändert wie beim Direktangebot das Gewicht, nicht die Kaufbereitschaftsgrenze.
+Jeder Pfad erhält pro Segment höchstens
+`min(Rest × a / (max(1, Summe f mit w>0) + Summe a), Rest × w × min(1,f))`.
+Business- und Leisure-Preisgrenzen beziehen sich auf den **direkten A–C-Referenzpreis**.
+Premium-Tarife oder die Summe der beiden lokalen Referenzpreise gelten hier nicht.
+
+Diese erste Fassung nutzt ausschließlich **freie Economy-Sitze**; sowohl
+Privatreisende als auch Geschäftsreisende können umsteigen. Keine Business-
+Umsteiger, kein Wechsel zwischen Kabinen. Die Summe aller Pfadanfragen wird je
+Teilstrecke mit deren freien Economy-Sitzen verglichen. Jeder Pfad wird mit dem
+kleineren Kapazitätsfaktor seiner beiden Teilstrecken gekürzt. Es gibt keine
+weitere Umverteilung dieser Kürzungen. Damit überschreitet weder ein Segment
+seinen bestehenden Markt noch eine Teilstrecke ihre Sitze. Die kanonische
+Angebotsreihenfolge macht die Rechnung unabhängig von der Airline-Reihenfolge.
+
+Damit unterschiedliche Abflugabstände nicht durch Abrundung unterschiedliche
+Tageszahlen auf den beiden Teilstrecken erzeugen, wird die Pfadrate auf Vielfache
+von `43200 / ggT(Abflugabstände in Sekunden)` **abgerundet**. Je Abflug bleiben so
+auf beiden Teilstrecken ganze Passagiere, und die täglichen Umsteigerzahlen sind
+identisch. Bei ungünstigen, teilerfremden Abständen kann diese konservative
+Rundung kleine Verbindungen auf null reduzieren. Keine Ansammlung oder Reservierung.
+
+Die Gesamtsumme der Economy-Tarife wird je Umsteiger proportional zur Entfernung
+aufgeteilt: Anteil der ersten Teilstrecke auf ganze EUR abrunden, der zweite
+Anteil erhält den exakten Rest. Das Spiel bilanziert weiterhin **ganze EUR**;
+beide Anteile ergeben deshalb auch auf den Cent genau den gesamten Ticketpreis,
+ohne neue Centkonten. Lokale Reisende zahlen weiterhin ihren jeweiligen Tarif.
+Bei Abflug werden Umsteigerzahl und Umsatzanteil zusammen mit dem gesamten
+Flugergebnis eingefroren; die Landung verbucht es genau einmal. Flughafengebühren
+und Service zählen alle Reisenden, Fracht berücksichtigt deren Gewicht.
+Ein ausgefallener Teilflug verliert seine eigenen Passagiere; keine Umbuchung und
+keine rückwirkende Änderung des anderen Teilfluges.
+
+Spieler und KI nutzen bei Abflügen dieselbe Angebotsliste und dieselbe Verteilung.
+KI-Planungsangebote behalten die Airline-Identität, bewerten zunächst jedoch nur
+Direktnachfrage (siehe unten). Die KI plant weiterhin keine Hubwellen. Die Routenanzeige nennt Lokal/Umstieg je
+Tag und Richtung und zeigt die speisenden A–H–C-Pfade mit ungefähren Tagesraten;
+ein Status markiert überwiegend umsteigegeprägte Routen. Ergebnisse zeigen die
+realisierte Aufteilung im Tooltip; der Umsatzanteil geht in alle Finanzsummen ein.
+
+Jede Airline behält ihre vorbereiteten Streckenmärkte über Betriebsereignisse
+hinweg. Änderungen an aktiven Strecken, Flugplanabstand, Preisen, Kabinen,
+Flugzeugmodell, Service, Bekanntheit oder Reputationsfaktor erneuern den
+wirtschaftlichen Schnappschuss. Flugfortschritt und bereits eingefrorene
+Ergebnisse beeinflussen ihn nicht. Ein ungespeicherter Revisionszähler wird an
+den Änderungsereignissen erhöht; Betriebsereignisse vergleichen nur diese Nummer
+und kopieren keine unveränderte Angebotsliste. Die gespeicherten Nachfrageangebote gehören
+zu diesem Schnappschuss und werden nicht wegen einer Eintragsgrenze verdrängt.
+Nur die Umsteigeallokation nutzt die Saison am Tagesanfang (`t − t % 86400`); lokale Direktnachfrage bleibt sekundengenau.
+Die Tagesangebote wiederholen sich nach einem Modelljahr; Ladezustände bauen diese abgeleiteten Daten neu auf.
+
+Zusätzlich bleiben bis zu 128 Topologien (einschließlich leerer Netze) erhalten:
+Pfadpaare und Umwegprüfung ändern sich nur mit Strecken, Eigentümer, Flugplan
+oder verfügbarer Economy-Kabine. Verdrängen einer Topologie ändert lediglich
+den Aufwand beim nächsten Aufbau. Ohne zwei aktive, unterschiedliche Strecken
+derselben Airline an einem gemeinsamen Flughafen entfällt die Topologieprüfung.
+Abflüge prüfen nur Pfade, die ihren eigenen Streckenmarkt berühren. Erreicht
+selbst die maximale saisonale Kaufbereitschaft kein gemeinsames Ratenquantum,
+steht die Umsteigerzahl bereits mit null fest. Lokale Sitzreservierungen werden
+nur für tatsächlich beteiligte Teilstrecken vorbereitet. Unveränderliche
+Geografie wird je Flughafenpaar wiederverwendet. Die Daten gehören nicht zum
+Spielstand; ein Cache-Neuaufbau muss dasselbe Ergebnis liefern.
+Keine Uhr in Godot, keine zeitlich abgestimmten Anschlüsse, Mindestumsteigezeiten,
+Codeshares, Interline-Verbindungen, speziellen Transfergebühren oder neue Kabinenbalance.
+
 ## Anzeige, Spielstände und Tests
 
-Die Routenübersicht zeigt je Route **Basismarkt / erwartete eigene Passagiere /
-wegen Sitzmangel abgewiesen**, jeweils pro Tag und Richtung. Rust liefert alle
+Die Routenübersicht zeigt je Route **lokaler Basismarkt / erwartete lokale Passagiere /
+erwartete Umsteiger**, jeweils pro Tag und Richtung. Rust liefert alle
 Werte; Godot formatiert sie nur. Erwartete Beförderung berücksichtigt Umverteilung,
 Sitzgrenze und Abrundung pro Abflug. Abgewiesen ist der positive Unterschied
 zwischen anfänglichem eigenen Tagesanteil und zugeteilter Beförderung vor
@@ -126,9 +210,12 @@ sitzgewichtet über alle Landungen dieser Route. Ohne Archivflüge steht „Kein
 Flüge“. Der Wettbewerbsbereich zeigt alle passenden Spieler-/KI-Angebote mit
 denselben kapazitätsbegrenzten Schätzungen pro Tag und Richtung.
 
-Angebotskapazitäten sind abgeleitete, temporäre Daten. Die Umverteilung fügt
-keinen Speicherzustand hinzu und braucht keinen Versionssprung oder neue
-Migration. Bestehende Abflugergebnisse bleiben unverändert.
+Angebotskapazitäten und Umsteigeverbindungen sind abgeleitete, temporäre Daten.
+Speicherformat **Version 32** ergänzt im Flugergebnis und in allen Finanzsummen
+`connecting_passengers` und `connecting_revenue`. Die additive Migration setzt
+fehlende Werte für ältere Versionen auf null, auch bei KI und Archivbatches.
+Bestehende Abflugergebnisse, historische Einnahmen und Konten bleiben unverändert;
+insbesondere werden Altflüge in der Luft nicht neu berechnet.
 
 Seit Speicherformat **Version 9** werden auch KI-Unternehmen und
 Entscheidungszeiten gespeichert;
@@ -147,7 +234,7 @@ Parallelrouten, umgekehrte Strecken, Frequenzen, Pause/16×, große/kleine Zeits
 Speichern/Laden und unveränderte historische Ergebnisse.
 
 Noch nicht enthalten: werktägliche Spitzen, Stadtmärkte über mehrere
-Flughäfen, Umsteiger, Buchungsvorlauf und echte Quoten pro Kalendertag.
+Flughäfen, Buchungsvorlauf und echte Quoten pro Kalendertag.
 
 
 ## Zehnjahresvergleich der KI (Sitzumverteilung)
@@ -267,3 +354,13 @@ setzt den Business-Preis auf den konfigurierten Aufschlag zum Economy-Preis.
 
 Nullwerte der Business-Summen werden im Archiv ausgelassen; das begrenzte
 Save-/Ladelimit beträgt wegen zusätzlicher Klassendetails jetzt 128 MiB.
+
+### KI-Planung und Transfers
+
+Die KI bewertet Kandidaten, Preise, Kabinen und zusätzliche Frequenzen zunächst
+nur mit Direktnachfrage, wie vor Einführung der Umsteiger. Diese bewusste
+Vereinfachung hält die Routensuche schnell und unterschätzt den Nutzen von Hubs.
+Bei tatsächlich geflogenen Flügen erhalten KI und Spieler dagegen unter denselben
+Regeln lokale und umsteigende Passagiere; diese Erlöse fließen vollständig in
+Flugergebnisse, Finanzen und die beobachtete Streckenrentabilität ein. Die KI baut
+noch keine Hubs gezielt auf.

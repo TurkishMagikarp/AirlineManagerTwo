@@ -547,6 +547,36 @@ mod tests {
         assert_eq!(loaded.history, g.history);
     }
     #[test]
+    #[ignore = "short diagnostic finance profile; run explicitly with --ignored"]
+    fn profile_twenty_thousand_flights() {
+        // Match finances_test.gd: two player fares, normal AI airlines, and an
+        // endowment to keep the intentionally loss-making service flying.
+        let mut g = game();
+        g.competitors = crate::competition::initial_competitors().unwrap();
+        g.buy_aircraft("atr72_600").unwrap();
+        g.create_route("EDDF", "EDDM", 2).unwrap();
+        g.set_ticket_price(2, 134).unwrap();
+        g.staff_up();
+        g.schedule(2, 1, 120).unwrap();
+        g.airline.as_mut().unwrap().capital_eur += 100_000_000_000;
+        g.history.as_mut().unwrap().opening_balance += 100_000_000_000;
+        crate::demand::TRANSFER_COUNTS.with(|c| c.set((0, 0, 0)));
+        let started = std::time::Instant::now();
+        assert!(g.advance(60.0 + 7200.0 * 20_000.0));
+        let elapsed = started.elapsed();
+        eprintln!("Finance stress advance: {elapsed:?}");
+        eprintln!(
+            "Settled flights including rivals: {}",
+            g.finance.totals.flights
+                + g.competitors
+                    .iter()
+                    .map(|c| c.game.finance.totals.flights)
+                    .sum::<i64>()
+        );
+
+        crate::demand::TRANSFER_COUNTS.with(|c| eprintln!("Transfer counts: {:?}", c.get()));
+    }
+    #[test]
     fn million_flight_finance_scenario_stays_within_budget() {
         // Match finances_test.gd: two player fares, normal AI airlines, and an
         // endowment to keep the intentionally loss-making service flying.
@@ -559,10 +589,26 @@ mod tests {
         g.schedule(2, 1, 120).unwrap();
         g.airline.as_mut().unwrap().capital_eur += 100_000_000_000;
         g.history.as_mut().unwrap().opening_balance += 100_000_000_000;
+        crate::demand::TRANSFER_COUNTS.with(|c| c.set((0, 0, 0)));
         let started = std::time::Instant::now();
         assert!(g.advance(60.0 + 7200.0 * 1_000_000.0));
         let elapsed = started.elapsed();
         eprintln!("Finance stress advance: {elapsed:?}");
+        eprintln!(
+            "Settled flights including rivals: {}",
+            g.finance.totals.flights
+                + g.competitors
+                    .iter()
+                    .map(|c| c.game.finance.totals.flights)
+                    .sum::<i64>()
+        );
+
+        crate::demand::TRANSFER_COUNTS.with(|c| {
+            eprintln!(
+                "Transfer counts (builds, allocations, timed allocations): {:?}",
+                c.get()
+            )
+        });
         if std::env::var("AIRLINE_ENFORCE_PERF_BUDGET").as_deref() == Ok("1") {
             assert!(
                 elapsed < std::time::Duration::from_secs(300),

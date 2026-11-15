@@ -65,7 +65,7 @@ func _run() -> void:
 		return
 	var route: Dictionary = sim.get_routes()[0]
 	var route_row: TreeItem = panel.route_tree.get_root().get_child(0)
-	if not _check(route["daily_spill"] > 0 and route_row.get_text(4) == "%d / %d / %d" % [route["base_daily_market"], route["expected_daily_passengers"], route["daily_spill"]], "Routes displays positive spill from Rust after price change and restart"):
+	if not _check(route["daily_spill"] > 0 and route_row.get_text(4) == "%d / %d / %d" % [route["base_daily_market"], route["expected_daily_local"], route["expected_daily_connecting"]], "Routes displays local and transfer estimates from Rust after price change and restart"):
 		return
 	var slow: RefCounted = ClassDB.instantiate("SimulationClock")
 	if not _check(slow.load_game(path).is_empty(), "Load comparison simulation"):

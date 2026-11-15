@@ -105,6 +105,7 @@ impl Game {
             .next_route_id
             .checked_add(1)
             .ok_or_else(|| "Keine weitere Routenkennung verfügbar.".to_string())?;
+        self.commercial_changed();
         self.routes.push(Route {
             cargo_rate_cents: crate::cargo::default_rate(),
             service_level: Default::default(),
@@ -245,6 +246,7 @@ impl Game {
             self.routes[i].remove_at = Some(state.ready);
             self.routes[i].rotation_phase = None;
         } else {
+            self.commercial_changed();
             self.routes[i].plan = None;
             self.routes[i].aircraft_id = None;
             self.routes[i].rotation_phase = None;
@@ -279,6 +281,13 @@ impl Game {
 
     pub fn apply_rotation_removals(&mut self) -> Result<(), String> {
         let now = self.clock.elapsed().as_secs();
+        if self
+            .routes
+            .iter()
+            .any(|r| r.remove_at.is_some_and(|t| t <= now))
+        {
+            self.commercial_changed();
+        }
         for r in &mut self.routes {
             if r.remove_at.is_some_and(|t| t <= now) {
                 let p = self
@@ -351,6 +360,7 @@ impl Game {
 
     pub fn route_mut(&mut self, id: u32) -> Result<&mut Route, String> {
         self.require_active()?;
+        self.commercial_changed();
         self.routes
             .iter_mut()
             .find(|r| r.id == id)
@@ -365,6 +375,7 @@ impl Game {
             .iter()
             .position(|r| r.id == route_id)
             .ok_or_else(|| "Unbekannte Route.".to_string())?;
+        self.commercial_changed();
         self.routes.retain(|r| r.public_id() != route_id);
         Ok(())
     }

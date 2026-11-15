@@ -33,6 +33,13 @@ func _run() -> void:
 		quit(0)
 		return
 	assert(sim.found_airline("Meridian Air", "DE", "EDDF").is_empty())
+	if OS.get_environment("AIRLINE_UI_CAPTURE_TRANSFERS_ONLY") == "1":
+		await _transfer_views(sim)
+		main.queue_free()
+		await process_frame
+		print("PASS: local/connecting route counts, feeding paths and empty state at 1440x1000 and 680x520")
+		quit(0)
+		return
 	if OS.get_environment("AIRLINE_UI_CAPTURE_SAVES_ONLY") == "1":
 		await _save_slot_views(sim)
 		main.queue_free()
@@ -636,3 +643,45 @@ func _save_slot_views(sim: RefCounted) -> void:
 	DirAccess.remove_absolute(directory.path_join("saves/legacy-imported"))
 	DirAccess.remove_absolute(directory.path_join("saves"))
 	DirAccess.remove_absolute(directory)
+
+
+func _transfer_views(sim: RefCounted) -> void:
+	for id in [1, 2]:
+		assert(sim.lease_aircraft("a320_200").is_empty())
+		assert(sim.create_route("EDDF", "EDDM" if id == 1 else "LTFM", id).is_empty())
+		assert(sim.set_ticket_price(id, 90 if id == 1 else 120).is_empty())
+		sim.hire_missing_staff()
+		assert(sim.schedule_route(id, 1, 240).is_empty())
+	sim.start()
+	assert(sim.advance(86400.0))
+	sim.pause()
+	main._sync_view()
+	main._show_page(2)
+	var panel = main.routes_panel
+	panel.route_tree.get_root().get_first_child().select(0)
+	panel._selection_changed()
+	assert(sim.get_routes()[0]["expected_daily_connecting"] > 0)
+	assert(not panel.connections_label.text.is_empty())
+	for dimensions in [Vector2i(1440, 1000), Vector2i(680, 520)]:
+		root.size = dimensions
+		for frame in range(5): await process_frame
+		var scroll: ScrollContainer = panel.get_parent().get_parent()
+		for target in [panel.route_tree, panel.connections_label, panel.results_tree, panel.competition_label]:
+			scroll.ensure_control_visible(target)
+			for frame in range(5): await process_frame
+			if not capture_dir.is_empty():
+				await RenderingServer.frame_post_draw
+				var name := "routes-transfers" if target == panel.route_tree else "routes-feeds" if target == panel.connections_label else "routes-transfer-results" if target == panel.results_tree else "routes-transfer-competition"
+				assert(root.get_texture().get_image().save_png(capture_dir.path_join("%s-%dx%d.png" % [name, dimensions.x, dimensions.y])) == OK)
+	assert(sim.stop_schedule(2).is_empty())
+	panel.refresh()
+	assert(panel.connections_empty.visible)
+	for dimensions in [Vector2i(1440, 1000), Vector2i(680, 520)]:
+		root.size = dimensions
+		for frame in range(5): await process_frame
+		var scroll: ScrollContainer = panel.get_parent().get_parent()
+		scroll.ensure_control_visible(panel.connections_empty)
+		for frame in range(5): await process_frame
+		if not capture_dir.is_empty():
+			await RenderingServer.frame_post_draw
+			assert(root.get_texture().get_image().save_png(capture_dir.path_join("routes-no-transfers-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)

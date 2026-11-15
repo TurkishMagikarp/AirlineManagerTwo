@@ -19,7 +19,9 @@ use std::time::Duration;
 // v29: implicit home base, dated extra bases; existing visits remain frozen.
 // v30: bounded shared used market, empty for all older saves.
 // v31: one-way ferry dispatches; older saves default to no ferries.
-pub(crate) const VERSION: u32 = 31;
+// v32: transfer counters/revenue default to zero on every stored result.
+// Old airborne quotes and all historical amounts remain unchanged.
+pub(crate) const VERSION: u32 = 32;
 // Bounded input, including centuries of fuel/seasonal quotes for the player
 // and both AI airlines in the million-flight finance restart scenario.
 // Version 17 retains per-class quotes, which also split more archive batches.
@@ -300,6 +302,9 @@ pub(crate) fn load_versioned(path: &Path) -> Result<(Game, u32), String> {
         return Err("Ungültiger Treibstoffmarkt.".into());
     }
     let mut game = Game {
+        departure_markets: Default::default(),
+        commercial_revision: 0,
+        reputation_revision: 0,
         ferries: data.state.ferries,
         external_slots: Default::default(),
         fuel_contract: data.state.fuel_contract,
@@ -354,6 +359,7 @@ pub(crate) fn load_versioned(path: &Path) -> Result<(Game, u32), String> {
             Default::default()
         },
     };
+    game.commercial_changed();
     if data.version < 13 {
         // Aircraft predating acquisition tracking are treated as acquired at founding.
         // Do not invent leases, payments or sale income during migration.

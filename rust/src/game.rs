@@ -8,6 +8,15 @@ use std::collections::HashSet;
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Game {
+    /// Unsaved dependency epoch. Unique epochs also distinguish diverging clones.
+    #[serde(skip)]
+    pub(crate) commercial_revision: u64,
+    #[serde(skip)]
+    pub(crate) reputation_revision: u64,
+    /// Derived dispatch markets survive frame/event boundaries. Unsaved: a load
+    /// reconstructs them from commercial state, never from airborne results.
+    #[serde(skip)]
+    pub(crate) departure_markets: crate::economy::DepartureMarkets,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub ferries: Vec<crate::operations::Ferry>,
     #[serde(default)]
@@ -45,9 +54,38 @@ pub struct Game {
     pub resolution: crate::financing::Resolution,
 }
 
+fn next_market_revision() -> u64 {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+    NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+}
+impl Game {
+    pub(crate) fn commercial_changed(&mut self) {
+        self.commercial_revision = next_market_revision();
+    }
+    pub(crate) fn reputation_changed(&mut self) {
+        self.reputation_revision = next_market_revision();
+    }
+    pub(crate) fn supply_revision(&self) -> u64 {
+        std::iter::once(self)
+            .chain(self.competitors.iter().map(|c| &*c.game))
+            .map(|g| g.commercial_revision.max(g.reputation_revision))
+            .max()
+            .unwrap()
+    }
+    pub(crate) fn supply_structure_revision(&self) -> u64 {
+        self.competitors
+            .iter()
+            .map(|c| c.game.commercial_revision)
+            .fold(self.commercial_revision, u64::max)
+    }
+}
+
 impl Default for Game {
     fn default() -> Self {
         Self {
+            departure_markets: Default::default(),
+            commercial_revision: 0,
+            reputation_revision: 0,
             ferries: Vec::new(),
             used_market: Default::default(),
             external_slots: Default::default(),

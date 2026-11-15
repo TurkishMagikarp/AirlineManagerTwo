@@ -60,6 +60,7 @@ pub fn estimate(
     estimate_loaded(route, model_id, supply, &passengers)
 }
 
+#[derive(Clone)]
 struct Share {
     frequency: f64,
     willingness: f64,
@@ -79,6 +80,7 @@ pub fn estimate_loaded(
 
 /// Derived only from one immutable offer snapshot. Never saved or reused after
 /// a company event; seasonal passenger loads are still supplied per departure.
+#[derive(Clone)]
 pub struct Market {
     base: f64,
     target: Option<usize>,
@@ -174,6 +176,13 @@ impl Game {
             .any(|r| r.id == id && r.parent_route_id.is_none())
         {
             return Err("Unbekannte Route.".into());
+        }
+        if self
+            .routes
+            .iter()
+            .any(|r| r.public_id() == id && r.cargo_rate_cents != rate)
+        {
+            self.commercial_changed();
         }
         for r in self.routes.iter_mut().filter(|r| r.public_id() == id) {
             r.cargo_rate_cents = rate;
