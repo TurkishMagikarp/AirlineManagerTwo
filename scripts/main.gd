@@ -42,6 +42,9 @@ var state_label: Label
 var start_button: Button
 var pause_button: Button
 var speed_buttons: Array[Button] = []
+var jump_buttons: Array[Button] = []
+var jump_status: Label
+var jump_in_progress := false
 var save_button: Button
 var load_button: Button
 var save_status: Label
@@ -312,6 +315,17 @@ func _add_time_controls(column: VBoxContainer) -> void:
 		button.pressed.connect(_set_speed.bind(speed))
 		segments.add_child(button)
 		speed_buttons.append(button)
+	for option in simulation.get_jump_options():
+		var button := Button.new()
+		button.text = tr(option["label"])
+		button.tooltip_text = tr("Springt unabhängig von Pause und Tempo; hält bei neuen Hinweisen oder Finanznot am Tagesabschnitt an.")
+		button.pressed.connect(_jump.bind(option["seconds"]))
+		controls.add_child(button)
+		jump_buttons.append(button)
+	jump_status = _label("", ThemeTokens.SMALL, ThemeTokens.INK_MUTED)
+	jump_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	jump_status.hide()
+	panel.add_child(jump_status)
 	save_button = Button.new()
 	save_button.text = "Speichern"
 	save_button.pressed.connect(_save_game)
@@ -326,6 +340,44 @@ func _add_time_controls(column: VBoxContainer) -> void:
 	save_status.tooltip_text = save_path
 	panel.add_child(save_status)
 	_refresh_time()
+
+
+func _jump(seconds: int) -> void:
+	if jump_in_progress or not simulation.begin_jump(seconds): return
+	jump_in_progress = true
+	var return_focus := get_viewport().gui_get_focus_owner()
+	var progress := _jump_progress()
+	var result: Dictionary = {}
+	while result.is_empty():
+		await get_tree().process_frame
+		result = simulation.poll_jump()
+	progress.hide()
+	progress.queue_free()
+	jump_in_progress = false
+	jump_status.text = result["message"]
+	jump_status.show()
+	last_clock_view = ""
+	_refresh_time()
+	_refresh_attention()
+	_show_page(current_page)
+	if is_instance_valid(return_focus): return_focus.grab_focus()
+
+
+func _jump_progress() -> Window:
+	var progress := Window.new()
+	progress.title = tr("Zeitsprung läuft")
+	progress.transient = true
+	progress.exclusive = true
+	progress.unresizable = true
+	progress.borderless = true
+	add_child(progress)
+	var panel := UI.frame_panel(progress, ThemeTokens.SPACE_4)
+	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var message := UI.label(tr("Zeitsprung läuft · Flüge und Abrechnungen werden verarbeitet."), ThemeTokens.BODY)
+	message.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	panel.add_child(message)
+	progress.popup_centered(Vector2i(420, 120))
+	return progress
 
 
 func _save_game() -> void:
@@ -355,6 +407,7 @@ func _set_speed(speed: int) -> void:
 
 
 func _process(delta: float) -> void:
+	if jump_in_progress: return
 	if founding.visible:
 		return
 	if not simulation.advance(delta):
@@ -384,6 +437,8 @@ func _refresh_time() -> void:
 	var airline: Dictionary = simulation.get_airline_info()
 	cash_label.text = UI.money(airline.get("capital_eur", 0))
 	cash_label.add_theme_color_override("font_color", ThemeTokens.STOP if airline.get("capital_eur", 0) < 0 else ThemeTokens.INK)
+	for button in jump_buttons:
+		button.disabled = not simulation.has_airline()
 	var display: String = simulation.get_display_time()
 	var view := "%s/%s/%d" % [display, simulation.is_running(), simulation.get_speed()]
 	if view == last_clock_view: return
@@ -1033,6 +1088,7 @@ func _found_airline() -> void:
 
 
 func _sync_view() -> void:
+	jump_status.hide()
 	fleet_status.text = ""
 	maintenance_status.text = ""
 	fleet_status.hide()

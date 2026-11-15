@@ -571,6 +571,30 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 231 fn insurance_due_check_and_operated_lease_keep_repair_obligations()
 273 fn insurance_rejects_corrupt_policy_and_pause_four_speed_match()
 
+## rust/src/jump_tests.rs
+3 const DAY: u64 = 86400;
+4 fn state(g: &Game) -> serde_json::Value
+7 fn game() -> Game
+17 fn small_steps(g: &mut Game, seconds: u64)
+30 fn jumps_match_small_steps_all_speeds_paused_month_lease_and_restart()
+75 fn jumps_tax_boundary_matches_waiting()
+86 fn jumps_new_attention_distress_and_insolvency_reuse_reasons()
+135 fn jumps_rejected_inputs_leave_every_owner_untouched()
+167 fn jumps_busy_six_ai_thirty_day_timing()
+
+## rust/src/jumps.rs
+6 pub type WorkerResult = (Game, Result<ResultSummary, &'static str>);
+8 const DAY: u64 = 86400;
+10 pub struct OptionRule
+15 pub struct Rules
+18 pub static RULES: LazyLock<Rules> = LazyLock::new(||
+31 pub struct ResultSummary
+35 impl ResultSummary
+36 pub fn message(&self) -> String
+66 fn same_entry(a: &Entry, b: &Entry) -> bool
+71 impl Game
+74 pub fn jump(&mut self, game_seconds: f64) -> Result<ResultSummary, &'static str>
+
 ## rust/src/lib.rs
 1 mod aircraft;
 3 mod airport_charge_tests;
@@ -597,124 +621,131 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 32 mod history;
 33 mod insurance;
 35 mod insurance_tests;
-36 mod maintenance;
-37 mod map;
-38 mod marketing;
-40 mod marketing_tests;
-41 mod operations;
-43 mod quality;
-44 mod reputation;
-46 mod reputation_tests;
-48 mod rotation_tests;
-49 mod route_save;
-50 mod routes;
-51 mod save;
-53 mod seasonal_tests;
-54 mod service;
-56 mod service_tests;
-58 mod slot_tests;
-59 mod slots;
-60 mod staff;
-62 mod staff_tests;
-63 mod tax;
-65 mod tax_tests;
-66 mod trading;
-68 mod trading_tests;
-70 mod widebody_tests;
-75 struct AirlineSimulation;
-84 struct SimulationClock
-90 impl IRefCounted for SimulationClock
-91 fn init(base: Base<RefCounted>) -> Self
-100 impl SimulationClock
-102 fn get_attention_snapshot(&self) -> Array<VarDictionary>
-118 fn get_active_flights(&self) -> Array<VarDictionary>
-135 fn get_finance_history_info(&self) -> VarDictionary
-149 fn get_tax_history(&self) -> Array<VarDictionary>
-168 fn get_route_finances(&self) -> Array<VarDictionary>
-209 fn get_route_flight_page(&self, route_id: u32, offset: i64) -> Array<VarDictionary>
-224 fn get_finance_series(&self, route_id: u32) -> Array<VarDictionary>
-261 fn get_map_airports(&self) -> Array<VarDictionary>
-289 fn get_map_routes(&self) -> Array<VarDictionary>
-310 fn get_competitor_routes(&self) -> Array<VarDictionary>
-326 fn get_map_competitor_routes(&self) -> Array<PackedVector2Array>
-345 fn get_map_flights(&self) -> Array<VarDictionary>
-363 fn get_economy_rules(&self) -> GString
-368 fn set_ticket_price(&mut self, route_id: u32, price: i64) -> GString
-378 fn set_marketing_budget(&mut self, budget: i64) -> GString
-388 fn start_fuel_contract(&mut self, share: u32, months: u32) -> GString
-398 fn get_fuel_contract(&self) -> VarDictionary
-414 fn get_marketing(&self) -> VarDictionary
-423 fn get_marketing_history(&self) -> Array<VarDictionary>
-432 fn get_insurance(&self) -> VarDictionary
-464 fn set_insurance(&mut self, level: GString) -> GString
-480 fn get_financial_summary(&self) -> VarDictionary
-571 fn get_financing(&self) -> VarDictionary
-597 fn reschedule_loan(&mut self) -> GString
-607 fn borrow_money(&mut self, amount: i64) -> GString
-617 fn repay_loan(&mut self, amount: i64) -> GString
-627 fn get_flight_results(&self) -> Array<VarDictionary>
-648 fn schedule_route(
-663 fn stop_schedule(&mut self, route_id: u32) -> GString
-673 fn get_operations(&self) -> Array<VarDictionary>
-765 fn preview_route(
-792 fn create_route(&mut self, origin: GString, destination: GString, aircraft_id: u32) -> GString
-802 fn assign_route(&mut self, route_id: u32, aircraft_id: u32) -> GString
-812 fn add_route_aircraft(&mut self, route_id: u32, aircraft_id: u32) -> GString
-822 fn remove_route_aircraft(&mut self, route_id: u32, aircraft_id: u32) -> GString
-832 fn delete_route(&mut self, route_id: u32) -> GString
-842 fn get_competitors(&self) -> Array<VarDictionary>
-909 fn get_route_competition(&self, route_id: u32) -> Array<VarDictionary>
-913 struct Offer<'a>
-988 fn get_routes(&self) -> Array<VarDictionary>
-1061 fn get_aircraft_models(&self) -> Array<VarDictionary>
-1080 fn buy_aircraft(&mut self, model_id: GString) -> GString
-1088 fn get_used_market(&self) -> Array<VarDictionary>
-1119 fn buy_used_aircraft(&mut self, listing_id: i64) -> GString
-1129 fn lease_aircraft(&mut self, model_id: GString) -> GString
-1139 fn sell_aircraft(&mut self, aircraft_id: u32) -> GString
-1149 fn return_aircraft(&mut self, aircraft_id: u32) -> GString
-1159 fn get_aircraft_cash_history(&self) -> Array<VarDictionary>
-1184 fn set_cabin_layout(&mut self, aircraft_id: u32, business_seats: u32) -> GString
-1194 fn set_cargo_rate(&mut self, route_id: u32, cents: i64) -> GString
-1204 fn set_service_level(&mut self, route_id: u32, level: GString) -> GString
-1214 fn set_business_ticket_price(&mut self, route_id: u32, price: i64) -> GString
-1224 fn preview_ferry(&self, aircraft_id: u32, destination: GString) -> VarDictionary
-1234 fn send_ferry(&mut self, aircraft_id: u32, destination: GString) -> GString
-1244 fn get_ferry_archive(&self, offset: i64) -> Array<VarDictionary>
-1261 fn get_fleet(&self) -> Array<VarDictionary>
-1316 fn set_maintenance_base(&mut self, icao: GString, open: bool) -> GString
-1326 fn get_maintenance_airports(&self) -> Array<VarDictionary>
-1347 fn request_maintenance(&mut self, aircraft_id: u32) -> GString
-1358 fn cancel_maintenance(&mut self, aircraft_id: u32) -> GString
-1369 fn get_staff(&self) -> Array<VarDictionary>
-1395 fn get_staff_overview(&self) -> VarDictionary
-1492 fn hire_pilots(&mut self, rating: GString, count: u32) -> GString
-1502 fn train_pilot(&mut self, id: u32, rating: GString) -> GString
-1513 fn hire_staff(&mut self, role: GString, count: i64) -> GString
-1524 fn hire_missing_staff(&mut self) -> GString
-1553 fn dismiss_staff(&mut self, employee_id: u32) -> GString
-1563 fn get_countries(&self) -> Array<VarDictionary>
-1579 fn get_airports(&self, country_code: GString) -> Array<VarDictionary>
-1601 fn get_starting_capital(&self) -> GString
-1609 fn has_airline(&self) -> bool
-1614 fn found_airline(&mut self, name: GString, country: GString, airport: GString) -> GString
-1626 fn get_airline_info(&self) -> VarDictionary
-1653 fn save_game(&self, path: GString) -> GString
-1661 fn load_game(&mut self, path: GString) -> GString
-1672 fn start(&mut self)
-1679 fn pause(&mut self)
-1684 fn is_running(&self) -> bool
-1689 fn set_speed(&mut self, multiplier: i64) -> bool
-1694 fn get_speed(&self) -> i64
-1699 fn advance(&mut self, real_seconds: f64) -> bool
-1704 fn get_elapsed_seconds(&self) -> f64
-1709 fn get_display_time(&self) -> GString
-1714 impl SimulationClock
-1716 fn route_maintenance_status(&self, route: &routes::Route) -> String
-1757 fn idle_crew_demand(&self) -> (u32, u32)
-1774 fn route_staff_status(&self, route: &routes::Route) -> String
-1792 fn maintenance_info(&self, p: usize, plane: &aircraft::Aircraft) -> VarDictionary
-1846 fn flight_dictionary(f: &economy::FlightResult) -> VarDictionary
+37 mod jump_tests;
+38 mod jumps;
+39 mod maintenance;
+40 mod map;
+41 mod marketing;
+43 mod marketing_tests;
+44 mod operations;
+46 mod quality;
+47 mod reputation;
+49 mod reputation_tests;
+51 mod rotation_tests;
+52 mod route_save;
+53 mod routes;
+54 mod save;
+56 mod seasonal_tests;
+57 mod service;
+59 mod service_tests;
+61 mod slot_tests;
+62 mod slots;
+63 mod staff;
+65 mod staff_tests;
+66 mod tax;
+68 mod tax_tests;
+69 mod trading;
+71 mod trading_tests;
+73 mod widebody_tests;
+78 struct AirlineSimulation;
+87 struct SimulationClock
+94 impl IRefCounted for SimulationClock
+95 fn init(base: Base<RefCounted>) -> Self
+105 impl SimulationClock
+107 fn get_attention_snapshot(&self) -> Array<VarDictionary>
+123 fn get_active_flights(&self) -> Array<VarDictionary>
+140 fn get_finance_history_info(&self) -> VarDictionary
+154 fn get_tax_history(&self) -> Array<VarDictionary>
+173 fn get_route_finances(&self) -> Array<VarDictionary>
+214 fn get_route_flight_page(&self, route_id: u32, offset: i64) -> Array<VarDictionary>
+229 fn get_finance_series(&self, route_id: u32) -> Array<VarDictionary>
+266 fn get_map_airports(&self) -> Array<VarDictionary>
+294 fn get_map_routes(&self) -> Array<VarDictionary>
+315 fn get_competitor_routes(&self) -> Array<VarDictionary>
+331 fn get_map_competitor_routes(&self) -> Array<PackedVector2Array>
+350 fn get_map_flights(&self) -> Array<VarDictionary>
+368 fn get_economy_rules(&self) -> GString
+373 fn set_ticket_price(&mut self, route_id: u32, price: i64) -> GString
+383 fn set_marketing_budget(&mut self, budget: i64) -> GString
+393 fn start_fuel_contract(&mut self, share: u32, months: u32) -> GString
+403 fn get_fuel_contract(&self) -> VarDictionary
+419 fn get_marketing(&self) -> VarDictionary
+428 fn get_marketing_history(&self) -> Array<VarDictionary>
+437 fn get_insurance(&self) -> VarDictionary
+469 fn set_insurance(&mut self, level: GString) -> GString
+485 fn get_financial_summary(&self) -> VarDictionary
+576 fn get_financing(&self) -> VarDictionary
+602 fn reschedule_loan(&mut self) -> GString
+612 fn borrow_money(&mut self, amount: i64) -> GString
+622 fn repay_loan(&mut self, amount: i64) -> GString
+632 fn get_flight_results(&self) -> Array<VarDictionary>
+653 fn schedule_route(
+668 fn stop_schedule(&mut self, route_id: u32) -> GString
+678 fn get_operations(&self) -> Array<VarDictionary>
+770 fn preview_route(
+797 fn create_route(&mut self, origin: GString, destination: GString, aircraft_id: u32) -> GString
+807 fn assign_route(&mut self, route_id: u32, aircraft_id: u32) -> GString
+817 fn add_route_aircraft(&mut self, route_id: u32, aircraft_id: u32) -> GString
+827 fn remove_route_aircraft(&mut self, route_id: u32, aircraft_id: u32) -> GString
+837 fn delete_route(&mut self, route_id: u32) -> GString
+847 fn get_competitors(&self) -> Array<VarDictionary>
+914 fn get_route_competition(&self, route_id: u32) -> Array<VarDictionary>
+918 struct Offer<'a>
+993 fn get_routes(&self) -> Array<VarDictionary>
+1066 fn get_aircraft_models(&self) -> Array<VarDictionary>
+1085 fn buy_aircraft(&mut self, model_id: GString) -> GString
+1093 fn get_used_market(&self) -> Array<VarDictionary>
+1124 fn buy_used_aircraft(&mut self, listing_id: i64) -> GString
+1134 fn lease_aircraft(&mut self, model_id: GString) -> GString
+1144 fn sell_aircraft(&mut self, aircraft_id: u32) -> GString
+1154 fn return_aircraft(&mut self, aircraft_id: u32) -> GString
+1164 fn get_aircraft_cash_history(&self) -> Array<VarDictionary>
+1189 fn set_cabin_layout(&mut self, aircraft_id: u32, business_seats: u32) -> GString
+1199 fn set_cargo_rate(&mut self, route_id: u32, cents: i64) -> GString
+1209 fn set_service_level(&mut self, route_id: u32, level: GString) -> GString
+1219 fn set_business_ticket_price(&mut self, route_id: u32, price: i64) -> GString
+1229 fn preview_ferry(&self, aircraft_id: u32, destination: GString) -> VarDictionary
+1239 fn send_ferry(&mut self, aircraft_id: u32, destination: GString) -> GString
+1249 fn get_ferry_archive(&self, offset: i64) -> Array<VarDictionary>
+1266 fn get_fleet(&self) -> Array<VarDictionary>
+1321 fn set_maintenance_base(&mut self, icao: GString, open: bool) -> GString
+1331 fn get_maintenance_airports(&self) -> Array<VarDictionary>
+1352 fn request_maintenance(&mut self, aircraft_id: u32) -> GString
+1363 fn cancel_maintenance(&mut self, aircraft_id: u32) -> GString
+1374 fn get_staff(&self) -> Array<VarDictionary>
+1400 fn get_staff_overview(&self) -> VarDictionary
+1497 fn hire_pilots(&mut self, rating: GString, count: u32) -> GString
+1507 fn train_pilot(&mut self, id: u32, rating: GString) -> GString
+1518 fn hire_staff(&mut self, role: GString, count: i64) -> GString
+1529 fn hire_missing_staff(&mut self) -> GString
+1558 fn dismiss_staff(&mut self, employee_id: u32) -> GString
+1568 fn get_countries(&self) -> Array<VarDictionary>
+1584 fn get_airports(&self, country_code: GString) -> Array<VarDictionary>
+1606 fn get_starting_capital(&self) -> GString
+1614 fn has_airline(&self) -> bool
+1619 fn found_airline(&mut self, name: GString, country: GString, airport: GString) -> GString
+1631 fn get_airline_info(&self) -> VarDictionary
+1658 fn save_game(&self, path: GString) -> GString
+1666 fn load_game(&mut self, path: GString) -> GString
+1677 fn start(&mut self)
+1684 fn pause(&mut self)
+1689 fn is_running(&self) -> bool
+1694 fn set_speed(&mut self, multiplier: i64) -> bool
+1699 fn get_speed(&self) -> i64
+1704 fn advance(&mut self, real_seconds: f64) -> bool
+1709 fn get_jump_options(&self) -> Array<VarDictionary>
+1722 fn jump(&mut self, game_seconds: f64) -> VarDictionary
+1729 fn begin_jump(&mut self, game_seconds: f64) -> bool
+1742 fn poll_jump(&mut self) -> VarDictionary
+1764 fn get_elapsed_seconds(&self) -> f64
+1769 fn get_display_time(&self) -> GString
+1774 impl SimulationClock
+1776 fn route_maintenance_status(&self, route: &routes::Route) -> String
+1817 fn idle_crew_demand(&self) -> (u32, u32)
+1834 fn route_staff_status(&self, route: &routes::Route) -> String
+1852 fn maintenance_info(&self, p: usize, plane: &aircraft::Aircraft) -> VarDictionary
+1906 fn flight_dictionary(f: &economy::FlightResult) -> VarDictionary
+1919 fn jump_dictionary(result: Result<jumps::ResultSummary, &'static str>) -> VarDictionary
 
 ## rust/src/maintenance.rs
 20 const RESUME_DELAY: u64 = 60;
@@ -1252,52 +1283,54 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 8 const StaffPanel = preload("res://scripts/staff_panel.gd")
 9 const UI = preload("res://scripts/ui/components.gd")
 11 const PAGES: Array[Dictionary] = [
-117 func _build_ferry_card(parent: VBoxContainer) -> void:
-127 func _refresh_ferry_card(plane: Dictionary) -> void:
-141 func _open_ferry() -> void:
-169 func _preview_ferry() -> void:
-178 func _send_ferry() -> void:
-185 func _ready() -> void:
-272 func _add_time_controls(column: VBoxContainer) -> void:
-331 func _save_game() -> void:
-337 func _load_game() -> void:
-350 func _set_speed(speed: int) -> void:
-357 func _process(delta: float) -> void:
-383 func _refresh_time() -> void:
-401 func _show_page(index: int) -> void:
-434 func _refresh_finance() -> void:
-454 func _build_fleet(content: VBoxContainer) -> void:
-555 func _model_selected(index: int) -> void:
-572 func _fleet_tab_changed(index: int) -> void:
-589 func _refresh_offers() -> void:
-603 func _confirm_disposal() -> void:
-614 func _lease_aircraft() -> void:
-624 func _dispose_aircraft() -> void:
-635 func _buy_aircraft() -> void:
-651 func _refresh_used_market() -> void:
-702 func _buy_used_aircraft(listing_id: int) -> void:
-714 func _refresh_fleet() -> void:
-762 func _maintenance_summary(plane: Dictionary) -> String:
-775 func _build_maintenance(parent: VBoxContainer) -> void:
-812 func _refresh_base_action() -> void:
-824 func _change_maintenance_base() -> void:
-831 func _refresh_maintenance() -> void:
-891 func _confirm_maintenance() -> void:
-904 func _request_maintenance() -> void:
-915 func _cancel_maintenance() -> void:
-926 func _build_founding() -> void:
-1006 func _country_changed(index: int) -> void:
-1023 func _found_airline() -> void:
-1035 func _sync_view() -> void:
-1057 func _open_founding() -> void:
-1066 func _label(text: String, style: Dictionary, color: Color = ThemeTokens.INK) -> Label:
-1070 func _build_finance(content: VBoxContainer) -> void:
-1104 func _build_attention(parent: VBoxContainer) -> void:
-1127 func _refresh_attention() -> void:
-1152 func _resize_frame() -> void:
-1168 func _open_attention(entry: Dictionary) -> void:
-1182 func _refresh_overview_register() -> void:
-1194 func _render_operations(parent: VBoxContainer) -> void:
+120 func _build_ferry_card(parent: VBoxContainer) -> void:
+130 func _refresh_ferry_card(plane: Dictionary) -> void:
+144 func _open_ferry() -> void:
+172 func _preview_ferry() -> void:
+181 func _send_ferry() -> void:
+188 func _ready() -> void:
+275 func _add_time_controls(column: VBoxContainer) -> void:
+345 func _jump(seconds: int) -> void:
+366 func _jump_progress() -> Window:
+383 func _save_game() -> void:
+389 func _load_game() -> void:
+402 func _set_speed(speed: int) -> void:
+409 func _process(delta: float) -> void:
+436 func _refresh_time() -> void:
+456 func _show_page(index: int) -> void:
+489 func _refresh_finance() -> void:
+509 func _build_fleet(content: VBoxContainer) -> void:
+610 func _model_selected(index: int) -> void:
+627 func _fleet_tab_changed(index: int) -> void:
+644 func _refresh_offers() -> void:
+658 func _confirm_disposal() -> void:
+669 func _lease_aircraft() -> void:
+679 func _dispose_aircraft() -> void:
+690 func _buy_aircraft() -> void:
+706 func _refresh_used_market() -> void:
+757 func _buy_used_aircraft(listing_id: int) -> void:
+769 func _refresh_fleet() -> void:
+817 func _maintenance_summary(plane: Dictionary) -> String:
+830 func _build_maintenance(parent: VBoxContainer) -> void:
+867 func _refresh_base_action() -> void:
+879 func _change_maintenance_base() -> void:
+886 func _refresh_maintenance() -> void:
+946 func _confirm_maintenance() -> void:
+959 func _request_maintenance() -> void:
+970 func _cancel_maintenance() -> void:
+981 func _build_founding() -> void:
+1061 func _country_changed(index: int) -> void:
+1078 func _found_airline() -> void:
+1090 func _sync_view() -> void:
+1113 func _open_founding() -> void:
+1122 func _label(text: String, style: Dictionary, color: Color = ThemeTokens.INK) -> Label:
+1126 func _build_finance(content: VBoxContainer) -> void:
+1160 func _build_attention(parent: VBoxContainer) -> void:
+1183 func _refresh_attention() -> void:
+1208 func _resize_frame() -> void:
+1224 func _open_attention(entry: Dictionary) -> void:
+1238 func _refresh_overview_register() -> void:
+1250 func _render_operations(parent: VBoxContainer) -> void:
 
 ## scripts/map_background.gd
 1 extends Control
@@ -1496,14 +1529,14 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 3 ## Starten
 22 ## Oberfläche
 29 ## Kleiner Simulationskern
-49 ## Eigene Airline gründen
-75 ## Flotte und Flugzeugkauf
-103 ## Wartung
-163 ## Routenplanung
-185 ## Erster Flugbetrieb
-216 ### Einmalige Überführungen
-241 ## Vereinfachte Wirtschaftssimulation
-300 ## Erste KI-Fluggesellschaften
-356 ## Finanzen und Routencontrolling
-390 ## Speichern und Laden
-470 ## Tests
+56 ## Eigene Airline gründen
+82 ## Flotte und Flugzeugkauf
+110 ## Wartung
+170 ## Routenplanung
+192 ## Erster Flugbetrieb
+223 ### Einmalige Überführungen
+248 ## Vereinfachte Wirtschaftssimulation
+307 ## Erste KI-Fluggesellschaften
+363 ## Finanzen und Routencontrolling
+397 ## Speichern und Laden
+477 ## Tests

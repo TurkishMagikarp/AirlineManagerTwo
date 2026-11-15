@@ -40,9 +40,16 @@ kein erfundenes Kalenderdatum). **Start / Pause**, **1× / 4× / 16×** steuern 
 technische Testwerte, keine endgültige Balancing-Entscheidung. Navigation bleibt
 per Maus oder Tab / Umschalt+Tab und Enter / Leertaste bedienbar.
 
-Noch keine Offline-Fortschreibung oder Bedienung zum Springen zu
-Ereignissen/Zeitpunkten. Spätere Spielregeln und
-Berechnungen gehören in den Rust-Kern, nicht in Godot.
+**+1 Std / +1 Tag / +1 Woche / +30 Tage** springen um Spielzeit, unabhängig
+von Pause und Tempo; beide bleiben erhalten (Insolvenz beendet den Betrieb).
+Rust verarbeitet Tagesabschnitte über dieselben Ereignisse wie beim Warten.
+Ein Rust-Worker hält die Oberfläche dabei reaktionsfähig; ein Fortschrittsfenster
+sperrt Eingaben, bis der Sprung vollständig übernommen wurde.
+Ein neuer Aufmerksamkeitseintrag oder eintretende Finanznot/Insolvenz hält den
+Sprung am Abschnittsende an; die Uhrleiste zeigt Dauer und vorhandenen Grund.
+Bereits sichtbare Hinweise allein halten nicht erneut an. Dauern stehen in
+`config/jumps.json`; ungültige Sprünge oder Sprünge ohne Airline ändern nichts.
+Keine Offline-Fortschreibung, Datumseingabe oder Sprünge zum nächsten Ereignis.
 
 Produktregeln und offene Fragen: [Game Design](docs/game-design/README.md).
 

@@ -33,6 +33,9 @@ mod history;
 mod insurance;
 #[cfg(test)]
 mod insurance_tests;
+#[cfg(test)]
+mod jump_tests;
+mod jumps;
 mod maintenance;
 mod map;
 mod marketing;
@@ -83,6 +86,7 @@ unsafe impl ExtensionLibrary for AirlineSimulation {}
 #[class(base = RefCounted)]
 struct SimulationClock {
     game: Game,
+    jump_worker: Option<std::thread::JoinHandle<jumps::WorkerResult>>,
     base: Base<RefCounted>,
 }
 
@@ -91,6 +95,7 @@ impl IRefCounted for SimulationClock {
     fn init(base: Base<RefCounted>) -> Self {
         Self {
             game: Game::default(),
+            jump_worker: None,
             base,
         }
     }
@@ -1697,7 +1702,62 @@ impl SimulationClock {
 
     #[func]
     fn advance(&mut self, real_seconds: f64) -> bool {
-        self.game.advance(real_seconds)
+        self.jump_worker.is_some() || self.game.advance(real_seconds)
+    }
+
+    #[func]
+    fn get_jump_options(&self) -> Array<VarDictionary> {
+        jumps::RULES
+            .options
+            .iter()
+            .map(|o| {
+                vdict! {
+                    "label" => o.label.as_str(), "seconds" => o.seconds as i64
+                }
+            })
+            .collect()
+    }
+
+    #[func]
+    fn jump(&mut self, game_seconds: f64) -> VarDictionary {
+        jump_dictionary(self.game.jump(game_seconds))
+    }
+
+    /// Worker owns only plain Rust data; no Godot objects cross threads.
+    /// The UI keeps a modal progress window open until poll_jump commits it.
+    #[func]
+    fn begin_jump(&mut self, game_seconds: f64) -> bool {
+        if self.jump_worker.is_some() {
+            return false;
+        }
+        let mut game = self.game.clone();
+        self.jump_worker = Some(std::thread::spawn(move || {
+            let result = game.jump(game_seconds);
+            (game, result)
+        }));
+        true
+    }
+
+    #[func]
+    fn poll_jump(&mut self) -> VarDictionary {
+        if !self
+            .jump_worker
+            .as_ref()
+            .is_some_and(|worker| worker.is_finished())
+        {
+            return VarDictionary::new();
+        }
+        match self.jump_worker.take().unwrap().join() {
+            Ok((game, result)) => {
+                if result.is_ok() {
+                    self.game = game;
+                }
+                jump_dictionary(result)
+            }
+            Err(_) => jump_dictionary(Err(
+                "Zeitsprung abgebrochen: Simulation konnte nicht fortgeschrieben werden.",
+            )),
+        }
     }
 
     #[func]
@@ -1854,4 +1914,15 @@ fn flight_dictionary(f: &economy::FlightResult) -> VarDictionary {
     "cargo_kg" => t.cargo_kg, "cargo_revenue_eur" => t.cargo_revenue, "ticket_revenue_eur" => t.revenue - t.cargo_revenue,
                     "revenue_eur" => t.revenue, "fuel_eur" => t.fuel, "airport_eur" => t.airport,
     "crew_eur" => t.crew, "overhead_eur" => t.overhead, "care_eur" => t.care, "punctuality_percent" => disruptions::percent(t), "punctuality_flights" => t.punctuality_flights, "service_eur" => t.service, "costs_eur" => t.costs(), "profit_eur" => t.profit() }
+}
+
+fn jump_dictionary(result: Result<jumps::ResultSummary, &'static str>) -> VarDictionary {
+    match result {
+        Ok(result) => vdict! {
+            "advanced_seconds" => result.advanced_seconds as i64,
+            "stopped" => !result.reason.is_empty(),
+            "reason" => result.reason.as_str(), "message" => result.message()
+        },
+        Err(error) => vdict! { "advanced_seconds" => 0, "error" => error, "message" => error },
+    }
 }
