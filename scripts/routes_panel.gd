@@ -613,7 +613,7 @@ func _update_fare(route: Dictionary) -> void:
 		fare_key = key.duplicate(true)
 		fare_cached = simulation.get_fare_suggestion(route.get("id", 0))
 	fare_value.text = "—" if fare_cached.is_empty() else UI.money(fare_cached["fare"])
-	fare_support.text = tr("FARE_NONE") if fare_cached.is_empty() else tr("FARE_PROFIT") % [UI.money(fare_cached["current_profit"]), UI.money(fare_cached["profit"])]
+	fare_support.text = tr("FARE_NONE") if fare_cached.is_empty() else tr("FARE_PROFIT") % [UI.signed_money(fare_cached["current_profit"]), UI.signed_money(fare_cached["profit"])]
 	fare_business.text = "" if fare_cached.get("business", -1) < 0 else tr("FARE_BUSINESS") % UI.money(fare_cached["business"])
 	var explanation := tr("FARE_TOOLTIP")
 	if not fare_cached.is_empty(): explanation += "\n" + tr("FARE_ASOF") % _fare_date(fare_cached["at"])

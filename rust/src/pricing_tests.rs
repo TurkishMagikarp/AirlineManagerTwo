@@ -91,6 +91,8 @@ fn pricing_empty_routes_cleanup_migration_and_corruption() {
     g.set_pricing_autopilot(1, true).unwrap();
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("legacy.json");
+    assert!(g.advance(61.0));
+    assert!(g.routes[0].plan.as_ref().unwrap().airborne.is_some());
     crate::save::save(&path, &g).unwrap();
     let mut v: serde_json::Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
     v["version"] = 34.into();

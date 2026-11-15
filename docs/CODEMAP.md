@@ -1062,10 +1062,10 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 19 fn restart(g: &Game) -> Game
 26 fn pricing_suggestion_is_read_only_valid_and_matches_next_quote()
 71 fn pricing_empty_routes_cleanup_migration_and_corruption()
-107 fn pricing_autopilot_weekly_manual_override_and_identical_speeds_restart()
-151 fn pricing_autopilot_jump_does_not_add_attention_or_stop()
-167 fn pricing_two_year_player_comparison()
-186 fn pricing_terminal_boundary_cancels_reviews_and_remains_saveable()
+109 fn pricing_autopilot_weekly_manual_override_and_identical_speeds_restart()
+153 fn pricing_autopilot_jump_does_not_add_attention_or_stop()
+169 fn pricing_two_year_player_comparison()
+188 fn pricing_terminal_boundary_cancels_reviews_and_remains_saveable()
 
 ## rust/src/quality.rs
 5 fn scenario(price: Option<i64>) -> Game
