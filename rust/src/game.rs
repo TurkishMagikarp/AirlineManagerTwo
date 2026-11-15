@@ -8,6 +8,11 @@ use std::collections::HashSet;
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Game {
+    #[serde(
+        default,
+        skip_serializing_if = "crate::difficulty::Settings::is_standard"
+    )]
+    pub difficulty: crate::difficulty::Settings,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub pricing: Vec<crate::pricing::Autopilot>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -89,6 +94,7 @@ impl Game {
 impl Default for Game {
     fn default() -> Self {
         Self {
+            difficulty: Default::default(),
             pricing: Vec::new(),
             milestones: None,
             departure_markets: Default::default(),
@@ -130,18 +136,8 @@ pub struct Airline {
     pub capital_eur: i64,
 }
 
-#[derive(Deserialize)]
-struct NewGameConfig {
-    starting_capital_eur: i64,
-}
-
 pub fn starting_capital() -> Result<i64, String> {
-    let config: NewGameConfig = serde_json::from_str(include_str!("../../config/new_game.json"))
-        .map_err(|_| "Startkapital-Konfiguration ist ungültig.".to_string())?;
-    if config.starting_capital_eur < 0 {
-        return Err("Startkapital darf nicht negativ sein.".into());
-    }
-    Ok(config.starting_capital_eur)
+    Ok(crate::difficulty::RULES.starting_capital_eur)
 }
 
 impl Airline {
@@ -179,17 +175,50 @@ impl Airline {
 impl Game {
     /// Build and validate everything before replacing the existing game.
     pub fn found(&mut self, name: &str, country: &str, airport: &str) -> Result<(), String> {
+        self.found_with_levels(name, country, airport, "standard", "standard", "standard")
+    }
+
+    pub fn found_with_levels(
+        &mut self,
+        name: &str,
+        country: &str,
+        airport: &str,
+        capital: &str,
+        competition: &str,
+        crises: &str,
+    ) -> Result<(), String> {
+        let difficulty = crate::difficulty::Settings::parse(capital, competition, crises)?;
         self.require_active()?;
         let airline = Airline {
             name: name.trim().to_string(),
             country_code: country.to_string(),
             home_airport_icao: airport.to_string(),
-            capital_eur: starting_capital()?,
+            capital_eur: crate::difficulty::RULES.capital_eur[difficulty.capital.key()],
         };
         airline.validate()?;
         crate::milestones::rules()?;
-        let competitors = crate::competition::new_competitors(airport)?;
+        let mut competitors = if difficulty.competition == crate::difficulty::Level::Standard {
+            crate::competition::new_competitors(airport)?
+        } else {
+            crate::competition::new_competitors_with_level(airport, difficulty.competition)?
+        };
+        let fuel_market = crate::economy::FuelMarket {
+            crises: difficulty.crises,
+            ..Default::default()
+        };
+        let world_economy = crate::world_economy::Cycle {
+            crises: difficulty.crises,
+            ..Default::default()
+        };
+        for c in &mut competitors {
+            c.game.difficulty = difficulty;
+            c.game.fuel_market = fuel_market.clone();
+            c.game.world_economy = world_economy;
+        }
         *self = Self {
+            difficulty,
+            fuel_market,
+            world_economy,
             competitors,
             milestones: Some(Default::default()),
             history: Some(crate::history::History::new(0, airline.capital_eur)),

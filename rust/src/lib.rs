@@ -14,6 +14,9 @@ mod cargo_tests;
 mod clock;
 mod competition;
 mod demand;
+mod difficulty;
+#[cfg(test)]
+mod difficulty_tests;
 #[cfg(test)]
 mod disruption_tests;
 mod disruptions;
@@ -1733,6 +1736,41 @@ impl SimulationClock {
     }
 
     #[func]
+    fn get_difficulty_options(&self) -> GString {
+        serde_json::json!({
+            "levels": ["low", "standard", "high"],
+            "presets": difficulty::RULES.presets,
+            "capital_eur": difficulty::RULES.capital_eur,
+        })
+        .to_string()
+        .as_str()
+        .into()
+    }
+
+    #[func]
+    fn found_airline_with_levels(
+        &mut self,
+        name: GString,
+        country: GString,
+        airport: GString,
+        capital: GString,
+        competition: GString,
+        crises: GString,
+    ) -> GString {
+        match self.game.found_with_levels(
+            &name.to_string(),
+            &country.to_string(),
+            &airport.to_string(),
+            &capital.to_string(),
+            &competition.to_string(),
+            &crises.to_string(),
+        ) {
+            Ok(()) => GString::new(),
+            Err(error) => error.as_str().into(),
+        }
+    }
+
+    #[func]
     fn has_airline(&self) -> bool {
         self.game.airline.is_some()
     }
@@ -1771,6 +1809,9 @@ impl SimulationClock {
             "country_name" => country.map(|c| c.name.as_str()).unwrap_or(""),
             "airport_icao" => airline.home_airport_icao.as_str(),
             "airport_name" => airport.map(|a| a.name.as_str()).unwrap_or(""),
+            "difficulty_capital" => self.game.difficulty.capital.key(),
+            "difficulty_competition" => self.game.difficulty.competition.key(),
+            "difficulty_crises" => self.game.difficulty.crises.key(),
             "capital_eur" => airline.capital_eur
         }
     }

@@ -67,17 +67,26 @@ Zustand erhalten, **Abbrechen** kehrt zurück. Während des Formulars läuft die
 nicht weiter. Erst erfolgreiches Gründen ersetzt die laufende Airline und setzt
 die Uhr zurück. Die gespeicherte Datei wird erst durch **Speichern** überschrieben.
 
-Startkapital: `config/new_game.json`, Feld `starting_capital_eur` (nichtnegative,
-ganze Euro). Der mitgelieferte Wert **10.000.000 EUR** und die vorläufige
-Darstellungswährung EUR sind technische Testkonfiguration, keine beschlossenen
-Wirtschafts- oder Länderregeln. Datei ändern, Spiel/Editor schließen und über
-`START.bat` neu bauen. Die Einstellung gilt nur für neue Gründungen; geladene
-Airlines behalten ihr gespeichertes Guthaben. Flugzeugkäufe werden davon abgezogen;
-Flüge verbuchen Ticketeinnahmen und Betriebskosten bei Landung.
+Unter Name, Land und Flughafen stehen drei feste Welt-Einstellungen:
+**Startkapital** (5 / 10 / 20 Mio. EUR), **Konkurrenz** (1 / 2 / 3 KI-Airlines)
+und **Krisen** (50 / 100 / 150 % der bisherigen Konjunktur- und Treibstoffausschläge,
+gleicher Mittelwert). Alles steht auf **Standard**, solange du nichts änderst.
+**Entspannt** wählt hohes Kapital, niedrige Konkurrenz und niedrige Krisen;
+**Anspruchsvoll** das Gegenteil. Danach kannst du jede Auswahl einzeln ändern.
+KI-Airlines behalten auf jeder Stufe ihr bisheriges Startkapital und dieselben Regeln.
+Die Übersicht zeigt die gespeicherten Startbedingungen; im laufenden Spiel sind
+sie unveränderlich. Alte Spielstände werden mit Standard auf allen drei Achsen
+in Version 36 übernommen; Guthaben, Rivalen und laufende Welt bleiben erhalten.
 
-Acht echte Flughäfen in Deutschland, Türkei und USA stehen zur Verfügung.
-Der [Katalog](data/README.md) liegt getrennt in `data/airports.json` und verwendet
-stabile ICAO-/Ländercodes als Grundlage für eine spätere weltweite Datenquelle.
+Alle Zahlen, Rivalen-Hubauswahlen und Presets stehen in `config/new_game.json`;
+`nearest` und `remote` nutzen die bisherige Entfernungsauswahl aus den Starter-Hubs
+in `config/competition.json`. High ergänzt einen weiteren verfügbaren Hub.
+Diese Werte und EUR sind **vorläufige Balancewerte, keine beschlossenen Regeln**.
+Nach Konfigurationsänderungen Spiel/Editor schließen und neu bauen.
+
+Der weltweite [Katalog](data/README.md) liegt in `data/airports.json` und umfasst
+Flughäfen in Europa, Amerika, Asien, Afrika und Ozeanien. Das Formular filtert
+nach Heimatland und nutzt stabile ICAO-/Ländercodes; die Liste lässt sich scrollen.
 
 ## Flotte und Flugzeugkauf
 

@@ -33,6 +33,8 @@ pub static RULES: LazyLock<Rules> = LazyLock::new(|| {
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Cycle {
+    #[serde(default, skip_serializing_if = "crate::difficulty::Level::is_standard")]
+    pub crises: crate::difficulty::Level,
     pub seed: u64,
     pub started_at: u64,
     /// Last delivered period; notification delivery is saved, independent of UI frames.
@@ -41,6 +43,7 @@ pub struct Cycle {
 impl Default for Cycle {
     fn default() -> Self {
         Self {
+            crises: Default::default(),
             seed: 0x45434f4e4f4d59,
             started_at: 0,
             notified_period: 0,
@@ -96,7 +99,7 @@ impl Cycle {
                         .clamp(RULES.minimum, RULES.maximum),
                 );
             }
-            values[period]
+            10000 + self.crises.scale(values[period] - 10000)
         })
     }
     pub fn validate(&self, now: u64) -> Result<(), String> {

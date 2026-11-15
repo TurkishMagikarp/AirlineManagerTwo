@@ -25,6 +25,11 @@ const PAGES: Array[Dictionary] = [
 var compact_navigation := -1
 var rail: PanelContainer
 var rail_brand: VBoxContainer
+var difficulty_options: Dictionary
+var difficulty_choices: Dictionary = {}
+var difficulty_preset: Array[Button] = []
+var difficulty_caption: Label
+var founding_scroll: ScrollContainer
 var airline_name: Label
 var airline_base: Label
 var nav_badges: Array[Label] = []
@@ -244,6 +249,7 @@ func _ready() -> void:
 	resized.connect(_resize_frame)
 	_resize_frame()
 	var scroll := ScrollContainer.new()
+	founding_scroll = scroll
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	scroll.follow_focus = true
@@ -1051,6 +1057,7 @@ func _build_founding() -> void:
 	column.add_child(_label("AIRLINE MANAGER", ThemeTokens.SCREEN_TITLE))
 	column.add_child(_label("DEINE EIGENE FLUGGESELLSCHAFT", ThemeTokens.SMALL, ThemeTokens.ACCENT_TEXT))
 	var scroll := ScrollContainer.new()
+	founding_scroll = scroll
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	scroll.follow_focus = true
@@ -1064,7 +1071,8 @@ func _build_founding() -> void:
 	for side in ["left", "top", "right", "bottom"]:
 		focus_margin.add_theme_constant_override("margin_" + side, ThemeTokens.SPACE_1)
 	scroll.add_child(focus_margin)
-	focus_margin.add_child(form)
+	var panel := UI.panel(focus_margin, "")
+	panel.add_child(form)
 	form.add_child(_label("Ein neuer Anfang.", ThemeTokens.SCREEN_TITLE))
 	form.add_child(_label("Name deiner Airline", ThemeTokens.BODY))
 	name_input = LineEdit.new()
@@ -1091,9 +1099,19 @@ func _build_founding() -> void:
 	airport_select.clip_text = true
 	airport_select.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	form.add_child(airport_select)
+	difficulty_options = JSON.parse_string(simulation.get_difficulty_options())
+	form.add_child(_label(tr("DIFFICULTY_PRESET"), ThemeTokens.BODY))
+	difficulty_preset = _difficulty_segments(form, ["relaxed", "standard", "demanding"], "DIFFICULTY_", func(key: String): _apply_difficulty_preset(key))
+	for key in ["capital", "competition", "crises"]:
+		var title := _label(tr("DIFFICULTY_" + key.to_upper()), ThemeTokens.BODY)
+		title.tooltip_text = tr("DIFFICULTY_TIP_" + key.to_upper())
+		form.add_child(title)
+		difficulty_choices[key] = _difficulty_segments(form, difficulty_options["levels"], "DIFFICULTY_LEVEL_", func(_level: String): _difficulty_edited())
+		for button in difficulty_choices[key]: button.tooltip_text = title.tooltip_text
 	founding_capital = _label("Startkapital: %s · vorläufig konfiguriert" % simulation.get_starting_capital(), ThemeTokens.BODY, ThemeTokens.ACCENT_TEXT)
 	founding_capital.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	form.add_child(founding_capital)
+	_apply_difficulty_preset("standard")
 	var actions := HBoxContainer.new()
 	actions.add_theme_constant_override("separation", 12)
 	column.add_child(actions)
@@ -1119,6 +1137,46 @@ func _build_founding() -> void:
 	_country_changed(country_select.selected)
 
 
+func _difficulty_segments(parent: Node, keys: Array, prefix: String, changed: Callable) -> Array[Button]:
+	var row := UI.segment_tray(parent)
+	var group := ButtonGroup.new()
+	var buttons: Array[Button] = []
+	for key in keys:
+		var button := Button.new()
+		button.text = tr(prefix + String(key).to_upper())
+		button.theme_type_variation = "SegmentButton"
+		button.toggle_mode = true
+		button.button_group = group
+		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		button.set_meta("level", key)
+		button.pressed.connect(func(): changed.call(key))
+		row.add_child(button)
+		buttons.append(button)
+	return buttons
+
+func _difficulty_level(key: String) -> String:
+	for button in difficulty_choices[key]:
+		if button.button_pressed: return button.get_meta("level")
+	return "standard"
+
+func _apply_difficulty_preset(key: String) -> void:
+	var values: Array = difficulty_options["presets"][key]
+	var fields := ["capital", "competition", "crises"]
+	for i in range(fields.size()):
+		for button in difficulty_choices[fields[i]]:
+			button.set_pressed_no_signal(button.get_meta("level") == values[i])
+	for button in difficulty_preset: button.set_pressed_no_signal(button.get_meta("level") == key)
+	_refresh_founding_capital()
+
+func _difficulty_edited() -> void:
+	# A manually edited preset becomes custom; the three selections are authoritative.
+	for button in difficulty_preset: button.set_pressed_no_signal(false)
+	_refresh_founding_capital()
+
+func _refresh_founding_capital() -> void:
+	founding_capital.text = tr("DIFFICULTY_AMOUNT") % UI.money(difficulty_options["capital_eur"][_difficulty_level("capital")])
+
+
 func _country_changed(index: int) -> void:
 	airport_select.clear()
 	if index < 0 or index >= country_select.item_count:
@@ -1140,7 +1198,7 @@ func _found_airline() -> void:
 	if country_select.selected < 0 or airport_select.selected < 0:
 		founding_status.text = "Bitte Heimatland und Heimatflughafen auswählen."
 		return
-	var error: String = simulation.found_airline(name_input.text, country_select.get_selected_metadata(), airport_select.get_selected_metadata())
+	var error: String = simulation.found_airline_with_levels(name_input.text, country_select.get_selected_metadata(), airport_select.get_selected_metadata(), _difficulty_level("capital"), _difficulty_level("competition"), _difficulty_level("crises"))
 	if not error.is_empty():
 		founding_status.text = error
 		return
@@ -1162,6 +1220,7 @@ func _sync_view() -> void:
 	founding.visible = not simulation.has_airline()
 	cancel_founding_button.visible = simulation.has_airline()
 	var airline: Dictionary = simulation.get_airline_info()
+	difficulty_caption.text = tr("DIFFICULTY_SAVED") % [tr("DIFFICULTY_LEVEL_" + String(airline.get("difficulty_capital", "standard")).to_upper()), tr("DIFFICULTY_LEVEL_" + String(airline.get("difficulty_competition", "standard")).to_upper()), tr("DIFFICULTY_LEVEL_" + String(airline.get("difficulty_crises", "standard")).to_upper())]
 	airline_name.text = airline.get("name", "—")
 	airline_base.text = "— · Basis %s" % airline.get("airport_icao", "—")
 	_refresh_time()
@@ -1178,6 +1237,8 @@ func _open_founding() -> void:
 	founding.show()
 	cancel_founding_button.show()
 	name_input.clear()
+	_apply_difficulty_preset("standard")
+	founding_scroll.scroll_vertical = 0
 	founding_status.text = "Neues Spiel: Gründen ersetzt den laufenden Zustand. Ungespeicherter Fortschritt geht verloren. Abbrechen kehrt zurück."
 	name_input.grab_focus()
 
@@ -1189,6 +1250,9 @@ func _label(text: String, style: Dictionary, color: Color = ThemeTokens.INK) -> 
 func _build_finance(content: VBoxContainer) -> void:
 	finance_panel = VBoxContainer.new()
 	content.add_child(finance_panel)
+	difficulty_caption = UI.label("", ThemeTokens.SMALL, UI.MUTED)
+	difficulty_caption.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	finance_panel.add_child(difficulty_caption)
 	milestones_panel = MilestonesPanel.new()
 	finance_panel.add_child(milestones_panel)
 	milestones_panel.setup(simulation)
