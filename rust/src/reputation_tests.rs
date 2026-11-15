@@ -79,6 +79,7 @@ fn reputation_v27_neutral_migration_preserves_airborne_and_all_other_state() {
     for c in &mut g.competitors {
         c.game.reputation = Reputation::default();
     }
+    g.migrate_world_economy_fixture();
     assert_eq!(state(&migrated), state(&g));
     let mut loaded = restart(&migrated);
     assert!(loaded.advance((30 * DAY) as f64));

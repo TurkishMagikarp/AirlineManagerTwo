@@ -39,11 +39,11 @@ func _run() -> void:
 			if not _check(sim.load_game(probe_path).is_empty(), "Load neutral v29 comparison world"):
 				return
 			var expected := _snapshot()
-			var old := RegEx.create_from_string(',"reputation":\\{[^{}]*\\}').sub(world, "", true).replace('"version":33', '"version":27')
+			var old := RegEx.create_from_string(',"reputation":\\{[^{}]*\\}').sub(world, "", true).replace('"version":34', '"version":27')
 			if not _check(not '"reputation"' in old and '"version":27' in old, "Legacy fixture omits reputation for player and both AI"):
 				return
 			_write(reputation_path, old)
-			if not _check(sim.load_game(reputation_path).is_empty() and _snapshot() == expected, "v27 migration changes only neutral reputation and version; all world bytes and APIs match v29 baseline"):
+			if not _check(sim.load_game(reputation_path).is_empty() and preload("res://tests/insurance_fixture.gd").without_economy_snapshot(_snapshot()) == preload("res://tests/insurance_fixture.gd").without_economy_snapshot(expected), "v27 migration changes only neutral reputation and version; all world bytes and APIs match v29 baseline"):
 				return
 		else:
 			if not _check(sim.save_game(reputation_path).is_empty(), "Save non-neutral v29 world with pending daily observations"):

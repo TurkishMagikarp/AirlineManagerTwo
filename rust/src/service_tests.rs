@@ -193,6 +193,7 @@ fn service_v17_migration_preserves_neutral_money_history_and_airborne_quotes() {
         c.game.marketing.settled_at = c.game.clock.elapsed().as_secs();
     }
     g.migrate_insurance_fixture();
+    g.migrate_world_economy_fixture();
     assert_eq!(state(&loaded), state(&g));
     let mut advanced = loaded;
     assert!(advanced.advance(86400.0));

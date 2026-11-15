@@ -284,6 +284,8 @@ fn contracts_ten_year_ai_comparison() {
 /// now seed different homes. This is the saved Frankfurt company setup.
 #[test]
 fn contracts_worldwide_cash_drift_tracks_discrete_growth() {
+    // Isolate this historical hedge/growth regression from macro demand.
+    crate::world_economy::ZERO_REACTIONS.with(|v| v.set(true));
     struct Reset;
     impl Drop for Reset {
         fn drop(&mut self) {
@@ -326,6 +328,7 @@ fn contracts_worldwide_cash_drift_tracks_discrete_growth() {
         }
     }
     let (h, s) = (&hedged.competitors[1].game, &spot.competitors[1].game);
+    crate::world_economy::ZERO_REACTIONS.with(|v| v.set(false));
     println!(
         "HEDGE_GROWTH year=1 hedged_cash={} spot_cash={} effect={}",
         h.cash(),

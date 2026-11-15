@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://co25y7rvv1s2c"
+
+[deps]
+
+files=["res://resources/localization/economy.de.translation", "res://resources/localization/economy.en.translation"]
+
+source_file="res://resources/localization/economy.csv"
+dest_files=["res://resources/localization/economy.de.translation", "res://resources/localization/economy.en.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

@@ -179,7 +179,9 @@ fn insurance_v22_migration_clears_all_owners_without_changing_cash() {
     strip(&mut v["state"]);
     std::fs::write(&p, serde_json::to_vec(&v).unwrap()).unwrap();
     let loaded = save::load(&p).unwrap();
-    let mut expected = serde_json::to_value(&g).unwrap();
+    let mut neutral = g.clone();
+    neutral.migrate_world_economy_fixture();
+    let mut expected = serde_json::to_value(&neutral).unwrap();
     crate::insurance::migrate(&mut expected);
     assert_eq!(serde_json::to_value(&loaded).unwrap(), expected);
     for (a, b) in std::iter::once((&g, &loaded)).chain(

@@ -1,0 +1,12 @@
+{
+  "minimum": 8500,
+  "maximum": 11200,
+  "volatility": 140,
+  "mean_reversion_divisor": 104,
+  "cadence_seconds": 604800,
+  "business_reaction": 1.4,
+  "leisure_reaction": 0.6,
+  "cargo_reaction": 1.0,
+  "downturn_threshold": 9600,
+  "boom_threshold": 10400
+}

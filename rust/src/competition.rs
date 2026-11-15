@@ -260,10 +260,23 @@ impl Game {
         route: &crate::routes::Route,
         plane: &crate::aircraft::Aircraft,
     ) -> Result<crate::demand::Offer, String> {
-        let mut offer = crate::cabins::offer(route, plane)?;
+        let mut offer = self.economy_offer(route, plane)?;
         offer.awareness = self.marketing.awareness;
         offer.reputation = self.reputation.score;
         offer.owner = self.market_owner_key();
+        Ok(offer)
+    }
+
+    fn economy_offer(
+        &self,
+        route: &crate::routes::Route,
+        plane: &crate::aircraft::Aircraft,
+    ) -> Result<crate::demand::Offer, String> {
+        let mut offer = crate::cabins::offer(route, plane)?;
+        offer.economy = Some(crate::world_economy::Context {
+            cycle: self.world_economy,
+            quoted_at: self.clock.elapsed().as_secs(),
+        });
         Ok(offer)
     }
 
@@ -289,6 +302,8 @@ impl Game {
             let g = &c.game;
             if !g.clock.is_valid()
                 || g.fuel_market != self.fuel_market
+                || g.world_economy.seed != self.world_economy.seed
+                || g.world_economy.started_at != self.world_economy.started_at
                 || !g.used_market.listings.is_empty()
                 || !g.competitors.is_empty()
                 || g.clock.elapsed() != self.clock.elapsed()
@@ -306,6 +321,7 @@ impl Game {
                 return Err("Doppelte KI-Airline.".into());
             }
             a.validate()?;
+            g.world_economy.validate(g.clock.elapsed().as_secs())?;
             g.validate_fleet()?;
             g.validate_routes()?;
             g.validate_operations()?;
@@ -904,7 +920,7 @@ impl Competitor {
             if let Some(index) = fare_supply.iter().position(|o| &o.route == r) {
                 fare_supply.remove(index);
             }
-            fare_supply.push(crate::cabins::offer(&candidate, plane).unwrap());
+            fare_supply.push(self.game.economy_offer(&candidate, plane).unwrap());
             let Ok(mut fare_market) =
                 crate::economy::QuoteMarket::direct(&candidate, &plane.model_id, &fare_supply)
             else {
@@ -1270,7 +1286,7 @@ impl Competitor {
             for business in layouts {
                 cabin_plane.business_seats = business;
                 let mut market = existing.clone();
-                market.push(crate::cabins::offer(&r, &cabin_plane)?);
+                market.push(g.economy_offer(&r, &cabin_plane)?);
                 let mut single_quote: Option<crate::economy::QuoteMarket> = None;
                 for step in 3..=15 {
                     if r.parent_route_id.is_some() && step != 3 {
@@ -1667,7 +1683,7 @@ impl Competitor {
             return false;
         };
         let mut offers = candidate_supply(&candidate, supply);
-        offers.push(crate::cabins::offer(&candidate, plane).unwrap());
+        offers.push(self.game.economy_offer(&candidate, plane).unwrap());
         let Ok(mut fare_market) = crate::economy::QuoteMarket::direct(&candidate, &model, &offers)
         else {
             return false;

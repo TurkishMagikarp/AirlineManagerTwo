@@ -633,7 +633,7 @@ pub(crate) fn quote_prepared(
     let (demand, passenger_loads) = market.passengers.estimate(departure);
     let passengers = demand.per_departure;
     let business_revenue = demand.business * route.business_ticket_eur;
-    let cargo_kg = market.cargo.estimate(passenger_loads);
+    let cargo_kg = market.cargo.estimate_at(passenger_loads, departure);
     let cargo_revenue = crate::cargo::revenue(cargo_kg, route.cargo_rate_cents);
     let seconds = market.flight_seconds as i64;
     let rates = market.rates;

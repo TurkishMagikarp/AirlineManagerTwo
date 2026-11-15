@@ -79,6 +79,9 @@ mod trading_tests;
 mod transfer_tests;
 #[cfg(test)]
 mod widebody_tests;
+mod world_economy;
+#[cfg(test)]
+mod world_economy_tests;
 
 use game::Game;
 use godot::prelude::*;
@@ -519,6 +522,29 @@ impl SimulationClock {
             .unwrap_or_default()
             .as_str()
             .into()
+    }
+
+    #[func]
+    fn get_world_economy(&self) -> VarDictionary {
+        let index = self
+            .game
+            .world_economy
+            .index_at(self.game.clock.elapsed().as_secs());
+        let r = &*world_economy::RULES;
+        vdict! { "percent" => index as f64 / 100.0, "phase" => world_economy::phase(index),
+        "business" => world_economy::factor(index, r.business_reaction),
+        "leisure" => world_economy::factor(index, r.leisure_reaction),
+        "cargo" => world_economy::factor(index, r.cargo_reaction) }
+    }
+
+    #[func]
+    fn take_economy_notifications(&mut self) -> PackedStringArray {
+        self.game
+            .world_economy
+            .take_notifications(self.game.clock.elapsed().as_secs())
+            .into_iter()
+            .map(GString::from)
+            .collect()
     }
 
     #[func]
@@ -1044,8 +1070,10 @@ impl SimulationClock {
             .filter(|r| r.parent_route_id.is_none())
             .filter_map(|r| {
                 let season = demand::season_factors(now);
-                let market = demand::market_at(r, r.ticket_eur, now).ok()?;
-                let base = demand::market_at(r, 0, now).ok()?;
+                let context = world_economy::Context { cycle: self.game.world_economy, quoted_at: now };
+                let market = demand::market_in_economy(r, r.ticket_eur, context, Some(now)).ok()?;
+                let base = demand::market_in_economy(r, 0, context, Some(now)).ok()?;
+                let index = self.game.world_economy.index_at(now);
                 let services: Vec<_> = self.game.routes.iter().filter(|s| s.public_id() == r.id).collect();
                 let aircraft_ids: Array<u32> = services.iter().filter_map(|s| s.aircraft_id).collect();
                 let has_plan = services.iter().any(|s| s.plan.is_some());
@@ -1084,7 +1112,7 @@ impl SimulationClock {
                     "destination_icao" => r.destination_icao.as_str(),
                     "distance_km" => routes::distance_km(&r.origin_icao, &r.destination_icao).unwrap_or(0.0),
                     "aircraft_id" => r.aircraft_id.unwrap_or(0), "aircraft_ids" => &aircraft_ids, "has_plan" => has_plan, "ticket_eur" => r.ticket_eur, "business_ticket_eur" => r.business_ticket_eur,
-                    "cargo_daily_demand_kg" => cargo::daily_demand(r).unwrap_or(0.0).floor() as i64,
+                    "cargo_daily_demand_kg" => (cargo::daily_demand(r).unwrap_or(0.0) * world_economy::factor(index, world_economy::RULES.cargo_reaction)).floor() as i64,
                     "cargo_rate_cents" => r.cargo_rate_cents, "cargo_max_rate_cents" => cargo::RULES.maximum_rate_cents,
                     "actual_cargo_kg" => actual.cargo_kg, "actual_cargo_revenue_eur" => actual.cargo_revenue,
                     "service_level" => r.service_level.name(),
@@ -1094,6 +1122,9 @@ impl SimulationClock {
                     "estimated_airport_eur" => airport_cost / active_count.max(1),
                     "actual_service_eur" => actual.service,
                     "punctuality_percent" => disruptions::percent(&actual), "punctuality_flights" => actual.punctuality_flights,
+                    "economy_business_factor" => world_economy::factor(index, world_economy::RULES.business_reaction),
+                    "economy_leisure_factor" => world_economy::factor(index, world_economy::RULES.leisure_reaction),
+                    "economy_cargo_factor" => world_economy::factor(index, world_economy::RULES.cargo_reaction),
                     "season_business_factor" => season.business,
                     "season_leisure_factor" => season.leisure,
                     "daily_demand" => market.total().floor() as i64,

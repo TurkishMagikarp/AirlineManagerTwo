@@ -100,6 +100,9 @@ var finance_panel: VBoxContainer
 var metrics: Dictionary = {}
 var finance_breakdown: Label
 var operation_summary: Label
+var economy_signature := ""
+var economy_support: HBoxContainer
+var economy_toast: CanvasLayer
 var metric_grid: GridContainer
 var decision_dialog: Control
 var previous_fleet_tab := 0
@@ -360,6 +363,7 @@ func _jump(seconds: int) -> void:
 	progress.queue_free()
 	jump_in_progress = false
 	milestones_panel.notify_reached()
+	_notify_economy()
 	jump_status.text = result["message"]
 	jump_status.show()
 	last_clock_view = ""
@@ -453,6 +457,7 @@ func _process(delta: float) -> void:
 	_refresh_time()
 	_refresh_attention()
 	milestones_panel.notify_reached()
+	_notify_economy()
 	var second := int(simulation.get_elapsed_seconds())
 	if current_page == 3 and simulation.is_running():
 		map_panel.refresh_flights()
@@ -521,7 +526,27 @@ func _show_page(index: int) -> void:
 		navigation[button_index].set_pressed_no_signal(button_index == index)
 
 
+func _notify_economy() -> void:
+	var phases: PackedStringArray = simulation.take_economy_notifications()
+	if not phases.is_empty():
+		var names := PackedStringArray()
+		for phase in phases: names.append(tr("ECONOMY_" + phase.to_upper()))
+		if is_instance_valid(economy_toast): economy_toast.queue_free()
+		economy_toast = UI.toast(self, tr("ECONOMY_TOAST") % " → ".join(names), true)
+
+
 func _refresh_finance() -> void:
+	var economy: Dictionary = simulation.get_world_economy()
+	metrics["economy"].text = UI.decimal(economy.percent) + (" %" if TranslationServer.get_locale().begins_with("de") else "%")
+	metrics["economy"].get_parent().get_child(0).text = tr("ECONOMY_TITLE")
+	metrics["economy"].get_parent().get_parent().tooltip_text = tr("ECONOMY_TOOLTIP")
+	var economy_key: String = str(economy.phase) + TranslationServer.get_locale()
+	if economy_signature != economy_key:
+		economy_signature = economy_key
+		for child in economy_support.get_children():
+			economy_support.remove_child(child)
+			child.queue_free()
+		economy_support.add_child(UI.status_chip(tr("ECONOMY_" + str(economy.phase).to_upper()), {"boom": "go", "normal": "neutral", "downturn": "caution"}[economy.phase]))
 	milestones_panel.refresh()
 	var airline: Dictionary = simulation.get_airline_info()
 	var finance: Dictionary = simulation.get_financial_summary()
@@ -1124,6 +1149,7 @@ func _found_airline() -> void:
 
 
 func _sync_view() -> void:
+	if is_instance_valid(economy_toast): economy_toast.queue_free()
 	milestones_panel.reset_view()
 	jump_status.hide()
 	fleet_status.text = ""
@@ -1174,6 +1200,8 @@ func _build_finance(content: VBoxContainer) -> void:
 	metric_grid.columns = 4 if get_viewport_rect().size.x >= 1280 else 2
 	for item in [["balance", "KONTOSTAND"], ["profit", "BETRIEBSERGEBNIS"], ["load", "AUSLASTUNG · GESAMT"], ["flights", "LANDUNGEN / PASSAGIERE"]]:
 		metrics[item[0]] = UI.metric(metric_grid, item[1])
+	economy_support = HBoxContainer.new()
+	metrics["economy"] = UI.metric(metric_grid, tr("ECONOMY_TITLE"), economy_support)
 	finance_panel.add_theme_constant_override("separation", ThemeTokens.SPACE_4)
 	var grid := GridContainer.new()
 	grid.add_theme_constant_override("h_separation", ThemeTokens.SPACE_4)

@@ -257,7 +257,9 @@ fn financing_save_load_migration_corruption_and_time_acceleration() {
         .unwrap()
         .remove("financing");
     std::fs::write(&path, serde_json::to_vec(&legacy).unwrap()).unwrap();
-    assert_eq!(state(&save::load(&path).unwrap()), state(&old));
+    let mut expected = old.clone();
+    expected.migrate_world_economy_fixture();
+    assert_eq!(state(&save::load(&path).unwrap()), state(&expected));
 }
 
 #[test]
@@ -543,6 +545,7 @@ fn restructuring_v13_migration_starts_fresh_grace_without_replaying_costs() {
     g.migrate_tax().unwrap();
     g.marketing.settled_at = g.clock.elapsed().as_secs();
     g.migrate_insurance_fixture();
+    g.migrate_world_economy_fixture();
     assert_eq!(state(&restored), state(&g));
     restored.clock.set_running(true);
     assert!(restored.advance(1.0));

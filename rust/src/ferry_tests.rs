@@ -169,7 +169,9 @@ fn ferry_steps_speeds_pause_restart_and_previous_save_migration() {
     v["version"] = 30.into();
     v["state"].as_object_mut().unwrap().remove("ferries");
     std::fs::write(&path, serde_json::to_vec(&v).unwrap()).unwrap();
-    assert_eq!(state(&crate::save::load(&path).unwrap()), state(&initial));
+    let mut expected = initial.clone();
+    expected.migrate_world_economy_fixture();
+    assert_eq!(state(&crate::save::load(&path).unwrap()), state(&expected));
 }
 
 #[test]
