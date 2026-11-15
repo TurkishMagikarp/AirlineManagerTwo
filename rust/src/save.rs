@@ -18,7 +18,8 @@ use std::time::Duration;
 // v28: neutral punctuality reputation for older saves, without history replay.
 // v29: implicit home base, dated extra bases; existing visits remain frozen.
 // v30: bounded shared used market, empty for all older saves.
-const VERSION: u32 = 30;
+// v31: one-way ferry dispatches; older saves default to no ferries.
+const VERSION: u32 = 31;
 // Bounded input, including centuries of fuel/seasonal quotes for the player
 // and both AI airlines in the million-flight finance restart scenario.
 // Version 17 retains per-class quotes, which also split more archive batches.
@@ -34,6 +35,8 @@ struct SaveGame {
 // Future simulation data belongs here, not in the UI or a serialized Godot object.
 #[derive(Serialize, Deserialize)]
 struct GameState {
+    #[serde(default)]
+    ferries: Vec<crate::operations::Ferry>,
     #[serde(default)]
     used_market: crate::trading::Market,
     #[serde(default)]
@@ -108,6 +111,7 @@ pub fn save(path: &Path, game: &Game) -> Result<(), String> {
     let data = SaveGame {
         version: VERSION,
         state: GameState {
+            ferries: game.ferries.clone(),
             used_market: game.used_market.clone(),
             maintenance_bases: game.maintenance_bases.clone(),
             insurance: Some(game.insurance.clone()),
@@ -292,6 +296,7 @@ pub fn load(path: &Path) -> Result<Game, String> {
         return Err("Ungültiger Treibstoffmarkt.".into());
     }
     let mut game = Game {
+        ferries: data.state.ferries,
         external_slots: Default::default(),
         fuel_contract: data.state.fuel_contract,
         marketing: data.state.marketing.ok_or("Marketingdaten fehlen.")?,

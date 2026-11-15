@@ -343,6 +343,9 @@ impl Game {
             .iter()
             .find(|p| p.id == id)
             .ok_or("Unbekanntes Flugzeug.")?;
+        if let Some(f) = self.ferry(id).filter(|f| !f.settled) {
+            return Ok(f.quote.destination.clone());
+        }
         if p.status == AircraftStatus::InFlight {
             let r = &self.routes[self.planned_route(id).ok_or("Flugplan fehlt.")?];
             let state = operations::movement(r, &p.model_id, self.clock.elapsed().as_secs())?;
@@ -436,7 +439,15 @@ impl Game {
             return Err("Wartung ist bereits geplant oder läuft.".into());
         }
         let now = self.clock.elapsed().as_secs();
-        let (start, wear) = if plane.status == AircraftStatus::InFlight {
+        let (start, wear) = if let Some(f) = self.ferry(aircraft_id).filter(|f| !f.settled) {
+            (
+                f.quote.landing,
+                plane
+                    .wear
+                    .added(1, f.quote.landing - f.departure)
+                    .ok_or("Betriebszeit-Überlauf.")?,
+            )
+        } else if plane.status == AircraftStatus::InFlight {
             let route = &self.routes[self
                 .planned_route(plane.id)
                 .ok_or("Flugzustand ohne Flugplan.")?];
@@ -583,6 +594,8 @@ impl Game {
         self.airline.as_mut().unwrap().capital_eur = balance;
         self.fleet[p].status = AircraftStatus::Maintenance;
         self.fleet[p].maintenance = Some(visit);
+        let id = self.fleet[p].id;
+        self.ferries.retain(|f| f.aircraft_id != id);
         Ok(())
     }
 
@@ -717,10 +730,14 @@ impl Game {
                             return Err(invalid());
                         }
                     } else {
-                        let route = &self.routes[planned.ok_or_else(invalid)?];
-                        let state = operations::movement(route, &plane.model_id, now)?;
+                        let landing = if let Some(f) = self.ferry(plane.id).filter(|f| !f.settled) {
+                            f.quote.landing
+                        } else {
+                            let route = &self.routes[planned.ok_or_else(invalid)?];
+                            operations::movement(route, &plane.model_id, now)?.landing
+                        };
                         if plane.status != AircraftStatus::InFlight
-                            || v.start != state.landing
+                            || v.start != landing
                             || v.unscheduled
                             || v.resume.is_some()
                         {

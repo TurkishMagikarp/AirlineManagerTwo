@@ -741,3 +741,31 @@ static func map_layer(caption: String, own_route: bool) -> CheckBox:
 	result.text = caption
 	if own_route: result.add_theme_constant_override("h_separation", ThemeTokens.SPACE_6)
 	return result
+
+
+static func toast(parent: Node, message: String, success: bool) -> CanvasLayer:
+	var layer := CanvasLayer.new()
+	layer.layer = 110
+	parent.add_child(layer)
+	var anchor := MarginContainer.new()
+	layer.add_child(anchor)
+	anchor.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	anchor.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	for side in ["left", "top", "right", "bottom"]: anchor.add_theme_constant_override("margin_" + side, ThemeTokens.SPACE_4)
+	var shell := PanelContainer.new()
+	shell.size_flags_horizontal = Control.SIZE_SHRINK_END
+	shell.size_flags_vertical = Control.SIZE_SHRINK_END
+	shell.add_theme_stylebox_override("panel", ThemeTokens.new().floating_box(ThemeTokens.RADIUS_LG, ThemeTokens.SPACE_4))
+	anchor.add_child(shell)
+	var row := HBoxContainer.new()
+	shell.add_child(row)
+	row.add_child(status_chip("Erledigt" if success else "Fehler", "go" if success else "stop"))
+	var sentence := label(message, ThemeTokens.SMALL)
+	sentence.custom_minimum_size.x = 200
+	sentence.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	row.add_child(sentence)
+	var close := Button.new()
+	close.text = "Schließen"
+	close.pressed.connect(layer.queue_free)
+	row.add_child(close)
+	return layer

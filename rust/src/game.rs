@@ -8,6 +8,8 @@ use std::collections::HashSet;
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Game {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub ferries: Vec<crate::operations::Ferry>,
     #[serde(default)]
     pub used_market: crate::trading::Market,
     /// Derived snapshot of other owners, refreshed before each AI review.
@@ -46,6 +48,7 @@ pub struct Game {
 impl Default for Game {
     fn default() -> Self {
         Self {
+            ferries: Vec::new(),
             used_market: Default::default(),
             external_slots: Default::default(),
             maintenance_bases: Vec::new(),

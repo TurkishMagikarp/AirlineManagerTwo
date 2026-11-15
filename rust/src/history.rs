@@ -51,6 +51,8 @@ pub struct Purchase {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct History {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub ferries: Vec<crate::operations::Ferry>,
     pub since: u64,
     pub opening_balance: i64,
     pub prior_totals: Totals,
@@ -108,6 +110,7 @@ impl SettledTotals {
 impl History {
     pub fn new(since: u64, opening_balance: i64) -> Self {
         Self {
+            ferries: Vec::new(),
             since,
             opening_balance,
             prior_totals: Totals::default(),
@@ -238,6 +241,13 @@ impl History {
             .iter()
             .filter(|e| e.time <= time)
             .map(|e| i128::from(e.cash))
+            .sum()
+    }
+    pub fn ferry_through(&self, time: u64) -> i128 {
+        self.aircraft_cash
+            .iter()
+            .filter(|e| e.time <= time && e.kind == crate::trading::Kind::Ferry)
+            .map(|e| -i128::from(e.cash))
             .sum()
     }
     pub fn rent_through(&self, time: u64) -> i128 {

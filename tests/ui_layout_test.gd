@@ -24,6 +24,13 @@ func _run() -> void:
 			for frame in range(5): await process_frame
 			await _capture_picker(main.country_select, "founding-country", dimensions)
 			await _capture_picker(main.airport_select, "founding-airport", dimensions)
+	if OS.get_environment("AIRLINE_UI_CAPTURE_FERRY_ONLY") == "1":
+		await _ferry_views(sim)
+		main.queue_free()
+		await process_frame
+		print("PASS: ferry dialog, airborne fleet, map and finance captures at 1440x1000 and 680x520")
+		quit(0)
+		return
 	assert(sim.found_airline("Meridian Air", "DE", "EDDF").is_empty())
 	if not capture_dir.is_empty():
 		for dimensions in [Vector2i(1440, 1000), Vector2i(1100, 720), Vector2i(680, 520)]:
@@ -299,6 +306,7 @@ func _run() -> void:
 	if not await _ai_cabin_views(sim):
 		quit(1)
 		return
+	await _ferry_views(sim)
 	main.queue_free()
 	await process_frame
 	print("PASS: populated overview/fleet/routes/map/finances/staff and founding at 1440x1000, 1100x720, 680x520; deep controls reachable; no financial changes")
@@ -454,3 +462,72 @@ func _ai_cabin_views(sim: RefCounted) -> bool:
 			await RenderingServer.frame_post_draw
 			assert(root.get_texture().get_image().save_png(capture_dir.path_join("ai-cabin-map-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
 	return true
+
+
+func _ferry_views(sim: RefCounted) -> void:
+	assert(sim.found_airline("Ferry capture", "DE", "EDDF").is_empty())
+	assert(sim.lease_aircraft("a330_300").is_empty())
+	assert(sim.hire_pilots("A330", 6).is_empty())
+	main._sync_view()
+	main._show_page(1)
+	main.fleet_tabs.current_tab = 0
+	main._refresh_fleet()
+	main._open_ferry()
+	for i in range(main.ferry_destination.item_count):
+		if main.ferry_destination.get_item_metadata(i) == "KJFK":
+			main.ferry_destination.select(i)
+			main.ferry_destination.item_selected.emit(i)
+	for dimensions in [Vector2i(1440, 1000), Vector2i(680, 520)]:
+		root.size = dimensions
+		for frame in range(5): await process_frame
+		assert(root.get_visible_rect().encloses(main.ferry_dialog.card.get_global_rect()))
+		if not capture_dir.is_empty():
+			await RenderingServer.frame_post_draw
+			assert(root.get_texture().get_image().save_png(capture_dir.path_join("ferry-dialog-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
+	main.ferry_dialog.get_ok_button().pressed.emit()
+	await process_frame
+	main.ferry_toast.queue_free()
+	sim.set_speed(1)
+	sim.start()
+	assert(sim.advance(3600.0))
+	sim.pause()
+	for dimensions in [Vector2i(1440, 1000), Vector2i(680, 520)]:
+		root.size = dimensions
+		main._sync_view()
+		main._show_page(1)
+		var scroll: ScrollContainer = main.fleet_panel.get_parent().get_parent()
+		scroll.ensure_control_visible(main.ferry_button)
+		for frame in range(5): await process_frame
+		scroll.ensure_control_visible(main.ferry_card.get_parent().get_parent().get_parent())
+		for frame in range(5): await process_frame
+		assert(root.get_visible_rect().encloses(main.ferry_card.get_parent().get_parent().get_parent().get_global_rect()))
+		if not capture_dir.is_empty():
+			await RenderingServer.frame_post_draw
+			assert(root.get_texture().get_image().save_png(capture_dir.path_join("ferry-airborne-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
+
+		main._show_page(3)
+		main.map_panel.selected_id = 1
+		main.map_panel.canvas.selection_position = main.map_panel.canvas.size / 2
+		main.map_panel.refresh_flights()
+		for frame in range(5): await process_frame
+		scroll.ensure_control_visible(main.map_panel.card)
+		for frame in range(5): await process_frame
+		if not capture_dir.is_empty():
+			await RenderingServer.frame_post_draw
+			assert(root.get_texture().get_image().save_png(capture_dir.path_join("ferry-map-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
+	sim.start()
+	assert(sim.advance(86400.0))
+	sim.pause()
+	main._sync_view()
+	for dimensions in [Vector2i(1440, 1000), Vector2i(680, 520)]:
+		root.size = dimensions
+		main._show_page(4)
+		main.finances_panel.refresh(true)
+		var scroll: ScrollContainer = main.fleet_panel.get_parent().get_parent()
+		scroll.ensure_control_visible(main.finances_panel.ferry_history)
+		for frame in range(5): await process_frame
+		scroll.ensure_control_visible(main.finances_panel.ferry_history)
+		for frame in range(5): await process_frame
+		if not capture_dir.is_empty():
+			await RenderingServer.frame_post_draw
+			assert(root.get_texture().get_image().save_png(capture_dir.path_join("ferry-finances-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)

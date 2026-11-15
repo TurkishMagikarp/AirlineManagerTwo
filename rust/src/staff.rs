@@ -239,7 +239,8 @@ impl Game {
         self.fleet
             .iter()
             .filter(|p| {
-                self.planned_route(p.id).is_some()
+                self.ferry(p.id).is_some_and(|f| !f.settled)
+                    || self.planned_route(p.id).is_some()
                     || p.maintenance.as_ref().is_some_and(|v| v.resume.is_some())
             })
             .filter_map(|p| needs(&p.model_id).ok())
@@ -424,6 +425,14 @@ impl Game {
                 cabin += n.cabin_crew;
             }
         }
+        pilots += self
+            .ferries
+            .iter()
+            .filter(|f| !f.settled)
+            .filter_map(|f| self.fleet.iter().find(|p| p.id == f.aircraft_id))
+            .filter_map(|p| needs(&p.model_id).ok())
+            .map(|n| n.pilots)
+            .sum::<u32>();
         (pilots, cabin)
     }
 

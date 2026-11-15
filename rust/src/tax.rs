@@ -74,6 +74,7 @@ impl History {
                 - self.maintenance_through(time)
                 - self.payroll_through(time)
                 - self.interest_through(time)
+                - self.ferry_through(time)
                 - self.rent_through(time)
                 - self.marketing_through(time)
                 - self.insurance_through(time),

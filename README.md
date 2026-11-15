@@ -176,7 +176,7 @@ ihre Zuweisung frei. Die Flotte zeigt reservierte Flugzeuge mit ihrer Routennumm
 Mehrere Verbindungen auf derselben Strecke sind mit verschiedenen Flugzeugen möglich.
 
 Ohne aktivierten Flugplan bleiben Routen reine Planungen und der Standort unverändert.
-Noch keine Überführungen; Nachfrage und Wirtschaft siehe unten.
+Manuelle Überführungen im Flottenregister verfügbar; Nachfrage und Wirtschaft siehe unten.
 Entfernung: Großkreis mit Haversine und mittlerem Erdradius
 6371,0088 km; Reichweite: vereinfachter Modellwert ohne Wetter oder Reserven.
 Rust prüft den ungerundeten Wert; die UI zeigt eine Nachkommastelle.
@@ -212,6 +212,31 @@ eine Schleife über jeden Flug. Pause friert den Betrieb ein; 1×/4×/16× nutze
 dieselbe Rust-Uhr. Der neue Tab **Karte** zeigt Flughäfen, Großkreisrouten und
 anklickbare Live-Flugzeuge auf einer offline verfügbaren 2D-Weltkarte.
 Mausrad zoomt, Ziehen verschiebt; Details und Tests: [Flugkarte](docs/map.md).
+
+### Einmalige Überführungen
+
+Im **Flottenregister** öffnet **Flugzeug überführen** auf der Flugzeugkarte einen
+Dialog mit Zielflughafen, Entfernung, Flugzeit und erwarteten Kosten aus Rust.
+Das Flugzeug muss geparkt, ohne Wartungsauftrag und keiner Route zugewiesen sein;
+berechtigte Piloten müssen frei sein und das Ziel innerhalb der Modellreichweite
+liegen. Finanznot oder Insolvenz sperrt neue Überführungen. Ein unzulässiger
+Start bleibt ohne Zustandsänderung; Button und Vorschau nennen den Grund.
+
+Der Leerflug startet sofort, ohne wiederkehrenden Slot. Treibstoff zum aktuellen
+Marktpreis (ohne Liefervertragsrabatt), Flughafenentgelte für null Passagiere und
+normale Betriebskosten stehen bei Abflug fest und werden genau einmal bei der
+Landung im Flugzeugjournal gebucht. Gehälter laufen wie sonst über die
+Personalabrechnung. Keine Passagiere, Fracht, Erlöse, Ruf- oder Routenstatistik.
+**Finanzen** zeigt Überführungskosten und ein eigenes Überführungs-Flugarchiv.
+
+Auf der **Karte** bleibt das Flugzeug anklickbar. In der Luft sind Verkauf,
+Rückgabe, Kabinenumbau und Routenzuweisung gesperrt. Ein Wartungsauftrag beginnt
+nach Landung am Ziel zu den dann geltenden Basis-/Außenstationspreisen; auch
+Verschleißgrenzen erzwingen dort einen Check. Sonst folgt normale Bodenzeit,
+danach ist das Flugzeug am Ziel geparkt und kann von dort eine Route beginnen.
+Die KI nutzt Überführungen nicht. Automatische Rückkehr, Vorabplanung und
+KI-Überführungen bleiben offen. Save-Version **31** speichert laufende
+Überführungen samt eingefrorener Kosten; Version 30 lädt ohne Überführungen.
 
 ## Vereinfachte Wirtschaftssimulation
 
@@ -385,13 +410,16 @@ Der aktuelle Projektname ist `Airline Manager — UI-Basis`. Der tatsächliche P
 steht auch im Tooltip der Speichermeldung. macOS ist hier nicht praktisch getestet.
 
 Rust (`rust/src/save.rs`) übernimmt Dateizugriff, JSON-Format und Validierung.
-Das Format hat Version **10** und einen `state`-Bereich mit `clock`, `airline`,
+Das Format hat Version **31** und einen `state`-Bereich mit `clock`, `airline`,
 `fleet`, `routes` (einschließlich Ticketpreis und optionalem Flugplan) und `finance`
 (Finanzsummen und letzte 100 Flugergebnisse) sowie `history` (Beginn, Anfangssaldo,
 vorherige Finanzsummen, verlustfreie Flugblöcke und zeitgestempelte Käufe).
 Zusätzlich enthält `competitors` die vollständigen KI-Unternehmenszustände mit
 Flotte, Routen, Konten, Abflugergebnissen, Archiv und nächster Entscheidungszeit.
 Archivzeiten, Summen und Flugdaten werden beim Laden und Speichern validiert.
+Version **31** ergänzt `ferries` für laufende Überführungen und `history.ferries`
+für ihr separates Flugarchiv. Version 30 erhält leere Überführungslisten; alle
+bisherigen Unternehmensdaten und eingefrorenen Abflugkosten bleiben erhalten.
 Additive KI-Felder speichern Strecken-Verlustprüfungen und Expansionswartezeit;
 bisherige Version-9-Spielstände bleiben durch Standardwerte lesbar.
 Version **10** ergänzt je Flugzeug `wear` (Betriebsstunden/Zyklen) und

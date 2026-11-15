@@ -200,6 +200,22 @@ pub fn flight_cost_ceiling(route: &Route, model_id: &str, fuel_price: i64) -> Re
         .ok_or("Finanzüberlauf.".into())
 }
 
+/// Same physical costs as a passenger departure, without payload or demand.
+pub fn empty_flight_quote(route: &Route, model: &str, price: i64) -> Result<Totals, String> {
+    let rates = &CONFIG.models[model];
+    let seconds = operations::timings(route, model)?.0 as i64;
+    Ok(Totals {
+        fuel: fuel_bill(
+            route,
+            model,
+            price.checked_mul(100).ok_or("Treibstoffüberlauf.")?,
+        )?,
+        airport: airport_bill(route, model, 0)?,
+        overhead: rates.overhead_cycle_eur + (seconds * rates.overhead_eur_per_hour + 3599) / 3600,
+        ..Default::default()
+    })
+}
+
 /// Both endpoints charge the same model/passenger tariff at their own level.
 /// Round each endpoint up to whole EUR; empty flights still pay landing charges.
 pub fn airport_bill(route: &Route, model: &str, passengers: i64) -> Result<i64, String> {

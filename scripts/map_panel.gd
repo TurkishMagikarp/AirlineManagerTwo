@@ -152,6 +152,10 @@ func refresh_flights() -> void:
 		if flight["aircraft_id"] == selected_id:
 			route_id = flight["route_id"]
 			details.text = tr("MAP_FLIGHT_DETAILS") % [flight["flight_number"], flight["model"], flight["identifier"], flight["origin"], flight["destination"], flight["progress"] * 100, flight["arrival"]]
+			if route_id == 0:
+				_card_header("%s–%s" % [flight["origin"], flight["destination"]], "Überführung", "info")
+				_add_name("%s · %s" % [flight["model"], flight["identifier"]])
+				card_body.add_child(UI.route_leg(flight["origin"], flight["destination"], flight["progress"] * 100, flight["arrival"]))
 	for route in route_rows:
 		if route["id"] != route_id: continue
 		canvas.selected_route = route_id
