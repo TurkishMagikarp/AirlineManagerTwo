@@ -145,6 +145,24 @@ pub fn flights(game: &Game) -> Vec<Flight> {
                 ahead: position(a, b, (progress + 0.0001).min(1.0)),
             })
         })
+        .chain(game.ferries.iter().filter(|f| !f.settled).filter_map(|f| {
+            let progress = ((now.as_secs_f64() - f.departure as f64)
+                / (f.quote.landing - f.departure) as f64)
+                .clamp(0.0, 1.0);
+            let a = airport(&f.quote.origin)?;
+            let b = airport(&f.quote.destination)?;
+            Some(Flight {
+                aircraft_id: f.aircraft_id,
+                route_id: 0,
+                origin: f.quote.origin.clone(),
+                destination: f.quote.destination.clone(),
+                departure: f.departure,
+                landing: f.quote.landing,
+                progress,
+                position: position(a, b, progress),
+                ahead: position(a, b, (progress + 0.0001).min(1.0)),
+            })
+        }))
         .collect()
 }
 

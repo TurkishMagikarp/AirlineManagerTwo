@@ -79,6 +79,9 @@ impl Game {
         {
             return Err("Dieses Flugzeug ist bereits einer anderen Route zugewiesen.".into());
         }
+        if self.ferry(aircraft_id).is_some() {
+            return Err("Überführung oder anschließende Bodenzeit läuft.".into());
+        }
         let range = aircraft::model(&plane.model_id)?.range_km;
         if distance > f64::from(range) {
             return Err(format!(

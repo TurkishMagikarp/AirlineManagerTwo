@@ -18,6 +18,8 @@ mod demand;
 mod disruption_tests;
 mod disruptions;
 mod economy;
+#[cfg(test)]
+mod ferry_tests;
 mod financing;
 #[cfg(test)]
 mod financing_tests;
@@ -118,6 +120,13 @@ impl SimulationClock {
             .routes
             .iter()
             .filter_map(|r| r.plan.as_ref()?.airborne.as_ref())
+            .chain(
+                self.game
+                    .ferries
+                    .iter()
+                    .filter(|f| !f.settled)
+                    .map(|f| &f.quote),
+            )
             .map(flight_dictionary)
             .collect()
     }
@@ -230,7 +239,7 @@ impl SimulationClock {
             // Central expenses belong only to the company series, never to
             // every route (which would duplicate them again).
             let costs = i128::from(t.costs()) + if route_id == 0 {
-                h.maintenance_through(time) + h.payroll_through(time) + h.interest_through(time) + h.rent_through(time) + h.tax_through(time) + h.marketing_through(time) + h.insurance_through(time)
+                h.ferry_through(time) + h.maintenance_through(time) + h.payroll_through(time) + h.interest_through(time) + h.rent_through(time) + h.tax_through(time) + h.marketing_through(time) + h.insurance_through(time)
             } else { 0 };
             let tax = if route_id == 0 { h.tax_through(time) } else { 0 };
             let period_costs = costs - previous_costs;
@@ -340,7 +349,7 @@ impl SimulationClock {
                 let p = self.game.fleet.iter().find(|p| p.id == f.aircraft_id)?;
                 let model = aircraft::model(&p.model_id).ok()?;
                 Some(vdict! { "aircraft_id" => f.aircraft_id, "route_id" => f.route_id,
-                "flight_number" => format!("AM-{}-{}", f.route_id, f.departure).as_str(),
+                "flight_number" => if f.route_id == 0 { format!("Überführung AM-{:06}", f.aircraft_id) } else { format!("AM-{}-{}", f.route_id, f.departure) }.as_str(),
                 "identifier" => p.identifier().as_str(), "model" => model.name.as_str(),
                 "origin" => f.origin.as_str(), "destination" => f.destination.as_str(),
                 "progress" => f.progress, "arrival" => operations::display_time(f.landing).as_str(),
@@ -520,7 +529,15 @@ impl SimulationClock {
             .history
             .as_ref()
             .map_or(0, |h| h.insurance_through(u64::MAX));
-        let costs = insurance
+        let ferry_cost: i128 = self
+            .game
+            .history
+            .iter()
+            .flat_map(|h| h.ferries.iter())
+            .map(|f| i128::from(f.quote.totals.costs()))
+            .sum();
+        let costs = ferry_cost
+            + insurance
             + marketing
             + tax
             + i128::from(t.costs())
@@ -540,6 +557,7 @@ impl SimulationClock {
         "tax_year_eur" => last_tax.map_or(0, |a| a.amount),
         "tax_year" => last_tax.map_or(0, |a| a.time / demand::YEAR_SECONDS) as i64,
         "tax_loss_eur" => self.game.tax_loss(), "tax_rate_bps" => self.game.tax_rate(),
+        "ferry_eur" => ferry_cost.min(i128::from(i64::MAX)) as i64,
         "maintenance_eur" => maintenance, "payroll_eur" => payroll,
         "rent_eur" => rent.min(i128::from(i64::MAX)) as i64,
         "aircraft_cash_eur" => aircraft_cash.clamp(i128::from(i64::MIN), i128::from(i64::MAX)) as i64,
@@ -1151,6 +1169,7 @@ impl SimulationClock {
                     "cash_eur" => e.cash,
                     "kind" => match e.kind {
                         trading::Kind::Cabin => "Kabinenumbau",
+                        trading::Kind::Ferry => "Überführung",
                         trading::Kind::Sale => "Verkauf",
                         trading::Kind::Deposit => "Leasingkaution",
                         trading::Kind::Rent => "Leasingrate",
@@ -1202,6 +1221,43 @@ impl SimulationClock {
     }
 
     #[func]
+    fn preview_ferry(&self, aircraft_id: u32, destination: GString) -> VarDictionary {
+        match self.game.quote_ferry(aircraft_id, &destination.to_string()) {
+            Ok(f) => {
+                vdict! { "error" => "", "distance_km" => routes::distance_km(&f.quote.origin, &f.quote.destination).unwrap_or(0.0), "flight_seconds" => (f.quote.landing - f.departure) as i64, "cost_eur" => f.quote.totals.costs(), "fuel_eur" => f.quote.totals.fuel, "airport_eur" => f.quote.totals.airport, "overhead_eur" => f.quote.totals.overhead }
+            }
+            Err(error) => vdict! { "error" => error.as_str() },
+        }
+    }
+
+    #[func]
+    fn send_ferry(&mut self, aircraft_id: u32, destination: GString) -> GString {
+        self.game
+            .send_ferry(aircraft_id, &destination.to_string())
+            .err()
+            .unwrap_or_default()
+            .as_str()
+            .into()
+    }
+
+    #[func]
+    fn get_ferry_archive(&self, offset: i64) -> Array<VarDictionary> {
+        self.game
+            .history
+            .iter()
+            .flat_map(|h| h.ferries.iter())
+            .rev()
+            .skip(offset.max(0) as usize)
+            .take(100)
+            .map(|f| {
+                let mut row = flight_dictionary(&f.quote);
+                row.set("aircraft_id", f.aircraft_id);
+                row
+            })
+            .collect()
+    }
+
+    #[func]
     fn get_fleet(&self) -> Array<VarDictionary> {
         let airports = airports::catalog().ok();
         self.game
@@ -1221,6 +1277,8 @@ impl SimulationClock {
                     .map(|airport| airport.name.as_str())
                     .unwrap_or("");
                 vdict! {
+                    "ferry_state" => self.game.ferry(plane.id).map_or("", |f| if f.settled { "Bodenzeit" } else { "Überführung" }),
+                    "ferry_error" => self.game.require_ferry_aircraft(plane.id).err().unwrap_or_default().as_str(),
                     "delay_seconds" => self.game.planned_route(plane.id).and_then(|i| operations::movement(&self.game.routes[i], &plane.model_id, self.game.clock.elapsed().as_secs()).ok()).map_or(0, |s| s.delay_seconds) as i64,
                     "id" => plane.id, "identifier" => plane.identifier().as_str(),
                     "model_id" => plane.model_id.as_str(), "model_name" => name,

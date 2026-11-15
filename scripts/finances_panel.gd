@@ -44,6 +44,7 @@ var fuel_result: Label
 var insurance_status: Label
 var insurance_choice: OptionButton
 var insurance_result: Label
+var ferry_history: Tree
 var marketing_history: Tree
 
 func _ready() -> void:
@@ -181,6 +182,9 @@ func _ready() -> void:
 	chart_range = UI.label("", ThemeTokens.SMALL, UI.MUTED)
 	chart_range.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	company.add_child(chart_range)
+	var ferries := UI.panel(self, "ÜBERFÜHRUNGEN  /  FLUGARCHIV · LETZTE 100")
+	ferry_history = UI.table(["Landung", "Flugzeug", "Strecke", "Kosten"], [160, 105, 130, 120], 150)
+	ferries.add_child(ferry_history)
 	var routes := UI.panel(self, "ROUTENCONTROLLING  /  ROUTE ANKLICKEN", null, true)
 	route_tree = UI.table(["Route / Strecke", "Flüge", "Tickets", "Kosten", "Ergebnis", "Auslastung", "Fracht kg / EUR"], [190, 65, 115, 115, 115, 95, 150], 210)
 	route_tree.item_selected.connect(_select_route)
@@ -232,6 +236,12 @@ func refresh(force: bool = false) -> void:
 	if key == signature and not force:
 		return
 	signature = key
+	ferry_history.clear()
+	var ferry_root := ferry_history.create_item()
+	for flight in simulation.get_ferry_archive(0):
+		var row := ferry_history.create_item(ferry_root)
+		for column in range(4):
+			UI.cell_text(row, column, [flight["landing"], "AM-%06d" % flight["aircraft_id"], "%s–%s" % [flight["origin"], flight["destination"]], UI.money(flight["costs_eur"])][column])
 	insurance_choice.select(["none", "basic", "full"].find(insurance["coverage"]))
 	insurance_choice.disabled = not insurance["can_change"]
 	insurance_status.text = "Basis: %s/Jahr · Selbstbehalt %.2f %% · Limit %.2f %% des Zeitwerts\nVoll: %s/Jahr · Selbstbehalt %.2f %% · Limit %.2f %% des Zeitwerts\nAktuelle Jahresprämie: %s · Schadenaufschlag %.2f %%\nPrämien: %s\nSelbstbehalte: %s\nUnversicherte Reparaturen: %s\nPrämien anteilig täglich; Flottenwert täglich aktualisiert. Deckungswechsel sofort, alte Prämie anteilig abgerechnet. Jährliche Schadenprüfung. Betriebskosten können das Konto ins Minus bringen." % [UI.money(insurance["basic_annual"]), insurance["basic_deductible_bps"] / 100.0, insurance["basic_limit_bps"] / 100.0, UI.money(insurance["full_annual"]), insurance["full_deductible_bps"] / 100.0, insurance["full_limit_bps"] / 100.0, UI.money(insurance["annual"]), insurance["loading_bps"] / 100.0, UI.money(insurance["premium"]), UI.money(insurance["deductible"]), UI.money(insurance["uninsured"])]
@@ -276,6 +286,7 @@ func refresh(force: bool = false) -> void:
 	note.text += "\nPassagierbetreuung / Entschädigung (in Kosten und Steuerbasis enthalten): %s." % UI.money(summary["care_eur"])
 	note.text += "\nBauchfracht: %d kg · %s Umsatz (im Ergebnis und in der Ertragsteuer enthalten)." % [summary["cargo_kg"], UI.money(summary["cargo_revenue_eur"])]
 	note.text += "\nTreibstoff weltweit: %.2f EUR/kg · %s%d Cent/kg gegenüber vor 30 Tagen (wöchentlich)." % [summary["fuel_cents_per_kg"] / 100.0, "↑ +" if summary["fuel_month_delta_cents"] > 0 else ("↓ " if summary["fuel_month_delta_cents"] < 0 else "→ "), summary["fuel_month_delta_cents"]]
+	note.text += "\nÜberführungen (in Gesamtkosten enthalten): %s." % UI.money(summary["ferry_eur"])
 	note.text += "\nLeasingraten (in Kosten enthalten): %s · Flugzeugjournal netto inkl. Verkäufen, Kautionen, Raten und Rückgaben: %s." % [UI.money(summary["rent_eur"]), UI.money(summary["aircraft_cash_eur"])]
 	note.text += "\nBordservice (Kosten / Ersparnis gegenüber Standard, in Gesamtkosten enthalten): %s." % UI.money(summary["service_eur"])
 	note.text += "\nErtragsteuer · letzter Abschluss Jahr %d: %s · Verlustvortrag: %s · Heimatsteuersatz: %.2f %% · Steuern insgesamt: %s. Abschluss alle 365 Tage; Jahr 0 = noch kein Abschluss." % [summary["tax_year"], UI.money(summary["tax_year_eur"]), UI.money(summary["tax_loss_eur"]), summary["tax_rate_bps"] / 100.0, UI.money(summary["tax_eur"])]

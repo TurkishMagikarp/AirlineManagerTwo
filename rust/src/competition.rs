@@ -321,7 +321,9 @@ impl Game {
             self.clock = target;
             return true;
         }
-        if crate::reputation::next_day(self.clock.elapsed().as_secs()) > target.elapsed().as_secs()
+        if self.ferries.is_empty()
+            && crate::reputation::next_day(self.clock.elapsed().as_secs())
+                > target.elapsed().as_secs()
             && self.competitors.is_empty()
             && self
                 .routes
@@ -420,7 +422,8 @@ impl Game {
                 .min()
                 .unwrap_or(u64::MAX);
             // Maintenance starts, ends and forced groundings of every company.
-            let maintenance = std::iter::once(staged.next_maintenance_event())
+            let maintenance = std::iter::once(staged.next_ferry_event())
+                .chain(std::iter::once(staged.next_maintenance_event()))
                 .chain(std::iter::once(staged.next_rotation_event()))
                 .chain(std::iter::once(staged.next_payroll_event()))
                 .chain(std::iter::once(staged.next_training_event()))
@@ -430,6 +433,7 @@ impl Game {
                 .chain(std::iter::once(staged.next_insurance_event()))
                 .chain(staged.competitors.iter().flat_map(|c| {
                     [
+                        c.game.next_ferry_event(),
                         c.game.next_maintenance_event(),
                         c.game.next_rotation_event(),
                         c.game.next_payroll_event(),
@@ -517,14 +521,20 @@ impl Game {
             }
             if staged.apply_insurance().is_err()
                 || staged.apply_rotation_removals().is_err()
-                || staged.apply_maintenance().is_err()
+                || staged
+                    .apply_ferries()
+                    .and_then(|()| staged.apply_maintenance())
+                    .is_err()
                 || staged.apply_payroll().is_err()
                 || staged.apply_marketing().is_err()
                 || staged.apply_financing().is_err()
                 || staged.competitors.iter_mut().any(|c| {
                     c.game.apply_insurance().is_err()
                         || c.game.apply_rotation_removals().is_err()
-                        || c.game.apply_maintenance().is_err()
+                        || c.game
+                            .apply_ferries()
+                            .and_then(|()| c.game.apply_maintenance())
+                            .is_err()
                         || c.game.apply_payroll().is_err()
                         || c.game.apply_marketing().is_err()
                         || c.game.apply_financing().is_err()

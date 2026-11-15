@@ -104,6 +104,84 @@ var fleet_operations: VBoxContainer
 var last_clock_view := ""
 
 
+var ferry_card: VBoxContainer
+var ferry_dialog: Control
+var ferry_destination: OptionButton
+var ferry_preview: Label
+var ferry_button: Button
+var ferry_chip: Control
+var ferry_title: Label
+var ferry_toast: CanvasLayer
+var ferry_aircraft := 0
+
+func _build_ferry_card(parent: VBoxContainer) -> void:
+	ferry_card = UI.panel(parent, "FLUGZEUG  /  ÜBERFÜHRUNG")
+	ferry_title = UI.label("", UI.EMPTY_TITLE)
+	ferry_title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	ferry_card.add_child(ferry_title)
+	ferry_button = Button.new()
+	ferry_button.text = "Flugzeug überführen"
+	ferry_button.pressed.connect(_open_ferry)
+	ferry_card.add_child(ferry_button)
+
+func _refresh_ferry_card(plane: Dictionary) -> void:
+	ferry_card.get_parent().get_parent().get_parent().visible = not plane.is_empty()
+	ferry_title.text = "%s · %s · %s" % [plane.get("identifier", ""), plane.get("model_name", ""), plane.get("location_icao", "")]
+	if is_instance_valid(ferry_chip):
+		ferry_card.remove_child(ferry_chip)
+		ferry_chip.queue_free()
+	var state: String = plane.get("ferry_state", "")
+	ferry_chip = UI.status_chip(state if not state.is_empty() else {"parked": "Geparkt", "in_flight": "Unterwegs", "ground": "Bodenzeit", "maintenance": "Wartung"}.get(plane.get("status", ""), "Geparkt"), "info" if plane.get("status") == "in_flight" else "neutral")
+	ferry_card.add_child(ferry_chip)
+	ferry_card.move_child(ferry_chip, 1)
+	ferry_button.disabled = not String(plane.get("ferry_error", "")).is_empty()
+	ferry_button.tooltip_text = plane.get("ferry_error", "")
+	if is_instance_valid(ferry_dialog): _preview_ferry()
+
+func _open_ferry() -> void:
+	ferry_aircraft = selected_aircraft
+	var plane: Dictionary = fleet_rows[ferry_aircraft]
+	ferry_dialog = UI.dialog(self, "%s überführen?" % plane["identifier"], "Einmaliger Leerflug ohne Erlös. Kosten werden bei Landung gebucht; danach gilt die normale Bodenzeit.", "Abbrechen", "Überführung starten", _send_ferry)
+	ferry_dialog.get_ok_button().theme_type_variation = "PrimaryButton"
+	var content: VBoxContainer = ferry_dialog.card.get_child(0)
+	ferry_destination = OptionButton.new()
+	ferry_destination.fit_to_longest_item = false
+	ferry_destination.clip_text = true
+	for airport in simulation.get_maintenance_airports():
+		if airport["icao"] == plane["location_icao"]: continue
+		ferry_destination.add_item("%s · %s" % [airport["icao"], airport["name"]])
+		ferry_destination.set_item_metadata(ferry_destination.item_count - 1, airport["icao"])
+	ferry_destination.item_selected.connect(func(_index: int): _preview_ferry())
+	var field := UI.field(content, "Zielflughafen", ferry_destination)
+	content.move_child(field, 2)
+	ferry_preview = UI.label("", ThemeTokens.DATA)
+	ferry_preview.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	content.add_child(ferry_preview)
+	content.move_child(ferry_preview, 3)
+	# Include the selector in keyboard traversal inside the dialog.
+	ferry_dialog.safe_button.focus_next = ferry_dialog.safe_button.get_path_to(ferry_destination)
+	ferry_destination.focus_next = ferry_destination.get_path_to(ferry_dialog.danger_button)
+	ferry_destination.focus_previous = ferry_destination.get_path_to(ferry_dialog.safe_button)
+	ferry_dialog.danger_button.focus_previous = ferry_dialog.danger_button.get_path_to(ferry_destination)
+	_preview_ferry()
+	ferry_dialog.popup_centered()
+
+func _preview_ferry() -> void:
+	if ferry_destination.selected < 0: return
+	var quote: Dictionary = simulation.preview_ferry(ferry_aircraft, ferry_destination.get_selected_metadata())
+	var error: String = quote["error"]
+	ferry_dialog.get_ok_button().disabled = not error.is_empty()
+	ferry_dialog.get_ok_button().tooltip_text = error
+	ferry_preview.text = error if not error.is_empty() else "%.0f km · %.0f min\nErwartete Kosten: %s\nTreibstoff %s · Flughäfen %s · Betrieb %s" % [quote["distance_km"], quote["flight_seconds"] / 60.0, UI.money(quote["cost_eur"]), UI.money(quote["fuel_eur"]), UI.money(quote["airport_eur"]), UI.money(quote["overhead_eur"])]
+	ferry_preview.add_theme_color_override("font_color", ThemeTokens.STOP if not error.is_empty() else ThemeTokens.INK)
+
+func _send_ferry() -> void:
+	var error: String = simulation.send_ferry(ferry_aircraft, ferry_destination.get_selected_metadata())
+	if is_instance_valid(ferry_toast): ferry_toast.queue_free()
+	ferry_toast = UI.toast(self, "Überführung gestartet." if error.is_empty() else error, error.is_empty())
+	_refresh_fleet()
+
+
 func _ready() -> void:
 	RenderingServer.set_default_clear_color(ThemeTokens.GROUND)
 	get_window().min_size = Vector2i(680, 520)
@@ -445,6 +523,7 @@ func _build_fleet(content: VBoxContainer) -> void:
 		fleet_tree.set_column_expand(index, index == 1 or index == 5)
 	fleet_tree.item_selected.connect(_refresh_maintenance)
 	owned.add_child(fleet_tree)
+	_build_ferry_card(owned)
 	disposal_details = _label("", ThemeTokens.BODY)
 	disposal_details.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	owned.add_child(disposal_details)
@@ -492,6 +571,7 @@ func _model_selected(index: int) -> void:
 
 func _fleet_tab_changed(index: int) -> void:
 	var plane: Dictionary = fleet_rows.get(selected_aircraft, {})
+	_refresh_ferry_card(plane)
 	if previous_fleet_tab == 0 and index != 0 and not plane.is_empty() and int(cabin_input.value) != plane["business_seats"]:
 		fleet_tabs.set_block_signals(true)
 		fleet_tabs.current_tab = 0
@@ -522,6 +602,7 @@ func _refresh_offers() -> void:
 
 func _confirm_disposal() -> void:
 	var plane: Dictionary = fleet_rows.get(selected_aircraft, {})
+	_refresh_ferry_card(plane)
 	if plane.is_empty(): return
 	var aircraft_id := selected_aircraft
 	var dialog := UI.dialog(self, "%s verkaufen?" % plane["identifier"] if not plane["leased"] else "%s zurückgeben?" % plane["identifier"], disposal_details.text, "Abbrechen", disposal_button.text, func():
@@ -542,6 +623,7 @@ func _lease_aircraft() -> void:
 
 func _dispose_aircraft() -> void:
 	var plane: Dictionary = fleet_rows.get(selected_aircraft, {})
+	_refresh_ferry_card(plane)
 	if plane.is_empty():
 		return
 	var error: String = simulation.return_aircraft(selected_aircraft) if plane["leased"] else simulation.sell_aircraft(selected_aircraft)
@@ -654,7 +736,7 @@ func _refresh_fleet() -> void:
 		UI.cell_text(row, 0, plane["identifier"])
 		UI.cell_text(row, 1, "%s · %s · Y %d / J %d" % [plane["model_name"], plane["ownership"], plane["economy_seats"], plane["business_seats"]])
 		UI.cell_text(row, 2, plane["location_icao"])
-		var phase: String = {"parked": "Geparkt", "in_flight": "Unterwegs", "ground": "Gelandet · Bodenzeit", "maintenance": "In Wartung"}.get(plane["status"], "Unbekannt")
+		var phase: String = plane["ferry_state"] if not plane["ferry_state"].is_empty() else {"parked": "Geparkt", "in_flight": "Unterwegs", "ground": "Gelandet · Bodenzeit", "maintenance": "In Wartung"}.get(plane["status"], "Unbekannt")
 		UI.cell_text(row, 3, "%s · Route #%d" % [phase, plane["route_id"]] if plane["route_id"] != 0 else phase)
 		UI.cell_text(row, 3, row.get_text(3) + " · %d min verspätet" % ceili(plane["delay_seconds"] / 60.0))
 		UI.cell_status(row, 3, row.get_text(3), "info" if plane["status"] in ["in_flight", "maintenance"] else "neutral")
@@ -759,6 +841,7 @@ func _refresh_maintenance() -> void:
 	selected_aircraft = item.get_metadata(0) if item != null else 0
 	var previous_cabin_id: int = cabin_input.get_meta("aircraft_id", -1)
 	var plane: Dictionary = fleet_rows.get(selected_aircraft, {})
+	_refresh_ferry_card(plane)
 	cabin_button.disabled = plane.is_empty() or not plane.get("can_edit_cabin", false)
 	cabin_input.editable = not cabin_button.disabled
 	cabin_input.max_value = plane.get("max_business_seats", 0)
@@ -807,6 +890,7 @@ func _refresh_maintenance() -> void:
 
 func _confirm_maintenance() -> void:
 	var plane: Dictionary = fleet_rows.get(selected_aircraft, {})
+	_refresh_ferry_card(plane)
 	if plane.is_empty(): return
 	var aircraft_id := selected_aircraft
 	var consequence := "Wartung jetzt: ca. %s · %.0f h Dauer. Die Kosten werden bei Beginn festgelegt. Während der Wartung finden keine Abflüge statt." % [UI.money(plane["maintenance_cost_eur"]), plane["maintenance_hours"]]
@@ -1103,7 +1187,7 @@ func _refresh_overview_register() -> void:
 		UI.cell_text(row, 0, plane["identifier"])
 		UI.cell_text(row, 1, plane["model_name"])
 		UI.cell_text(row, 2, plane["location_icao"])
-		var phase: String = {"parked": "Geparkt", "in_flight": "Unterwegs", "ground": "Gelandet · Bodenzeit", "maintenance": "In Wartung"}.get(plane["status"], "Unbekannt")
+		var phase: String = plane["ferry_state"] if not plane["ferry_state"].is_empty() else {"parked": "Geparkt", "in_flight": "Unterwegs", "ground": "Gelandet · Bodenzeit", "maintenance": "In Wartung"}.get(plane["status"], "Unbekannt")
 		UI.cell_status(row, 3, phase, "info" if plane["status"] in ["in_flight", "maintenance"] else "neutral")
 
 

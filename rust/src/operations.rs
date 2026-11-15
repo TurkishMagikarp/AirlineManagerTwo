@@ -155,6 +155,270 @@ fn departure_quote_prepared(
     })
 }
 
+/// One dispatch, with an immutable empty-flight quote. Ground time retains the
+/// dispatch until ready; maintenance may take over immediately at landing.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Ferry {
+    pub aircraft_id: u32,
+    pub departure: u64,
+    pub ready: u64,
+    pub quote: crate::economy::FlightResult,
+    pub settled: bool,
+}
+
+impl Game {
+    pub fn ferry(&self, id: u32) -> Option<&Ferry> {
+        self.ferries.iter().find(|f| f.aircraft_id == id)
+    }
+
+    pub fn validate_ferries(&self) -> Result<(), String> {
+        let now = self.clock.elapsed().as_secs();
+        let invalid = || "Ungültige Überführung im Spielstand.".to_string();
+        let check = |f: &Ferry| -> Result<(), String> {
+            let t = &f.quote.totals;
+            let expected = crate::economy::Totals {
+                fuel: t.fuel,
+                airport: t.airport,
+                overhead: t.overhead,
+                ..Default::default()
+            };
+            if *t != expected
+                || t.fuel < 0
+                || t.airport < 0
+                || t.overhead < 0
+                || f.quote.route_id != 0
+                || f.quote.ticket_eur != 0
+                || f.quote.landing <= f.departure
+                || f.ready < f.quote.landing
+                || f.departure > now
+                || f.aircraft_id == 0
+                || f.aircraft_id >= self.next_aircraft_id
+                || crate::routes::distance_km(&f.quote.origin, &f.quote.destination).is_err()
+                || t.fuel
+                    .checked_add(t.airport)
+                    .and_then(|v| v.checked_add(t.overhead))
+                    .is_none()
+            {
+                return Err(invalid());
+            }
+            Ok(())
+        };
+        if self
+            .ferries
+            .windows(2)
+            .any(|w| w[0].aircraft_id >= w[1].aircraft_id)
+        {
+            return Err(invalid());
+        }
+        for f in &self.ferries {
+            check(f)?;
+            let p = self
+                .fleet
+                .iter()
+                .find(|p| p.id == f.aircraft_id)
+                .ok_or_else(invalid)?;
+            let model = aircraft::model(&p.model_id)?;
+            let flight = (crate::routes::distance_km(&f.quote.origin, &f.quote.destination)?
+                / f64::from(model.cruise_kmh)
+                * 3600.0)
+                .ceil() as u64;
+            if f.quote.landing - f.departure != flight.max(1)
+                || f.ready - f.quote.landing != u64::from(model.turnaround_minutes) * 60
+                || crate::routes::distance_km(&f.quote.origin, &f.quote.destination)?
+                    > f64::from(model.range_km)
+                || self.routes.iter().any(|r| r.aircraft_id == Some(p.id))
+                || f.ready <= now
+                || f.settled != (f.quote.landing <= now)
+                || p.status
+                    != if f.settled {
+                        AircraftStatus::Ground
+                    } else {
+                        AircraftStatus::InFlight
+                    }
+                || p.location_icao
+                    != if f.settled {
+                        &f.quote.destination
+                    } else {
+                        &f.quote.origin
+                    }
+                    .as_str()
+            {
+                return Err(invalid());
+            }
+        }
+        if let Some(h) = &self.history {
+            for f in &h.ferries {
+                check(f)?;
+                if f.settled || f.quote.landing > now {
+                    return Err(invalid());
+                }
+            }
+            let expenses: Vec<_> = h
+                .aircraft_cash
+                .iter()
+                .filter(|e| e.kind == crate::trading::Kind::Ferry)
+                .collect();
+            if expenses.len() != h.ferries.len()
+                || expenses
+                    .iter()
+                    .zip(&h.ferries)
+                    .any(|(e, f)| e.time != f.quote.landing || e.cash != -f.quote.totals.costs())
+            {
+                return Err(invalid());
+            }
+        } else if !self.ferries.is_empty() {
+            return Err(invalid());
+        }
+        Ok(())
+    }
+
+    pub fn require_ferry_aircraft(&self, id: u32) -> Result<(), String> {
+        self.require_solvent()?;
+        let plane = self
+            .fleet
+            .iter()
+            .find(|p| p.id == id)
+            .ok_or("Unbekanntes Flugzeug.")?;
+        if plane.status != AircraftStatus::Parked || self.ferry(id).is_some() {
+            return Err("Überführung benötigt ein geparktes Flugzeug.".into());
+        }
+        if plane.maintenance.is_some() {
+            return Err("Wartung ist geplant oder läuft.".into());
+        }
+        if self.routes.iter().any(|r| r.aircraft_id == Some(id)) {
+            return Err("Flugzeug ist einer Route zugewiesen.".into());
+        }
+        let needs = crate::staff::needs(&plane.model_id)?;
+        if self.rated_available(&needs.rating) < needs.pilots {
+            return Err(format!("Berechtigte Piloten fehlen: {}.", needs.rating));
+        }
+        Ok(())
+    }
+
+    pub fn quote_ferry(&self, id: u32, destination: &str) -> Result<Ferry, String> {
+        self.require_ferry_aircraft(id)?;
+        let plane = self.fleet.iter().find(|p| p.id == id).unwrap();
+        let distance = crate::routes::distance_km(&plane.location_icao, destination)?;
+        if distance > f64::from(aircraft::model(&plane.model_id)?.range_km) {
+            return Err("Ziel liegt außerhalb der Reichweite.".into());
+        }
+        let departure = self.clock.elapsed().as_secs();
+        let route = Route {
+            id: 0,
+            origin_icao: plane.location_icao.clone(),
+            destination_icao: destination.into(),
+            aircraft_id: Some(id),
+            parent_route_id: None,
+            remove_at: None,
+            rotation_phase: None,
+            ticket_eur: 0,
+            business_ticket_eur: 0,
+            cargo_rate_cents: 0,
+            service_level: crate::service::Level::default(),
+            plan: None,
+        };
+        let (seconds, ground) = timings(&route, &plane.model_id)?;
+        let landing = departure.checked_add(seconds).ok_or("Zeitüberlauf.")?;
+        let totals = crate::economy::empty_flight_quote(
+            &route,
+            &plane.model_id,
+            self.fuel_market.price_at(departure),
+        )?;
+        Ok(Ferry {
+            aircraft_id: id,
+            departure,
+            ready: landing.checked_add(ground).ok_or("Zeitüberlauf.")?,
+            quote: crate::economy::FlightResult {
+                route_id: 0,
+                landing,
+                origin: plane.location_icao.clone(),
+                destination: destination.into(),
+                ticket_eur: 0,
+                totals,
+            },
+            settled: false,
+        })
+    }
+
+    pub fn send_ferry(&mut self, id: u32, destination: &str) -> Result<(), String> {
+        let ferry = self.quote_ferry(id, destination)?;
+        self.fleet.iter_mut().find(|p| p.id == id).unwrap().status = AircraftStatus::InFlight;
+        self.ferries.push(ferry);
+        self.ferries.sort_by_key(|f| f.aircraft_id);
+        Ok(())
+    }
+
+    pub fn next_ferry_event(&self) -> Option<u64> {
+        self.ferries
+            .iter()
+            .map(|f| if f.settled { f.ready } else { f.quote.landing })
+            .min()
+    }
+
+    pub(crate) fn apply_ferries(&mut self) -> Result<(), String> {
+        let now = self.clock.elapsed().as_secs();
+        for i in 0..self.ferries.len() {
+            let f = self.ferries[i].clone();
+            let p = self
+                .fleet
+                .iter()
+                .position(|p| p.id == f.aircraft_id)
+                .ok_or("Flugzeug fehlt.")?;
+            if !f.settled && f.quote.landing <= now {
+                let wear = self.fleet[p]
+                    .wear
+                    .added(1, f.quote.landing - f.departure)
+                    .ok_or("Betriebszeit-Überlauf.")?;
+                self.post_aircraft_cash(-f.quote.totals.costs(), crate::trading::Kind::Ferry)?;
+                self.history
+                    .as_mut()
+                    .ok_or("Finanzhistorie fehlt.")?
+                    .ferries
+                    .push(f.clone());
+                self.fleet[p].wear = wear;
+                self.fleet[p].location_icao = f.quote.destination.clone();
+                self.fleet[p].status = AircraftStatus::Ground;
+                self.ferries[i].settled = true;
+                if self.fleet[p].maintenance.is_none()
+                    && self.fleet[p]
+                        .wear
+                        .is_due(crate::maintenance::rules(&self.fleet[p].model_id)?)
+                {
+                    let mut visit = crate::maintenance::Visit {
+                        start: now,
+                        end: now,
+                        cost_eur: 0,
+                        unscheduled: true,
+                        resume: None,
+                        staffed: true,
+                    };
+                    let rules = crate::maintenance::rules(&self.fleet[p].model_id)?;
+                    let (cost, duration) =
+                        self.check_at(&f.quote.destination, &self.fleet[p].wear, rules, true)?;
+                    visit.cost_eur = cost;
+                    visit.end = now.checked_add(duration).ok_or("Zeitüberlauf.")?;
+                    visit.unscheduled = true;
+                    self.fleet[p].maintenance = Some(visit);
+                }
+            }
+            if self.ferries[i].settled
+                && f.ready <= now
+                && self.fleet[p].status == AircraftStatus::Ground
+            {
+                self.fleet[p].status = AircraftStatus::Parked;
+            }
+        }
+        self.ferries.retain(|f| {
+            f.ready > now
+                && self
+                    .fleet
+                    .iter()
+                    .any(|p| p.id == f.aircraft_id && p.status != AircraftStatus::Maintenance)
+        });
+        Ok(())
+    }
+}
+
 pub struct Movement {
     pub delay_seconds: u64,
     pub status: AircraftStatus,
@@ -548,6 +812,7 @@ impl Game {
     }
 
     pub fn validate_operations(&self) -> Result<(), String> {
+        self.validate_ferries()?;
         for plane in &self.fleet {
             if let Some(route) = self
                 .routes
@@ -598,6 +863,8 @@ impl Game {
                 {
                     return Err("Widersprüchlicher Flugzustand im Spielstand.".into());
                 }
+            } else if self.ferry(plane.id).is_some() {
+                // Validated together with its immutable dispatch below.
             } else if !matches!(
                 plane.status,
                 AircraftStatus::Parked | AircraftStatus::Maintenance
