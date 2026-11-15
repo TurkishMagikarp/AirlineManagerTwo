@@ -181,6 +181,15 @@ func _init() -> void:
 		var image := Image.new()
 		image.load_svg_from_string(svg)
 		set_icon("checked" if checked else "unchecked", "CheckBox", ImageTexture.create_from_image(image))
+	text_style("CheckButton", BODY)
+	for checked in [false, true]:
+		var fill: Color = ACCENT if checked else SURFACE_SUNKEN
+		var thumb: Color = ON_ACCENT if checked else INK_MUTED
+		var svg := '<svg xmlns="http://www.w3.org/2000/svg" width="36" height="22"><rect x="1" y="2" width="34" height="18" rx="9" fill="#%s"/><circle cx="%d" cy="11" r="7" fill="#%s"/></svg>' % [fill.to_html(false), 26 if checked else 10, thumb.to_html(false)]
+		var image := Image.new()
+		image.load_svg_from_string(svg)
+		set_icon("checked" if checked else "unchecked", "CheckButton", ImageTexture.create_from_image(image))
+	set_stylebox("focus", "CheckButton", focus_box())
 	default_font = font_for(BODY)
 	default_font_size = BODY["size"]
 	set_color("font_color", "Label", INK)

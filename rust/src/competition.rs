@@ -3,7 +3,6 @@ use crate::{clock::Clock, game::Game, routes::Route};
 use serde::{Deserialize, Serialize};
 use std::{sync::LazyLock, time::Duration};
 
-const REVIEW: u64 = 7 * 86400;
 /// Weekly reviews a stopped service waits before the market is checked again.
 const RETRY_AFTER: u32 = 4;
 /// Departure interval used by AI services, in minutes.
@@ -91,7 +90,7 @@ fn staffing_per_week(game: &Game, model: &str) -> Result<i64, String> {
     let monthly = pilots * staff::salary(Role::Pilot)?
         + cabin * staff::salary(Role::CabinCrew)?
         + techs * staff::salary(Role::Technician)?;
-    Ok(monthly * REVIEW as i64 / period)
+    Ok(monthly * crate::pricing::RULES.fare_review_seconds as i64 / period)
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -218,7 +217,7 @@ fn starter_competitors(
             game: Box::new(g),
             next_review: now
                 .as_secs()
-                .checked_add(REVIEW)
+                .checked_add(crate::pricing::RULES.fare_review_seconds)
                 .ok_or("KI-Zeitüberlauf.")?,
             losing_reviews: 0,
             last_profit: 0,
@@ -267,7 +266,7 @@ impl Game {
         Ok(offer)
     }
 
-    fn economy_offer(
+    pub(crate) fn economy_offer(
         &self,
         route: &crate::routes::Route,
         plane: &crate::aircraft::Aircraft,
@@ -308,7 +307,8 @@ impl Game {
                 || !g.competitors.is_empty()
                 || g.clock.elapsed() != self.clock.elapsed()
                 || c.next_review <= self.clock.elapsed().as_secs()
-                || c.next_review - self.clock.elapsed().as_secs() > REVIEW
+                || c.next_review - self.clock.elapsed().as_secs()
+                    > crate::pricing::RULES.fare_review_seconds
                 || c.losing_reviews > 2
                 || c.idle_reviews > RETRY_AFTER
                 || c.last_action.len() > 200
@@ -369,7 +369,10 @@ impl Game {
             self.clock = target;
             return true;
         }
-        if self.ferries.is_empty()
+        if self
+            .next_pricing_event()
+            .is_none_or(|t| t > target.elapsed().as_secs())
+            && self.ferries.is_empty()
             && crate::reputation::next_day(self.clock.elapsed().as_secs())
                 > target.elapsed().as_secs()
             && self.competitors.is_empty()
@@ -477,7 +480,8 @@ impl Game {
                 .min()
                 .unwrap_or(u64::MAX);
             // Maintenance starts, ends and forced groundings of every company.
-            let maintenance = std::iter::once(staged.next_ferry_event())
+            let maintenance = std::iter::once(staged.next_pricing_event())
+                .chain(std::iter::once(staged.next_ferry_event()))
                 .chain(std::iter::once(staged.next_maintenance_event()))
                 .chain(std::iter::once(staged.next_rotation_event()))
                 .chain(std::iter::once(staged.next_payroll_event()))
@@ -636,6 +640,9 @@ impl Game {
                     std::mem::swap(&mut staged.used_market, &mut c.game.used_market);
                 }
             }
+            if staged.apply_pricing().is_err() {
+                return false;
+            }
             if end.as_secs().is_multiple_of(crate::reputation::DAY) && end.subsec_nanos() == 0 {
                 staged.evaluate_milestones();
             }
@@ -767,7 +774,10 @@ impl Competitor {
             }
             self.last_action =
                 "Finanznot: Expansion ausgesetzt, ungenutztes Personal abgebaut".into();
-            let Some(next) = self.next_review.checked_add(REVIEW) else {
+            let Some(next) = self
+                .next_review
+                .checked_add(crate::pricing::RULES.fare_review_seconds)
+            else {
                 return false;
             };
             self.next_review = next;
@@ -861,7 +871,8 @@ impl Competitor {
                 - i128::from(previous.profit)
                 - i128::from(landed) * i128::from(maintenance);
             let rent = plane.lease.as_ref().map_or(0, |l| {
-                i128::from(l.monthly) * i128::from(REVIEW) / i128::from(l.period)
+                i128::from(l.monthly) * i128::from(crate::pricing::RULES.fare_review_seconds)
+                    / i128::from(l.period)
             });
             // A seasonal trough alone must not retire an annually viable route.
             // Real losses still count when annual demand cannot cover the service.
@@ -884,7 +895,8 @@ impl Competitor {
             ) else {
                 return false;
             };
-            let annual_week = i128::from(annual.profit() - maintenance) * i128::from(REVIEW)
+            let annual_week = i128::from(annual.profit() - maintenance)
+                * i128::from(crate::pricing::RULES.fare_review_seconds)
                 / i128::from(r.plan.as_ref().unwrap().interval_seconds)
                 - rent;
             let losses = if week - rent < 0 && annual_week < 0 {
@@ -910,51 +922,19 @@ impl Competitor {
             let Some(plane) = self.game.fleet.iter().find(|p| Some(p.id) == r.aircraft_id) else {
                 return false;
             };
-            // Evaluate nearby fares with the same demand/cost functions as players.
             let old = r.ticket_eur;
-            let mut best = (i64::MIN, old);
-            let mut candidate = r.clone();
-            // Preserve main's direct-only hypothetical offer, including its
-            // neutral awareness/reputation, rather than granting a hub bonus.
-            let mut fare_supply = candidate_supply(r, supply);
-            if let Some(index) = fare_supply.iter().position(|o| &o.route == r) {
-                fare_supply.remove(index);
-            }
-            fare_supply.push(self.game.economy_offer(&candidate, plane).unwrap());
-            let Ok(mut fare_market) =
-                crate::economy::QuoteMarket::direct(&candidate, &plane.model_id, &fare_supply)
-            else {
+            let Ok(best) = crate::pricing::review(&self.game, r, plane, supply, false) else {
                 return false;
             };
-            for price in [old.saturating_sub(10).max(0), old, (old + 10).min(100_000)] {
-                candidate.ticket_eur = price;
-                if plane.business_seats > 0 {
-                    candidate.business_ticket_eur = crate::cabins::premium_fare(price);
-                }
-                fare_market.reprice_direct(&candidate);
-                let Ok(t) = crate::economy::quote_prepared(
-                    &candidate,
-                    &plane.model_id,
-                    supply,
-                    fuel,
-                    None,
-                    &mut fare_market,
-                ) else {
-                    return false;
-                };
-                if t.profit() > best.0 || (t.profit() == best.0 && price == old) {
-                    best = (t.profit(), price);
-                }
-            }
             let business_fare =
-                (plane.business_seats > 0).then(|| crate::cabins::premium_fare(best.1));
-            if self.game.set_ticket_price(id, best.1).is_err()
+                (plane.business_seats > 0).then(|| crate::cabins::premium_fare(best.fare));
+            if self.game.set_ticket_price(id, best.fare).is_err()
                 || business_fare
                     .is_some_and(|fare| self.game.set_business_ticket_price(id, fare).is_err())
             {
                 return false;
             }
-            self.last_action = format!("Preisprüfung: {old} → {} EUR", best.1);
+            self.last_action = format!("Preisprüfung: {old} → {} EUR", best.fare);
         }
         for id in &closed {
             if self.game.delete_route(*id).is_err() {
@@ -975,7 +955,10 @@ impl Competitor {
                 return false;
             }
         }
-        let Some(next) = self.next_review.checked_add(REVIEW) else {
+        let Some(next) = self
+            .next_review
+            .checked_add(crate::pricing::RULES.fare_review_seconds)
+        else {
             return false;
         };
         self.plan_maintenance(next);
@@ -1067,7 +1050,9 @@ impl Competitor {
                     - i128::from(landed) * i128::from(maintenance_per_flight(r, &plane.model_id)?)
                     - i128::from(staffing_per_week(&self.game, &plane.model_id)?);
                 if let Some(l) = &plane.lease {
-                    week -= i128::from(l.monthly) * i128::from(REVIEW) / i128::from(l.period);
+                    week -= i128::from(l.monthly)
+                        * i128::from(crate::pricing::RULES.fare_review_seconds)
+                        / i128::from(l.period);
                 }
                 let quote = planning_quote(
                     r,
@@ -1079,12 +1064,13 @@ impl Competitor {
                 )?;
                 annual_week +=
                     i128::from(quote.profit() - maintenance_per_flight(r, &plane.model_id)?)
-                        * i128::from(REVIEW)
+                        * i128::from(crate::pricing::RULES.fare_review_seconds)
                         / i128::from(r.plan.as_ref().unwrap().interval_seconds)
                         - i128::from(staffing_per_week(&self.game, &plane.model_id)?);
                 if let Some(l) = &plane.lease {
-                    annual_week -=
-                        i128::from(l.monthly) * i128::from(REVIEW) / i128::from(l.period);
+                    annual_week -= i128::from(l.monthly)
+                        * i128::from(crate::pricing::RULES.fare_review_seconds)
+                        / i128::from(l.period);
                 }
                 expected.add(&quote, 1).ok_or("KI-Finanzüberlauf")?;
                 previous_losses = previous_losses.min(previous.losses);
@@ -1189,11 +1175,15 @@ impl Competitor {
                         .price_at(self.game.clock.elapsed().as_secs()),
                 )?;
                 let rent = p.lease.as_ref().map_or(0, |l| {
-                    (l.monthly * REVIEW as i64 + l.period as i64 - 1) / l.period as i64
+                    (l.monthly * crate::pricing::RULES.fare_review_seconds as i64 + l.period as i64
+                        - 1)
+                        / l.period as i64
                 });
                 strong &= q.load_percent() >= FREQUENCY.load_factor_percent
                     && (q.profit() - maintenance_per_flight(r, &p.model_id)?)
-                        * (REVIEW / r.plan.as_ref().unwrap().interval_seconds) as i64
+                        * (crate::pricing::RULES.fare_review_seconds
+                            / r.plan.as_ref().unwrap().interval_seconds)
+                            as i64
                         > staffing_per_week(g, &p.model_id)? + rent;
             }
             if strong {
@@ -1348,7 +1338,9 @@ impl Competitor {
                                     .price_at(self.game.clock.elapsed().as_secs()),
                             )?;
                             dilution += (before.profit() - after.profit())
-                                * (REVIEW / old.plan.as_ref().unwrap().interval_seconds) as i64;
+                                * (crate::pricing::RULES.fare_review_seconds
+                                    / old.plan.as_ref().unwrap().interval_seconds)
+                                    as i64;
                         }
                         if t.load_percent() < FREQUENCY.load_factor_percent {
                             continue;
@@ -1363,11 +1355,14 @@ impl Competitor {
                         } else {
                             0
                         },
-                        profit: (t.profit() - maintenance) * (REVIEW / (interval * 60)) as i64
+                        profit: (t.profit() - maintenance)
+                            * (crate::pricing::RULES.fare_review_seconds / (interval * 60)) as i64
                             - staffing
                             - dilution,
                         costs: staffing
-                            + (t.costs() + maintenance) * (REVIEW / (interval * 60)) as i64,
+                            + (t.costs() + maintenance)
+                                * (crate::pricing::RULES.fare_review_seconds / (interval * 60))
+                                    as i64,
                     });
                 }
             }
@@ -1389,7 +1384,10 @@ impl Competitor {
             .fleet
             .iter()
             .filter_map(|p| p.lease.as_ref())
-            .map(|l| (l.monthly * REVIEW as i64 + l.period as i64 - 1) / l.period as i64)
+            .map(|l| {
+                (l.monthly * crate::pricing::RULES.fare_review_seconds as i64 + l.period as i64 - 1)
+                    / l.period as i64
+            })
             .sum::<i64>();
         for route in g.routes.iter().filter(|r| r.plan.is_some()) {
             let plane = g
@@ -1406,7 +1404,8 @@ impl Competitor {
                     .price_at(self.game.clock.elapsed().as_secs()),
             )?;
             committed_weekly_costs += (t.costs() + maintenance_per_flight(route, &plane.model_id)?)
-                * (REVIEW / route.plan.as_ref().unwrap().interval_seconds) as i64;
+                * (crate::pricing::RULES.fare_review_seconds
+                    / route.plan.as_ref().unwrap().interval_seconds) as i64;
         }
         let free: Vec<_> = g
             .fleet
@@ -1430,7 +1429,10 @@ impl Competitor {
                     0,
                     false,
                     p.lease.as_ref().map_or(0, |l| {
-                        (l.monthly * REVIEW as i64 + l.period as i64 - 1) / l.period as i64
+                        (l.monthly * crate::pricing::RULES.fare_review_seconds as i64
+                            + l.period as i64
+                            - 1)
+                            / l.period as i64
                     }),
                 )
             })
@@ -1479,7 +1481,10 @@ impl Competitor {
                     let (deposit, monthly) = crate::trading::lease_terms(&m.id)?;
                     if airline.capital_eur.saturating_sub(deposit) >= RESERVE {
                         let period = crate::trading::RULES.lease_period_days * 86400;
-                        let rent = (monthly * REVIEW as i64 + period as i64 - 1) / period as i64;
+                        let rent = (monthly * crate::pricing::RULES.fare_review_seconds as i64
+                            + period as i64
+                            - 1)
+                            / period as i64;
                         options.push((
                             None,
                             0,
@@ -1505,7 +1510,7 @@ impl Competitor {
             let capital_adjustment = if let Some(id) = used {
                 let listing = g.used_market.listings.iter().find(|l| l.id == id).unwrap();
                 let now = g.clock.elapsed().as_secs();
-                let horizon = now.saturating_add(104 * REVIEW);
+                let horizon = now.saturating_add(104 * crate::pricing::RULES.fare_review_seconds);
                 let residual = crate::trading::hull_value_at(&listing.aircraft, horizon)?;
                 let alternative_net = if airline.capital_eur.saturating_sub(m.price_eur) >= RESERVE
                 {
@@ -2030,7 +2035,8 @@ mod tests {
             )
             .unwrap();
             let week = (quote.profit() - maintenance_per_flight(route, &hub.model).unwrap())
-                * (REVIEW / route.plan.as_ref().unwrap().interval_seconds) as i64
+                * (crate::pricing::RULES.fare_review_seconds
+                    / route.plan.as_ref().unwrap().interval_seconds) as i64
                 - c.game.monthly_payroll() * 7 / 30;
             assert!(
                 week > 0,
@@ -2318,7 +2324,7 @@ mod tests {
             "fixture needs profitable weak service"
         );
         g.competitors = vec![c];
-        assert!(g.advance(2.0 * REVIEW as f64 + 86400.0));
+        assert!(g.advance(2.0 * crate::pricing::RULES.fare_review_seconds as f64 + 86400.0));
         assert_eq!(
             g.competitors[0]
                 .game
@@ -2381,7 +2387,7 @@ mod tests {
         c.game.stop_schedule(1).unwrap();
         c.game.schedule(1, 179, 360).unwrap();
         g.competitors = vec![c];
-        assert!(g.advance(2.0 * REVIEW as f64));
+        assert!(g.advance(2.0 * crate::pricing::RULES.fare_review_seconds as f64));
         let c = &g.competitors[0];
         assert_eq!(
             c.game
@@ -2438,7 +2444,7 @@ mod tests {
         assert!(c.game.routes[1].plan.is_none());
         g.validate_competitors().unwrap();
         // A grouped route with one survivor can still close after further losses.
-        assert!(g.advance(3.0 * REVIEW as f64));
+        assert!(g.advance(3.0 * crate::pricing::RULES.fare_review_seconds as f64));
         assert!(g.competitors[0].game.routes.is_empty());
     }
 
@@ -2574,7 +2580,7 @@ mod tests {
                     crate::operations::timings(&c.game.routes[0], "atr72_600").unwrap();
                 c.game.routes[0].plan.as_mut().unwrap().interval_seconds = flight + ground;
             }
-            assert!(g.advance(2.0 * REVIEW as f64));
+            assert!(g.advance(2.0 * crate::pricing::RULES.fare_review_seconds as f64));
             let mut small = g.clone();
             let dir = tempfile::tempdir().unwrap();
             let path = dir.path().join("closing.json");
@@ -2682,7 +2688,7 @@ mod tests {
     #[test]
     fn expansion_spends_real_cash_and_obeys_budget_range_and_fleet_limit() {
         let mut g = game();
-        assert!(g.advance(52.0 * REVIEW as f64));
+        assert!(g.advance(52.0 * crate::pricing::RULES.fare_review_seconds as f64));
         let c = g
             .competitors
             .iter()
@@ -2836,7 +2842,7 @@ mod tests {
         c.game.create_route("EDDF", "EDDM", 2).unwrap();
         c.game.schedule(2, 1, 360).unwrap();
         c.game.routes[0].ticket_eur = 100_000;
-        assert!(g.advance(2.0 * REVIEW as f64));
+        assert!(g.advance(2.0 * crate::pricing::RULES.fare_review_seconds as f64));
         let c = &g.competitors[0];
         assert!(!c.game.routes.iter().any(|r| r.id == 1));
         assert!(c.game.routes.iter().any(|r| r.id == 2 && r.plan.is_some()));
@@ -2846,7 +2852,7 @@ mod tests {
                 .history
                 .as_ref()
                 .unwrap()
-                .totals(1, 2 * REVIEW)
+                .totals(1, 2 * crate::pricing::RULES.fare_review_seconds)
                 .flights
                 > 0
         );
@@ -2975,18 +2981,20 @@ mod tests {
         let mut g = game();
         // An overpriced rival runs empty but pays exactly the normal operating costs.
         g.competitors[0].game.routes[0].ticket_eur = 100_000;
-        assert!(g.advance(2.0 * REVIEW as f64));
+        assert!(g.advance(2.0 * crate::pricing::RULES.fare_review_seconds as f64));
         let c = &g.competitors[0];
         assert!(c.game.routes.is_empty());
         assert_eq!(c.game.fleet.len(), 1);
         assert!(c.game.finance.totals.profit() < 0);
         assert_eq!(c.game.finance.totals.passengers, 0);
         let flights = c.game.finance.totals.flights;
-        assert!(g.advance(REVIEW as f64));
+        assert!(g.advance(crate::pricing::RULES.fare_review_seconds as f64));
         assert_eq!(g.competitors[0].game.finance.totals.flights, flights);
         g.validate_competitors().unwrap();
         // After RETRY_AFTER idle reviews the rival re-enters at a viable fare.
-        assert!(g.advance(f64::from(RETRY_AFTER - 1) * REVIEW as f64));
+        assert!(g.advance(
+            f64::from(RETRY_AFTER - 1) * crate::pricing::RULES.fare_review_seconds as f64
+        ));
         let c = &g.competitors[0];
         let r = &c.game.routes[0];
         assert!(r.plan.is_some(), "{}", c.last_action);

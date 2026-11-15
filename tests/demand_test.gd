@@ -58,7 +58,7 @@ func _run() -> void:
 		return
 	root.size = Vector2i(680, 520)
 	await process_frame
-	if not _check(panel.route_tree.columns == 6 and main.size.x <= 680, "Demand table keeps small-window layout"):
+	if not _check(panel.route_tree.columns == 7 and main.size.x <= 680, "Demand table keeps small-window layout"):
 		return
 	sim.hire_missing_staff()
 	sim.schedule_route(1, 1, 120)

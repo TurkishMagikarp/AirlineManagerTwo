@@ -8,6 +8,8 @@ use std::collections::HashSet;
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Game {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub pricing: Vec<crate::pricing::Autopilot>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub milestones: Option<crate::milestones::State>,
     /// Unsaved dependency epoch. Unique epochs also distinguish diverging clones.
@@ -87,6 +89,7 @@ impl Game {
 impl Default for Game {
     fn default() -> Self {
         Self {
+            pricing: Vec::new(),
             milestones: None,
             departure_markets: Default::default(),
             commercial_revision: 0,

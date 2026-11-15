@@ -1,4 +1,7 @@
 {
+  "fare_review_seconds": 604800,
+  "fare_step_eur": 10,
+  "fare_sweep_steps": 20,
   "max_aircraft_per_route": 2,
   "load_factor_percent": 85.0,
   "starter_hubs": [
