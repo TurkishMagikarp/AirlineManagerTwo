@@ -24,12 +24,16 @@ func _run() -> void:
 		var airports: Array = main.simulation.get_airports(code)
 		if not _check(main.airport_select.item_count == airports.size() and airports.size() > 0, "Country filters available airports"):
 			return
+		airports.sort_custom(func(a: Dictionary, b: Dictionary): return a["iata"].naturalnocasecmp_to(b["iata"]) < 0)
 		for airport_index in range(airports.size()):
 			if not _check(main.airport_select.get_item_metadata(airport_index) == airports[airport_index]["icao"], "Stable airport identifiers come from Rust"):
 				return
-	main.country_select.select(1)
-	main.country_select.item_selected.emit(1)
-	main.airport_select.select(1)
+	for i in range(main.country_select.item_count):
+		if main.country_select.get_item_metadata(i) == "TR":
+			main.country_select.select(i)
+			main.country_select.item_selected.emit(i)
+	for i in range(main.airport_select.item_count):
+		if main.airport_select.get_item_metadata(i) == "LTFJ": main.airport_select.select(i)
 	main.name_input.text = "  Bosporus 日本 Air  "
 	await _click(main.found_button)
 	var airline: Dictionary = main.simulation.get_airline_info()

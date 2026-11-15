@@ -30,9 +30,12 @@ func _run() -> void:
 		return
 	if mode.begins_with("write-"):
 		main.name_input.text = "Neustart 日本 Air"
-		main.country_select.select(1)
-		main.country_select.item_selected.emit(1)
-		main.airport_select.select(1)
+		for i in range(main.country_select.item_count):
+			if main.country_select.get_item_metadata(i) == "TR":
+				main.country_select.select(i)
+				main.country_select.item_selected.emit(i)
+		for i in range(main.airport_select.item_count):
+			if main.airport_select.get_item_metadata(i) == "LTFJ": main.airport_select.select(i)
 		await _click(main.found_button)
 		await _click(main.start_button)
 		await _click(main.speed_buttons[2 if running else 1])

@@ -1550,6 +1550,8 @@ mod tests {
 
     #[test]
     fn frequency_growth_uses_shared_assignment_and_respects_cap() {
+        // This scenario isolates the original city-pair choices; worldwide growth has its own audit.
+        let _catalogue = crate::airports::original_catalogue_scenario();
         let mut c = frequency_ai();
         c.expand(&[]).unwrap();
         assert_eq!(c.game.routes.len(), 2);
@@ -1949,6 +1951,8 @@ mod tests {
 
     #[test]
     fn expansion_reuses_parked_aircraft_and_competes_for_existing_market() {
+        // This scenario isolates the original city-pair choices; worldwide growth has its own audit.
+        let _catalogue = crate::airports::original_catalogue_scenario();
         let mut c = initial_competitors().unwrap().remove(0);
         c.game.stop_schedule(1).unwrap();
         c.game.delete_route(1).unwrap();
@@ -2306,6 +2310,8 @@ mod tests {
 
     #[test]
     fn unprofitable_markets_keep_rivals_idle_until_the_next_retry() {
+        // This scenario isolates the original city-pair choices; worldwide growth has its own audit.
+        let _catalogue = crate::airports::original_catalogue_scenario();
         let mut g = game();
         g.competitors[0].game.routes[0].ticket_eur = 100_000;
         assert!(g.advance(2.0 * REVIEW as f64));

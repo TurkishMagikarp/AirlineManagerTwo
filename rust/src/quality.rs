@@ -348,3 +348,67 @@ fn sustained_high_fuel_keeps_viable_player_and_both_ai_alive() {
         );
     }
 }
+
+/// Same audit is run against the eight-airport baseline and the expanded catalogue.
+#[test]
+fn two_year_catalogue_ai_audit() {
+    let mut game = scenario(Some(90));
+    let started = Instant::now();
+    let mut max_week = std::time::Duration::ZERO;
+    for week in 0..104 {
+        let start = Instant::now();
+        assert!(game.advance(7.0 * 86400.0));
+        max_week = max_week.max(start.elapsed());
+        for c in &game.competitors {
+            assert!(!c.game.distressed(), "week={week}");
+            assert!(c.game.cash() > 0);
+        }
+    }
+    assert!(game.advance(2.0 * 86400.0));
+    game.validate_competitors().unwrap();
+    assert_eq!(game.competitors.len(), 2);
+    let elapsed = started.elapsed();
+    let expected = serde_json::to_value(&game).unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    for speed in [1, 4, 16] {
+        let mut replay = scenario(Some(90));
+        replay.clock.set_speed(speed);
+        for day in 0..730 {
+            assert!(replay.advance(86400.0 / f64::from(speed)));
+            if day == 364 {
+                let path = dir.path().join("catalogue-restart.json");
+                crate::save::save(&path, &replay).unwrap();
+                replay = crate::save::load(&path).unwrap();
+            }
+        }
+        replay.clock.set_speed(1);
+        assert_eq!(
+            first_diff(&expected, &serde_json::to_value(&replay).unwrap(), ""),
+            None,
+            "speed={speed}"
+        );
+    }
+    println!(
+        "CATALOGUE airports={} total_ms={} max_week_ms={}",
+        crate::airports::catalog().unwrap().airports.len(),
+        elapsed.as_millis(),
+        max_week.as_millis()
+    );
+    for c in &game.competitors {
+        assert!(c.game.fleet.len() > 1 && c.game.fleet.len() <= 6);
+        c.game.validate_history().unwrap();
+        let pairs: Vec<_> = c
+            .game
+            .routes
+            .iter()
+            .map(|r| format!("{}-{}", r.origin_icao, r.destination_icao))
+            .collect();
+        println!(
+            "CATALOGUE {} cash={} profit={} fleet={} routes={pairs:?}",
+            c.game.airline.as_ref().unwrap().name,
+            c.game.cash(),
+            c.game.finance.totals.profit(),
+            c.game.fleet.len()
+        );
+    }
+}

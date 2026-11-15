@@ -724,4 +724,62 @@ mod tests {
         assert_eq!(fs::read(&path).unwrap(), previous);
         assert!(load(&path).unwrap().fleet.is_empty());
     }
+
+    /// Audit every supported migration before/after adding catalogue entries.
+    /// AIRLINE_CATALOGUE_SAVE_BASELINE records the old-catalogue result once;
+    /// subsequent runs compare every saved company's state to that record.
+    #[test]
+    fn all_save_versions_preserve_catalogue_company_state() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("migration.json");
+        let mut states = Vec::new();
+        for version in 1..=VERSION {
+            let mut game = Game::default();
+            if version >= 2 {
+                game.found("Catalogue migration", "DE", "EDDF").unwrap();
+            }
+            if version >= 3 {
+                game.buy_aircraft("atr72_600").unwrap();
+            }
+            if version >= 4 {
+                game.create_route("EDDF", "EDDM", 1).unwrap();
+            }
+            if version >= 5 {
+                game.staff_up();
+            }
+            save(&path, &game).unwrap();
+            let mut old: serde_json::Value =
+                serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+            old["version"] = serde_json::json!(version);
+            let state = old["state"].as_object_mut().unwrap();
+            if version < 3 {
+                state.remove("fleet");
+            }
+            if version < 4 {
+                state.remove("routes");
+            }
+            fs::write(&path, serde_json::to_vec(&old).unwrap()).unwrap();
+            let loaded = load(&path).unwrap_or_else(|e| panic!("version={version}: {e}"));
+            assert_eq!(loaded.airline, game.airline, "version={version}");
+            assert_eq!(loaded.fleet, game.fleet, "version={version}");
+            assert_eq!(loaded.routes, game.routes, "version={version}");
+            let slots: Vec<_> = [
+                "EDDF", "EDDM", "LTFM", "LTFJ", "KJFK", "KLAX", "EDLP", "EDFH",
+            ]
+            .iter()
+            .map(|c| loaded.slot_usage(c))
+            .collect();
+            states.push(serde_json::json!({"version":version, "airline":loaded.airline, "fleet":loaded.fleet, "routes":loaded.routes, "staff":loaded.staff, "slots":slots}));
+        }
+        if let Ok(path) = std::env::var("AIRLINE_CATALOGUE_SAVE_BASELINE") {
+            let current = serde_json::to_value(states).unwrap();
+            if std::path::Path::new(&path).exists() {
+                let baseline: serde_json::Value =
+                    serde_json::from_slice(&fs::read(path).unwrap()).unwrap();
+                assert_eq!(current, baseline);
+            } else {
+                fs::write(path, serde_json::to_vec_pretty(&current).unwrap()).unwrap();
+            }
+        }
+    }
 }

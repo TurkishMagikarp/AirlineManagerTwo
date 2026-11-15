@@ -23,7 +23,7 @@ func _run() -> void:
 	await _click(main.buy_button)
 	await _click(main.buy_button)
 	await _click(main.navigation[2])
-	_choose(panel.destination, 0)
+	_choose_airport(panel.destination, "EDDF")
 	if not _check(panel.create_button.disabled and "verschieden" in panel.preview.text, "Same airport rejected in preview"):
 		return
 	for i in range(panel.destination.item_count):
@@ -31,11 +31,11 @@ func _run() -> void:
 			_choose(panel.destination, i)
 	if not _check(panel.create_button.disabled and "Reichweite überschritten" in panel.preview.text, "Long route rejected in preview"):
 		return
-	_choose(panel.destination, 1)
+	_choose_airport(panel.destination, "EDDM")
 	if not _check(not panel.create_button.disabled and "Reichweite ausreichend" in panel.preview.text and "km" in panel.preview.text, "Valid route displays distance and range check"):
 		return
 	var estimate: Dictionary = main.simulation.preview_route("EDDF", "EDDM", panel.aircraft.get_selected_metadata(), 0)
-	if not _check(estimate["has_cost_estimate"] and estimate["estimated_airport_eur"] > 0 and "Start + Ziel" in panel.preview.text and "Gebühren 60 %" in panel.origin.get_item_text(0), "Rust airport estimate and endpoint levels appear in planning"):
+	if not _check(estimate["has_cost_estimate"] and estimate["estimated_airport_eur"] > 0 and "Start + Ziel" in panel.preview.text and "Gebühren 60 %" in panel.origin.get_item_text(panel.origin.selected), "Rust airport estimate and endpoint levels appear in planning"):
 		return
 	await _click(panel.create_button)
 	if not _check(main.simulation.get_routes().size() == 1 and panel.aircraft.item_count == 1 and panel.route_tree.get_root().get_child_count() == 1, "Created route listed and aircraft removed from available choices"):
@@ -124,3 +124,11 @@ func _check(condition: bool, message: String) -> bool:
 		push_error("FAIL: " + message)
 		quit(1)
 	return condition
+
+
+func _choose_airport(select: OptionButton, code: String) -> void:
+	for i in range(select.item_count):
+		if select.get_item_metadata(i) == code:
+			_choose(select, i)
+			return
+	assert(false, "Missing airport: " + code)

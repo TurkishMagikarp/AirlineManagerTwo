@@ -1,11 +1,15 @@
-# Kleine reale Kataloge
+# Reale Kataloge
 
 ## Flughäfen
 
 `airports.json` enthält reale Identitätsdaten und geografische Koordinaten sowie
 ausdrücklich geschätzte Nachfrageparameter `market_size` und `business_percent`
-([Annahmen](../docs/demand.md)), keine gemessenen Streckenpassagierzahlen. Die kleine Auswahl ist
-keine weltweite Abdeckung und noch keine vollständige geografische Datenbasis.
+([Annahmen](../docs/demand.md)), keine gemessenen Streckenpassagierzahlen.
+Die Auswahl umfasst 40 Flughäfen in 29 Ländern auf allen bewohnten Kontinenten;
+sie ist bewusst kein vollständiges Flughafenverzeichnis. Auch `charge_percent`
+und `daily_departure_slots` sind Spielschätzungen, keine echten Gebühren oder
+behördlichen Kapazitäten. Frankfurt bleibt der Größenmaßstab 1,00.
+Die acht bisherigen Einträge bleiben einschließlich fehlender Slotlimits unverändert.
 
 - Länder werden über ISO-3166-1-Alpha-2-Codes referenziert.
 - Flughäfen werden über ICAO-Codes referenziert; IATA ist optionale Anzeigeinformation.
@@ -14,10 +18,14 @@ keine weltweite Abdeckung und noch keine vollständige geografische Datenbasis.
 - `latitude` / `longitude`: geografische Breite/Länge in Dezimalgrad (WGS84),
   gerundete Flughafen-Referenzpositionen, nicht einzelne Startbahnen oder Gates.
   Referenz: [OurAirports Flughafen-Datensätze](https://ourairports.com/data/)
-  (Public Domain), Codes EDDF, EDDM, LTFM, LTFJ, KJFK, KLAX, EDLP und EDFH.
+  (Public Domain), für die Ergänzungen aus dem
+  [OurAirports-CSV](https://github.com/davidmegginson/ourairports-data/blob/main/airports.csv),
+  abgerufen am 14.11.2026. Verwendet: ICAO aus `gps_code` (ersatzweise `ident`), `iata_code`, `name`,
+  `iso_country`, `latitude_deg`, `longitude_deg` (auf sechs Dezimalstellen gerundet).
+  Bestehende Positionen und Namen bleiben unverändert.
   Rust leitet daraus die Großkreisentfernung ab; Spielstände speichern nur Codes.
-- Der Katalog wird einmal in Rust eingelesen. Später kann der Loader eine größere,
-  lizenzierte Datenquelle verwenden; die Referenzen im Spielstand bleiben stabil.
+- Der Katalog wird einmal in Rust eingelesen. Später kann der Loader eine umfangreichere
+  Datenquelle verwenden; die Referenzen im Spielstand bleiben stabil.
 - Neue Einträge ergänzen, `START.bat` erneut starten: Cargo baut die eingebettete
   Datei neu. Weitere Attribute können später ergänzt werden, ohne die UI-Liste
   mit Wirtschaftsdaten zu vermischen.

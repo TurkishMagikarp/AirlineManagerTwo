@@ -33,8 +33,15 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 28 pub struct Catalog
 35 static CATALOG: LazyLock<Result<Catalog, String>> = LazyLock::new(||
 40 pub fn catalog() -> Result<&'static Catalog, String>
-45 mod tests
-50 fn catalog_has_unique_identifiers_and_valid_countries()
+55 static LEGACY_SCENARIO: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+58 static LEGACY_CATALOG: std::sync::OnceLock<Catalog> = std::sync::OnceLock::new();
+61 pub struct OriginalCatalogue(bool);
+63 impl Drop for OriginalCatalogue
+64 fn drop(&mut self)
+69 pub fn original_catalogue_scenario() -> OriginalCatalogue
+74 mod tests
+79 fn catalog_has_unique_identifiers_and_valid_countries()
+107 fn worldwide_catalogue_preserves_original_entries_and_connects_each_region()
 
 ## rust/src/attention.rs
 7 struct Rules
@@ -159,31 +166,31 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 1483 fn frequency_ai() -> Competitor
 1495 fn seasonal_ai_growth_uses_annual_view_and_weak_weeks_keep_viable_rotations()
 1552 fn frequency_growth_uses_shared_assignment_and_respects_cap()
-1586 fn frequency_growth_can_buy_or_lease_and_weak_loads_reduce_service()
-1652 fn frequency_review_keeps_a_service_during_maintenance()
-1672 fn frequency_growth_skips_maintenance_wrong_location_and_weak_market()
-1693 fn frequency_weak_airborne_service_retires_once_across_steps_speeds_and_restart()
-1764 fn trading_ai_leases_only_affordable_profitable_growth_and_sells_in_distress()
-1815 fn trading_ai_lease_economy_is_bounded_and_deterministic_over_two_years()
-1857 fn game() -> Game
-1869 fn state(g: &Game) -> serde_json::Value
-1874 fn airborne_loss_reviews_close_after_ground_time_even_across_restart()
-1930 fn previous_v9_saves_default_new_review_fields_and_reject_corruption()
-1951 fn expansion_reuses_parked_aircraft_and_competes_for_existing_market()
-1990 fn expansion_spends_real_cash_and_obeys_budget_range_and_fleet_limit()
-2028 fn ai_airlines_pay_for_regular_checks_before_reaching_the_limit()
-2085 fn route_reviews_charge_the_planned_maintenance_share_per_landing()
-2132 fn losses_are_measured_per_route_not_hidden_by_profitable_routes()
-2158 fn common_market_price_frequency_capacity_and_separate_ledgers()
-2212 fn mixed_fares_and_frequencies_never_duplicate_the_base_market()
-2246 fn speed_steps_reviews_and_restart_produce_identical_results()
-2275 fn losses_close_service_without_erasing_aircraft_or_finances()
-2308 fn unprofitable_markets_keep_rivals_idle_until_the_next_retry()
-2342 fn old_saves_keep_departure_snapshot_and_start_rivals_only_at_load_time()
-2373 fn price_reviews_preserve_airborne_quotes_for_both_owners()
-2400 fn invalid_ai_saves_and_overflow_cannot_partially_commit()
-2458 mod slot_admission_tests
-2460 fn slots_ai_full_hub_skips_purchase_and_full_destination_uses_other_markets()
+1588 fn frequency_growth_can_buy_or_lease_and_weak_loads_reduce_service()
+1654 fn frequency_review_keeps_a_service_during_maintenance()
+1674 fn frequency_growth_skips_maintenance_wrong_location_and_weak_market()
+1695 fn frequency_weak_airborne_service_retires_once_across_steps_speeds_and_restart()
+1766 fn trading_ai_leases_only_affordable_profitable_growth_and_sells_in_distress()
+1817 fn trading_ai_lease_economy_is_bounded_and_deterministic_over_two_years()
+1859 fn game() -> Game
+1871 fn state(g: &Game) -> serde_json::Value
+1876 fn airborne_loss_reviews_close_after_ground_time_even_across_restart()
+1932 fn previous_v9_saves_default_new_review_fields_and_reject_corruption()
+1953 fn expansion_reuses_parked_aircraft_and_competes_for_existing_market()
+1994 fn expansion_spends_real_cash_and_obeys_budget_range_and_fleet_limit()
+2032 fn ai_airlines_pay_for_regular_checks_before_reaching_the_limit()
+2089 fn route_reviews_charge_the_planned_maintenance_share_per_landing()
+2136 fn losses_are_measured_per_route_not_hidden_by_profitable_routes()
+2162 fn common_market_price_frequency_capacity_and_separate_ledgers()
+2216 fn mixed_fares_and_frequencies_never_duplicate_the_base_market()
+2250 fn speed_steps_reviews_and_restart_produce_identical_results()
+2279 fn losses_close_service_without_erasing_aircraft_or_finances()
+2312 fn unprofitable_markets_keep_rivals_idle_until_the_next_retry()
+2348 fn old_saves_keep_departure_snapshot_and_start_rivals_only_at_load_time()
+2379 fn price_reviews_preserve_airborne_quotes_for_both_owners()
+2406 fn invalid_ai_saves_and_overflow_cannot_partially_commit()
+2464 mod slot_admission_tests
+2466 fn slots_ai_full_hub_skips_purchase_and_full_destination_uses_other_markets()
 
 ## rust/src/demand.rs
 7 struct Config
@@ -825,6 +832,7 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 290 struct Reset;
 291 impl Drop for Reset
 292 fn drop(&mut self)
+354 fn two_year_catalogue_ai_audit()
 
 ## rust/src/reputation.rs
 5 pub const DAY: u64 = 86400;
@@ -920,6 +928,7 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 651 fn v2_company_migrates_without_buying_aircraft_or_changing_balance()
 669 fn rejects_corrupt_fleet_instead_of_silently_losing_aircraft()
 711 fn oversized_archive_cannot_overwrite_a_loadable_save()
+732 fn all_save_versions_preserve_catalogue_company_state()
 
 ## rust/src/seasonal_tests.rs
 3 const DAY: u64 = 86400;
@@ -1213,18 +1222,18 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 820 func _request_maintenance() -> void:
 831 func _cancel_maintenance() -> void:
 842 func _build_founding() -> void:
-916 func _country_changed(index: int) -> void:
-930 func _found_airline() -> void:
-942 func _sync_view() -> void:
-964 func _open_founding() -> void:
-973 func _label(text: String, style: Dictionary, color: Color = ThemeTokens.INK) -> Label:
-977 func _build_finance(content: VBoxContainer) -> void:
-1011 func _build_attention(parent: VBoxContainer) -> void:
-1034 func _refresh_attention() -> void:
-1059 func _resize_frame() -> void:
-1075 func _open_attention(entry: Dictionary) -> void:
-1089 func _refresh_overview_register() -> void:
-1101 func _render_operations(parent: VBoxContainer) -> void:
+922 func _country_changed(index: int) -> void:
+939 func _found_airline() -> void:
+951 func _sync_view() -> void:
+973 func _open_founding() -> void:
+982 func _label(text: String, style: Dictionary, color: Color = ThemeTokens.INK) -> Label:
+986 func _build_finance(content: VBoxContainer) -> void:
+1020 func _build_attention(parent: VBoxContainer) -> void:
+1043 func _refresh_attention() -> void:
+1068 func _resize_frame() -> void:
+1084 func _open_attention(entry: Dictionary) -> void:
+1098 func _refresh_overview_register() -> void:
+1110 func _render_operations(parent: VBoxContainer) -> void:
 
 ## scripts/map_background.gd
 1 extends Control
@@ -1276,24 +1285,24 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 5 const ThemeTokens = preload("res://scripts/ui/operations_theme.gd")
 6 const UI = preload("res://scripts/ui/components.gd")
 41 func _ready() -> void:
-207 func _arrange_workspace() -> void:
-253 func _label(text: String) -> Label:
-259 func _select(title: String) -> OptionButton:
-269 func _selected_id(select: OptionButton) -> int:
-273 func _route() -> Dictionary:
-278 func refresh() -> void:
-317 func refresh_operations() -> void:
-387 func _preview() -> void:
-399 func _selection_changed() -> void:
-432 func _update_service_cost(route: Dictionary) -> void:
-438 func _update_schedule_controls(route: Dictionary) -> void:
-453 func _refresh_competition() -> void:
-474 func _assignment_preview() -> void:
-490 func _feedback(error: String, success: String, field: Control = null) -> void:
-501 func _create() -> void:
-505 func _assign() -> void:
-515 func _delete() -> void:
-521 func focus_route(id: int) -> void:
+212 func _arrange_workspace() -> void:
+258 func _label(text: String) -> Label:
+264 func _select(title: String) -> OptionButton:
+275 func _selected_id(select: OptionButton) -> int:
+279 func _route() -> Dictionary:
+284 func refresh() -> void:
+323 func refresh_operations() -> void:
+393 func _preview() -> void:
+405 func _selection_changed() -> void:
+438 func _update_service_cost(route: Dictionary) -> void:
+444 func _update_schedule_controls(route: Dictionary) -> void:
+459 func _refresh_competition() -> void:
+480 func _assignment_preview() -> void:
+496 func _feedback(error: String, success: String, field: Control = null) -> void:
+507 func _create() -> void:
+511 func _assign() -> void:
+521 func _delete() -> void:
+527 func focus_route(id: int) -> void:
 
 ## scripts/staff_panel.gd
 1 extends VBoxContainer
