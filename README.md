@@ -277,8 +277,16 @@ Pause, 1×/4×/16×, Speichern/Laden und erneute Flugpläne verursachen keine Do
 Zwei fiktive Konkurrenten starten mit eigenem Startkapital, gekauften Flugzeugen,
 Flugplänen, Ticketpreisen und separaten Konten/Finanzarchiven:
 
-- **Regional Wings**: Frankfurt–München, ATR 72-600, zunächst 90 EUR.
-- **Continental Sky**: Frankfurt–Istanbul IST, A320-200, zunächst 150 EUR.
+- **Regional Wings** startet am konfigurierten regionalen Hub, der der Spielerbasis am nächsten liegt.
+- **Continental Sky** startet am entferntesten freigegebenen Fern-Hub in einer anderen Weltregion.
+
+`config/competition.json` enthält die Starter-Hubs samt erster Strecke, Modell
+und Tarif sowie den Fern-Hub-Pool. Bei einer Gründung in Frankfurt startet Regional
+Wings weiterhin FRA–MUC mit ATR 72-600 zu 90 EUR; Continental Sky startet in São Paulo.
+Bei Gründung in Brasilien oder Japan liegt Regional Wings entsprechend dort.
+Bestehende Spielstände behalten ihre KI-Firmen einschließlich Heimat, Flotte,
+Konten und laufender Flüge unverändert. Details und Zweijahresvergleiche:
+[Weltweite KI](docs/worldwide-ai-verification.md).
 
 Beide pendeln zunächst alle sechs Stunden. Spieler und KI nutzen dieselben
 Rust-Funktionen für Kauf, Streckenprüfung, Flugbewegung, Nachfrage, Kosten und

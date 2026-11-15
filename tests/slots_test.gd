@@ -96,14 +96,22 @@ func _slot_views() -> bool:
 		return false
 	# Independent reservation count from all three owners' saved timetables.
 	var used := 0
+	var expected_usage := {}
+	var homes := {}
 	for owner in _owners(state):
-		var own := 0
+		var home: String = owner["airline"]["home_airport_icao"]
+		homes[home] = true
+		var home_used := 0
 		for route in _routes(owner):
-			if "EDDF" in [route["origin_icao"], route["destination_icao"]] and route["plan"] != null:
-				own += ceili(86400.0 / (2 * route["plan"]["interval_seconds"]))
-		if not _check(own > 0, "Player and each AI reserve FRA slots"):
+			if route["plan"] == null:
+				continue
+			var reservations := ceili(86400.0 / (2 * route["plan"]["interval_seconds"]))
+			for airport in [route["origin_icao"], route["destination_icao"]]:
+				expected_usage[airport] = expected_usage.get(airport, 0) + reservations
+				if airport == "EDDF": used += reservations
+				if airport == home: home_used += reservations
+		if not _check(home_used > 0, "Player and each AI reserve slots at their actual home"):
 			return false
-		used += own
 	var expected := "EDDF: %d Slots belegt · 0 von 120 frei/Tag" % used
 	if not _check(used > 120, "Migration fixture exceeds hub capacity"):
 		return false
@@ -132,6 +140,10 @@ func _slot_views() -> bool:
 	var map = main.map_panel
 	for i in range(map.canvas.airports.size()):
 		var airport: Dictionary = map.canvas.airports[i]
+		if homes.has(airport["icao"]):
+			var prefix := "%s: %d Slots belegt" % [airport["icao"], expected_usage[airport["icao"]]]
+			if not _check(airport["slots"].begins_with(prefix), "Map reports independently counted reservations at every owner home"):
+				return false
 		if airport["icao"] == "EDDF":
 			map.selected_id = -i - 1
 			map.refresh()

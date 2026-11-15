@@ -206,6 +206,7 @@ fn contracts_ten_year_ai_comparison() {
     let mut hedged = game();
     let mut baseline = hedged.clone();
     let mut observed = false;
+    let mut matched_effect = false;
     for year in 1..=10 {
         for _ in 0..365 {
             DISABLE_AI.with(|v| v.set(false));
@@ -220,20 +221,46 @@ fn contracts_ten_year_ai_comparison() {
                         .all(|c| !c.game.distressed() && c.game.resolution.deadline.is_none())
                 );
             }
+            if hedged.clock.elapsed().as_secs().is_multiple_of(30 * DAY) {
+                for c in &hedged.competitors {
+                    if c.game.active_fuel_contract().is_none() {
+                        continue;
+                    }
+                    let mut protected = (*c.game).clone();
+                    let mut spot = protected.clone();
+                    spot.fuel_contract = None;
+                    // Clone one company into an isolated, identical market.
+                    // Its normal event loop handles maintenance/disruptions;
+                    // no competitor review can choose a different expansion.
+                    // These monthly samples never cross an annual tax boundary.
+                    protected.clock.set_running(true);
+                    spot.clock.set_running(true);
+                    assert!(protected.advance(DAY as f64));
+                    assert!(spot.advance(DAY as f64));
+                    let (p, s) = (&protected.finance.totals, &spot.finance.totals);
+                    assert_eq!(
+                        (p.flights, p.passengers, p.revenue),
+                        (s.flights, s.passengers, s.revenue)
+                    );
+                    let effect = p.fuel_contract_effect - s.fuel_contract_effect;
+                    assert_eq!(p.fuel - s.fuel, effect);
+                    assert_eq!(protected.cash() - spot.cash(), -effect);
+                    matched_effect |= effect != 0;
+                }
+            }
             observed |= hedged
                 .competitors
                 .iter()
                 .any(|c| c.game.active_fuel_contract().is_some());
         }
         for (h, b) in hedged.competitors.iter().zip(&baseline.competitors) {
-            let difference = h.game.cash().abs_diff(b.game.cash());
-            // Cargo can shift discrete aircraft purchases and route growth. Bound
-            // cash drift to 5% of cumulative operating income, not idle cash.
+            // Expansion is cash-sensitive and discrete: compare the recorded
+            // fuel-only effect with the income of the flights actually operated.
+            // Independent route/fleet choices are checked for solvency above.
             assert!(
-                difference <= (b.game.finance.totals.revenue as u64 / 20).max(100_000),
-                "year={year} hedged={} baseline={}",
-                h.game.cash(),
-                b.game.cash()
+                h.game.finance.totals.fuel_contract_effect.unsigned_abs()
+                    <= (h.game.finance.totals.revenue as u64 / 20).max(100_000),
+                "year={year} fuel-only effect overwhelmed operating income"
             );
             for g in [&h.game, &b.game] {
                 let t = &g.finance.totals;
@@ -250,5 +277,65 @@ fn contracts_ten_year_ai_comparison() {
         hedged = restart(&hedged);
         baseline = restart(&baseline);
     }
-    assert!(observed);
+    assert!(observed && matched_effect);
+}
+
+/// Keep the actual forty-airport regression reproducible even though new games
+/// now seed different homes. This is the saved Frankfurt company setup.
+#[test]
+fn contracts_worldwide_cash_drift_tracks_discrete_growth() {
+    struct Reset;
+    impl Drop for Reset {
+        fn drop(&mut self) {
+            DISABLE_AI.with(|v| v.set(false));
+        }
+    }
+    let _reset = Reset;
+    let mut hedged = game();
+    hedged.competitors = crate::competition::initial_competitors().unwrap();
+    let mut spot = hedged.clone();
+    let mut first_difference = false;
+    for day in 1..=365 {
+        DISABLE_AI.with(|v| v.set(false));
+        assert!(hedged.advance(DAY as f64));
+        DISABLE_AI.with(|v| v.set(true));
+        assert!(spot.advance(DAY as f64));
+        let (h, s) = (&hedged.competitors[1].game, &spot.competitors[1].game);
+        let choices = |g: &Game| {
+            (
+                g.fleet
+                    .iter()
+                    .map(|p| p.model_id.clone())
+                    .collect::<Vec<_>>(),
+                g.routes
+                    .iter()
+                    .map(|r| r.destination_icao.clone())
+                    .collect::<Vec<_>>(),
+            )
+        };
+        if !first_difference && choices(h) != choices(s) {
+            println!(
+                "HEDGE_GROWTH first_day={day} hedged_cash={} spot_cash={} effect={} hedged={:?} spot={:?}",
+                h.cash(),
+                s.cash(),
+                h.finance.totals.fuel_contract_effect,
+                choices(h),
+                choices(s)
+            );
+            first_difference = true;
+        }
+    }
+    let (h, s) = (&hedged.competitors[1].game, &spot.competitors[1].game);
+    println!(
+        "HEDGE_GROWTH year=1 hedged_cash={} spot_cash={} effect={}",
+        h.cash(),
+        s.cash(),
+        h.finance.totals.fuel_contract_effect
+    );
+    assert!(first_difference);
+    assert!(!h.distressed() && !s.distressed());
+    assert!(
+        h.finance.totals.fuel_contract_effect.unsigned_abs() < h.finance.totals.revenue as u64 / 20
+    );
+    assert_eq!(s.finance.totals.fuel_contract_effect, 0);
 }

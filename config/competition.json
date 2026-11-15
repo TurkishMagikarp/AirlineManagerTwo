@@ -1,4 +1,47 @@
 {
   "max_aircraft_per_route": 2,
-  "load_factor_percent": 85.0
+  "load_factor_percent": 85.0,
+  "starter_hubs": [
+    {
+      "home": "EDDF",
+      "destination": "EDDM",
+      "model": "atr72_600",
+      "ticket_eur": 90
+    },
+    {
+      "home": "SBGR",
+      "destination": "SAEZ",
+      "model": "a320_200",
+      "ticket_eur": 128
+    },
+    {
+      "home": "RJTT",
+      "destination": "ZBAA",
+      "model": "a320_200",
+      "ticket_eur": 172
+    },
+    {
+      "home": "KJFK",
+      "destination": "KORD",
+      "model": "atr72_600",
+      "ticket_eur": 150
+    },
+    {
+      "home": "YSSY",
+      "destination": "YMML",
+      "model": "atr72_600",
+      "ticket_eur": 110
+    },
+    {
+      "home": "FAOR",
+      "destination": "FACT",
+      "model": "atr72_600",
+      "ticket_eur": 150
+    }
+  ],
+  "remote_hubs": [
+    "EDDF",
+    "SBGR",
+    "RJTT"
+  ]
 }
