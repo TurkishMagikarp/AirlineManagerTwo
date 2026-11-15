@@ -9,6 +9,7 @@ func _initialize() -> void:
 	call_deferred("_run")
 
 func _run() -> void:
+	TranslationServer.set_locale("de") # Verify the longer German clock labels.
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--capture-dir="):
 			capture_dir = arg.trim_prefix("--capture-dir=")
@@ -64,6 +65,23 @@ func _run() -> void:
 	assert(sim.hire_pilots("ATR 72", 1).is_empty())
 	assert(sim.train_pilot(sim.get_staff()[-1]["id"], "737").is_empty())
 	main._sync_view()
+	if not capture_dir.is_empty() and OS.get_environment("AIRLINE_UI_CAPTURE_CLOCK_ONLY") == "1":
+		for dimensions in [Vector2i(1440, 1000), Vector2i(680, 520)]:
+			root.size = dimensions
+			for page in range(main.PAGES.size()):
+				main._show_page(page)
+				for frame in range(5): await process_frame
+				for control in main.jump_buttons + [main.time_label, main.start_button, main.save_button, main.load_button]:
+					assert(root.get_visible_rect().encloses(control.get_global_rect()))
+				await RenderingServer.frame_post_draw
+				var name: String = ["overview", "fleet", "routes", "map", "finances", "staff"][page]
+				assert(root.get_texture().get_image().save_png(capture_dir.path_join("%s-%dx%d.png" % [name, dimensions.x, dimensions.y])) == OK)
+		await _jump_views()
+		main.queue_free()
+		await process_frame
+		print("PASS: German clock bar on all six screens, jump stop and progress at 1440x1000 and 680x520")
+		quit(0)
+		return
 	var unchanged: Dictionary = sim.get_financial_summary().duplicate(true)
 	for dimensions in [Vector2i(1440, 1000), Vector2i(1100, 720), Vector2i(680, 520)]:
 		root.size = dimensions
@@ -76,7 +94,7 @@ func _run() -> void:
 			scroll.scroll_vertical = 0
 			for frame in range(5):
 				await process_frame
-			for control in [main.navigation[0], main.navigation[2], main.new_game_button, main.start_button, main.save_button, main.load_button, main.time_label, main.save_status]:
+			for control in main.jump_buttons + [main.navigation[0], main.navigation[2], main.new_game_button, main.start_button, main.save_button, main.load_button, main.time_label, main.save_status]:
 				if not root.get_visible_rect().encloses(control.get_global_rect()):
 					push_error("Control outside viewport at %s page %d: %s %s %s" % [dimensions, page, control, control.get_global_rect(), control.text])
 					quit(1)
@@ -307,6 +325,7 @@ func _run() -> void:
 		quit(1)
 		return
 	await _ferry_views(sim)
+	await _jump_views()
 	main.queue_free()
 	await process_frame
 	print("PASS: populated overview/fleet/routes/map/finances/staff and founding at 1440x1000, 1100x720, 680x520; deep controls reachable; no financial changes")
@@ -531,3 +550,32 @@ func _ferry_views(sim: RefCounted) -> void:
 		if not capture_dir.is_empty():
 			await RenderingServer.frame_post_draw
 			assert(root.get_texture().get_image().save_png(capture_dir.path_join("ferry-finances-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
+
+
+func _jump_views() -> void:
+	var sim: RefCounted = main.simulation
+	assert(sim.found_airline("Jump capture", "DE", "EDDF").is_empty())
+	for i in range(3): assert(sim.buy_aircraft("atr72_600").is_empty())
+	for i in range(6): assert(sim.lease_aircraft("atr72_600").is_empty())
+	main._sync_view()
+	main._show_page(0)
+	main._jump(main.simulation.get_jump_options()[-1]["seconds"])
+	while main.jump_in_progress: await process_frame
+	assert("Finanznot" in main.jump_status.text)
+	for dimensions in [Vector2i(1440, 1000), Vector2i(680, 520)]:
+		root.size = dimensions
+		for frame in range(5): await process_frame
+		assert(root.get_visible_rect().encloses(main.jump_status.get_global_rect()))
+		for button in main.jump_buttons:
+			assert(root.get_visible_rect().encloses(button.get_global_rect()))
+		if not capture_dir.is_empty():
+			await RenderingServer.frame_post_draw
+			assert(root.get_texture().get_image().save_png(capture_dir.path_join("jump-status-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
+		var progress: Window = main._jump_progress()
+		for frame in range(5): await process_frame
+		assert(progress.exclusive)
+		if not capture_dir.is_empty():
+			await RenderingServer.frame_post_draw
+			assert(root.get_texture().get_image().save_png(capture_dir.path_join("jump-progress-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
+		progress.queue_free()
+		await process_frame
