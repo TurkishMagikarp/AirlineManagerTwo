@@ -134,3 +134,39 @@ fn transfers_v31_migration_preserves_old_airborne_and_historical_results() {
     std::fs::write(&p, serde_json::to_vec(&value).unwrap()).unwrap();
     assert!(save::load(&p).is_err());
 }
+
+#[test]
+fn transfers_stored_quotes_equal_fresh_after_long_run_and_commercial_events() {
+    let mut g = game();
+    assert!(g.advance(400.0 * 86400.0));
+    for event in 0..7 {
+        match event {
+            1 => g.set_ticket_price(1, 95).unwrap(),
+            2 => g.reputation.score = -500_000,
+            3 => g.marketing.awareness = 10_000_000,
+            4 => g.routes[1].plan.as_mut().unwrap().interval_seconds *= 2,
+            5 => g.fleet[0].business_seats = 20,
+            6 => g.routes[1].plan = None,
+            _ => {}
+        }
+        let supply = g.prioritize_market(&g.market_routes());
+        g.departure_markets.refresh(&supply);
+        for route in &g.routes {
+            let model = &g
+                .fleet
+                .iter()
+                .find(|p| Some(p.id) == route.aircraft_id)
+                .unwrap()
+                .model_id;
+            for time in [None, Some(60), Some(400 * 86400), Some(401 * 86400 + 123)] {
+                let mut fresh = economy::QuoteMarket::new(route, model, &supply).unwrap();
+                let expected =
+                    economy::quote_prepared(route, model, &supply, 100, time, &mut fresh).unwrap();
+                let stored = g.departure_markets.market(route, model).unwrap();
+                let actual =
+                    economy::quote_prepared(route, model, &supply, 100, time, stored).unwrap();
+                assert_eq!(actual, expected, "event={event}, time={time:?}");
+            }
+        }
+    }
+}

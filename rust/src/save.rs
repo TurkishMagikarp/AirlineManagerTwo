@@ -302,6 +302,7 @@ pub(crate) fn load_versioned(path: &Path) -> Result<(Game, u32), String> {
         return Err("Ungültiger Treibstoffmarkt.".into());
     }
     let mut game = Game {
+        departure_markets: Default::default(),
         ferries: data.state.ferries,
         external_slots: Default::default(),
         fuel_contract: data.state.fuel_contract,

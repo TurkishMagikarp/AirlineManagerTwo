@@ -8,6 +8,10 @@ use std::collections::HashSet;
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Game {
+    /// Derived dispatch markets survive frame/event boundaries. Unsaved: a load
+    /// reconstructs them from commercial state, never from airborne results.
+    #[serde(skip)]
+    pub(crate) departure_markets: crate::economy::DepartureMarkets,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub ferries: Vec<crate::operations::Ferry>,
     #[serde(default)]
@@ -48,6 +52,7 @@ pub struct Game {
 impl Default for Game {
     fn default() -> Self {
         Self {
+            departure_markets: Default::default(),
             ferries: Vec::new(),
             used_market: Default::default(),
             external_slots: Default::default(),

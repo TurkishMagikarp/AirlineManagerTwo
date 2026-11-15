@@ -171,15 +171,26 @@ Tag und Richtung und zeigt die speisenden A–H–C-Pfade mit ungefähren Tagesr
 ein Status markiert überwiegend umsteigegeprägte Routen. Ergebnisse zeigen die
 realisierte Aufteilung im Tooltip; der Umsatzanteil geht in alle Finanzsummen ein.
 
-Abgeleitete Netze werden für höchstens vier Angebotsschnappschüsse pro Thread
-geteilt. Zusätzlich bleiben bis zu 128 Topologien (einschließlich leerer Netze)
-erhalten: Pfadpaare und Umwegprüfung ändern sich nur mit Strecken, Eigentümer,
-Flugplan oder verfügbarer Economy-Kabine, nicht mit Tarif oder Reputation.
-Abflüge prüfen nur Pfade, die ihren eigenen Streckenmarkt berühren. Lokale
-Sitzreservierungen werden nur für tatsächlich beteiligte Teilstrecken vorbereitet.
-Unveränderliche Geografie wird je Flughafenpaar wiederverwendet.
-Bis zu 256 exakte Abflugzeitpunkte je Netz werden vorübergehend wiederverwendet;
-Saison und Kapazitätsverteilung werden bei einem neuen Zeitpunkt neu berechnet; der Cache ist weder Spielzustand noch Bestandteil eines Spielstands.
+Jede Airline behält ihre vorbereiteten Streckenmärkte über Betriebsereignisse
+hinweg. Änderungen an aktiven Strecken, Flugplanabstand, Preisen, Kabinen,
+Flugzeugmodell, Service, Bekanntheit oder Reputationsfaktor erneuern den
+wirtschaftlichen Schnappschuss. Flugfortschritt und bereits eingefrorene
+Ergebnisse beeinflussen ihn nicht. Die gespeicherten Nachfrageangebote gehören
+zu diesem Schnappschuss und werden nicht wegen einer Eintragsgrenze verdrängt.
+Die Saison bleibt sekundengenau; identische Saisonzeitpunkte wiederholen sich
+nach einem Modelljahr. Ladezustände bauen diese abgeleiteten Daten neu auf.
+
+Zusätzlich bleiben bis zu 128 Topologien (einschließlich leerer Netze) erhalten:
+Pfadpaare und Umwegprüfung ändern sich nur mit Strecken, Eigentümer, Flugplan
+oder verfügbarer Economy-Kabine. Verdrängen einer Topologie ändert lediglich
+den Aufwand beim nächsten Aufbau. Ohne zwei aktive, unterschiedliche Strecken
+derselben Airline an einem gemeinsamen Flughafen entfällt die Topologieprüfung.
+Abflüge prüfen nur Pfade, die ihren eigenen Streckenmarkt berühren. Erreicht
+selbst die maximale saisonale Kaufbereitschaft kein gemeinsames Ratenquantum,
+steht die Umsteigerzahl bereits mit null fest. Lokale Sitzreservierungen werden
+nur für tatsächlich beteiligte Teilstrecken vorbereitet. Unveränderliche
+Geografie wird je Flughafenpaar wiederverwendet. Die Daten gehören nicht zum
+Spielstand; ein Cache-Neuaufbau muss dasselbe Ergebnis liefern.
 Keine Uhr in Godot, keine zeitlich abgestimmten Anschlüsse, Mindestumsteigezeiten,
 Codeshares, Interline-Verbindungen, speziellen Transfergebühren oder neue Kabinenbalance.
 

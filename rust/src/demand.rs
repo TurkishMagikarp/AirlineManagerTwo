@@ -199,7 +199,7 @@ impl Offer {
     }
 }
 
-#[derive(Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct Estimate {
     pub business: i64,
     pub connecting: i64,
@@ -286,6 +286,7 @@ fn estimate_with_season(
 
 /// Local, unsaved quote workspace for one route and immutable supply snapshot.
 /// Every seasonal quantity and spill result is recomputed at departure time.
+#[derive(Clone)]
 struct LocalPrepared {
     services: Vec<Offer>,
     matching: Vec<Offer>,
@@ -601,12 +602,14 @@ pub struct Connection {
     pub daily: f64,
 }
 
+#[derive(Clone)]
 pub(crate) struct Prepared {
     local: LocalPrepared,
-    network: Option<std::rc::Rc<std::cell::RefCell<TransferNetwork>>>,
+    network: Option<std::sync::Arc<std::sync::Mutex<TransferNetwork>>>,
     target: Option<usize>,
     loads: Vec<i64>,
     transfer_services: Vec<Option<usize>>,
+    quotes: std::collections::HashMap<Option<u64>, (Estimate, Vec<i64>)>,
 }
 impl Prepared {
     pub fn new(route: &Route, seats: u32, routes: &[Offer]) -> Result<Self, String> {
@@ -615,13 +618,28 @@ impl Prepared {
             .iter()
             .find(|o| same_offer(route, &o.route))
             .map(|o| &o.owner);
-        let network = if route.plan.is_some() {
+        let eligible = local.services.iter().any(|a| {
+            routes.iter().any(|b| {
+                a.owner == b.owner
+                    && b.route.plan.is_some()
+                    && a.seats > a.business_seats
+                    && b.seats > b.business_seats
+                    && !same_market(&a.route, &b.route)
+                    && [&a.route.origin_icao, &a.route.destination_icao]
+                        .iter()
+                        .any(|airport| {
+                            **airport == b.route.origin_icao
+                                || **airport == b.route.destination_icao
+                        })
+            })
+        });
+        let network = if route.plan.is_some() && eligible {
             transfer_network(route, routes)?
         } else {
             None
         };
         let target = network.as_ref().and_then(|n| {
-            n.borrow().offers.iter().position(|o| {
+            n.lock().unwrap().offers.iter().position(|o| {
                 same_offer(route, &o.route) && Some(&o.owner) == owner && o.seats == seats
             })
         });
@@ -630,7 +648,8 @@ impl Prepared {
             .iter()
             .map(|key| {
                 network.as_ref().and_then(|n| {
-                    n.borrow()
+                    n.lock()
+                        .unwrap()
                         .offers
                         .iter()
                         .position(|o| o.owner == key.owner && same_offer(&o.route, &key.route))
@@ -638,6 +657,7 @@ impl Prepared {
             })
             .collect();
         Ok(Self {
+            quotes: Default::default(),
             transfer_services,
             local,
             network,
@@ -646,9 +666,10 @@ impl Prepared {
         })
     }
     pub(crate) fn reprice_single(&mut self, route: &Route) {
+        self.quotes.clear();
         self.local.reprice_single(route);
         if let (Some(network), Some(target)) = (&self.network, self.target) {
-            let mut offers = network.borrow().offers.clone();
+            let mut offers = network.lock().unwrap().offers.clone();
             offers[target].route.ticket_eur = route.ticket_eur;
             offers[target].route.business_ticket_eur = route.business_ticket_eur;
             // Rebuild with new willingness; never retain a transfer quote at old fares.
@@ -662,11 +683,21 @@ impl Prepared {
         self.estimate_inner(time, true)
     }
     fn estimate_inner(&mut self, time: Option<u64>, display: bool) -> (Estimate, &[i64]) {
+        // Season repeats exactly each model year. Quotes belong to this
+        // commercial snapshot; only an input change invalidates them.
+        let time = time.map(|t| t % YEAR_SECONDS);
+        if !display
+            && self.network.is_some()
+            && let Some((quote, loads)) = self.quotes.get(&time)
+        {
+            self.loads.clone_from(loads);
+            return (quote.clone(), &self.loads);
+        }
         let (mut result, loads) = self.local.estimate(time);
         self.loads.clear();
         self.loads.extend_from_slice(loads);
         if let (Some(network), Some(target)) = (&self.network, self.target) {
-            let mut n = network.borrow_mut();
+            let mut n = network.lock().unwrap();
             n.estimate(time);
             result.connecting = n.passengers[target];
             result.connecting_revenue = n.revenue[target];
@@ -691,10 +722,16 @@ impl Prepared {
                 }
             }
         }
+        if !display && self.network.is_some() {
+            self.quotes
+                .insert(time, (result.clone(), self.loads.clone()));
+        }
         (result, &self.loads)
     }
 }
 
+#[cfg(test)]
+thread_local! { pub(crate) static TRANSFER_COUNTS: std::cell::Cell<(u64, u64, u64)> = const { std::cell::Cell::new((0, 0, 0)) }; }
 struct TransferPath {
     legs: [usize; 2],
     origin: String,
@@ -723,10 +760,9 @@ struct TransferNetwork {
     revenue: Vec<i64>,
     daily: Vec<f64>,
     last: Option<Option<u64>>,
-    recent: std::collections::VecDeque<TransferAllocation>,
+    recent: std::collections::HashMap<Option<u64>, TransferAllocation>,
 }
 struct TransferAllocation {
-    time: Option<u64>,
     passengers: Vec<i64>,
     revenue: Vec<i64>,
     daily: Vec<f64>,
@@ -734,7 +770,7 @@ struct TransferAllocation {
 thread_local! {
     // Derived, bounded and unsaved. Quotes for different owners share the exact
     // same network allocation, independent of supply/airline iteration order.
-    static TRANSFERS: std::cell::RefCell<Vec<std::rc::Rc<std::cell::RefCell<TransferNetwork>>>> = const { std::cell::RefCell::new(Vec::new()) };
+    static TRANSFERS: std::cell::RefCell<Vec<std::sync::Arc<std::sync::Mutex<TransferNetwork>>>> = const { std::cell::RefCell::new(Vec::new()) };
 }
 /// Structural connection data survives fare, awareness and reputation changes.
 /// Bounded independently of economic snapshots, including networks with no paths.
@@ -874,7 +910,7 @@ fn transfer_topology(offers: &[Offer]) -> Result<std::rc::Rc<TransferTopology>, 
 fn transfer_network(
     route: &Route,
     routes: &[Offer],
-) -> Result<Option<std::rc::Rc<std::cell::RefCell<TransferNetwork>>>, String> {
+) -> Result<Option<std::sync::Arc<std::sync::Mutex<TransferNetwork>>>, String> {
     let mut offers: Vec<_> = routes
         .iter()
         .filter(|o| o.route.plan.is_some())
@@ -903,15 +939,37 @@ fn transfer_network(
     if !topology.paths_for(route).iter().any(|&p| {
         let p = &topology.paths[p];
         let [a, b] = p.legs.map(|i| &offers[i]);
-        ((a.route.ticket_eur + b.route.ticket_eur) as f64)
-            < p.direct.reference * CONFIG.business_price_limit.max(CONFIG.leisure_price_limit)
+        let inputs = p.direct.with_price(a.route.ticket_eur + b.route.ticket_eur);
+        let maximum = |curve: &[f64; 12]| {
+            curve.iter().copied().fold(0.0, f64::max) / (curve.iter().sum::<f64>() / 12.0)
+        };
+        let ceiling = inputs
+            .at(&Market {
+                business: maximum(&CONFIG.business_monthly),
+                leisure: maximum(&CONFIG.leisure_monthly),
+            })
+            .total()
+            * CONFIG.transfer_penalty
+            * frequency(&a.route).min(frequency(&b.route)).min(1.0);
+        let (mut x, mut y) = (
+            a.route.plan.as_ref().unwrap().interval_seconds,
+            b.route.plan.as_ref().unwrap().interval_seconds,
+        );
+        while y != 0 {
+            (x, y) = (y, x % y);
+        }
+        // Every allocation is bounded by this willingness ceiling, even with
+        // empty legs and no competing offers. If it cannot reach one common
+        // rate quantum in any season, all quotes on this market are exactly zero.
+        // Keep a rounding margin: this shortcut must never discard a passenger.
+        ceiling >= (43200.0 / x as f64) * (1.0 - 1e-12)
     }) {
         return Ok(None);
     }
     TRANSFERS.with(|cache| {
         let mut cache = cache.borrow_mut();
         if let Some(n) = cache.iter().find(|n| {
-            let n = n.borrow();
+            let n = n.lock().unwrap();
             n.offers == offers
                 && n.reputation_factors
                     .iter()
@@ -924,7 +982,7 @@ fn transfer_network(
         if network.paths.is_empty() {
             return Ok(None);
         }
-        let n = std::rc::Rc::new(std::cell::RefCell::new(network));
+        let n = std::sync::Arc::new(std::sync::Mutex::new(network));
         if cache.len() == 4 {
             cache.remove(0);
         }
@@ -934,6 +992,11 @@ fn transfer_network(
 }
 impl TransferNetwork {
     fn new(offers: Vec<Offer>) -> Result<Self, String> {
+        #[cfg(test)]
+        TRANSFER_COUNTS.with(|c| {
+            let (n, a, timed) = c.get();
+            c.set((n + 1, a, timed));
+        });
         let reputation_factors: Vec<_> = offers
             .iter()
             .map(|o| crate::reputation::attractiveness(o.reputation))
@@ -979,7 +1042,7 @@ impl TransferNetwork {
                 revenue: Vec::new(),
                 daily: Vec::new(),
                 last: None,
-                recent: std::collections::VecDeque::new(),
+                recent: std::collections::HashMap::new(),
             });
         }
         let mut markets: Vec<TransferMarket> = Vec::new();
@@ -1080,20 +1143,26 @@ impl TransferNetwork {
             revenue: vec![0; count],
             daily: vec![0.0; path_count],
             last: None,
-            recent: std::collections::VecDeque::new(),
+            recent: std::collections::HashMap::new(),
         })
     }
     fn estimate(&mut self, time: Option<u64>) {
+        let time = time.map(|t| t % YEAR_SECONDS);
         if self.last == Some(time) {
             return;
         }
         self.last = Some(time);
-        if let Some(cached) = self.recent.iter().find(|c| c.time == time) {
+        if let Some(cached) = self.recent.get(&time) {
             self.passengers.copy_from_slice(&cached.passengers);
             self.revenue.copy_from_slice(&cached.revenue);
             self.daily.copy_from_slice(&cached.daily);
             return;
         }
+        #[cfg(test)]
+        TRANSFER_COUNTS.with(|c| {
+            let (n, a, timed) = c.get();
+            c.set((n, a + 1, timed + u64::from(time.is_some())));
+        });
         self.passengers.fill(0);
         self.revenue.fill(0);
         self.daily.fill(0.0);
@@ -1166,17 +1235,16 @@ impl TransferNetwork {
                 self.revenue[k] += count * p.fare[j];
             }
         }
-        // Owners often project a whole day's departures one route at a time.
-        // Retain a bounded set of exact-time allocations for the next route.
-        if self.recent.len() == 256 {
-            self.recent.pop_front();
-        }
-        self.recent.push_back(TransferAllocation {
+        // Sharing a snapshot cannot evict another route's quote. Seasonal
+        // keys also reuse identical departures in later model years.
+        self.recent.insert(
             time,
-            passengers: self.passengers.clone(),
-            revenue: self.revenue.clone(),
-            daily: self.daily.clone(),
-        });
+            TransferAllocation {
+                passengers: self.passengers.clone(),
+                revenue: self.revenue.clone(),
+                daily: self.daily.clone(),
+            },
+        );
     }
 }
 
@@ -1467,6 +1535,36 @@ mod tests {
             o
         })
         .collect()
+    }
+
+    #[test]
+    fn transfer_zero_ceiling_and_stored_quotes_match_fresh_after_cache_churn() {
+        for interval in [7200, 7260, 14400, 14520, 86400] {
+            let mut offers = transfer_offers();
+            offers[1].route.plan.as_mut().unwrap().interval_seconds = interval;
+            let mut stored = Prepared::new(&offers[0].route, offers[0].seats, &offers).unwrap();
+            for month in 0..24 {
+                let time = Some(month * YEAR_SECONDS / 12 + 123);
+                let actual = stored.estimate(time).0;
+                // Bypass both the eligibility shortcut and shared network cache.
+                let mut fresh = Prepared::new(&offers[0].route, offers[0].seats, &offers).unwrap();
+                let network = TransferNetwork::new(offers.clone()).unwrap();
+                fresh.target = Some(0);
+                fresh.network = Some(std::sync::Arc::new(std::sync::Mutex::new(network)));
+                let expected = fresh.estimate(time).0;
+                assert_eq!(actual, expected, "interval={interval}, month={month}");
+            }
+            let before = stored.estimate(Some(123)).0;
+            // More than the old 128-entry topology limit cannot change a quote.
+            for id in 1000..1140 {
+                let mut unrelated = offers.clone();
+                unrelated[0].route.id = id;
+                transfer_topology(&unrelated).unwrap();
+            }
+            assert_eq!(stored.estimate(Some(YEAR_SECONDS + 123)).0, before);
+            let mut fresh = Prepared::new(&offers[0].route, offers[0].seats, &offers).unwrap();
+            assert_eq!(fresh.estimate(Some(123)).0, before);
+        }
     }
 
     #[test]

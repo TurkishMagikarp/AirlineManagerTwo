@@ -461,7 +461,66 @@ fn quote_with_time(
     quote_prepared(route, model_id, routes, fuel_cents, departure, &mut market)
 }
 
+/// Current event snapshot only: no cache-size invalidation or eviction.
+#[derive(Clone, Default)]
+pub(crate) struct DepartureMarkets {
+    supply: Vec<crate::demand::Offer>,
+    factors: Vec<f64>,
+    markets: std::collections::BTreeMap<u32, (String, QuoteMarket)>,
+}
+impl DepartureMarkets {
+    pub(crate) fn refresh(&mut self, supply: &[crate::demand::Offer]) {
+        // Operational plan progress, disruption cursors and frozen results do
+        // not affect demand. Only the active interval is a commercial input.
+        let normalized: Vec<_> = supply
+            .iter()
+            .map(|o| {
+                let mut o = o.clone();
+                o.route.plan = o
+                    .route
+                    .plan
+                    .as_ref()
+                    .map(|p| crate::operations::FlightPlan {
+                        interval_seconds: p.interval_seconds,
+                        ..Default::default()
+                    });
+                o.route.remove_at = None;
+                o.route.rotation_phase = None;
+                o
+            })
+            .collect();
+        let factors: Vec<_> = supply
+            .iter()
+            .map(|o| crate::reputation::attractiveness(o.reputation))
+            .collect();
+        if self.supply != normalized || self.factors != factors {
+            self.supply = normalized;
+            self.factors = factors;
+            self.markets.clear();
+        }
+    }
+    pub(crate) fn market(
+        &mut self,
+        route: &Route,
+        model: &str,
+    ) -> Result<&mut QuoteMarket, String> {
+        if !self.markets.contains_key(&route.id) {
+            self.markets.insert(
+                route.id,
+                (
+                    model.to_owned(),
+                    QuoteMarket::new(route, model, &self.supply)?,
+                ),
+            );
+        }
+        let (stored_model, market) = self.markets.get_mut(&route.id).unwrap();
+        debug_assert_eq!(stored_model, model);
+        Ok(market)
+    }
+}
+
 /// Bound to one route/model/offer snapshot; rebuild when that snapshot changes.
+#[derive(Clone)]
 pub(crate) struct QuoteMarket {
     // Catalog lookups happen once per prepared market, including return legs.
     airport_levels: [i64; 2],

@@ -660,6 +660,8 @@ impl Game {
     ) -> bool {
         let owned_supply = self.prioritize_market(supply);
         let supply = owned_supply.as_slice();
+        let mut departure_markets = std::mem::take(&mut self.departure_markets);
+        departure_markets.refresh(supply);
         let mut updates = Vec::new();
         let mut finance = self.finance.clone();
         let mut delta = 0i64;
@@ -690,22 +692,27 @@ impl Game {
             let Some(wear) = plane.wear.added(projection.landed.len() as u64, flight) else {
                 return false;
             };
-            let mut market = None;
+            let needs_quote = projection
+                .landed
+                .iter()
+                .chain(projection.active.iter())
+                .any(|leg| leg.index != plan.completed_flights || plan.airborne.is_none());
+            let mut market = if needs_quote {
+                match departure_markets.market(route, &plane.model_id) {
+                    Ok(market) => Some(market),
+                    Err(_) => return false,
+                }
+            } else {
+                None
+            };
             let (mut fuel_until, mut fuel_cents) = (0, 0);
             let mut quote = |leg: &crate::disruptions::Leg,
-                             market: &mut Option<crate::economy::QuoteMarket>|
+                             market: &mut Option<&mut crate::economy::QuoteMarket>|
              -> Result<crate::economy::FlightResult, String> {
                 if leg.index == plan.completed_flights
                     && let Some(f) = &plan.airborne
                 {
                     return Ok(f.clone());
-                }
-                if market.is_none() {
-                    *market = Some(crate::economy::QuoteMarket::new(
-                        route,
-                        &plane.model_id,
-                        supply,
-                    )?);
                 }
                 // Quote the actual departure time: seasonal demand, fuel prices
                 // and contracts are frozen at dispatch, never at landing.
@@ -720,7 +727,7 @@ impl Game {
                     supply,
                     fuel_cents,
                     leg.departure,
-                    market.as_mut().unwrap(),
+                    market.as_deref_mut().expect("dispatch market"),
                 )?;
                 self.apply_fuel_contract(&mut f, &plane.model_id, leg.departure)?;
                 crate::disruptions::apply(&mut f.totals, leg)?;
@@ -758,6 +765,7 @@ impl Game {
             };
             updates.push((i, p, projection, airborne, wear));
         }
+        self.departure_markets = departure_markets;
         let balance = match &self.airline {
             Some(a) => match a.capital_eur.checked_add(delta) {
                 Some(v) => Some(v),
