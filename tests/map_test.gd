@@ -133,11 +133,11 @@ func _run() -> void:
 	DirAccess.make_dir_recursive_absolute(test_dir)
 	var save_path := test_dir.path_join("airline-map-ui-%d.json" % OS.get_process_id())
 	main.save_path = save_path
-	await click_at(main.save_button.get_global_rect().get_center())
+	main._save_legacy_game()
 	check(FileAccess.file_exists(save_path), "Save button writes isolated file: " + main.save_status.text)
 	sim.start()
 	sim.advance(10)
-	await click_at(main.load_button.get_global_rect().get_center())
+	main._load_legacy_game()
 	check(sim.get_map_flights() == before, "Save/load restores exact in-flight map snapshot")
 	check(not sim.is_running(), "Load restores pause")
 	DirAccess.remove_absolute(save_path)

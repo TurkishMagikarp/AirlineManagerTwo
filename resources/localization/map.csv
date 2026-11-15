@@ -66,3 +66,31 @@ Neuseeland,Neuseeland,New Zealand
 Springt unabhängig von Pause und Tempo; hält bei neuen Hinweisen oder Finanznot am Tagesabschnitt an.,Springt unabhängig von Pause und Tempo; hält bei neuen Hinweisen oder Finanznot am Tagesabschnitt an.,Jump independently of pause and speed; stop after a daily chunk on new attention or financial distress.
 Zeitsprung läuft,Zeitsprung läuft,Time jump in progress
 Zeitsprung läuft · Flüge und Abrechnungen werden verarbeitet.,Zeitsprung läuft · Flüge und Abrechnungen werden verarbeitet.,Time jump in progress · processing flights and payments.
+Spielstand speichern,Spielstand speichern,Save game
+Spielstand laden,Spielstand laden,Load game
+Name des Spielstands,Name des Spielstands,Save name
+Zum Beispiel: Vor dem Zeitsprung,Zum Beispiel: Vor dem Zeitsprung,For example: Before the time jump
+Schließen,Schließen,Close
+Hier speichern,Hier speichern,Save here
+Noch keine Spielstände,Noch keine Spielstände,No saved games yet
+Ein Speicherplatz hält dein Unternehmen vor dem nächsten Zeitsprung fest.,Ein Speicherplatz hält dein Unternehmen vor dem nächsten Zeitsprung fest.,Keep your company in a save slot before the next time jump.
+Freier Speicherplatz,Freier Speicherplatz,Free save slot
+Überschreiben,Überschreiben,Overwrite
+Beschädigter Spielstand,Beschädigter Spielstand,Damaged save
+Beschädigt · Hauptdatei kann nicht geladen werden.,Beschädigt · Hauptdatei kann nicht geladen werden.,Damaged · main file cannot be loaded.
+Laden,Laden,Load
+Löschen,Löschen,Delete
+Sicherung,Sicherung,Backup
+Sicherung laden,Sicherung laden,Load backup
+Flugzeuge,Flugzeuge,Aircraft
+Spielstand überschreiben?,Spielstand überschreiben?,Overwrite saved game?
+Der bisherige Spielstand wird zur Sicherung. Eine ältere Sicherung wird ersetzt.,Der bisherige Spielstand wird zur Sicherung. Eine ältere Sicherung wird ersetzt.,The previous save becomes the backup. An older backup will be replaced.
+Spielstand gespeichert.,Spielstand gespeichert.,Game saved.
+Sicherung geladen.,Sicherung geladen.,Backup loaded.
+Spielstand geladen.,Spielstand geladen.,Game loaded.
+Spielstand löschen?,Spielstand löschen?,Delete saved game?
+Spielstand und Sicherung werden endgültig gelöscht.,Spielstand und Sicherung werden endgültig gelöscht.,The save and its backup will be permanently deleted.
+Spielstand gelöscht.,Spielstand gelöscht.,Saved game deleted.
+Abbrechen,Abbrechen,Cancel
+Speicherplätze · manuell speichern und laden,Speicherplätze · manuell speichern und laden,Save slots · save and load manually
+%d Speicherplätze · Namen bis %d Zeichen.,%d Speicherplätze · Namen bis %d Zeichen.,%d save slots · names up to %d characters.

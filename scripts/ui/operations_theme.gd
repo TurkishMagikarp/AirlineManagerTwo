@@ -93,6 +93,10 @@ static func font_for(style: Dictionary) -> Font:
 	_fonts[key] = font
 	return font
 
+static func save_slot_box(selected: bool, free: bool = false) -> StyleBoxFlat:
+	return box(TRANSPARENT if free else ACCENT_WASH if selected else SURFACE,
+		TRANSPARENT if free else ACCENT_TEXT if selected else LINE, RADIUS_MD, SPACE_3, SPACE_2)
+
 static func box(fill: Color, border: Color = LINE, radius: int = RADIUS_MD, horizontal: int = SPACE_4, vertical: int = SPACE_2) -> StyleBoxFlat:
 	var result := StyleBoxFlat.new()
 	result.bg_color = fill

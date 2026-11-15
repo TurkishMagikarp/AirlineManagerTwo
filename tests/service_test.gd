@@ -28,7 +28,7 @@ func _run() -> void:
 	var frozen: Array
 	if mode.begins_with("read-"):
 		main.save_path = path
-		await _click(main.founding_load_button)
+		main._load_legacy_game()
 		if not _check(main.save_status.text == "Spielstand geladen.", "Load with real button in a fresh process"):
 			return
 		frozen = FileAccess.open(path + ".flight", FileAccess.READ).get_var()
@@ -75,7 +75,7 @@ func _run() -> void:
 		if mode.begins_with("write-"):
 			main.save_path = path
 			await _click(main.navigation[0])
-			await _click(main.save_button)
+			main._save_legacy_game()
 			if not _check(main.save_status.text == "Spielstand gespeichert.", "Save airborne flight through real button"):
 				return
 			var file := FileAccess.open(path + ".flight", FileAccess.WRITE)
@@ -163,7 +163,7 @@ func _run() -> void:
 				return
 	if mode == "read-v17":
 		await _click(main.navigation[0])
-		await _click(main.save_button)
+		main._save_legacy_game()
 		if not _check(main.save_status.text == "Spielstand gespeichert." and JSON.parse_string(FileAccess.get_file_as_string(path))["version"] == 31, "Migrated v17 resaves as v31"):
 			return
 	print("PASS: real service input, frozen costs, archive/Finances agreement and layout; mode=" + mode)

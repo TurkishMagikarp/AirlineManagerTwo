@@ -33,6 +33,13 @@ func _run() -> void:
 		quit(0)
 		return
 	assert(sim.found_airline("Meridian Air", "DE", "EDDF").is_empty())
+	if OS.get_environment("AIRLINE_UI_CAPTURE_SAVES_ONLY") == "1":
+		await _save_slot_views(sim)
+		main.queue_free()
+		await process_frame
+		print("PASS: empty, populated, damaged and long-name save dialogs at 1440x1000 and 680x520")
+		quit(0)
+		return
 	if not capture_dir.is_empty():
 		for dimensions in [Vector2i(1440, 1000), Vector2i(1100, 720), Vector2i(680, 520)]:
 			root.size = dimensions
@@ -579,3 +586,53 @@ func _jump_views() -> void:
 			assert(root.get_texture().get_image().save_png(capture_dir.path_join("jump-progress-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
 		progress.queue_free()
 		await process_frame
+
+
+func _save_slot_views(sim: RefCounted) -> void:
+	var directory := OS.get_cache_dir().path_join("air-save-slot-shots-%d" % OS.get_process_id())
+	DirAccess.make_dir_recursive_absolute(directory)
+	main.save_user_dir = directory
+	main._sync_view()
+	for scenario in ["empty", "populated", "damaged", "long-name"]:
+		if scenario == "populated":
+			assert(sim.save_slot(directory, 0, "Vor dem Zeitsprung", false).is_empty())
+			assert(sim.buy_aircraft("atr72_600").is_empty())
+			assert(sim.save_slot(directory, 0, "Nach dem Flugzeugkauf", true).is_empty())
+			assert(sim.save_slot(directory, 1, "Zweiter Speicherplatz", false).is_empty())
+		if scenario == "damaged":
+			var slot := directory.path_join("saves/slot-00")
+			var manifest: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(slot.path_join("manifest.json")))
+			var file := FileAccess.open(slot.path_join(manifest["main"]).path_join("save.json"), FileAccess.WRITE)
+			file.store_string("{")
+			file.close()
+		if scenario == "long-name":
+			assert(sim.save_slot(directory, 1, "Vor dem nächsten großen Zeitsprung – Flottenplan und Rücklagen", true).is_empty())
+		for dimensions in [Vector2i(1440, 1000), Vector2i(680, 520)]:
+			root.size = dimensions
+			main._sync_view()
+			main._open_save_slots(scenario == "empty" or scenario == "long-name")
+			await process_frame
+			var dialog: Control = main.save_slots_dialog
+			if scenario == "long-name": dialog.select_slot(1, "Vor dem nächsten großen Zeitsprung – Flottenplan und Rücklagen")
+			for frame in range(5): await process_frame
+			assert(root.get_visible_rect().encloses(dialog.content.get_global_rect()))
+			await RenderingServer.frame_post_draw
+			assert(root.get_texture().get_image().save_png(capture_dir.path_join("save-slots-%s-%dx%d.png" % [scenario, dimensions.x, dimensions.y])) == OK)
+			if scenario == "populated":
+				dialog.request_delete(0, "Nach dem Flugzeugkauf")
+				for frame in range(3): await process_frame
+				await RenderingServer.frame_post_draw
+				assert(root.get_texture().get_image().save_png(capture_dir.path_join("save-slots-confirm-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
+				dialog.decision.get_cancel_button().pressed.emit()
+			dialog.close_dialog()
+			await process_frame
+	for dimensions in [Vector2i(1440, 1000), Vector2i(680, 520)]:
+		root.size = dimensions
+		main._sync_view()
+		for frame in range(5): await process_frame
+		await RenderingServer.frame_post_draw
+		assert(root.get_texture().get_image().save_png(capture_dir.path_join("overview-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
+	for id in [0, 1]: assert(sim.delete_save_slot(directory, id).is_empty())
+	DirAccess.remove_absolute(directory.path_join("saves/legacy-imported"))
+	DirAccess.remove_absolute(directory.path_join("saves"))
+	DirAccess.remove_absolute(directory)

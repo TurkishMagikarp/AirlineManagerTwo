@@ -23,7 +23,7 @@ func _run() -> void:
 	var panel = main.routes_panel
 	if mode.begins_with("read-"):
 		main.save_path = path
-		await _click(main.founding_load_button)
+		main._load_legacy_game()
 		if not _check(main.save_status.text == "Spielstand geladen.", "Load via UI in a fresh process"):
 			return
 	else:
@@ -104,7 +104,7 @@ func _run() -> void:
 			return
 	if mode.begins_with("write-"):
 		main.save_path = path
-		await _click(main.save_button)
+		main._save_legacy_game()
 		if not _check(main.save_status.text == "Spielstand gespeichert.", "Save restart fixture via UI"):
 			return
 		if mode.ends_with("v17") or mode.ends_with("v16"):

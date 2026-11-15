@@ -280,7 +280,7 @@ func _restart_family(mode: String) -> bool:
 		_store(disruption_path + ".initial", _snapshot())
 	else:
 		main.save_path = disruption_path
-		await _click(main.founding_load_button)
+		main._load_legacy_game()
 		if not _check(main.save_status.text == "Spielstand geladen." and _snapshot() == _read(disruption_path + ".initial"), "Fresh process matches full world and API immediately"):
 			return false
 	var before := _state()

@@ -396,8 +396,17 @@ Bei kleinen Fenstern bricht die Navigation in zwei Zeilen um.
 
 ## Speichern und Laden
 
-**Speichern** ersetzt den einen lokalen Spielstand; **Laden** stellt ihn wieder
-her. Nach einem Neustart **Spielstand laden** drücken: Airline einschließlich
+**Speichern** und **Laden** öffnen die Liste der lokalen Speicherplätze.
+In einen freien Platz speichern, einen Namen eingeben, einen vorhandenen Platz
+überschreiben, laden oder löschen: Überschreiben und Löschen fragen zuerst nach.
+Jeder Platz zeigt Name, Spielzeit, Guthaben, Flottengröße und Schreibzeit (UTC).
+Beim Überschreiben bleibt die vorige Datei als eine Sicherung erhalten.
+Beschädigte Hauptdateien werden markiert; **Sicherung laden** lädt nur auf
+ausdrücklichen Wunsch. Die Sicherung zeigt ihre eigenen Daten.
+Es gibt 12 Plätze mit Namen bis 64 Unicode-Zeichen (`config/saves.json`).
+Pfadzeichen und reservierte Windows-Dateinamen werden abgelehnt.
+
+Laden stellt den gewählten Stand wieder her. Nach einem Neustart **Spielstand laden** drücken: Airline einschließlich
 Name, Land, Heimatflughafen und verbleibendem Guthaben, die komplette Flotte
 einschließlich bezahlter Preise und Kennungszähler, Routen mit Flugzeugzuweisungen
 und Routenkennungszähler, Pendelflugpläne samt Landungszählern und aktuellem
@@ -407,14 +416,29 @@ Spielstand läuft anschließend weiter, ein pausierter bleibt pausiert. Die Zeit
 während des geschlossenen Spiels wird nicht angerechnet. Es gibt bewusst kein
 automatisches Speichern oder Laden.
 
-Datei: `user://savegame.json`, von Godot auf den beschreibbaren Benutzerordner
+Speicherordner: `user://saves/`, von Godot auf den beschreibbaren Benutzerordner
 aufgelöst (unabhängig von Installationsordner und Arbeitsverzeichnis):
 
-- Windows: `%APPDATA%\Godot\app_userdata\<Projektname>\savegame.json`
-- macOS: `~/Library/Application Support/Godot/app_userdata/<Projektname>/savegame.json`
+- Windows: `%APPDATA%\Godot\app_userdata\<Projektname>\saves`
+- macOS: `~/Library/Application Support/Godot/app_userdata/<Projektname>/saves`
 
-Der aktuelle Projektname ist `Airline Manager — UI-Basis`. Der tatsächliche Pfad
-steht auch im Tooltip der Speichermeldung. macOS ist hier nicht praktisch getestet.
+Der aktuelle Projektname ist `Airline Manager — UI-Basis`. macOS ist hier nicht
+praktisch getestet. Der bisherige `user://savegame.json` wird beim ersten Öffnen
+als „Bisheriger Spielstand“ übernommen. Seine Bytes bleiben unverändert, und
+die ursprüngliche Datei bleibt erhalten. Löschen des importierten Platzes holt
+sie nicht erneut zurück. Die Windows-Neustarttests nutzen weiter die vorhandene
+Einzeldatei-API; ihre Treiber wurden hier nicht ausgeführt.
+
+Rust (`rust/src/save_slots.rs`) verwaltet stabile numerische Platz-IDs, unabhängig
+vom Anzeigenamen. Pro Platz zeigt ein atomar ersetztes Manifest auf aktuelle und
+vorherige unveränderliche Generation. Jede Generation enthält die unveränderte
+Simulationsdatei sowie einen kleinen Kopf im Metadatenformat 1. Die Liste liest
+nur begrenzte Köpfe und Dateimetadaten (Größe/Änderungszeit), keine Spielarchive.
+Fehlende oder defekte Köpfe sowie veränderte Dateien sind beschädigt; beim Laden
+folgt immer die vollständige Format- und Zustandsprüfung. Eine extern manipulierte
+Datei mit exakt erhaltener Größe und Änderungszeit kann erst dabei auffallen.
+Die Schreibzeit ist reine Anzeige und gehört nie zum Simulationszustand.
+Während eines Zeitsprungs sperren Dialog und Rust-API alle Speicheraktionen.
 
 Rust (`rust/src/save.rs`) übernimmt Dateizugriff, JSON-Format und Validierung.
 Das Format hat Version **31** und einen `state`-Bereich mit `clock`, `airline`,
@@ -464,10 +488,10 @@ werden jetzt abgelehnt. Keine Serialisierung von Godot-Objekten.
 Eine vollständig geschriebene und synchronisierte temporäre Datei im selben
 Ordner ersetzt erst zum Schluss den bisherigen Spielstand. Fehler beim Laden
 (fehlende, defekte, zu große oder ungültige Dateien) erscheinen als Meldung und
-verändern die laufende Simulation nicht. Noch keine mehreren Speicherplätze,
-Backups oder automatische Wiederherstellung. Ungültige Airline- und Flottendaten werden
+verändern die laufende Simulation nicht. Es gibt kein automatisches Speichern
+und keine stille Wiederherstellung. Ungültige Airline- und Flottendaten werden
 ebenso abgelehnt wie defekte Zeitdaten, ohne den laufenden Zustand zu ersetzen.
-Das Dateilimit beträgt 8 MiB; auch Speichern prüft es, damit keine
+Das Dateilimit beträgt 256 MiB; auch Speichern prüft es, damit keine
 zu große, anschließend nicht mehr ladbare Datei einen guten Spielstand ersetzt.
 JSON wird ohne unnötige Einrückung geschrieben; vorhandene formatierte Dateien bleiben lesbar.
 Das Limit gilt weiterhin auch mit Archiv: Sehr viele Preis-/Flugplanwechsel können

@@ -49,11 +49,11 @@ func _run() -> void:
 		await _click(main.navigation[2])
 		await _click(main.routes_panel.create_button)
 		await _click(main.navigation[0])
-		await _click(main.save_button)
+		main._save_legacy_game()
 		if not _check(main.save_status.text == "Spielstand gespeichert.", "Save button writes via Rust"):
 			return
 	else:
-		await _click(main.founding_load_button)
+		main._load_legacy_game()
 		if not _check(main.save_status.text == "Spielstand geladen.", "Load button restores via Rust after restart"):
 			return
 	if not _check(clock.get_elapsed_seconds() == 86400.125 and clock.is_running() == running and clock.get_speed() == speed, "Exact saved time, running flag and speed"):
@@ -111,7 +111,7 @@ func _run() -> void:
 			var file := FileAccess.open(main.save_path, FileAccess.WRITE)
 			file.store_string(content)
 			file.close()
-			await _click(main.load_button)
+			main._load_legacy_game()
 			if not _check(main.save_status.text != "Spielstand geladen." and clock.get_elapsed_seconds() == expected and clock.is_running() == running and clock.get_speed() == speed, "Corrupt load preserves live state"):
 				return
 		var invalid_company: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(path))
@@ -120,14 +120,14 @@ func _run() -> void:
 		var route_file := FileAccess.open(main.save_path, FileAccess.WRITE)
 		route_file.store_string(invalid_routes)
 		route_file.close()
-		await _click(main.load_button)
+		main._load_legacy_game()
 		if not _check(main.save_status.text != "Spielstand geladen." and clock.get_routes() == routes and clock.get_fleet() == fleet, "Invalid route load preserves live routes and aircraft"):
 			return
 		invalid_company["state"]["airline"]["country_code"] = "DE"
 		var invalid_file := FileAccess.open(main.save_path, FileAccess.WRITE)
 		invalid_file.store_string(JSON.stringify(invalid_company))
 		invalid_file.close()
-		await _click(main.load_button)
+		main._load_legacy_game()
 		if not _check(main.save_status.text != "Spielstand geladen." and clock.get_airline_info() == airline and clock.get_elapsed_seconds() == expected and clock.get_speed() == speed and clock.is_running() == running, "Invalid airline data cannot replace company or clock"):
 			return
 		var invalid_fleet: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(path))
@@ -135,15 +135,15 @@ func _run() -> void:
 		invalid_file = FileAccess.open(main.save_path, FileAccess.WRITE)
 		invalid_file.store_string(JSON.stringify(invalid_fleet))
 		invalid_file.close()
-		await _click(main.load_button)
+		main._load_legacy_game()
 		if not _check(main.save_status.text != "Spielstand geladen." and clock.get_fleet() == fleet and clock.get_airline_info() == airline and clock.get_elapsed_seconds() == expected, "Corrupt fleet cannot erase aircraft or money"):
 			return
 		main.save_path = path + ".missing"
-		await _click(main.load_button)
+		main._load_legacy_game()
 		if not _check(main.save_status.text != "Spielstand geladen." and clock.get_elapsed_seconds() == expected, "Missing save is safe"):
 			return
 		main.save_path = path.path_join("blocked.json")
-		await _click(main.save_button)
+		main._save_legacy_game()
 		if not _check(main.save_status.text != "Spielstand gespeichert." and FileAccess.get_file_as_bytes(path) == good_bytes, "Write failure leaves existing save intact"):
 			return
 		root.size = Vector2i(680, 520)

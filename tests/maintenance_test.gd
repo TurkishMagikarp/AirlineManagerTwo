@@ -116,10 +116,10 @@ func _run() -> void:
 	if not _check(sim.get_financial_summary()["flights"] == flights + 1 and sim.get_fleet()[0]["status"] == "maintenance", "No departures during maintenance"):
 		return
 	main.save_path = path
-	await _click(main.save_button)
+	main._save_legacy_game()
 	if not _check(main.save_status.text == "Spielstand gespeichert.", "Save during maintenance"):
 		return
-	await _click(main.load_button)
+	main._load_legacy_game()
 	if not _check(main.save_status.text == "Spielstand geladen." and sim.get_fleet()[0]["maintenance_state"] == "active", "Load during maintenance"):
 		return
 	await _click(main.navigation[1])

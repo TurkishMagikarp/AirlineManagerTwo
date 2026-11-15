@@ -22,7 +22,7 @@ func _run() -> void:
 	var sim = main.simulation
 	if mode.begins_with("read-"):
 		main.save_path = reputation_path
-		await _click(main.founding_load_button)
+		main._load_legacy_game()
 		if not _check(main.save_status.text == "Spielstand geladen." and _snapshot() == _read(reputation_path + ".initial"), "Fresh reader matches full player/AI world bytes and API snapshots immediately"):
 			return
 	else:

@@ -21,7 +21,7 @@ func _run() -> void:
 	main.set_process(false)
 	if mode.begins_with("read-"):
 		main.save_path = slot_path
-		await _click(main.founding_load_button)
+		main._load_legacy_game()
 		if not _check(main.save_status.text == "Spielstand geladen." and _snapshot() == _read(slot_path + ".initial"), "Fresh reader restores every world byte and player/AI API"):
 			return
 	else:

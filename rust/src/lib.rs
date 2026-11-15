@@ -53,6 +53,9 @@ mod route_save;
 mod routes;
 mod save;
 #[cfg(test)]
+mod save_slot_tests;
+mod save_slots;
+#[cfg(test)]
 mod seasonal_tests;
 mod service;
 #[cfg(test)]
@@ -1653,9 +1656,93 @@ impl SimulationClock {
         }
     }
 
-    /// Empty string means success; errors are safe, user-visible messages.
+    /// Header-only slot list; legacy import is performed once on first access.
+    #[func]
+    fn get_save_slots(&self, user_dir: GString) -> VarDictionary {
+        if self.jump_worker.is_some() {
+            return vdict! {"error" => "Zeitsprung läuft."};
+        }
+        let user = std::path::PathBuf::from(user_dir.to_string());
+        match save_slots::list(&user.join("saves"), &user.join("savegame.json")) {
+            Ok(slots) => {
+                let rows: Array<VarDictionary> = slots.into_iter().map(|s| {
+                    let header = |h: Option<save_slots::Header>| -> VarDictionary {
+                        h.map(|h| vdict! {"name" => h.name.as_str(), "game_time" => h.game_time.as_str(),
+                            "cash" => h.cash, "fleet" => h.fleet as i64, "written_at" => h.written_at as i64,
+                            "format_version" => h.format_version as i64, "save_version" => h.save_version as i64}).unwrap_or_default()
+                    };
+                    vdict! {"id" => s.id as i64, "occupied" => s.occupied, "header" => &header(s.header),
+                        "backup" => &header(s.backup), "error" => s.error.as_str()}
+                }).collect();
+                vdict! {"slots" => &rows, "name_length" => save_slots::RULES.name_length as i64, "error" => ""}
+            }
+            Err(e) => vdict! {"error" => e.as_str()},
+        }
+    }
+
+    #[func]
+    fn save_slot(&self, user_dir: GString, id: i64, name: GString, overwrite: bool) -> GString {
+        if self.jump_worker.is_some() {
+            return "Zeitsprung läuft.".into();
+        }
+        let result = u32::try_from(id)
+            .map_err(|_| "Ungültiger Speicherplatz.".to_string())
+            .and_then(|id| {
+                save_slots::store(
+                    &std::path::PathBuf::from(user_dir.to_string()).join("saves"),
+                    id,
+                    &name.to_string(),
+                    &self.game,
+                    overwrite,
+                )
+            });
+        result.err().unwrap_or_default().as_str().into()
+    }
+
+    #[func]
+    fn load_slot(&mut self, user_dir: GString, id: i64, backup: bool) -> GString {
+        if self.jump_worker.is_some() {
+            return "Zeitsprung läuft.".into();
+        }
+        let result = u32::try_from(id)
+            .map_err(|_| "Ungültiger Speicherplatz.".to_string())
+            .and_then(|id| {
+                save_slots::load(
+                    &std::path::PathBuf::from(user_dir.to_string()).join("saves"),
+                    id,
+                    backup,
+                )
+            });
+        match result {
+            Ok(game) => {
+                self.game = game;
+                GString::new()
+            }
+            Err(e) => e.as_str().into(),
+        }
+    }
+
+    #[func]
+    fn delete_save_slot(&self, user_dir: GString, id: i64) -> GString {
+        if self.jump_worker.is_some() {
+            return "Zeitsprung läuft.".into();
+        }
+        let result = u32::try_from(id)
+            .map_err(|_| "Ungültiger Speicherplatz.".to_string())
+            .and_then(|id| {
+                save_slots::delete(
+                    &std::path::PathBuf::from(user_dir.to_string()).join("saves"),
+                    id,
+                )
+            });
+        result.err().unwrap_or_default().as_str().into()
+    }
+
     #[func]
     fn save_game(&self, path: GString) -> GString {
+        if self.jump_worker.is_some() {
+            return "Zeitsprung läuft.".into();
+        }
         match save::save(std::path::Path::new(&path.to_string()), &self.game) {
             Ok(()) => GString::new(),
             Err(error) => error.as_str().into(),
@@ -1664,6 +1751,9 @@ impl SimulationClock {
 
     #[func]
     fn load_game(&mut self, path: GString) -> GString {
+        if self.jump_worker.is_some() {
+            return "Zeitsprung läuft.".into();
+        }
         match save::load(std::path::Path::new(&path.to_string())) {
             Ok(game) => {
                 self.game = game;
