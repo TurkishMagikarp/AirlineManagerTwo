@@ -462,59 +462,81 @@ fn quote_with_time(
 }
 
 /// Current event snapshot only: no cache-size invalidation or eviction.
+/// Transactional Game clones share derived quote scratch through locks. A new
+/// commercial epoch replaces this clone's map; other snapshots stay intact.
 #[derive(Clone, Default)]
 pub(crate) struct DepartureMarkets {
-    supply: Vec<crate::demand::Offer>,
-    factors: Vec<f64>,
-    markets: std::collections::BTreeMap<u32, (String, QuoteMarket)>,
+    supply: std::sync::Arc<Vec<crate::demand::Offer>>,
+    revision: Option<u64>,
+    structure_revision: Option<u64>,
+    reputations: Vec<(String, i64)>,
+    transfers: Option<crate::demand::SharedTransferSupply>,
+    markets:
+        std::collections::BTreeMap<u32, (String, std::sync::Arc<std::sync::Mutex<QuoteMarket>>)>,
 }
 impl DepartureMarkets {
-    pub(crate) fn refresh(&mut self, supply: &[crate::demand::Offer]) {
-        // Operational plan progress, disruption cursors and frozen results do
-        // not affect demand. Only the active interval is a commercial input.
-        let normalized: Vec<_> = supply
-            .iter()
-            .map(|o| {
-                let mut o = o.clone();
-                o.route.plan = o
-                    .route
-                    .plan
-                    .as_ref()
-                    .map(|p| crate::operations::FlightPlan {
-                        interval_seconds: p.interval_seconds,
-                        ..Default::default()
-                    });
-                o.route.remove_at = None;
-                o.route.rotation_phase = None;
-                o
-            })
-            .collect();
-        let factors: Vec<_> = supply
-            .iter()
-            .map(|o| crate::reputation::attractiveness(o.reputation))
-            .collect();
-        if self.supply != normalized || self.factors != factors {
-            self.supply = normalized;
-            self.factors = factors;
-            self.markets.clear();
+    pub(crate) fn refresh(
+        &mut self,
+        revision: u64,
+        structure_revision: u64,
+        live_supply: &[crate::demand::Offer],
+        supply: impl FnOnce() -> Vec<crate::demand::Offer>,
+    ) {
+        if self.revision == Some(revision) {
+            return;
         }
+        if self.structure_revision != Some(structure_revision) {
+            self.supply = std::sync::Arc::new(supply());
+            self.structure_revision = Some(structure_revision);
+            self.markets.clear();
+            self.transfers = None;
+            self.reputations.clear();
+            for offer in &*self.supply {
+                if !self
+                    .reputations
+                    .iter()
+                    .any(|(owner, _)| *owner == offer.owner)
+                {
+                    self.reputations
+                        .push((offer.owner.clone(), offer.reputation));
+                }
+            }
+        }
+        for (owner, score) in &mut self.reputations {
+            if let Some(offer) = live_supply.iter().find(|o| o.owner == *owner) {
+                *score = offer.reputation;
+            }
+        }
+        self.revision = Some(revision);
     }
+
     pub(crate) fn market(
         &mut self,
         route: &Route,
         model: &str,
-    ) -> Result<&mut QuoteMarket, String> {
+    ) -> Result<std::sync::MutexGuard<'_, QuoteMarket>, String> {
         if !self.markets.contains_key(&route.id) {
             self.markets.insert(
                 route.id,
                 (
                     model.to_owned(),
-                    QuoteMarket::new(route, model, &self.supply)?,
+                    std::sync::Arc::new(std::sync::Mutex::new(QuoteMarket::prepare(
+                        route,
+                        model,
+                        &self.supply,
+                        false,
+                        &mut self.transfers,
+                        self.structure_revision,
+                    )?)),
                 ),
             );
         }
         let (stored_model, market) = self.markets.get_mut(&route.id).unwrap();
         debug_assert_eq!(stored_model, model);
+        let mut market = market.lock().unwrap();
+        market
+            .passengers
+            .set_reputation(self.revision.unwrap(), &self.reputations);
         Ok(market)
     }
 }
@@ -533,14 +555,38 @@ pub(crate) struct QuoteMarket {
 }
 impl QuoteMarket {
     /// Only fares change within a single-service expansion sweep (fixed cabin).
+    #[cfg(test)]
     pub(crate) fn reprice_single(&mut self, route: &Route) {
         self.passengers.reprice_single(route);
+    }
+
+    pub(crate) fn reprice_direct(&mut self, route: &Route) {
+        self.passengers.reprice_direct(route);
+    }
+
+    pub(crate) fn direct(
+        route: &Route,
+        model_id: &str,
+        routes: &[crate::demand::Offer],
+    ) -> Result<Self, String> {
+        Self::prepare(route, model_id, routes, true, &mut None, None)
     }
 
     pub fn new(
         route: &Route,
         model_id: &str,
         routes: &[crate::demand::Offer],
+    ) -> Result<Self, String> {
+        Self::prepare(route, model_id, routes, false, &mut None, None)
+    }
+
+    fn prepare(
+        route: &Route,
+        model_id: &str,
+        routes: &[crate::demand::Offer],
+        direct: bool,
+        transfers: &mut Option<crate::demand::SharedTransferSupply>,
+        revision: Option<u64>,
     ) -> Result<Self, String> {
         let offer = routes
             .iter()
@@ -554,7 +600,11 @@ impl QuoteMarket {
             airport_levels: airport_levels(route)?,
             flight_seconds: operations::timings(route, model_id)?.0,
             cargo: crate::cargo::Market::new(route, model_id, routes)?,
-            passengers: crate::demand::Prepared::new(route, seats, routes)?,
+            passengers: if direct {
+                crate::demand::Prepared::direct(route, seats, routes)?
+            } else {
+                crate::demand::Prepared::in_supply(route, seats, routes, transfers, revision)?
+            },
         })
     }
 }
@@ -654,7 +704,17 @@ impl Game {
         if !(0..=100_000).contains(&price) {
             return Err("Ticketpreis muss zwischen 0 und 100000 EUR liegen.".into());
         }
-        self.route_mut(id)?;
+        self.require_active()?;
+        if !self.routes.iter().any(|r| r.id == id) {
+            return Err("Unbekannte Route.".into());
+        }
+        if self
+            .routes
+            .iter()
+            .any(|r| r.public_id() == id && r.ticket_eur != price)
+        {
+            self.commercial_changed();
+        }
         for r in self.routes.iter_mut().filter(|r| r.public_id() == id) {
             r.ticket_eur = price;
         }

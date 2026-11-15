@@ -142,15 +142,36 @@ fn transfers_stored_quotes_equal_fresh_after_long_run_and_commercial_events() {
     for event in 0..7 {
         match event {
             1 => g.set_ticket_price(1, 95).unwrap(),
-            2 => g.reputation.score = -500_000,
-            3 => g.marketing.awareness = 10_000_000,
-            4 => g.routes[1].plan.as_mut().unwrap().interval_seconds *= 2,
-            5 => g.fleet[0].business_seats = 20,
-            6 => g.routes[1].plan = None,
+            2 => {
+                g.reputation.score = -500_000;
+                g.commercial_changed();
+            }
+            3 => {
+                g.marketing.awareness = 10_000_000;
+                g.commercial_changed();
+            }
+            4 => {
+                g.route_mut(2)
+                    .unwrap()
+                    .plan
+                    .as_mut()
+                    .unwrap()
+                    .interval_seconds *= 2
+            }
+            5 => {
+                g.fleet[0].business_seats = 20;
+                g.commercial_changed();
+            }
+            6 => g.route_mut(2).unwrap().plan = None,
             _ => {}
         }
         let supply = g.prioritize_market(&g.market_routes());
-        g.departure_markets.refresh(&supply);
+        g.departure_markets.refresh(
+            g.supply_revision(),
+            g.supply_structure_revision(),
+            &supply,
+            || supply.clone(),
+        );
         for route in &g.routes {
             let model = &g
                 .fleet
@@ -162,10 +183,109 @@ fn transfers_stored_quotes_equal_fresh_after_long_run_and_commercial_events() {
                 let mut fresh = economy::QuoteMarket::new(route, model, &supply).unwrap();
                 let expected =
                     economy::quote_prepared(route, model, &supply, 100, time, &mut fresh).unwrap();
-                let stored = g.departure_markets.market(route, model).unwrap();
+                let mut stored = g.departure_markets.market(route, model).unwrap();
                 let actual =
-                    economy::quote_prepared(route, model, &supply, 100, time, stored).unwrap();
+                    economy::quote_prepared(route, model, &supply, 100, time, &mut stored).unwrap();
                 assert_eq!(actual, expected, "event={event}, time={time:?}");
+            }
+        }
+    }
+}
+
+#[test]
+fn transfers_dependency_epochs_track_commercial_events_and_diverging_clones() {
+    let mut world = game();
+    assert!(world.advance(60.0));
+    let mut fork = world.clone();
+    world.set_ticket_price(1, 95).unwrap();
+    fork.set_ticket_price(1, 100).unwrap();
+    assert_ne!(world.supply_revision(), fork.supply_revision());
+    let revision = world.supply_revision();
+    // Settlement progress and frozen airborne results are not commercial inputs.
+    assert!(world.advance(1.0));
+    assert_eq!(world.supply_revision(), revision);
+    let mut stored = std::mem::take(&mut world.departure_markets);
+    stored.refresh(
+        revision,
+        world.supply_structure_revision(),
+        &world.market_routes(),
+        || world.prioritize_market(&world.market_routes()),
+    );
+    stored.refresh(
+        revision,
+        world.supply_structure_revision(),
+        &world.market_routes(),
+        || panic!("unchanged supply must not be cloned"),
+    );
+    world.competitors = crate::competition::initial_competitors().unwrap();
+    let before = world.supply_revision();
+    world.competitors[0].game.set_ticket_price(1, 150).unwrap();
+    assert_ne!(before, world.supply_revision());
+    stored.refresh(
+        world.supply_revision(),
+        world.supply_structure_revision(),
+        &world.market_routes(),
+        || world.prioritize_market(&world.market_routes()),
+    );
+    let supply = world.prioritize_market(&world.market_routes());
+    for route in &world.routes {
+        let model = &world
+            .fleet
+            .iter()
+            .find(|p| Some(p.id) == route.aircraft_id)
+            .unwrap()
+            .model_id;
+        let expected = economy::quote_at_price(route, model, &supply, 100).unwrap();
+        let actual = economy::quote_prepared(
+            route,
+            model,
+            &supply,
+            100,
+            None,
+            &mut stored.market(route, model).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(actual, expected);
+    }
+}
+
+#[test]
+fn transfers_reputation_reordering_keeps_stored_seat_reservations_fresh() {
+    let mut g = game();
+    let mut supply = g.market_routes();
+    let mut rival = supply.clone();
+    for offer in &mut rival {
+        offer.owner = "company:Rival".into();
+    }
+    supply.extend(rival);
+    let mut stored = economy::DepartureMarkets::default();
+    let structure = g.supply_structure_revision();
+    for score in [-900_000, 900_000, -500_000, 0] {
+        for offer in &mut supply {
+            offer.reputation = if offer.owner == "company:Rival" {
+                score
+            } else {
+                -score
+            };
+        }
+        g.reputation_changed();
+        stored.refresh(g.supply_revision(), structure, &supply, || supply.clone());
+        for route in &g.routes {
+            let mut fresh = economy::QuoteMarket::new(route, "a320_200", &supply).unwrap();
+            for time in [None, Some(60), Some(180 * 86400), Some(400 * 86400)] {
+                let expected =
+                    economy::quote_prepared(route, "a320_200", &supply, 100, time, &mut fresh)
+                        .unwrap();
+                let actual = economy::quote_prepared(
+                    route,
+                    "a320_200",
+                    &supply,
+                    100,
+                    time,
+                    &mut stored.market(route, "a320_200").unwrap(),
+                )
+                .unwrap();
+                assert_eq!(actual, expected, "score={score}, time={time:?}");
             }
         }
     }

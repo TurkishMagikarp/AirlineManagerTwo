@@ -303,6 +303,8 @@ pub(crate) fn load_versioned(path: &Path) -> Result<(Game, u32), String> {
     }
     let mut game = Game {
         departure_markets: Default::default(),
+        commercial_revision: 0,
+        reputation_revision: 0,
         ferries: data.state.ferries,
         external_slots: Default::default(),
         fuel_contract: data.state.fuel_contract,
@@ -357,6 +359,7 @@ pub(crate) fn load_versioned(path: &Path) -> Result<(Game, u32), String> {
             Default::default()
         },
     };
+    game.commercial_changed();
     if data.version < 13 {
         // Aircraft predating acquisition tracking are treated as acquired at founding.
         // Do not invent leases, payments or sale income during migration.

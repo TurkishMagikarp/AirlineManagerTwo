@@ -105,6 +105,7 @@ impl Game {
             self.post_aircraft_cash(-RULES.layout_fee_eur, crate::trading::Kind::Cabin)?;
         }
         self.fleet[p].business_seats = business;
+        self.commercial_changed();
         Ok(())
     }
 
@@ -112,7 +113,17 @@ impl Game {
         if !(0..=100_000).contains(&price) {
             return Err("Ticketpreis muss zwischen 0 und 100000 EUR liegen.".into());
         }
-        self.route_mut(id)?;
+        self.require_active()?;
+        if !self.routes.iter().any(|r| r.id == id) {
+            return Err("Unbekannte Route.".into());
+        }
+        if self
+            .routes
+            .iter()
+            .any(|r| r.public_id() == id && r.business_ticket_eur != price)
+        {
+            self.commercial_changed();
+        }
         for r in self.routes.iter_mut().filter(|r| r.public_id() == id) {
             r.business_ticket_eur = price;
         }

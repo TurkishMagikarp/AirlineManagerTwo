@@ -657,11 +657,21 @@ impl Game {
         &mut self,
         clock: crate::clock::Clock,
         supply: &[crate::demand::Offer],
+        revision: u64,
+        structure_revision: u64,
     ) -> bool {
-        let owned_supply = self.prioritize_market(supply);
-        let supply = owned_supply.as_slice();
         let mut departure_markets = std::mem::take(&mut self.departure_markets);
-        departure_markets.refresh(supply);
+        {
+            departure_markets.refresh(revision, structure_revision, supply, || {
+                let owner = self.market_owner_key();
+                let mut commercial: Vec<_> = supply
+                    .iter()
+                    .map(crate::demand::Offer::commercial_clone)
+                    .collect();
+                commercial.sort_by_key(|o| o.owner != owner);
+                commercial
+            });
+        }
         let mut updates = Vec::new();
         let mut finance = self.finance.clone();
         let mut delta = 0i64;
@@ -706,33 +716,34 @@ impl Game {
                 None
             };
             let (mut fuel_until, mut fuel_cents) = (0, 0);
-            let mut quote = |leg: &crate::disruptions::Leg,
-                             market: &mut Option<&mut crate::economy::QuoteMarket>|
-             -> Result<crate::economy::FlightResult, String> {
-                if leg.index == plan.completed_flights
-                    && let Some(f) = &plan.airborne
-                {
-                    return Ok(f.clone());
-                }
-                // Quote the actual departure time: seasonal demand, fuel prices
-                // and contracts are frozen at dispatch, never at landing.
-                if leg.departure >= fuel_until {
-                    fuel_cents = self.fuel_market.price_at(leg.departure);
-                    fuel_until = self.fuel_market.next_change(leg.departure);
-                }
-                let mut f = departure_quote_prepared(
-                    route,
-                    &plane.model_id,
-                    leg.index,
-                    supply,
-                    fuel_cents,
-                    leg.departure,
-                    market.as_deref_mut().expect("dispatch market"),
-                )?;
-                self.apply_fuel_contract(&mut f, &plane.model_id, leg.departure)?;
-                crate::disruptions::apply(&mut f.totals, leg)?;
-                Ok(f)
-            };
+            let mut quote =
+                |leg: &crate::disruptions::Leg,
+                 market: &mut Option<std::sync::MutexGuard<'_, crate::economy::QuoteMarket>>|
+                 -> Result<crate::economy::FlightResult, String> {
+                    if leg.index == plan.completed_flights
+                        && let Some(f) = &plan.airborne
+                    {
+                        return Ok(f.clone());
+                    }
+                    // Quote the actual departure time: seasonal demand, fuel prices
+                    // and contracts are frozen at dispatch, never at landing.
+                    if leg.departure >= fuel_until {
+                        fuel_cents = self.fuel_market.price_at(leg.departure);
+                        fuel_until = self.fuel_market.next_change(leg.departure);
+                    }
+                    let mut f = departure_quote_prepared(
+                        route,
+                        &plane.model_id,
+                        leg.index,
+                        supply,
+                        fuel_cents,
+                        leg.departure,
+                        market.as_deref_mut().expect("dispatch market"),
+                    )?;
+                    self.apply_fuel_contract(&mut f, &plane.model_id, leg.departure)?;
+                    crate::disruptions::apply(&mut f.totals, leg)?;
+                    Ok(f)
+                };
             for leg in &projection.landed {
                 let Ok(f) = quote(leg, &mut market) else {
                     return false;
@@ -804,7 +815,11 @@ impl Game {
                 .is_multiple_of(crate::reputation::DAY)
             && self.clock.elapsed().subsec_nanos() == 0
         {
+            let previous_factor = crate::reputation::attractiveness(self.reputation.score);
             self.reputation.close_day();
+            if previous_factor != crate::reputation::attractiveness(self.reputation.score) {
+                self.reputation_changed();
+            }
         }
         self.complete_training();
         for (r, p, projection, airborne, wear) in updates {

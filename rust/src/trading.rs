@@ -185,6 +185,7 @@ impl Game {
             .checked_add(1)
             .ok_or("Marktkennung erschöpft.")?;
         self.post_aircraft_cash(quote, kind)?;
+        self.commercial_changed();
         for r in &mut self.routes {
             if r.aircraft_id == Some(id) {
                 r.plan = None;

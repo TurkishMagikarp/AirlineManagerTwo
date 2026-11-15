@@ -149,6 +149,9 @@ impl Game {
         };
         m.awareness += m.trend;
         m.exposure = 0;
+        if m.trend != 0 {
+            self.commercial_changed();
+        }
         self.observe_distress();
         if self.distressed() {
             self.marketing.budget_eur = 0;

@@ -594,6 +594,9 @@ impl Game {
         self.airline.as_mut().unwrap().capital_eur = balance;
         self.fleet[p].status = AircraftStatus::Maintenance;
         self.fleet[p].maintenance = Some(visit);
+        if route.is_some() {
+            self.commercial_changed();
+        }
         let id = self.fleet[p].id;
         self.ferries.retain(|f| f.aircraft_id != id);
         Ok(())
@@ -651,6 +654,7 @@ impl Game {
         });
         // A changed catalog may no longer fit the interval: then stay parked.
         if operations::movement(&route, &model, visit.end).is_ok() {
+            self.commercial_changed();
             self.routes[i] = route;
         }
         Ok(())

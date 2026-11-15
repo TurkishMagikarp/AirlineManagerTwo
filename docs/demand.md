@@ -163,10 +163,9 @@ und Service zählen alle Reisenden, Fracht berücksichtigt deren Gewicht.
 Ein ausgefallener Teilflug verliert seine eigenen Passagiere; keine Umbuchung und
 keine rückwirkende Änderung des anderen Teilfluges.
 
-Spieler und KI nutzen dieselbe Angebotsliste und dieselbe Verteilung. KI-Preis-
-und Erweiterungsangebote behalten die Airline-Identität und berücksichtigen die
-vollständige Angebotsliste, damit ihre Prognosen Umsteigeerlöse enthalten.
-Die KI plant weiterhin keine Hubwellen. Die Routenanzeige nennt Lokal/Umstieg je
+Spieler und KI nutzen bei Abflügen dieselbe Angebotsliste und dieselbe Verteilung.
+KI-Planungsangebote behalten die Airline-Identität, bewerten zunächst jedoch nur
+Direktnachfrage (siehe unten). Die KI plant weiterhin keine Hubwellen. Die Routenanzeige nennt Lokal/Umstieg je
 Tag und Richtung und zeigt die speisenden A–H–C-Pfade mit ungefähren Tagesraten;
 ein Status markiert überwiegend umsteigegeprägte Routen. Ergebnisse zeigen die
 realisierte Aufteilung im Tooltip; der Umsatzanteil geht in alle Finanzsummen ein.
@@ -175,7 +174,9 @@ Jede Airline behält ihre vorbereiteten Streckenmärkte über Betriebsereignisse
 hinweg. Änderungen an aktiven Strecken, Flugplanabstand, Preisen, Kabinen,
 Flugzeugmodell, Service, Bekanntheit oder Reputationsfaktor erneuern den
 wirtschaftlichen Schnappschuss. Flugfortschritt und bereits eingefrorene
-Ergebnisse beeinflussen ihn nicht. Die gespeicherten Nachfrageangebote gehören
+Ergebnisse beeinflussen ihn nicht. Ein ungespeicherter Revisionszähler wird an
+den Änderungsereignissen erhöht; Betriebsereignisse vergleichen nur diese Nummer
+und kopieren keine unveränderte Angebotsliste. Die gespeicherten Nachfrageangebote gehören
 zu diesem Schnappschuss und werden nicht wegen einer Eintragsgrenze verdrängt.
 Die Saison bleibt sekundengenau; identische Saisonzeitpunkte wiederholen sich
 nach einem Modelljahr. Ladezustände bauen diese abgeleiteten Daten neu auf.
@@ -353,3 +354,13 @@ setzt den Business-Preis auf den konfigurierten Aufschlag zum Economy-Preis.
 
 Nullwerte der Business-Summen werden im Archiv ausgelassen; das begrenzte
 Save-/Ladelimit beträgt wegen zusätzlicher Klassendetails jetzt 128 MiB.
+
+### KI-Planung und Transfers
+
+Die KI bewertet Kandidaten, Preise, Kabinen und zusätzliche Frequenzen zunächst
+nur mit Direktnachfrage, wie vor Einführung der Umsteiger. Diese bewusste
+Vereinfachung hält die Routensuche schnell und unterschätzt den Nutzen von Hubs.
+Bei tatsächlich geflogenen Flügen erhalten KI und Spieler dagegen unter denselben
+Regeln lokale und umsteigende Passagiere; diese Erlöse fließen vollständig in
+Flugergebnisse, Finanzen und die beobachtete Streckenrentabilität ein. Die KI baut
+noch keine Hubs gezielt auf.

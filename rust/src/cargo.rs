@@ -177,6 +177,13 @@ impl Game {
         {
             return Err("Unbekannte Route.".into());
         }
+        if self
+            .routes
+            .iter()
+            .any(|r| r.public_id() == id && r.cargo_rate_cents != rate)
+        {
+            self.commercial_changed();
+        }
         for r in self.routes.iter_mut().filter(|r| r.public_id() == id) {
             r.cargo_rate_cents = rate;
         }
