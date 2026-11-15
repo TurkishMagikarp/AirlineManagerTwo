@@ -64,6 +64,8 @@ mod tax_tests;
 mod trading;
 #[cfg(test)]
 mod trading_tests;
+#[cfg(test)]
+mod widebody_tests;
 
 use game::Game;
 use godot::prelude::*;

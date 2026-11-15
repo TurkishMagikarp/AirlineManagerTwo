@@ -263,6 +263,18 @@ pub(crate) struct Prepared {
     frequency: f64,
 }
 impl Prepared {
+    /// With one economy cabin there is no price-dependent sort order. Keep the
+    /// same geography, capacities and allocation storage; refresh willingness.
+    pub(crate) fn reprice_single_economy(&mut self, route: &Route) {
+        assert_eq!(self.matching.len(), 1);
+        assert_eq!(self.own_indices, [0]);
+        assert!(!self.matching[0].premium && self.matching[0].business_seats == 0);
+        debug_assert_eq!(self.frequency, frequency(route));
+        self.matching[0].route.ticket_eur = route.ticket_eur;
+        self.matching[0].route.business_ticket_eur = route.business_ticket_eur;
+        self.inputs[0] = self.base.with_price(route.ticket_eur);
+    }
+
     pub fn new(route: &Route, seats: u32, routes: &[Offer]) -> Result<Self, String> {
         let mut matching: Vec<_> = routes
             .iter()

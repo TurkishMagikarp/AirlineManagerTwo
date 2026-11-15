@@ -446,6 +446,11 @@ pub(crate) struct QuoteMarket {
     passengers: crate::demand::Prepared,
 }
 impl QuoteMarket {
+    /// Only fares change within a single-offer economy expansion sweep.
+    pub(crate) fn reprice_single_economy(&mut self, route: &Route) {
+        self.passengers.reprice_single_economy(route);
+    }
+
     pub fn new(
         route: &Route,
         model_id: &str,
@@ -964,6 +969,10 @@ mod tests {
                     let mut g = Game::default();
                     g.found("Calibration Air", country, origin).unwrap();
                     g.competitors.clear();
+                    // Fund the calibration fixture for any catalogue purchase;
+                    // production starting funds and AI budgets stay unchanged.
+                    g.airline.as_mut().unwrap().capital_eur += model.price_eur;
+                    g.history.as_mut().unwrap().opening_balance += model.price_eur;
                     g.buy_aircraft(&model.id).unwrap();
                     g.staff_up();
                     g.create_route(origin, destination, 1).unwrap();

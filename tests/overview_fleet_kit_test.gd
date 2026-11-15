@@ -11,10 +11,10 @@ func _run() -> void:
 	var sim: RefCounted = main.simulation
 	assert(sim.found_airline("Kit Regression", "DE", "EDDF").is_empty())
 	for model in sim.get_aircraft_models():
-		assert(model["class"] == ("Turboprop" if model["id"] == "atr72_600" else "Narrowbody"))
-		assert(model["cruise_kmh"] == {"a320_200": 830, "b737_800": 840, "atr72_600": 510}[model["id"]])
-		assert(model["pilots"] == 4)
-		assert(model["cabin_crew"] == {"a320_200": 6, "b737_800": 7, "atr72_600": 3}[model["id"]])
+		assert(model["class"] == ({"atr72_600": "Turboprop", "a330_300": "Widebody", "b777_300er": "Widebody"}.get(model["id"], "Narrowbody")))
+		assert(model["cruise_kmh"] == {"a320_200": 830, "b737_800": 840, "atr72_600": 510, "a330_300": 871, "b777_300er": 905}[model["id"]])
+		assert(model["pilots"] == {"a330_300": 6, "b777_300er": 8}.get(model["id"], 4))
+		assert(model["cabin_crew"] == {"a320_200": 6, "b737_800": 7, "atr72_600": 3, "a330_300": 12, "b777_300er": 16}[model["id"]])
 	assert(sim.buy_aircraft("atr72_600").is_empty())
 	main._sync_view()
 	main._show_page(1)
