@@ -759,13 +759,15 @@ static func toast(parent: Node, message: String, success: bool) -> CanvasLayer:
 	anchor.add_child(shell)
 	var row := HBoxContainer.new()
 	shell.add_child(row)
-	row.add_child(status_chip("Erledigt" if success else "Fehler", "go" if success else "stop"))
+	row.add_child(status_chip(TranslationServer.translate("MILESTONES_DONE") if success else "Fehler", "go" if success else "stop"))
 	var sentence := label(message, ThemeTokens.SMALL)
-	sentence.custom_minimum_size.x = 200
+	sentence.custom_minimum_size.x = 120
+	sentence.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	shell.custom_minimum_size.x = minf(560, parent.get_viewport().get_visible_rect().size.x - 32)
 	sentence.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	row.add_child(sentence)
 	var close := Button.new()
-	close.text = "Schließen"
+	close.text = TranslationServer.translate("MILESTONES_CLOSE")
 	close.pressed.connect(layer.queue_free)
 	row.add_child(close)
 	return layer

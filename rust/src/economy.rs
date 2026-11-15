@@ -998,6 +998,7 @@ mod tests {
         let mut old = valid.clone();
         old["version"] = 5.into();
         old["state"].as_object_mut().unwrap().remove("finance");
+        old["state"].as_object_mut().unwrap().remove("milestones");
         old["state"]["routes"]["routes"][0]
             .as_object_mut()
             .unwrap()

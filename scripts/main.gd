@@ -6,6 +6,9 @@ const RoutesPanel = preload("res://scripts/routes_panel.gd")
 const MapPanel = preload("res://scripts/map_panel.gd")
 const FinancesPanel = preload("res://scripts/finances_panel.gd")
 const StaffPanel = preload("res://scripts/staff_panel.gd")
+const MilestonesPanel = preload("res://scripts/milestones_panel.gd")
+var milestones_panel: VBoxContainer
+
 const UI = preload("res://scripts/ui/components.gd")
 
 const PAGES: Array[Dictionary] = [
@@ -356,6 +359,7 @@ func _jump(seconds: int) -> void:
 	progress.hide()
 	progress.queue_free()
 	jump_in_progress = false
+	milestones_panel.notify_reached()
 	jump_status.text = result["message"]
 	jump_status.show()
 	last_clock_view = ""
@@ -448,6 +452,7 @@ func _process(delta: float) -> void:
 		save_status.add_theme_color_override("font_color", UI.NEGATIVE)
 	_refresh_time()
 	_refresh_attention()
+	milestones_panel.notify_reached()
 	var second := int(simulation.get_elapsed_seconds())
 	if current_page == 3 and simulation.is_running():
 		map_panel.refresh_flights()
@@ -517,6 +522,7 @@ func _show_page(index: int) -> void:
 
 
 func _refresh_finance() -> void:
+	milestones_panel.refresh()
 	var airline: Dictionary = simulation.get_airline_info()
 	var finance: Dictionary = simulation.get_financial_summary()
 	var financing: Dictionary = simulation.get_financing()
@@ -1118,6 +1124,7 @@ func _found_airline() -> void:
 
 
 func _sync_view() -> void:
+	milestones_panel.reset_view()
 	jump_status.hide()
 	fleet_status.text = ""
 	maintenance_status.text = ""
@@ -1156,6 +1163,9 @@ func _label(text: String, style: Dictionary, color: Color = ThemeTokens.INK) -> 
 func _build_finance(content: VBoxContainer) -> void:
 	finance_panel = VBoxContainer.new()
 	content.add_child(finance_panel)
+	milestones_panel = MilestonesPanel.new()
+	finance_panel.add_child(milestones_panel)
+	milestones_panel.setup(simulation)
 	metric_grid = GridContainer.new()
 	metric_grid.add_theme_constant_override("h_separation", ThemeTokens.SPACE_4)
 	metric_grid.add_theme_constant_override("v_separation", ThemeTokens.SPACE_4)

@@ -21,7 +21,8 @@ use std::time::Duration;
 // v31: one-way ferry dispatches; older saves default to no ferries.
 // v32: transfer counters/revenue default to zero on every stored result.
 // Old airborne quotes and all historical amounts remain unchanged.
-pub(crate) const VERSION: u32 = 32;
+// v33: player milestones; missing legacy state is sampled at the load instant.
+pub(crate) const VERSION: u32 = 33;
 // Bounded input, including centuries of fuel/seasonal quotes for the player
 // and both AI airlines in the million-flight finance restart scenario.
 // Version 17 retains per-class quotes, which also split more archive batches.
@@ -37,6 +38,8 @@ struct SaveGame {
 // Future simulation data belongs here, not in the UI or a serialized Godot object.
 #[derive(Serialize, Deserialize)]
 struct GameState {
+    #[serde(default)]
+    milestones: Option<crate::milestones::State>,
     #[serde(default)]
     ferries: Vec<crate::operations::Ferry>,
     #[serde(default)]
@@ -98,6 +101,7 @@ pub fn save(path: &Path, game: &Game) -> Result<(), String> {
     if game.fuel_market.started_at > game.clock.elapsed().as_secs() {
         return Err("Ungültiger Treibstoffmarkt.".into());
     }
+    game.validate_milestones()?;
     game.validate_fleet()?;
     game.validate_routes()?;
     game.validate_operations()?;
@@ -113,6 +117,7 @@ pub fn save(path: &Path, game: &Game) -> Result<(), String> {
     let data = SaveGame {
         version: VERSION,
         state: GameState {
+            milestones: game.milestones.clone(),
             ferries: game.ferries.clone(),
             used_market: game.used_market.clone(),
             maintenance_bases: game.maintenance_bases.clone(),
@@ -302,6 +307,7 @@ pub(crate) fn load_versioned(path: &Path) -> Result<(Game, u32), String> {
         return Err("Ungültiger Treibstoffmarkt.".into());
     }
     let mut game = Game {
+        milestones: data.state.milestones,
         departure_markets: Default::default(),
         commercial_revision: 0,
         reputation_revision: 0,
@@ -359,6 +365,9 @@ pub(crate) fn load_versioned(path: &Path) -> Result<(Game, u32), String> {
             Default::default()
         },
     };
+    if data.version >= 33 && game.airline.is_some() && game.milestones.is_none() {
+        return Err("Meilensteine fehlen im Spielstand.".into());
+    }
     game.commercial_changed();
     if data.version < 13 {
         // Aircraft predating acquisition tracking are treated as acquired at founding.
@@ -379,6 +388,7 @@ pub(crate) fn load_versioned(path: &Path) -> Result<(Game, u32), String> {
             c.game.fuel_market = game.fuel_market.clone();
         }
     }
+    game.validate_milestones()?;
     game.validate_fleet()?;
     game.validate_routes()?;
     if data.version < 5 && game.routes.iter().any(|r| r.plan.is_some()) {
@@ -462,6 +472,10 @@ pub(crate) fn load_versioned(path: &Path) -> Result<(Game, u32), String> {
             return Err("Abweichender Treibstoffmarkt.".into());
         }
     }
+    if data.version < 33 && game.milestones.is_none() {
+        game.migrate_milestones()?;
+    }
+    game.validate_milestones()?;
     Ok((game, data.version))
 }
 

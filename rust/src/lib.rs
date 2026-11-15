@@ -41,6 +41,9 @@ mod map;
 mod marketing;
 #[cfg(test)]
 mod marketing_tests;
+#[cfg(test)]
+mod milestone_tests;
+mod milestones;
 mod operations;
 #[cfg(test)]
 mod quality;
@@ -108,6 +111,36 @@ impl IRefCounted for SimulationClock {
 
 #[godot_api]
 impl SimulationClock {
+    #[func]
+    fn get_milestones(&self) -> Array<VarDictionary> {
+        let mut rows = Array::new();
+        if let Some(state) = &self.game.milestones {
+            for (rule, value) in milestones::rules()
+                .unwrap_or_default()
+                .iter()
+                .zip(self.game.milestone_values())
+            {
+                let mut row = VarDictionary::new();
+                row.set("id", rule.id.as_str());
+                row.set("target", rule.threshold);
+                row.set("current", value);
+                row.set(
+                    "reached",
+                    state.reached.get(&rule.id).map_or(-1, |t| *t as i64),
+                );
+                rows.push(&row);
+            }
+        }
+        rows
+    }
+    #[func]
+    fn take_milestone_notifications(&mut self) -> PackedStringArray {
+        self.game
+            .take_milestone_notifications()
+            .iter()
+            .map(|id| GString::from(id.as_str()))
+            .collect()
+    }
     #[func]
     fn get_attention_snapshot(&self) -> Array<VarDictionary> {
         self.game
