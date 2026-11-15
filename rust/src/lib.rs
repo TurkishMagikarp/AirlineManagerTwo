@@ -73,6 +73,8 @@ mod trading;
 #[cfg(test)]
 mod trading_tests;
 #[cfg(test)]
+mod transfer_tests;
+#[cfg(test)]
 mod widebody_tests;
 
 use game::Game;
@@ -203,6 +205,8 @@ impl SimulationClock {
             .map(|(id, (a, b, active, t))| {
                 vdict! {
                     "route_id" => id, "origin" => a, "destination" => b, "active" => active,
+                    "connecting_passengers" => t.connecting_passengers, "local_passengers" => t.passengers - t.connecting_passengers,
+                    "connecting_revenue_eur" => t.connecting_revenue,
                     "business_revenue_eur" => t.business_revenue, "economy_revenue_eur" => t.revenue - t.business_revenue - t.cargo_revenue,
                     "business_passengers" => t.business_passengers, "economy_passengers" => t.passengers - t.business_passengers,
                     "care_eur" => t.care, "punctuality_percent" => disruptions::percent(&t), "punctuality_flights" => t.punctuality_flights, "service_eur" => t.service, "flights" => t.flights, "cargo_kg" => t.cargo_kg, "cargo_revenue_eur" => t.cargo_revenue, "ticket_revenue_eur" => t.revenue - t.cargo_revenue,
@@ -556,6 +560,8 @@ impl SimulationClock {
         let profit = i128::from(t.revenue) - costs;
         vdict! { "fuel_cents_per_kg" => self.game.fuel_market.price_at(self.game.clock.elapsed().as_secs()),
         "fuel_month_delta_cents" => self.game.fuel_market.price_at(self.game.clock.elapsed().as_secs()) - self.game.fuel_market.price_at(self.game.clock.elapsed().as_secs().saturating_sub(30 * 86400)),
+        "connecting_passengers" => t.connecting_passengers, "connecting_revenue_eur" => t.connecting_revenue,
+        "local_passengers" => t.passengers - t.connecting_passengers,
         "flights" => t.flights, "passengers" => t.passengers, "cargo_kg" => t.cargo_kg, "cargo_revenue_eur" => t.cargo_revenue, "ticket_revenue_eur" => t.revenue - t.cargo_revenue,
                     "revenue_eur" => t.revenue,
         "reputation_percent" => self.game.reputation.percent(),
@@ -1008,6 +1014,7 @@ impl SimulationClock {
                 let aircraft_ids: Array<u32> = services.iter().filter_map(|s| s.aircraft_id).collect();
                 let has_plan = services.iter().any(|s| s.plan.is_some());
                 let mut estimate = demand::Estimate::default();
+                let mut connections: Array<VarDictionary> = Array::new();
                 let mut service_cost = 0;
                 let mut airport_cost = 0;
                 for service in &services {
@@ -1015,6 +1022,10 @@ impl SimulationClock {
                     if let Some(plane) = self.game.fleet.iter().find(|p| Some(p.id) == service.aircraft_id)
                         && let Ok(model) = aircraft::model(&plane.model_id)
                         && let Ok(e) = demand::estimate_at(service, cabins::offer(service, plane).map_or(model.seats, |o| o.seats), &supply, now) {
+                        estimate.daily_connecting += e.daily_connecting;
+                        for c in &e.connections {
+                            connections.push(&vdict! { "origin" => c.origin.as_str(), "hub" => c.hub.as_str(), "destination" => c.destination.as_str(), "daily" => c.daily });
+                        }
                         estimate.daily_passengers += e.daily_passengers;
                         estimate.daily_spill += e.daily_spill;
                         estimate.per_departure += e.per_departure;
@@ -1054,6 +1065,11 @@ impl SimulationClock {
                     "daily_business" => market.business.floor() as i64,
                     "daily_leisure" => market.leisure.floor() as i64,
                     "estimated_passengers" => estimate.per_departure,
+                    "connections" => &connections,
+                    "expected_daily_local" => (estimate.daily_passengers - estimate.daily_connecting).floor() as i64,
+                    "expected_daily_connecting" => estimate.daily_connecting.floor() as i64,
+                    "transfer_fed" => estimate.daily_connecting > estimate.daily_passengers / 2.0,
+                    "actual_connecting_passengers" => actual.connecting_passengers,
                     "expected_daily_passengers" => estimate.daily_passengers.floor() as i64,
                     "daily_spill" => estimate.daily_spill.floor() as i64,
                     "actual_flights" => actual.flights, "actual_load_percent" => actual.load_percent(),
@@ -1997,6 +2013,8 @@ fn flight_dictionary(f: &economy::FlightResult) -> VarDictionary {
     let t = &f.totals;
     vdict! { "route_id" => f.route_id, "landing" => operations::display_time(f.landing).as_str(),
     "origin" => f.origin.as_str(), "destination" => f.destination.as_str(), "ticket_eur" => f.ticket_eur,
+    "connecting_passengers" => t.connecting_passengers, "local_passengers" => t.passengers - t.connecting_passengers,
+    "connecting_revenue_eur" => t.connecting_revenue,
     "passengers" => t.passengers, "seats" => t.seats, "load_percent" => t.load_percent(),
     "business_passengers" => t.business_passengers, "economy_passengers" => t.passengers - t.business_passengers,
     "business_revenue_eur" => t.business_revenue, "economy_revenue_eur" => t.revenue - t.business_revenue - t.cargo_revenue,

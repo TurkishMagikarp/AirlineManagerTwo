@@ -270,6 +270,10 @@ fn zero(value: &i64) -> bool {
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Totals {
     #[serde(default, skip_serializing_if = "zero")]
+    pub connecting_passengers: i64,
+    #[serde(default, skip_serializing_if = "zero")]
+    pub connecting_revenue: i64,
+    #[serde(default, skip_serializing_if = "zero")]
     pub care: i64,
     // Compact archive counters: on-time = tracked minus late. Most flight
     // batches omit the zero late count entirely.
@@ -326,9 +330,14 @@ impl Totals {
                 self.business_revenue % self.business_passengers == 0
                     && self.business_revenue / self.business_passengers <= 100_000
             }
-            && (self.passengers - self.business_passengers)
+            && self.connecting_passengers >= 0
+            && self.connecting_passengers <= self.passengers - self.business_passengers
+            && self.connecting_revenue >= 0
+            && (self.connecting_passengers > 0 || self.connecting_revenue == 0)
+            && (self.passengers - self.business_passengers - self.connecting_passengers)
                 .checked_mul(economy_fare)
                 .and_then(|v| v.checked_add(self.business_revenue))
+                .and_then(|v| v.checked_add(self.connecting_revenue))
                 .and_then(|v| v.checked_add(self.cargo_revenue))
                 == Some(self.revenue)
     }
@@ -349,6 +358,8 @@ impl Totals {
         let count = i64::try_from(count).ok()?;
         macro_rules! add { ($($f:ident),*) => { $(self.$f = self.$f.checked_add(other.$f.checked_mul(count)?)?;)* }; }
         add!(
+            connecting_passengers,
+            connecting_revenue,
             flights,
             passengers,
             seats,
@@ -508,6 +519,8 @@ pub(crate) fn quote_prepared(
     let seconds = market.flight_seconds as i64;
     let rates = market.rates;
     Ok(Totals {
+        connecting_passengers: demand.connecting,
+        connecting_revenue: demand.connecting_revenue,
         care: 0,
         punctuality_flights: 0,
         late_flights: 0,
@@ -522,7 +535,8 @@ pub(crate) fn quote_prepared(
         business_seats: business_seats.into(),
         business_passengers: demand.business,
         business_revenue,
-        revenue: (passengers - demand.business) * route.ticket_eur
+        revenue: (passengers - demand.business - demand.connecting) * route.ticket_eur
+            + demand.connecting_revenue
             + business_revenue
             + cargo_revenue,
         fuel: ((seconds * rates.fuel_kg_per_hour + rates.fuel_cycle_kg * 3600) * fuel_cents
@@ -569,7 +583,7 @@ impl Game {
             service_level: crate::service::Level::Standard,
         };
         let mut supply = self.market_routes();
-        supply.push(crate::cabins::offer(&route, plane)?);
+        supply.insert(0, self.market_offer(&route, plane)?);
         quote_at_price(
             &route,
             &plane.model_id,
@@ -598,6 +612,11 @@ impl Game {
                     .is_some_and(|v| v >= 0)
                 && t.business_passengers >= 0
                 && t.business_passengers <= t.passengers
+                && t.connecting_passengers >= 0
+                && t.connecting_passengers <= t.passengers - t.business_passengers
+                && t.connecting_revenue >= 0
+                && t.connecting_revenue <= t.revenue
+                && (t.connecting_passengers > 0 || t.connecting_revenue == 0)
                 && t.business_seats >= t.business_passengers
                 && t.business_seats <= t.seats
                 && t.business_revenue >= 0

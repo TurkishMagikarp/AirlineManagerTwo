@@ -10,6 +10,9 @@ struct Config {
     distance_decay_km: f64,
     business_price_limit: f64,
     leisure_price_limit: f64,
+    transfer_penalty: f64,
+    transfer_max_detour: f64,
+    transfer_min_leg_km: f64,
     business_monthly: [f64; 12],
     leisure_monthly: [f64; 12],
 }
@@ -25,6 +28,9 @@ static CONFIG: LazyLock<Config> = LazyLock::new(|| {
     ] {
         assert!(n.is_finite() && n > 0.0 && n <= 100_000.0);
     }
+    assert!((0.0..1.0).contains(&c.transfer_penalty));
+    assert!((1.0..=3.0).contains(&c.transfer_max_detour));
+    assert!((1.0..=1000.0).contains(&c.transfer_min_leg_km));
     for curve in [&c.business_monthly, &c.leisure_monthly] {
         assert!(
             curve
@@ -83,15 +89,40 @@ fn market_with_season(route: &Route, price: i64, time: Option<u64>) -> Result<Ma
 
 /// Geography and price response are constant within an offer snapshot. Keep
 /// factors separate to preserve the original floating-point evaluation order.
+#[derive(Clone, Copy)]
 struct MarketInputs {
+    km: f64,
     reference: f64,
     base: f64,
     share: f64,
     business: f64,
     leisure: f64,
 }
+thread_local! {
+    static GEOGRAPHY: std::cell::RefCell<std::collections::HashMap<String, std::collections::HashMap<String, MarketInputs>>> = std::cell::RefCell::new(std::collections::HashMap::new());
+}
 impl MarketInputs {
     fn new(route: &Route, price: i64) -> Result<Self, String> {
+        if let Some(base) = GEOGRAPHY.with(|cache| {
+            cache
+                .borrow()
+                .get(&route.origin_icao)
+                .and_then(|pairs| pairs.get(&route.destination_icao))
+                .copied()
+        }) {
+            return Ok(base.with_price(price));
+        }
+        let base = Self::geography(route)?;
+        GEOGRAPHY.with(|cache| {
+            cache
+                .borrow_mut()
+                .entry(route.origin_icao.clone())
+                .or_default()
+                .insert(route.destination_icao.clone(), base);
+        });
+        Ok(base.with_price(price))
+    }
+    fn geography(route: &Route) -> Result<Self, String> {
         let airports = &airports::catalog()?.airports;
         let a = airports
             .iter()
@@ -110,13 +141,14 @@ impl MarketInputs {
         let share = f64::from(a.business_percent + b.business_percent) / 200.0;
         let reference = crate::economy::reference_price(km);
         Ok(Self {
+            km,
             reference,
             base,
             share,
             business: 0.0,
             leisure: 0.0,
         }
-        .with_price(price))
+        .with_price(0))
     }
     /// All offers in a prepared market have the same endpoints. Reuse their
     /// geography, preserving the exact willingness and allocation arithmetic.
@@ -124,6 +156,7 @@ impl MarketInputs {
         let willingness =
             |limit: f64| (1.0 - price as f64 / (self.reference * limit)).clamp(0.0, 1.0);
         Self {
+            km: self.km,
             reference: self.reference,
             base: self.base,
             share: self.share,
@@ -169,6 +202,10 @@ impl Offer {
 #[derive(Debug, Default, PartialEq)]
 pub struct Estimate {
     pub business: i64,
+    pub connecting: i64,
+    pub connecting_revenue: i64,
+    pub daily_connecting: f64,
+    pub connections: Vec<Connection>,
     pub daily_passengers: f64,
     pub daily_spill: f64,
     pub per_departure: i64,
@@ -239,7 +276,7 @@ fn estimate_with_season(
     loads: Option<&mut Vec<i64>>,
 ) -> Result<Estimate, String> {
     let mut prepared = Prepared::new(route, seats, routes)?;
-    let (estimate, allocated) = prepared.estimate(time);
+    let (estimate, allocated) = prepared.estimate_display(time);
     if let Some(loads) = loads {
         loads.clear();
         loads.extend_from_slice(allocated);
@@ -249,7 +286,8 @@ fn estimate_with_season(
 
 /// Local, unsaved quote workspace for one route and immutable supply snapshot.
 /// Every seasonal quantity and spill result is recomputed at departure time.
-pub(crate) struct Prepared {
+struct LocalPrepared {
+    services: Vec<Offer>,
     matching: Vec<Offer>,
     own_indices: Vec<usize>,
     service_indices: Vec<usize>,
@@ -262,7 +300,7 @@ pub(crate) struct Prepared {
     loads: Vec<i64>,
     frequency: f64,
 }
-impl Prepared {
+impl LocalPrepared {
     /// With one service and ordered cabin fares, keep the
     /// same geography, capacities and allocation storage; refresh willingness.
     pub(crate) fn reprice_single(&mut self, route: &Route) {
@@ -324,6 +362,7 @@ impl Prepared {
                 matching.push(own);
             }
         }
+        let services = matching.clone();
         // Both cabins participate in this same segmented allocator and spill loop.
         // Premium has no leisure weight; unsatisfied business can spill to economy.
         let mut own_indices = Vec::new();
@@ -399,6 +438,7 @@ impl Prepared {
             .collect();
         let len = matching.len();
         Ok(Self {
+            services,
             matching,
             own_indices,
             service_indices,
@@ -544,9 +584,497 @@ impl Prepared {
                 daily_passengers: per_departure as f64 * self.frequency,
                 daily_spill: (requested - daily).max(0.0),
                 per_departure,
+                ..Estimate::default()
             },
             self.loads.as_slice(),
         )
+    }
+}
+
+/// Displayed daily rates are per direction; both directions share this symmetric
+/// rate model. A path is identified by its ultimate endpoints and transfer airport.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Connection {
+    pub origin: String,
+    pub hub: String,
+    pub destination: String,
+    pub daily: f64,
+}
+
+pub(crate) struct Prepared {
+    local: LocalPrepared,
+    network: Option<std::rc::Rc<std::cell::RefCell<TransferNetwork>>>,
+    target: Option<usize>,
+    loads: Vec<i64>,
+    transfer_services: Vec<Option<usize>>,
+}
+impl Prepared {
+    pub fn new(route: &Route, seats: u32, routes: &[Offer]) -> Result<Self, String> {
+        let local = LocalPrepared::new(route, seats, routes)?;
+        let owner = routes
+            .iter()
+            .find(|o| same_offer(route, &o.route))
+            .map(|o| &o.owner);
+        let network = if route.plan.is_some() && market_has_transfers(route, routes)? {
+            transfer_network(routes)?
+        } else {
+            None
+        };
+        let target = network.as_ref().and_then(|n| {
+            n.borrow().offers.iter().position(|o| {
+                same_offer(route, &o.route) && Some(&o.owner) == owner && o.seats == seats
+            })
+        });
+        let transfer_services = local
+            .services
+            .iter()
+            .map(|key| {
+                network.as_ref().and_then(|n| {
+                    n.borrow()
+                        .offers
+                        .iter()
+                        .position(|o| o.owner == key.owner && same_offer(&o.route, &key.route))
+                })
+            })
+            .collect();
+        Ok(Self {
+            transfer_services,
+            local,
+            network,
+            target,
+            loads: Vec::new(),
+        })
+    }
+    pub(crate) fn reprice_single(&mut self, route: &Route) {
+        self.local.reprice_single(route);
+        if let (Some(network), Some(target)) = (&self.network, self.target) {
+            let mut offers = network.borrow().offers.clone();
+            offers[target].route.ticket_eur = route.ticket_eur;
+            offers[target].route.business_ticket_eur = route.business_ticket_eur;
+            // Rebuild with new willingness; never retain a transfer quote at old fares.
+            *self = Self::new(route, offers[target].seats, &offers).expect("valid repriced supply");
+        }
+    }
+    pub fn estimate(&mut self, time: Option<u64>) -> (Estimate, &[i64]) {
+        self.estimate_inner(time, false)
+    }
+    fn estimate_display(&mut self, time: Option<u64>) -> (Estimate, &[i64]) {
+        self.estimate_inner(time, true)
+    }
+    fn estimate_inner(&mut self, time: Option<u64>, display: bool) -> (Estimate, &[i64]) {
+        let (mut result, loads) = self.local.estimate(time);
+        self.loads.clear();
+        self.loads.extend_from_slice(loads);
+        if let (Some(network), Some(target)) = (&self.network, self.target) {
+            let mut n = network.borrow_mut();
+            n.estimate(time);
+            result.connecting = n.passengers[target];
+            result.connecting_revenue = n.revenue[target];
+            result.daily_connecting = result.connecting as f64 * self.local.frequency;
+            result.per_departure += result.connecting;
+            result.daily_passengers += result.daily_connecting;
+            for (i, index) in self.transfer_services.iter().enumerate() {
+                if let Some(j) = index {
+                    self.loads[i] += n.passengers[*j];
+                }
+            }
+            if display {
+                for (p, daily) in n.paths.iter().zip(&n.daily) {
+                    if *daily > 0.0 && (p.legs[0] == target || p.legs[1] == target) {
+                        result.connections.push(Connection {
+                            origin: p.origin.clone(),
+                            hub: p.hub.clone(),
+                            destination: p.destination.clone(),
+                            daily: *daily,
+                        });
+                    }
+                }
+            }
+        }
+        (result, &self.loads)
+    }
+}
+
+struct TransferPath {
+    legs: [usize; 2],
+    origin: String,
+    hub: String,
+    destination: String,
+    inputs: MarketInputs,
+    frequency: f64,
+    quantum: f64,
+    fare: [i64; 2],
+}
+struct TransferMarket {
+    endpoints: Route,
+    local: Option<LocalPrepared>,
+    base: MarketInputs,
+    paths: Vec<usize>,
+    local_indices: Vec<Option<usize>>,
+    weights: Vec<[[f64; 2]; 2]>,
+    denominators: [f64; 2],
+}
+struct TransferNetwork {
+    offers: Vec<Offer>,
+    paths: Vec<TransferPath>,
+    markets: Vec<TransferMarket>,
+    passengers: Vec<i64>,
+    revenue: Vec<i64>,
+    daily: Vec<f64>,
+    last: Option<Option<u64>>,
+    recent: std::collections::VecDeque<TransferAllocation>,
+}
+struct TransferAllocation {
+    time: Option<u64>,
+    passengers: Vec<i64>,
+    revenue: Vec<i64>,
+    daily: Vec<f64>,
+}
+thread_local! {
+    // Derived, bounded and unsaved. Quotes for different owners share the exact
+    // same network allocation, independent of supply/airline iteration order.
+    static TRANSFERS: std::cell::RefCell<Vec<std::rc::Rc<std::cell::RefCell<TransferNetwork>>>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+/// Unrelated networks cannot affect this market's passengers or cargo payload.
+/// In particular, an isolated Asian route need not allocate a Brazilian hub.
+fn market_has_transfers(route: &Route, offers: &[Offer]) -> Result<bool, String> {
+    for a in offers.iter().filter(|a| {
+        a.route.plan.is_some() && same_market(route, &a.route) && a.seats > a.business_seats
+    }) {
+        for b in offers.iter().filter(|b| {
+            b.route.plan.is_some()
+                && b.owner == a.owner
+                && b.seats > b.business_seats
+                && !same_market(&a.route, &b.route)
+        }) {
+            for (hub, origin) in [
+                (&a.route.origin_icao, &a.route.destination_icao),
+                (&a.route.destination_icao, &a.route.origin_icao),
+            ] {
+                let destination = if *hub == b.route.origin_icao {
+                    &b.route.destination_icao
+                } else if *hub == b.route.destination_icao {
+                    &b.route.origin_icao
+                } else {
+                    continue;
+                };
+                let d1 = MarketInputs::new(&a.route, 0)?.km;
+                let d2 = MarketInputs::new(&b.route, 0)?.km;
+                if d1.min(d2) < CONFIG.transfer_min_leg_km {
+                    continue;
+                }
+                let mut od = a.route.clone();
+                od.origin_icao = origin.clone();
+                od.destination_icao = destination.clone();
+                let direct = MarketInputs::new(&od, 0)?;
+                if (d1 + d2) / direct.km <= CONFIG.transfer_max_detour
+                    && ((a.route.ticket_eur + b.route.ticket_eur) as f64)
+                        < direct.reference
+                            * CONFIG.business_price_limit.max(CONFIG.leisure_price_limit)
+                {
+                    return Ok(true);
+                }
+            }
+        }
+    }
+    Ok(false)
+}
+
+fn transfer_network(
+    routes: &[Offer],
+) -> Result<Option<std::rc::Rc<std::cell::RefCell<TransferNetwork>>>, String> {
+    let mut offers: Vec<_> = routes
+        .iter()
+        .filter(|o| o.route.plan.is_some())
+        .map(|o| {
+            let mut o = o.clone();
+            // Only the interval enters demand. Progress, frozen results and
+            // disruption cursors must not invalidate an economic snapshot.
+            o.route.plan = Some(crate::operations::FlightPlan {
+                interval_seconds: o.route.plan.as_ref().unwrap().interval_seconds,
+                ..Default::default()
+            });
+            o
+        })
+        .collect();
+    offers.sort_by(|a, b| {
+        a.owner
+            .cmp(&b.owner)
+            .then(a.route.id.cmp(&b.route.id))
+            .then(a.route.origin_icao.cmp(&b.route.origin_icao))
+            .then(a.route.destination_icao.cmp(&b.route.destination_icao))
+            .then(a.route.ticket_eur.cmp(&b.route.ticket_eur))
+            .then(a.seats.cmp(&b.seats))
+    });
+    TRANSFERS.with(|cache| {
+        let mut cache = cache.borrow_mut();
+        if let Some(n) = cache.iter().find(|n| n.borrow().offers == offers) {
+            return Ok(Some(n.clone()));
+        }
+        let network = TransferNetwork::new(offers)?;
+        if network.paths.is_empty() {
+            return Ok(None);
+        }
+        let n = std::rc::Rc::new(std::cell::RefCell::new(network));
+        if cache.len() == 4 {
+            cache.remove(0);
+        }
+        cache.push(n.clone());
+        Ok(Some(n))
+    })
+}
+impl TransferNetwork {
+    fn new(offers: Vec<Offer>) -> Result<Self, String> {
+        let mut paths = Vec::new();
+        for (i, a) in offers.iter().enumerate() {
+            for (j, b) in offers.iter().enumerate().skip(i + 1) {
+                if a.owner != b.owner
+                    || same_market(&a.route, &b.route)
+                    || a.seats == a.business_seats
+                    || b.seats == b.business_seats
+                {
+                    continue;
+                }
+                for (hub, origin) in [
+                    (&a.route.origin_icao, &a.route.destination_icao),
+                    (&a.route.destination_icao, &a.route.origin_icao),
+                ] {
+                    let destination = if *hub == b.route.origin_icao {
+                        &b.route.destination_icao
+                    } else if *hub == b.route.destination_icao {
+                        &b.route.origin_icao
+                    } else {
+                        continue;
+                    };
+                    let d1 = crate::routes::distance_km(origin, hub)?;
+                    let d2 = crate::routes::distance_km(hub, destination)?;
+                    let direct = crate::routes::distance_km(origin, destination)?;
+                    if d1.min(d2) < CONFIG.transfer_min_leg_km
+                        || (d1 + d2) / direct > CONFIG.transfer_max_detour
+                    {
+                        continue;
+                    }
+                    let mut endpoints = a.route.clone();
+                    endpoints.origin_icao = origin.clone();
+                    endpoints.destination_icao = destination.clone();
+                    let total_fare = a.route.ticket_eur + b.route.ticket_eur;
+                    let first_fare = (total_fare as f64 * d1 / (d1 + d2)).floor() as i64;
+                    let (mut x, mut y) = (
+                        a.route.plan.as_ref().unwrap().interval_seconds,
+                        b.route.plan.as_ref().unwrap().interval_seconds,
+                    );
+                    while y != 0 {
+                        (x, y) = (y, x % y);
+                    }
+                    paths.push(TransferPath {
+                        legs: [i, j],
+                        origin: origin.clone(),
+                        hub: hub.clone(),
+                        destination: destination.clone(),
+                        inputs: MarketInputs::new(&endpoints, total_fare)?,
+                        frequency: frequency(&a.route).min(frequency(&b.route)),
+                        quantum: 43200.0 / x as f64,
+                        fare: [first_fare, total_fare - first_fare],
+                    });
+                }
+            }
+        }
+        if paths.is_empty() {
+            return Ok(Self {
+                offers,
+                paths,
+                markets: Vec::new(),
+                passengers: Vec::new(),
+                revenue: Vec::new(),
+                daily: Vec::new(),
+                last: None,
+                recent: std::collections::VecDeque::new(),
+            });
+        }
+        let mut markets: Vec<TransferMarket> = Vec::new();
+        for (i, p) in paths.iter().enumerate() {
+            let mut endpoints = offers[p.legs[0]].route.clone();
+            endpoints.origin_icao = p.origin.clone();
+            endpoints.destination_icao = p.destination.clone();
+            if let Some(m) = markets
+                .iter_mut()
+                .find(|m| same_market(&m.endpoints, &endpoints))
+            {
+                m.paths.push(i);
+            } else {
+                let local = offers
+                    .iter()
+                    .find(|o| same_market(&o.route, &endpoints))
+                    .map(|o| LocalPrepared::new(&o.route, o.seats, &offers))
+                    .transpose()?;
+                markets.push(TransferMarket {
+                    base: MarketInputs::new(&endpoints, 0)?,
+                    endpoints,
+                    local,
+                    paths: vec![i],
+                    local_indices: Vec::new(),
+                    weights: Vec::new(),
+                    denominators: [1.0; 2],
+                });
+            }
+        }
+        // Also prepare leg markets to reserve their local economy passengers.
+        for o in &offers {
+            if !markets.iter().any(|m| same_market(&m.endpoints, &o.route)) {
+                markets.push(TransferMarket {
+                    endpoints: o.route.clone(),
+                    base: MarketInputs::new(&o.route, 0)?,
+                    local: Some(LocalPrepared::new(&o.route, o.seats, &offers)?),
+                    paths: Vec::new(),
+                    local_indices: Vec::new(),
+                    weights: Vec::new(),
+                    denominators: [1.0; 2],
+                });
+            }
+        }
+        for m in &mut markets {
+            if let Some(local) = &m.local {
+                m.local_indices = local
+                    .matching
+                    .iter()
+                    .map(|o| {
+                        if o.premium {
+                            None
+                        } else {
+                            Some(
+                                offers
+                                    .iter()
+                                    .position(|p| {
+                                        p.owner == o.owner && same_offer(&p.route, &o.route)
+                                    })
+                                    .expect("local network offer"),
+                            )
+                        }
+                    })
+                    .collect();
+            }
+            let mut frequencies = [0.0_f64; 2];
+            let mut sums = [0.0; 2];
+            for &p in &m.paths {
+                let path = &paths[p];
+                let mut weights = [[0.0; 2]; 2];
+                for (segment, willingness) in [path.inputs.business, path.inputs.leisure]
+                    .into_iter()
+                    .enumerate()
+                {
+                    let w = willingness * CONFIG.transfer_penalty;
+                    let weight = path.frequency * w / (1.0 - w).max(1e-9);
+                    weights[segment] = [w, weight];
+                    sums[segment] += weight;
+                    if w > 0.0 {
+                        frequencies[segment] += path.frequency;
+                    }
+                }
+                m.weights.push(weights);
+            }
+            for s in 0..2 {
+                m.denominators[s] = frequencies[s].max(1.0) + sums[s];
+            }
+        }
+        let count = offers.len();
+        let path_count = paths.len();
+        Ok(Self {
+            offers,
+            paths,
+            markets,
+            passengers: vec![0; count],
+            revenue: vec![0; count],
+            daily: vec![0.0; path_count],
+            last: None,
+            recent: std::collections::VecDeque::new(),
+        })
+    }
+    fn estimate(&mut self, time: Option<u64>) {
+        if self.last == Some(time) {
+            return;
+        }
+        self.last = Some(time);
+        if let Some(cached) = self.recent.iter().find(|c| c.time == time) {
+            self.passengers.copy_from_slice(&cached.passengers);
+            self.revenue.copy_from_slice(&cached.revenue);
+            self.daily.copy_from_slice(&cached.daily);
+            return;
+        }
+        self.passengers.fill(0);
+        self.revenue.fill(0);
+        self.daily.fill(0.0);
+        let season = time.map(season_factors).unwrap_or(Market {
+            business: 1.0,
+            leisure: 1.0,
+        });
+        let mut spare: Vec<f64> = self
+            .offers
+            .iter()
+            .map(|o| frequency(&o.route) * f64::from(o.seats - o.business_seats))
+            .collect();
+        for m in &mut self.markets {
+            let base = m.base.at(&season);
+            let mut residual = [base.business, base.leisure];
+            if let Some(local) = &mut m.local {
+                local.estimate(time);
+                for (j, o) in local.matching.iter().enumerate() {
+                    for (s, r) in residual.iter_mut().enumerate() {
+                        *r = (*r - local.allocated[j][s]).max(0.0);
+                    }
+                    if !o.premium {
+                        let k = m.local_indices[j].expect("economy network offer");
+                        spare[k] -= rounded_passengers(local.allocated[j].iter().sum(), o) as f64
+                            * frequency(&o.route);
+                    }
+                }
+            }
+            for (s, remaining) in residual.into_iter().enumerate() {
+                for (&p, weights) in m.paths.iter().zip(&m.weights) {
+                    let [w, weight] = weights[s];
+                    self.daily[p] += (remaining * weight / m.denominators[s])
+                        .min(remaining * w * self.paths[p].frequency.min(1.0));
+                }
+            }
+        }
+        let mut requested = vec![0.0; self.offers.len()];
+        for (p, n) in self.paths.iter().zip(&self.daily) {
+            for leg in p.legs {
+                requested[leg] += n;
+            }
+        }
+        for (i, p) in self.paths.iter().enumerate() {
+            let scale = p
+                .legs
+                .iter()
+                .map(|&k| {
+                    if requested[k] > 0.0 {
+                        (spare[k] / requested[k]).clamp(0.0, 1.0)
+                    } else {
+                        0.0
+                    }
+                })
+                .fold(1.0, f64::min);
+            // Common rate quantum gives identical daily travellers/revenue on
+            // both legs even with unequal intervals. No rounding creates demand.
+            let units = (self.daily[i] * scale / p.quantum).floor();
+            self.daily[i] = units * p.quantum;
+            for (j, k) in p.legs.into_iter().enumerate() {
+                let count = (units * (p.quantum / frequency(&self.offers[k].route)).round()) as i64;
+                self.passengers[k] += count;
+                self.revenue[k] += count * p.fare[j];
+            }
+        }
+        // Owners often project a whole day's departures one route at a time.
+        // Retain a bounded set of exact-time allocations for the next route.
+        if self.recent.len() == 256 {
+            self.recent.pop_front();
+        }
+        self.recent.push_back(TransferAllocation {
+            time,
+            passengers: self.passengers.clone(),
+            revenue: self.revenue.clone(),
+            daily: self.daily.clone(),
+        });
     }
 }
 
@@ -777,6 +1305,7 @@ fn estimate_reference(
         daily_passengers: per_departure as f64 * frequency(route),
         daily_spill: (requested - daily).max(0.0),
         per_departure,
+        ..Estimate::default()
     })
 }
 
@@ -813,6 +1342,186 @@ mod tests {
         }
         g.clock.set_running(true);
         g
+    }
+
+    fn transfer_offers() -> Vec<Offer> {
+        let g = game(1, 720);
+        let template = &g.routes[0];
+        [
+            ("EDDM", "EDDF", "hub"),
+            ("EDDF", "KJFK", "hub"),
+            ("EDDM", "KJFK", "rival"),
+        ]
+        .into_iter()
+        .enumerate()
+        .map(|(i, (a, b, owner))| {
+            let mut r = template.clone();
+            r.id = (i + 1) as u32;
+            r.origin_icao = a.into();
+            r.destination_icao = b.into();
+            r.ticket_eur = if i == 0 { 100 } else { 200 };
+            let mut o = Offer::new(&r, 1000);
+            o.owner = owner.into();
+            o
+        })
+        .collect()
+    }
+
+    #[test]
+    fn transfers_conserve_od_markets_reserve_locals_and_split_revenue() {
+        let offers = transfer_offers();
+        let mut network = TransferNetwork::new(offers.clone()).unwrap();
+        assert_eq!(network.paths.len(), 1);
+        for time in [None, Some(0), Some(180 * 86400)] {
+            network.estimate(time);
+            assert!(network.daily[0] > 0.0);
+            let mut carried = 0.0;
+            for (i, o) in offers.iter().enumerate() {
+                let mut local = LocalPrepared::new(&o.route, o.seats, &offers).unwrap();
+                let baseline = local.estimate(time).0;
+                let actual = estimate_with_season(&o.route, o.seats, &offers, time, None).unwrap();
+                assert_eq!(
+                    actual.per_departure - actual.connecting,
+                    baseline.per_departure
+                );
+                assert_eq!(actual.business, baseline.business);
+                assert!(actual.per_departure <= i64::from(o.seats));
+                assert_eq!(actual.connecting, network.passengers[i]);
+                if i == 2 {
+                    carried += actual.daily_passengers;
+                }
+            }
+            carried += network.daily[0];
+            let base = market_with_season(&offers[2].route, 0, time)
+                .unwrap()
+                .total();
+            assert!(carried <= base + 1e-9);
+            assert_eq!(network.passengers[0], network.passengers[1]);
+            let count = network.passengers[0];
+            assert_eq!(network.revenue[0] + network.revenue[1], count * 300);
+            let mut reverse = offers.clone();
+            reverse.reverse();
+            for o in &offers {
+                assert_eq!(
+                    estimate_with_season(&o.route, o.seats, &offers, time, None).unwrap(),
+                    estimate_with_season(&o.route, o.seats, &reverse, time, None).unwrap()
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn transfers_require_active_same_owner_sensible_geometry_and_economy_seats() {
+        let offers = transfer_offers();
+        for case in 0..6 {
+            let mut supply = offers.clone();
+            match case {
+                0 => supply[1].route.plan = None,
+                1 => supply[1].owner = "other".into(),
+                2 => {
+                    supply[0].route.origin_icao = "EDDM".into();
+                    supply[0].route.destination_icao = "KLAX".into();
+                    supply[1].route.origin_icao = "KLAX".into();
+                }
+                3 => supply[0].route.origin_icao = "EDFH".into(),
+                4 => {
+                    supply[0].business_seats = supply[0].seats;
+                }
+                _ => supply[0].route.ticket_eur = 100_000,
+            }
+            let e = estimate(&supply[0].route, supply[0].seats, &supply).unwrap();
+            assert_eq!(e.connecting, 0, "case={case}");
+        }
+    }
+
+    #[test]
+    fn transfers_limit_both_legs_and_unequal_frequencies_with_no_owner_bonus() {
+        let mut offers = transfer_offers();
+        offers[0].route.plan.as_mut().unwrap().interval_seconds = 21600;
+        offers[1].route.plan.as_mut().unwrap().interval_seconds = 64800;
+        offers[0].seats = 180;
+        offers[1].seats = 500;
+        // A second airline supplies the identical two-legged offer.
+        let mut other = offers[..2].to_vec();
+        for o in &mut other {
+            o.owner = "other".into();
+        }
+        offers.extend(other);
+        let mut n = TransferNetwork::new(offers.clone()).unwrap();
+        n.estimate(None);
+        for (i, o) in offers.iter().enumerate() {
+            let local = LocalPrepared::new(&o.route, o.seats, &offers)
+                .unwrap()
+                .estimate(None)
+                .0;
+            assert!(n.passengers[i] + local.per_departure <= i64::from(o.seats));
+        }
+        let mut sums = [0.0; 2];
+        for (p, rate) in n.paths.iter().zip(&n.daily) {
+            assert!(*rate <= p.frequency * 180.0);
+            for (j, k) in p.legs.iter().enumerate() {
+                sums[j] += n.passengers[*k] as f64 * frequency(&offers[*k].route);
+            }
+        }
+        assert_eq!(sums[0], sums[1]);
+        assert_eq!(n.passengers[0], n.passengers[3]);
+        assert_eq!(n.passengers[1], n.passengers[4]);
+    }
+
+    #[test]
+    fn transfers_five_airline_overlapping_networks_remain_bounded_in_every_market() {
+        let template = transfer_offers().remove(0).route;
+        let mut offers = Vec::new();
+        for owner in 0..5 {
+            for (i, destination) in ["EDDM", "KJFK", "LTFM", "EHAM", "LEMD", "EGLL"]
+                .into_iter()
+                .enumerate()
+            {
+                let mut route = template.clone();
+                route.id = i as u32 + 1;
+                route.origin_icao = "EDDF".into();
+                route.destination_icao = destination.into();
+                route.ticket_eur = 60 + owner * 20;
+                route.plan.as_mut().unwrap().interval_seconds = (120 + i as u64 * 60) * 60;
+                let mut o = Offer::new(&route, 180);
+                o.business_seats = 12;
+                o.owner = format!("owner{owner}");
+                offers.push(o);
+            }
+        }
+        // A direct offer competes with several same-airline connecting paths.
+        let mut direct = offers[0].clone();
+        direct.owner = "direct".into();
+        direct.route.origin_icao = "EDDM".into();
+        direct.route.destination_icao = "KJFK".into();
+        offers.push(direct);
+        let mut n = TransferNetwork::new(offers.clone()).unwrap();
+        assert!(n.paths.len() > 10);
+        for time in [Some(0), Some(180 * 86400)] {
+            n.estimate(time);
+            for (i, o) in offers.iter().enumerate() {
+                let e = LocalPrepared::new(&o.route, o.seats, &offers)
+                    .unwrap()
+                    .estimate(time)
+                    .0;
+                assert!(e.per_departure + n.passengers[i] <= i64::from(o.seats));
+                assert!(
+                    e.per_departure - e.business + n.passengers[i]
+                        <= i64::from(o.seats - o.business_seats)
+                );
+            }
+            for m in &mut n.markets {
+                let local = m.local.as_mut().map_or(0.0, |p| {
+                    p.estimate(time);
+                    p.allocated.iter().flatten().sum::<f64>()
+                });
+                let transfer = m.paths.iter().map(|&p| n.daily[p]).sum::<f64>();
+                assert!(
+                    local + transfer
+                        <= market_with_season(&m.endpoints, 0, time).unwrap().total() + 1e-8
+                );
+            }
+        }
     }
 
     #[test]

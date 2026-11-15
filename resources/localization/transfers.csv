@@ -1,0 +1,11 @@
+keys,de,en
+TRANSFER_MARKET_HEADER,Markt / Lokal / Umstieg →,Market / Local / Transfer →
+TRANSFER_FED,Umstieg geprägt,Transfer fed
+TRANSFER_EMPTY,Keine Umsteiger,No connecting passengers
+TRANSFER_HINT,Zwei aktive Routen derselben Airline können freie Economy-Sitze für Verbindungen nutzen.,Two active routes of the same airline can use spare economy seats for connections.
+TRANSFER_SELECT,Route auswählen,Select route
+TRANSFER_FEEDS,Umsteigeverbindungen · ca. Pax/Tag und Richtung,Connections · approx. pax/day each way
+TRANSFER_PATH,%s – %s – %s · %.1f Pax/Tag,%s – %s – %s · %.1f pax/day
+TRANSFER_RESULT,Lokal: %d · Umsteiger: %d (Economy),Local: %d · Connecting: %d (economy)
+TRANSFER_REVENUE,Umsteigeranteil: %s,Connecting share: %s
+TRANSFER_COUNTS,%s–%s · Lokal %d / Umstieg %d Pax/Tag →,%s–%s · Local %d / Connecting %d pax/day →

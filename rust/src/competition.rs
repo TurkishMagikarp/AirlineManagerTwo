@@ -232,16 +232,25 @@ fn starter_competitors(
 }
 
 impl Game {
+    pub(crate) fn market_offer(
+        &self,
+        route: &crate::routes::Route,
+        plane: &crate::aircraft::Aircraft,
+    ) -> Result<crate::demand::Offer, String> {
+        let mut offer = crate::cabins::offer(route, plane)?;
+        offer.awareness = self.marketing.awareness;
+        offer.reputation = self.reputation.score;
+        offer.owner = self.market_owner_key();
+        Ok(offer)
+    }
+
     pub fn market_routes(&self) -> Vec<crate::demand::Offer> {
         std::iter::once(self)
             .chain(self.competitors.iter().map(|c| &*c.game))
             .flat_map(|g| {
                 g.routes.iter().filter_map(|r| {
                     let plane = g.fleet.iter().find(|p| Some(p.id) == r.aircraft_id)?;
-                    let mut offer = crate::cabins::offer(r, plane).ok()?;
-                    offer.awareness = g.marketing.awareness;
-                    offer.reputation = g.reputation.score;
-                    offer.owner = g.market_owner_key();
+                    let offer = g.market_offer(r, plane).ok()?;
                     Some(offer)
                 })
             })
@@ -835,7 +844,7 @@ impl Competitor {
                 if let Some(index) = offers.iter().position(|o| &o.route == r) {
                     offers.remove(index);
                 }
-                offers.push(crate::cabins::offer(&candidate, plane).unwrap());
+                offers.insert(0, self.game.market_offer(&candidate, plane).unwrap());
                 let Ok(t) = crate::economy::quote_at_price(
                     &candidate,
                     &plane.model_id,
@@ -1162,11 +1171,7 @@ impl Competitor {
             {
                 continue;
             }
-            let existing: Vec<_> = offers
-                .iter()
-                .filter(|o| crate::demand::same_market(&o.route, &r))
-                .cloned()
-                .collect();
+            let existing = offers.to_vec();
             let existing_plane = plane.and_then(|id| g.fleet.iter().find(|p| p.id == id));
             let mut cabin_plane = crate::aircraft::Aircraft {
                 business_seats: 0,
@@ -1207,7 +1212,7 @@ impl Competitor {
                         r.business_ticket_eur = crate::cabins::premium_fare(r.ticket_eur);
                     }
                     let mut market = existing.clone();
-                    market.push(crate::cabins::offer(&r, &cabin_plane)?);
+                    market.insert(0, g.market_offer(&r, &cabin_plane)?);
                     let t = if existing.is_empty() && plane.is_none() {
                         if let Some(prepared) = &mut single_quote {
                             prepared.reprice_single(&r);
@@ -1599,7 +1604,7 @@ impl Competitor {
                 candidate.business_ticket_eur = crate::cabins::premium_fare(price);
             }
             let mut offers = supply.to_vec();
-            offers.push(crate::cabins::offer(&candidate, plane).unwrap());
+            offers.insert(0, self.game.market_offer(&candidate, plane).unwrap());
             let Ok(t) = crate::economy::quote_at_price(
                 &candidate,
                 &model,
