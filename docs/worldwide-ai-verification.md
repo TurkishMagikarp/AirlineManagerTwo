@@ -169,3 +169,13 @@ Der separat aktivierte regionale Wochenbudgettest bestand erneut: Frankfurt
 1.223 ms / 63 ms, São Paulo 1.119 ms / 52 ms und Tokio 814 ms / 24 ms
 (gesamter Advance / langsamste Woche). Die unterschiedlichen Zeitmessungen
 auf dem geteilten Server ändern weder Firmenzustände noch finale Routen.
+
+## Finale Godot-Verifikation
+
+`tools/godot_check.sh tests`: **40 Testgruppen bestanden, 0 fehlgeschlagen**,
+Exitstatus 0. Einschließlich Karte, Slots, weltweitem Katalog und Finanz-
+Millionenflugtest. Zuvor scheiterte nur Karte an dem von root angelegten,
+nicht beschreibbaren `/tmp/opencode`; ein eigener Test-TEMP-Ordner beseitigte
+den Umgebungsfehler. Danach bestanden sowohl die einzelne Kartenprobe als auch
+der gesamte erneute Suite-Lauf unverändert. Keine Produktionsänderung für
+diesen Testfehler. Windows-Neustarttreiber werden vom Serverlauf explizit übersprungen.
