@@ -126,7 +126,7 @@ wird diese zugeteilte Tagesmenge (vor Abrundung) vom bestehenden A–C-Markt B
 abgezogen. Umsteigeangebote konkurrieren ausschließlich um diesen Rest; sie
 verdrängen keine direkten Reisenden und erzeugen keinen zweiten Markt.
 Für die Restverteilung gelten dieselbe Außenoption und Kaufbereitschaftsgrenze:
-`w = Kaufbereitschaft(Summe beider Economy-Tarife) × transfer_penalty` (**0,6**),
+`w = Kaufbereitschaft(Summe beider Economy-Tarife) × transfer_penalty` (**0,25**),
 `f = min(Frequenz beider Teilstrecken)`, `a = f × w / max(1e-9, 1 − w)`.
 Jeder Pfad erhält pro Segment höchstens
 `min(Rest × a / (max(1, Summe f mit w>0) + Summe a), Rest × w × min(1,f))`.

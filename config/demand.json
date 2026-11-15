@@ -1,5 +1,5 @@
 {
-  "transfer_penalty": 0.6,
+  "transfer_penalty": 0.25,
   "transfer_max_detour": 1.6,
   "transfer_min_leg_km": 150.0,
   "daily_market": 1700.0,
