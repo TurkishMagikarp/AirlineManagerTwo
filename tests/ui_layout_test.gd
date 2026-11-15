@@ -296,6 +296,9 @@ func _run() -> void:
 	if not await _widebody_views(sim):
 		quit(1)
 		return
+	if not await _ai_cabin_views(sim):
+		quit(1)
+		return
 	main.queue_free()
 	await process_frame
 	print("PASS: populated overview/fleet/routes/map/finances/staff and founding at 1440x1000, 1100x720, 680x520; deep controls reachable; no financial changes")
@@ -410,4 +413,44 @@ func _widebody_action(error: String) -> bool:
 	if not error.is_empty():
 		push_error("Widebody fixture: " + error)
 		return false
+	return true
+
+
+## Normal two-year rivals, including their organically acquired long-haul A330.
+func _ai_cabin_views(sim: RefCounted) -> bool:
+	if not _widebody_action(sim.found_airline("AI cabin audit", "DE", "EDDF")): return false
+	sim.set_speed(1)
+	sim.start()
+	sim.advance(730.0 * 86400.0)
+	sim.pause()
+	var offers: Array = sim.get_competitor_routes()
+	var selected := -1
+	for i in range(offers.size()):
+		if offers[i]["origin_icao"] == "SBGR" and offers[i]["destination_icao"] == "EGLL":
+			assert("A330" in offers[i]["model"])
+			selected = i
+	assert(selected >= 0, "Normal AI expansion must expose its widebody route on the map")
+	for dimensions in [Vector2i(1440, 1000), Vector2i(680, 520)]:
+		root.size = dimensions
+		main._sync_view()
+		main._show_page(3)
+		var map = main.map_panel
+		map.canvas.reset_view()
+		map.competitor_layer.button_pressed = true
+		map.selected_id = 0
+		map.canvas.selected_route = 0
+		map.canvas.selected_competitor = selected
+		map.canvas.selection_position = map.canvas.size / 2
+		map.refresh_flights()
+		var scroll: ScrollContainer = map.get_parent().get_parent()
+		scroll.ensure_control_visible(map.canvas)
+		for frame in range(5): await process_frame
+		scroll.ensure_control_visible(map.card)
+		for frame in range(5): await process_frame
+		assert(root.get_visible_rect().encloses(map.card.get_global_rect()))
+		assert("A330" in map.details.text)
+		assert(Rect2(Vector2.ZERO, map.canvas.size).encloses(map.card.get_rect()))
+		if not capture_dir.is_empty():
+			await RenderingServer.frame_post_draw
+			assert(root.get_texture().get_image().save_png(capture_dir.path_join("ai-cabin-map-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
 	return true

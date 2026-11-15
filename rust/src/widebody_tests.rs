@@ -260,29 +260,34 @@ fn widebody_pacific_map_and_staggered_rotation() {
 }
 
 #[test]
-fn single_economy_fare_sweep_matches_fresh_quotes() {
+fn single_cabin_fare_sweep_matches_fresh_quotes() {
     for (model, origin, destination) in [
         ("a330_300", "EDDF", "RJTT"),
         ("b777_300er", "SBGR", "EDDF"),
         ("a320_200", "EDDF", "EDDM"),
     ] {
         let mut g = game(model, origin, destination);
-        g.set_cabin_layout(1, 0).unwrap();
-        let mut prepared =
-            economy::QuoteMarket::new(&g.routes[0], model, &g.market_routes()).unwrap();
-        for fare in [0, 100, 400, 800, 100_000, 800, 400, 100, 0] {
-            g.set_ticket_price(1, fare).unwrap();
-            g.set_business_ticket_price(1, (fare * 2).min(100_000))
-                .unwrap();
-            let route = &g.routes[0];
-            let supply = g.market_routes();
-            prepared.reprice_single_economy(route);
-            for fuel in [50, 80, 120] {
-                let fresh = economy::quote_at_price(route, model, &supply, fuel).unwrap();
-                let reused =
-                    economy::quote_prepared(route, model, &supply, fuel, None, &mut prepared)
-                        .unwrap();
-                assert_eq!(reused, fresh, "{model} fare={fare} fuel={fuel}");
+        for percent in [0, 20, 40, 50, 100] {
+            let business = crate::aircraft::model(model).unwrap().seats * percent
+                / 100
+                / crate::cabins::RULES.business_space_ratio;
+            g.set_cabin_layout(1, business).unwrap();
+            let mut prepared =
+                economy::QuoteMarket::new(&g.routes[0], model, &g.market_routes()).unwrap();
+            for fare in [0, 100, 400, 800, 100_000, 800, 400, 100, 0] {
+                g.set_ticket_price(1, fare).unwrap();
+                g.set_business_ticket_price(1, (fare * 2).min(100_000))
+                    .unwrap();
+                let route = &g.routes[0];
+                let supply = g.market_routes();
+                prepared.reprice_single(route);
+                for fuel in [50, 80, 120] {
+                    let fresh = economy::quote_at_price(route, model, &supply, fuel).unwrap();
+                    let reused =
+                        economy::quote_prepared(route, model, &supply, fuel, None, &mut prepared)
+                            .unwrap();
+                    assert_eq!(reused, fresh, "{model} fare={fare} fuel={fuel}");
+                }
             }
         }
     }

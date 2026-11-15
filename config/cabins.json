@@ -4,5 +4,6 @@
   "business_price_multiplier": 2.0,
   "business_preference": 3.0,
   "ai_business_share_min": 0.4,
-  "ai_business_space_percent": 20
+  "ai_business_space_percent": 20,
+  "ai_expansion_business_space_percent": [0, 20, 40]
 }

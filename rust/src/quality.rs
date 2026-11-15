@@ -453,14 +453,14 @@ fn worldwide_ai_two_year_budget() {
         for c in &g.competitors {
             assert!(c.game.fleet.len() > 1);
             println!(
-                "WORLD_AI {} cash={} fleet={} models={:?} routes={:?} action={}",
+                "WORLD_AI {} cash={} fleet={} models_cabins={:?} routes={:?} action={}",
                 c.game.airline.as_ref().unwrap().name,
                 c.game.cash(),
                 c.game.fleet.len(),
                 c.game
                     .fleet
                     .iter()
-                    .map(|p| p.model_id.as_str())
+                    .map(|p| (p.model_id.as_str(), p.business_seats))
                     .collect::<Vec<_>>(),
                 c.game
                     .routes
