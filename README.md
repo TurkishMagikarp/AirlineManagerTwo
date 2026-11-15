@@ -450,7 +450,7 @@ Die Schreibzeit ist reine Anzeige und gehört nie zum Simulationszustand.
 Während eines Zeitsprungs sperren Dialog und Rust-API alle Speicheraktionen.
 
 Rust (`rust/src/save.rs`) übernimmt Dateizugriff, JSON-Format und Validierung.
-Das Format hat Version **31** und einen `state`-Bereich mit `clock`, `airline`,
+Das Format hat Version **36** und einen `state`-Bereich mit `difficulty`, `clock`, `airline`,
 `fleet`, `routes` (einschließlich Ticketpreis und optionalem Flugplan) und `finance`
 (Finanzsummen und letzte 100 Flugergebnisse) sowie `history` (Beginn, Anfangssaldo,
 vorherige Finanzsummen, verlustfreie Flugblöcke und zeitgestempelte Käufe).
