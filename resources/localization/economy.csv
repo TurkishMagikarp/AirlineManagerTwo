@@ -21,3 +21,18 @@ FARE_ASOF,Stand: %s,As of: %s
 FARE_TOOLTIP,"Prognose mit heutiger Nachfrage, Saison, Konjunktur, Treibstoff und Konkurrenz einschließlich Umsteigern. Gewinn je Abflug, bei mehreren Flugzeugen Mittelwert. Gilt für neue Abflüge; laufende Flüge behalten ihren Preis.","Forecast using today’s demand, season, economy, fuel and competition including connections. Profit per departure; average across aircraft. Applies to new departures; airborne flights keep their fare."
 FARE_AUTO_TOOLTIP,"Wöchentliche KI-Preisprüfung: aktueller Preis und ±10 EUR, bei Gleichstand bleibt der Preis. Jahresnachfrage wie bei der KI; daher kann der Tagesvorschlag abweichen. Ändert nur Passagierpreise. Manuelle Preise bleiben möglich.","Weekly AI fare review: current fare and ±10 EUR; ties keep the current fare. Annual demand as for rivals, so today’s suggestion may differ. Changes passenger fares only. Manual fares remain available."
 FARE_DATE,Tag %d · %s,Day %d · %s
+DIFFICULTY_PRESET,Startbedingungen,Starting conditions
+DIFFICULTY_RELAXED,Entspannt,Relaxed
+DIFFICULTY_STANDARD,Standard,Standard
+DIFFICULTY_DEMANDING,Anspruchsvoll,Demanding
+DIFFICULTY_LEVEL_LOW,Niedrig,Low
+DIFFICULTY_LEVEL_STANDARD,Standard,Standard
+DIFFICULTY_LEVEL_HIGH,Hoch,High
+DIFFICULTY_CAPITAL,Startkapital,Starting capital
+DIFFICULTY_COMPETITION,Konkurrenz,Competition
+DIFFICULTY_CRISES,Krisen,Crises
+DIFFICULTY_TIP_CAPITAL,Ändert nur dein Startkapital; KI-Airlines behalten ihr bisheriges Kapital.,Changes only your starting cash; AI airlines keep their usual capital.
+DIFFICULTY_TIP_COMPETITION,Ändert nur die Anzahl der KI-Airlines; ihre Regeln bleiben gleich.,Changes only the number of AI airlines; their rules stay the same.
+DIFFICULTY_TIP_CRISES,Ändert die Ausschläge von Konjunktur und Treibstoffpreis bei gleichem Mittelwert.,Changes the swings in the economy and fuel price around the same mean.
+DIFFICULTY_AMOUNT,Startkapital: %s · vorläufige Balance,Starting capital: %s · provisional balance
+DIFFICULTY_SAVED,Feste Startbedingungen · Kapital: %s · Konkurrenz: %s · Krisen: %s,Fixed starting conditions · Capital: %s · Competition: %s · Crises: %s

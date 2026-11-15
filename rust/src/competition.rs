@@ -121,6 +121,19 @@ pub fn new_competitors(player_home: &str) -> Result<Vec<Competitor>, String> {
     if crate::airports::LEGACY_SCENARIO.with(|active| active.get()) {
         return initial_competitors();
     }
+    new_competitors_with_level(player_home, crate::difficulty::Level::Standard)
+}
+
+pub fn new_competitors_with_level(
+    player_home: &str,
+    level: crate::difficulty::Level,
+) -> Result<Vec<Competitor>, String> {
+    #[cfg(test)]
+    if level == crate::difficulty::Level::Standard
+        && crate::airports::LEGACY_SCENARIO.with(|active| active.get())
+    {
+        return initial_competitors();
+    }
     let mut hubs = FREQUENCY
         .starter_hubs
         .iter()
@@ -144,25 +157,48 @@ pub fn new_competitors(player_home: &str) -> Result<Vec<Competitor>, String> {
     if near.home == far.home {
         return Err("KI-Startflughäfen müssen verschieden sein".into());
     }
-    starter_competitors(
-        Duration::ZERO,
-        &[
+    let mut chosen = Vec::new();
+    for choice in &crate::difficulty::RULES.competition_hubs[level.key()] {
+        let hub = match choice.as_str() {
+            "nearest" => near,
+            "remote" => far,
+            home => FREQUENCY
+                .starter_hubs
+                .iter()
+                .find(|h| h.home == home)
+                .ok_or("KI-Startflughafen fehlt")?,
+        };
+        // A named extra can already be the nearest hub for the player's home.
+        let hub = if chosen.iter().any(|h: &&StarterHub| h.home == hub.home) {
+            hubs.iter()
+                .map(|(h, _)| *h)
+                .find(|h| !chosen.iter().any(|c| c.home == h.home))
+                .ok_or("KI-Startflughafen fehlt")?
+        } else {
+            hub
+        };
+        chosen.push(hub);
+    }
+    let names = [
+        "Regional Wings",
+        "Continental Sky",
+        "Oceanic Air",
+        "Global Wings",
+    ];
+    let starters: Vec<_> = chosen
+        .iter()
+        .enumerate()
+        .map(|(i, h)| {
             (
-                "Regional Wings",
-                &near.home,
-                &near.destination,
-                &near.model,
-                near.ticket_eur,
-            ),
-            (
-                "Continental Sky",
-                &far.home,
-                &far.destination,
-                &far.model,
-                far.ticket_eur,
-            ),
-        ],
-    )
+                names[i],
+                h.home.as_str(),
+                h.destination.as_str(),
+                h.model.as_str(),
+                h.ticket_eur,
+            )
+        })
+        .collect();
+    starter_competitors(Duration::ZERO, &starters)
 }
 
 pub fn initial_competitors_at(now: Duration) -> Result<Vec<Competitor>, String> {
@@ -293,6 +329,7 @@ impl Game {
     }
 
     pub fn validate_competitors(&self) -> Result<(), String> {
+        self.validate_difficulty()?;
         if self.competitors.len() > 4 || (self.airline.is_none() && !self.competitors.is_empty()) {
             return Err("Ungültige KI-Airlines.".into());
         }
@@ -300,6 +337,8 @@ impl Game {
         for c in &self.competitors {
             let g = &c.game;
             if !g.clock.is_valid()
+                || g.difficulty != self.difficulty
+                || g.world_economy.crises != self.world_economy.crises
                 || g.fuel_market != self.fuel_market
                 || g.world_economy.seed != self.world_economy.seed
                 || g.world_economy.started_at != self.world_economy.started_at

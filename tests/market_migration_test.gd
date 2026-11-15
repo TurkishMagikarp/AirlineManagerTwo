@@ -53,7 +53,7 @@ func _run() -> void:
 			return
 		if not _check(sim.get_elapsed_seconds() == 86400.0 and sim.get_financial_summary()["fuel_cents_per_kg"] == 80, "Legacy time preserved and fuel starts at base price"):
 			return
-		if not _check(sim.save_game(path).is_empty() and JSON.parse_string(FileAccess.get_file_as_string(path))["version"] == 35, "Migrated save uses current version"):
+		if not _check(sim.save_game(path).is_empty() and JSON.parse_string(FileAccess.get_file_as_string(path))["version"] == 36, "Migrated save uses current version"):
 			return
 	# Exercise a changed global price, beyond the zero-delta initial display.
 	sim.start()

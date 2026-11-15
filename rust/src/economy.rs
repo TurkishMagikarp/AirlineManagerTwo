@@ -12,12 +12,15 @@ thread_local! { pub(crate) static HIGH_FUEL: std::cell::Cell<bool> = const { std
 /// derived at departure time; no frame-driven RNG or mutable UI clock.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct FuelMarket {
+    #[serde(default, skip_serializing_if = "crate::difficulty::Level::is_standard")]
+    pub crises: crate::difficulty::Level,
     pub seed: u64,
     pub started_at: u64,
 }
 impl Default for FuelMarket {
     fn default() -> Self {
         Self {
+            crises: Default::default(),
             seed: 0x4149524c494e45,
             started_at: 0,
         }
@@ -48,12 +51,18 @@ impl FuelMarket {
                     timelines.len() - 1
                 }
             };
-            timelines[index].price_at(week)
+            CONFIG.fuel_cents_per_kg
+                + self
+                    .crises
+                    .scale(timelines[index].price_at(week) - CONFIG.fuel_cents_per_kg)
         })
     }
 
     pub fn max_price(&self) -> i64 {
-        CONFIG.fuel_max_cents_per_kg
+        CONFIG.fuel_cents_per_kg
+            + self
+                .crises
+                .scale(CONFIG.fuel_max_cents_per_kg - CONFIG.fuel_cents_per_kg)
     }
 
     pub fn next_change(&self, time: u64) -> u64 {
@@ -846,6 +855,7 @@ mod tests {
             let market = FuelMarket {
                 seed,
                 started_at: 123_456,
+                ..Default::default()
             };
             // Cold late query builds checkpoints; reverse queries must be exact
             // too, including migrated start times and an evicted cache.

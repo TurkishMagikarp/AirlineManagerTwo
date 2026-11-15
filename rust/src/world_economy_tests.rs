@@ -260,6 +260,7 @@ impl Game {
             seed: self.fuel_market.seed ^ 0x45434f4e4f4d59,
             started_at: self.clock.elapsed().as_secs(),
             notified_period: 0,
+            ..Default::default()
         };
         for c in &mut self.competitors {
             c.game.world_economy = self.world_economy;

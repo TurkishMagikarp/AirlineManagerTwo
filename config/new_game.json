@@ -1,3 +1,44 @@
 {
-  "starting_capital_eur": 10000000
+  "starting_capital_eur": 10000000,
+  "capital_eur": {
+    "low": 5000000,
+    "standard": 10000000,
+    "high": 20000000
+  },
+  "competition_hubs": {
+    "low": [
+      "nearest"
+    ],
+    "standard": [
+      "nearest",
+      "remote"
+    ],
+    "high": [
+      "nearest",
+      "remote",
+      "KJFK"
+    ]
+  },
+  "crisis_percent": {
+    "low": 50,
+    "standard": 100,
+    "high": 150
+  },
+  "presets": {
+    "relaxed": [
+      "high",
+      "low",
+      "low"
+    ],
+    "standard": [
+      "standard",
+      "standard",
+      "standard"
+    ],
+    "demanding": [
+      "low",
+      "high",
+      "high"
+    ]
+  }
 }

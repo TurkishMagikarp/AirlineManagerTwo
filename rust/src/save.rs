@@ -24,7 +24,8 @@ use std::time::Duration;
 // v33: player milestones; missing legacy state is sampled at the load instant.
 // v34: shared world economic cycle. Legacy timelines start neutral at load.
 // v35: route fare autopilot; old saves have no enabled routes or change history.
-pub(crate) const VERSION: u32 = 35;
+// v36: immutable founding difficulty; older worlds keep Standard on every axis.
+pub(crate) const VERSION: u32 = 36;
 // Bounded input, including centuries of fuel/seasonal quotes for the player
 // and both AI airlines in the million-flight finance restart scenario.
 // Version 17 retains per-class quotes, which also split more archive batches.
@@ -40,6 +41,8 @@ struct SaveGame {
 // Future simulation data belongs here, not in the UI or a serialized Godot object.
 #[derive(Serialize, Deserialize)]
 struct GameState {
+    #[serde(default)]
+    difficulty: Option<crate::difficulty::Settings>,
     #[serde(default)]
     pricing: Vec<crate::pricing::Autopilot>,
     #[serde(default)]
@@ -125,6 +128,7 @@ pub fn save(path: &Path, game: &Game) -> Result<(), String> {
     let data = SaveGame {
         version: VERSION,
         state: GameState {
+            difficulty: Some(game.difficulty),
             pricing: game.pricing.clone(),
             world_economy: Some(game.world_economy),
             milestones: game.milestones.clone(),
@@ -335,6 +339,11 @@ pub(crate) fn load_versioned(path: &Path) -> Result<(Game, u32), String> {
     };
     world_economy.validate(clock.elapsed().as_secs())?;
     let mut game = Game {
+        difficulty: if data.version >= 36 {
+            data.state.difficulty.ok_or("Schwierigkeit fehlt.")?
+        } else {
+            Default::default()
+        },
         pricing: if data.version < 35 {
             Vec::new()
         } else {

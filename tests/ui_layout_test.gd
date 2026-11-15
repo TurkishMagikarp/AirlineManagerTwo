@@ -23,6 +23,14 @@ func _run() -> void:
 			root.size = dimensions
 			main._sync_view()
 			for frame in range(5): await process_frame
+			await RenderingServer.frame_post_draw
+			assert(root.get_texture().get_image().save_png(capture_dir.path_join("founding-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
+			main.founding_scroll.ensure_control_visible(main.founding_capital)
+			for frame in range(5): await process_frame
+			await RenderingServer.frame_post_draw
+			assert(root.get_texture().get_image().save_png(capture_dir.path_join("founding-choices-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
+			main.founding_scroll.scroll_vertical = 0
+			for frame in range(5): await process_frame
 			await _capture_picker(main.country_select, "founding-country", dimensions)
 			await _capture_picker(main.airport_select, "founding-airport", dimensions)
 	if OS.get_environment("AIRLINE_UI_CAPTURE_FERRY_ONLY") == "1":
