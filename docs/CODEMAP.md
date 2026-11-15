@@ -1500,15 +1500,15 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 1097 func _country_changed(index: int) -> void:
 1114 func _found_airline() -> void:
 1126 func _sync_view() -> void:
-1149 func _open_founding() -> void:
-1158 func _label(text: String, style: Dictionary, color: Color = ThemeTokens.INK) -> Label:
-1162 func _build_finance(content: VBoxContainer) -> void:
-1199 func _build_attention(parent: VBoxContainer) -> void:
-1222 func _refresh_attention() -> void:
-1247 func _resize_frame() -> void:
-1263 func _open_attention(entry: Dictionary) -> void:
-1277 func _refresh_overview_register() -> void:
-1289 func _render_operations(parent: VBoxContainer) -> void:
+1150 func _open_founding() -> void:
+1159 func _label(text: String, style: Dictionary, color: Color = ThemeTokens.INK) -> Label:
+1163 func _build_finance(content: VBoxContainer) -> void:
+1200 func _build_attention(parent: VBoxContainer) -> void:
+1223 func _refresh_attention() -> void:
+1248 func _resize_frame() -> void:
+1264 func _open_attention(entry: Dictionary) -> void:
+1278 func _refresh_overview_register() -> void:
+1290 func _render_operations(parent: VBoxContainer) -> void:
 
 ## scripts/map_background.gd
 1 extends Control
@@ -1565,6 +1565,7 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 51 func add_entry(parent: Node, entry: Dictionary) -> void:
 68 func notify_reached() -> void:
 76 func open_list() -> void:
+105 func reset_view() -> void:
 
 ## scripts/routes_panel.gd
 1 extends VBoxContainer

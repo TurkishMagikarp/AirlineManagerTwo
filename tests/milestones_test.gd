@@ -34,6 +34,8 @@ func _run() -> void:
 	main.milestones_panel.open_list()
 	await process_frame
 	assert(sim.found_airline("Fresh goals", "DE", "EDDF").is_empty())
+	main._sync_view()
+	assert(not is_instance_valid(main.milestones_panel.notification))
 	assert(sim.get_milestones().all(func(e: Dictionary): return e.reached < 0))
 	main.queue_free()
 	await process_frame

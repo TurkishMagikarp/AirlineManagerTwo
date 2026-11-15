@@ -1124,6 +1124,7 @@ func _found_airline() -> void:
 
 
 func _sync_view() -> void:
+	milestones_panel.reset_view()
 	jump_status.hide()
 	fleet_status.text = ""
 	maintenance_status.text = ""

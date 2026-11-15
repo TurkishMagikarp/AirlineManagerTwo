@@ -101,3 +101,10 @@ func open_list() -> void:
 	window.close_requested.connect(window.queue_free)
 	window.popup_centered()
 	close.grab_focus()
+
+func reset_view() -> void:
+	if is_instance_valid(notification): notification.queue_free()
+	notification = null
+	for child in get_children():
+		if child is Window: child.queue_free()
+	signature = ""
