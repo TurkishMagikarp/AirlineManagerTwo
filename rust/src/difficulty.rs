@@ -30,6 +30,10 @@ impl Level {
         *self == Self::Standard
     }
     pub fn scale(self, deviation: i64) -> i64 {
+        // The legacy world needs no config lookup on the quote hot path.
+        if self.is_standard() {
+            return deviation;
+        }
         deviation * RULES.crisis_percent[self.key()] / 100
     }
 }

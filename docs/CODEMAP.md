@@ -332,14 +332,14 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 22 pub fn key(self) -> &'static str
 29 pub fn is_standard(&self) -> bool
 32 pub fn scale(self, deviation: i64) -> i64
-37 pub struct Settings
-42 impl Settings
-43 pub fn parse(capital: &str, competition: &str, crises: &str) -> Result<Self, String>
-50 pub fn is_standard(&self) -> bool
-55 pub struct Rules
-62 pub static RULES: LazyLock<Rules> = LazyLock::new(||
-75 impl crate::game::Game
-76 pub fn validate_difficulty(&self) -> Result<(), String>
+41 pub struct Settings
+46 impl Settings
+47 pub fn parse(capital: &str, competition: &str, crises: &str) -> Result<Self, String>
+54 pub fn is_standard(&self) -> bool
+59 pub struct Rules
+66 pub static RULES: LazyLock<Rules> = LazyLock::new(||
+79 impl crate::game::Game
+80 pub fn validate_difficulty(&self) -> Result<(), String>
 
 ## rust/src/difficulty_tests.rs
 5 const DAY: f64 = 86400.0;

@@ -177,7 +177,7 @@ fn difficulty_nonstandard_steps_speeds_restart_match() {
     let mut whole = initial.clone();
     assert!(whole.advance(60.0 * DAY));
     for speed in [1, 4, 16] {
-        let mut g = initial.clone();
+        let mut g = restart(&initial);
         g.clock.set_speed(speed);
         for step in 0..240 {
             assert!(g.advance(DAY / 4.0 / f64::from(speed)));
