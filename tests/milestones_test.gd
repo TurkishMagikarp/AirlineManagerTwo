@@ -10,6 +10,12 @@ func _run() -> void:
 	var sim: RefCounted = main.simulation
 	assert(sim.found_airline("Milestone test", "DE", "EDDF").is_empty())
 	assert(sim.get_milestones().size() == 15)
+	for language in ["de", "en"]:
+		TranslationServer.set_locale(language)
+		var caption: String = main.milestones_panel.title({"id": "fleet_5", "target": 7000})
+		assert(caption.contains("7.000" if language == "de" else "7,000"))
+		assert(not caption.contains("{target}"))
+	TranslationServer.set_locale("de")
 	assert(sim.get_milestones().all(func(e: Dictionary): return e.reached < 0))
 	assert(sim.buy_aircraft("atr72_600").is_empty())
 	var live: Dictionary = sim.get_milestones().filter(func(e: Dictionary): return e.id == "fleet_1")[0]

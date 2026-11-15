@@ -7,18 +7,18 @@ MILESTONES_CLOSE,Schließen,Close
 MILESTONES_EMPTY,Noch keine Meilensteine. Baue deine Airline in deinem Tempo auf. Optionale Ziele ohne Belohnungen oder Freischaltungen; Prüfung täglich.,No milestones yet. Grow your airline at your own pace. Optional goals with no rewards or unlocks; checked daily.
 MILESTONES_DATE,Tag %d · %02d:%02d,Day %d · %02d:%02d
 MILESTONES_TOAST,Meilenstein erreicht: %s,Milestone reached: %s
-MILESTONE_FLEET_1,Erstes Flugzeug,First aircraft
-MILESTONE_FLEET_5,5 Flugzeuge,5 aircraft
-MILESTONE_FLEET_15,15 Flugzeuge,15 aircraft
-MILESTONE_ROUTES_1,Erste aktive Route,First active route
-MILESTONE_ROUTES_5,5 aktive Routen,5 active routes
-MILESTONE_DESTINATIONS_3,3 Flughäfen im Netz,3 airports in the network
-MILESTONE_DESTINATIONS_10,10 Flughäfen im Netz,10 airports in the network
-MILESTONE_PASSENGERS_1000,1.000 Passagiere befördert,"1,000 passengers carried"
-MILESTONE_PASSENGERS_1000000,Eine Million Passagiere,One million passengers
-MILESTONE_LONG_HAUL,Erste Langstrecke · 5.000 km,"First long haul · 5,000 km"
-MILESTONE_CONNECTION,Erster Umsteiger befördert,First connecting passenger
-MILESTONE_PROFITABLE_YEAR,Erstes profitables Kalenderjahr,First profitable calendar year
-MILESTONE_REVENUE_10000000,10 Mio. EUR Jahresumsatz,10 million EUR annual revenue
+MILESTONE_FLEET_1,Flottengröße: {target},Fleet size: {target}
+MILESTONE_FLEET_5,Flottengröße: {target},Fleet size: {target}
+MILESTONE_FLEET_15,Flottengröße: {target},Fleet size: {target}
+MILESTONE_ROUTES_1,Aktive Routen: {target},Active routes: {target}
+MILESTONE_ROUTES_5,Aktive Routen: {target},Active routes: {target}
+MILESTONE_DESTINATIONS_3,Flughäfen im Netz: {target},Airports in the network: {target}
+MILESTONE_DESTINATIONS_10,Flughäfen im Netz: {target},Airports in the network: {target}
+MILESTONE_PASSENGERS_1000,{target} Passagiere befördert,{target} passengers carried
+MILESTONE_PASSENGERS_1000000,{target} Passagiere befördert,{target} passengers carried
+MILESTONE_LONG_HAUL,Langstrecke ab {target} km,Long haul from {target} km
+MILESTONE_CONNECTION,Umsteiger befördert: {target},Connecting passengers carried: {target}
+MILESTONE_PROFITABLE_YEAR,Profitable Kalenderjahre: {target},Profitable calendar years: {target}
+MILESTONE_REVENUE_10000000,Jahresumsatz: {target} EUR,Annual revenue: {target} EUR
 MILESTONE_DEBT_FREE,Schuldenfrei mit Flotte,Debt free with a fleet
-MILESTONE_REPUTATION,"30 Betriebstage mit hohem Ruf (≥ 0,5)",30 operating days with high reputation (≥ 0.5)
+MILESTONE_REPUTATION,"Hoher Ruf (≥ 0,5): {target} Betriebstage",High reputation (≥ 0.5): {target} operating days

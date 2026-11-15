@@ -1564,8 +1564,9 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 27 func refresh() -> void:
 51 func add_entry(parent: Node, entry: Dictionary) -> void:
 68 func notify_reached() -> void:
-76 func open_list() -> void:
-105 func reset_view() -> void:
+79 func open_list() -> void:
+108 func reset_view() -> void:
+115 func number_text(value: int) -> String:
 
 ## scripts/routes_panel.gd
 1 extends VBoxContainer

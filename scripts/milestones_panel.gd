@@ -22,7 +22,7 @@ func date_text(seconds: int) -> String:
 	return tr("MILESTONES_DATE") % [seconds / 86400 + 1, seconds / 3600 % 24, seconds / 60 % 60]
 
 func title(entry: Dictionary) -> String:
-	return tr("MILESTONE_" + str(entry.id).to_upper())
+	return tr("MILESTONE_" + str(entry.id).to_upper()).replace("{target}", number_text(entry.target))
 
 func refresh() -> void:
 	var entries: Array = simulation.get_milestones()
@@ -62,14 +62,17 @@ func add_entry(parent: Node, entry: Dictionary) -> void:
 		row.add_child(UI.label(date_text(entry.reached), Tokens.CODE, UI.MUTED))
 	else:
 		var progress := UI.progress(clampf(float(entry.current) / float(entry.target) * 100.0, 0, 100))
-		progress.get_child(1).text = "%d / %d" % [entry.current, entry.target]
+		progress.get_child(1).text = "%s / %s" % [number_text(entry.current), number_text(entry.target)]
 		block.add_child(progress)
 
 func notify_reached() -> void:
 	var ids: PackedStringArray = simulation.take_milestone_notifications()
 	if ids.is_empty(): return
 	var titles := PackedStringArray()
-	for id in ids: titles.append(tr("MILESTONE_" + id.to_upper()))
+	var entries: Array = simulation.get_milestones()
+	for id in ids:
+		for entry in entries:
+			if entry.id == id: titles.append(title(entry))
 	if is_instance_valid(notification): notification.queue_free()
 	notification = UI.toast(self, tr("MILESTONES_TOAST") % "; ".join(titles), true)
 
@@ -108,3 +111,12 @@ func reset_view() -> void:
 	for child in get_children():
 		if child is Window: child.queue_free()
 	signature = ""
+
+func number_text(value: int) -> String:
+	var digits := str(value)
+	var separator := "." if TranslationServer.get_locale().begins_with("de") else ","
+	var grouped := ""
+	for i in range(digits.length()):
+		if i > 0 and (digits.length() - i) % 3 == 0: grouped += separator
+		grouped += digits[i]
+	return grouped

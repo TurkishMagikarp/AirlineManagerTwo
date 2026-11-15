@@ -5,7 +5,8 @@ Die Datei wird beim ersten Zugriff eingelesen und validiert; Änderungen gelten
 nach einem Neustart. Fehlende Dateien, unbekannte Arten, doppelte Kennungen und
 nichtpositive Schwellen liefern einen Fehler beim Gründen oder Laden.
 Kennungen bleiben bei der Abstimmung stabil; neue Kennungen benötigen DE/EN-Texte
-in `resources/localization/milestones.csv`. Die Reihenfolge bestimmt die nächsten
+in `resources/localization/milestones.csv`. Mengenangaben in den übersetzten Titeln verwenden die konfigurierte Schwelle,
+nicht die Zahl in der stabilen Kennung. Die Reihenfolge bestimmt die nächsten
 offenen Ziele in der Übersicht.
 
 Rust prüft nach der vollständigen Tagesabrechnung um Mitternacht. Der gespeicherte
