@@ -8,6 +8,8 @@ use std::collections::HashSet;
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Game {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub milestones: Option<crate::milestones::State>,
     /// Unsaved dependency epoch. Unique epochs also distinguish diverging clones.
     #[serde(skip)]
     pub(crate) commercial_revision: u64,
@@ -83,6 +85,7 @@ impl Game {
 impl Default for Game {
     fn default() -> Self {
         Self {
+            milestones: None,
             departure_markets: Default::default(),
             commercial_revision: 0,
             reputation_revision: 0,
@@ -178,9 +181,11 @@ impl Game {
             capital_eur: starting_capital()?,
         };
         airline.validate()?;
+        crate::milestones::rules()?;
         let competitors = crate::competition::new_competitors(airport)?;
         *self = Self {
             competitors,
+            milestones: Some(Default::default()),
             history: Some(crate::history::History::new(0, airline.capital_eur)),
             airline: Some(airline),
             ..Self::default()

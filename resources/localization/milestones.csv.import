@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://61dbud2pk0we"
+
+[deps]
+
+files=["res://resources/localization/milestones.de.translation", "res://resources/localization/milestones.en.translation"]
+
+source_file="res://resources/localization/milestones.csv"
+dest_files=["res://resources/localization/milestones.de.translation", "res://resources/localization/milestones.en.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

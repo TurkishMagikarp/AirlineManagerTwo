@@ -1,0 +1,24 @@
+keys,de,en
+MILESTONES_TITLE,Meilensteine,Milestones
+MILESTONES_VIEW,Alle ansehen,View all
+MILESTONES_REACHED,Erreicht,Reached
+MILESTONES_DONE,Erledigt,Done
+MILESTONES_CLOSE,Schließen,Close
+MILESTONES_EMPTY,Noch keine Meilensteine. Baue deine Airline in deinem Tempo auf. Optionale Ziele ohne Belohnungen oder Freischaltungen; Prüfung täglich.,No milestones yet. Grow your airline at your own pace. Optional goals with no rewards or unlocks; checked daily.
+MILESTONES_DATE,Tag %d · %02d:%02d,Day %d · %02d:%02d
+MILESTONES_TOAST,Meilenstein erreicht: %s,Milestone reached: %s
+MILESTONE_FLEET_1,Erstes Flugzeug,First aircraft
+MILESTONE_FLEET_5,5 Flugzeuge,5 aircraft
+MILESTONE_FLEET_15,15 Flugzeuge,15 aircraft
+MILESTONE_ROUTES_1,Erste aktive Route,First active route
+MILESTONE_ROUTES_5,5 aktive Routen,5 active routes
+MILESTONE_DESTINATIONS_3,3 Flughäfen im Netz,3 airports in the network
+MILESTONE_DESTINATIONS_10,10 Flughäfen im Netz,10 airports in the network
+MILESTONE_PASSENGERS_1000,1.000 Passagiere befördert,"1,000 passengers carried"
+MILESTONE_PASSENGERS_1000000,Eine Million Passagiere,One million passengers
+MILESTONE_LONG_HAUL,Erste Langstrecke · 5.000 km,"First long haul · 5,000 km"
+MILESTONE_CONNECTION,Erster Umsteiger befördert,First connecting passenger
+MILESTONE_PROFITABLE_YEAR,Erstes profitables Kalenderjahr,First profitable calendar year
+MILESTONE_REVENUE_10000000,10 Mio. EUR Jahresumsatz,10 million EUR annual revenue
+MILESTONE_DEBT_FREE,Schuldenfrei mit Flotte,Debt free with a fleet
+MILESTONE_REPUTATION,"30 Betriebstage mit hohem Ruf (≥ 0,5)",30 operating days with high reputation (≥ 0.5)

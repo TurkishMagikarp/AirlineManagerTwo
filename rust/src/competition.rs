@@ -620,6 +620,9 @@ impl Game {
                     std::mem::swap(&mut staged.used_market, &mut c.game.used_market);
                 }
             }
+            if end.as_secs().is_multiple_of(crate::reputation::DAY) && end.subsec_nanos() == 0 {
+                staged.evaluate_milestones();
+            }
             if staged.insolvent() {
                 staged.clock.set_speed(target.speed());
                 *self = staged;

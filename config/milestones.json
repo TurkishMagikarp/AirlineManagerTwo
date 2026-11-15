@@ -1,0 +1,77 @@
+[
+  {
+    "id": "fleet_1",
+    "kind": "fleet",
+    "threshold": 1
+  },
+  {
+    "id": "routes_1",
+    "kind": "active_routes",
+    "threshold": 1
+  },
+  {
+    "id": "passengers_1000",
+    "kind": "passengers",
+    "threshold": 1000
+  },
+  {
+    "id": "debt_free",
+    "kind": "debt_free_fleet",
+    "threshold": 1
+  },
+  {
+    "id": "destinations_3",
+    "kind": "destinations",
+    "threshold": 3
+  },
+  {
+    "id": "reputation",
+    "kind": "reputation_days",
+    "threshold": 30
+  },
+  {
+    "id": "revenue_10000000",
+    "kind": "annual_revenue",
+    "threshold": 10000000
+  },
+  {
+    "id": "profitable_year",
+    "kind": "profitable_years",
+    "threshold": 1
+  },
+  {
+    "id": "fleet_5",
+    "kind": "fleet",
+    "threshold": 5
+  },
+  {
+    "id": "routes_5",
+    "kind": "active_routes",
+    "threshold": 5
+  },
+  {
+    "id": "destinations_10",
+    "kind": "destinations",
+    "threshold": 10
+  },
+  {
+    "id": "connection",
+    "kind": "connecting_passengers",
+    "threshold": 1
+  },
+  {
+    "id": "long_haul",
+    "kind": "long_haul_km",
+    "threshold": 5000
+  },
+  {
+    "id": "passengers_1000000",
+    "kind": "passengers",
+    "threshold": 1000000
+  },
+  {
+    "id": "fleet_15",
+    "kind": "fleet",
+    "threshold": 15
+  }
+]

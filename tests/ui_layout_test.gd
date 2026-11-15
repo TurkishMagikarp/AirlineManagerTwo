@@ -33,6 +33,13 @@ func _run() -> void:
 		quit(0)
 		return
 	assert(sim.found_airline("Meridian Air", "DE", "EDDF").is_empty())
+	if OS.get_environment("AIRLINE_UI_CAPTURE_MILESTONES_ONLY") == "1":
+		await _milestone_views(sim)
+		main.queue_free()
+		await process_frame
+		print("PASS: empty and reached milestone Overview and dialogs in both languages and sizes")
+		quit(0)
+		return
 	if OS.get_environment("AIRLINE_UI_CAPTURE_TRANSFERS_ONLY") == "1":
 		await _transfer_views(sim)
 		main.queue_free()
@@ -685,3 +692,47 @@ func _transfer_views(sim: RefCounted) -> void:
 		if not capture_dir.is_empty():
 			await RenderingServer.frame_post_draw
 			assert(root.get_texture().get_image().save_png(capture_dir.path_join("routes-no-transfers-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
+
+func _milestone_views(sim: RefCounted) -> void:
+	for populated in [false, true]:
+		if populated:
+			assert(sim.buy_aircraft("atr72_600").is_empty())
+			assert(sim.create_route("EDDF", "EDDM", 1).is_empty())
+			sim.hire_missing_staff()
+			assert(sim.schedule_route(1, 1, 120).is_empty())
+			sim.start()
+			assert(sim.advance(86400.0))
+			sim.pause()
+		var entries: Array = sim.get_milestones()
+		assert(entries.size() == 15)
+		assert(entries.filter(func(e: Dictionary): return e.reached >= 0).size() > 0 if populated else entries.all(func(e: Dictionary): return e.reached < 0))
+		for language in ["de", "en"]:
+			TranslationServer.set_locale(language)
+			for dimensions in [Vector2i(1440, 1000), Vector2i(680, 520)]:
+				root.size = dimensions
+				main._sync_view()
+				main.milestones_panel.refresh()
+				var scroll: ScrollContainer = main.finance_panel.get_parent().get_parent()
+				scroll.scroll_vertical = 0
+				for frame in range(5): await process_frame
+				if dimensions.x < 900:
+					scroll.scroll_vertical = int(main.milestones_panel.position.y + main.finance_panel.position.y)
+					for frame in range(5): await process_frame
+				if not capture_dir.is_empty():
+					await RenderingServer.frame_post_draw
+					assert(root.get_texture().get_image().save_png(capture_dir.path_join("milestones-%s-%s-%dx%d.png" % ["reached" if populated else "empty", language, dimensions.x, dimensions.y])) == OK)
+				main.milestones_panel.open_list()
+				for frame in range(5): await process_frame
+				if not capture_dir.is_empty():
+					await RenderingServer.frame_post_draw
+					assert(root.get_texture().get_image().save_png(capture_dir.path_join("milestones-list-%s-%s-%dx%d.png" % ["reached" if populated else "empty", language, dimensions.x, dimensions.y])) == OK)
+				for child in main.milestones_panel.get_children():
+					if child is Window: child.queue_free()
+				await process_frame
+		if populated:
+			main.milestones_panel.notify_reached()
+			assert(sim.take_milestone_notifications().is_empty())
+			for frame in range(5): await process_frame
+			if not capture_dir.is_empty():
+				await RenderingServer.frame_post_draw
+				assert(root.get_texture().get_image().save_png(capture_dir.path_join("milestones-toast-680x520.png")) == OK)
