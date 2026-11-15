@@ -88,6 +88,15 @@ keine garantierten Herstellerwerte bei maximaler Reichweite. Wie bisher zieht
 die Frachtregel 100 kg pro Passagier von der Nutzlast ab und begrenzt dann auf
 Bauchfracht. Volle Tanks, Wetter und konkrete Triebwerksvarianten werden nicht modelliert.
 
+Öffentliche Fracht-Plausibilitätsreferenzen: [SWISS WorldCargo, Flotte](https://www.swissworldcargo.com/fleet/)
+nennt für die A330-300 bis zu 19 t Fracht/Post bei voller Passagierbelegung;
+der [SWISS Service Guide 2026, S. 45](https://www.swissworldcargo.com/wp-content/uploads/2026/03/SWC_Service-Guide_STT26_20260316.pdf)
+nennt bis zu 25 t für die 777-300ER. Die gewählten 12/18 t liegen bewusst darunter.
+Das sind betreiberspezifische Referenzen, keine gemeinsame Garantie mit maximaler
+Herstellerreichweite. Die festen 45/65-t-Payloads, 90/120-min-Turnarounds und
+871/905-km/h-Reisegeschwindigkeiten bleiben explizite gerundete Spielannahmen;
+Frachtvolumen, Ladeplan und die konkrete Gewichtsversion werden nicht nachgerechnet.
+
 Die neuen Modellregeln stehen ausschließlich in `config/`: 24/36 Mio. EUR
 Spielkaufpreis, 5.500/7.500 kg stündlicher Reisefuel, eigene Zykluskosten,
 Flughafentarife, Overhead, Wartungsintervalle und Personalbedarf. Die Besatzungen

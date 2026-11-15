@@ -1036,6 +1036,8 @@ impl Competitor {
     ) -> Result<Vec<ExpansionQuote>, String> {
         let g = &self.game;
         let m = crate::aircraft::model(model)?;
+        let staffing = staffing_per_week(g, model)?;
+        let fuel = g.fuel_market.price_at(g.clock.elapsed().as_secs());
         let mut quotes = Vec::new();
         let mut candidates = Vec::new();
         for root in g.routes.iter().filter(|r| r.parent_route_id.is_none()) {
@@ -1143,6 +1145,7 @@ impl Competitor {
                 .filter(|o| crate::demand::same_market(&o.route, &r))
                 .cloned()
                 .collect();
+            let mut single_quote: Option<crate::economy::QuoteMarket> = None;
             for step in 3..=15 {
                 if r.parent_route_id.is_some() && step != 3 {
                     continue;
@@ -1161,14 +1164,23 @@ impl Competitor {
                         None => crate::demand::Offer::new(&r, m.seats),
                     },
                 );
-                let t = crate::economy::quote_at_price(
-                    &r,
-                    model,
-                    &market,
-                    self.game
-                        .fuel_market
-                        .price_at(self.game.clock.elapsed().as_secs()),
-                )?;
+                let t = if existing.is_empty() && plane.is_none() {
+                    if let Some(prepared) = &mut single_quote {
+                        prepared.reprice_single_economy(&r);
+                    } else {
+                        single_quote = Some(crate::economy::QuoteMarket::new(&r, model, &market)?);
+                    }
+                    crate::economy::quote_prepared(
+                        &r,
+                        model,
+                        &market,
+                        fuel,
+                        None,
+                        single_quote.as_mut().unwrap(),
+                    )?
+                } else {
+                    crate::economy::quote_at_price(&r, model, &market, fuel)?
+                };
                 // Charge the loss of revenue on our existing services too:
                 // an added aircraft must earn its keep after market dilution.
                 let mut dilution = 0;
@@ -1210,10 +1222,9 @@ impl Competitor {
                     route: r.clone(),
                     interval: interval as u32,
                     profit: (t.profit() - maintenance) * (REVIEW / (interval * 60)) as i64
-                        - staffing_per_week(g, model)?
+                        - staffing
                         - dilution,
-                    costs: staffing_per_week(g, model)?
-                        + (t.costs() + maintenance) * (REVIEW / (interval * 60)) as i64,
+                    costs: staffing + (t.costs() + maintenance) * (REVIEW / (interval * 60)) as i64,
                 });
             }
         }

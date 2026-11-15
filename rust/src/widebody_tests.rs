@@ -205,11 +205,9 @@ fn widebody_world_steps_speeds_pause_and_annual_restart() {
     for speed in [1, 4, 16] {
         let mut daily = initial.clone();
         daily.clock.set_running(false);
+        let paused = serde_json::to_value(&daily).unwrap();
         assert!(daily.advance(86400.0));
-        assert_eq!(
-            serde_json::to_value(&daily).unwrap()["clock"]["elapsed"],
-            serde_json::to_value(&initial).unwrap()["clock"]["elapsed"]
-        );
+        assert_eq!(serde_json::to_value(&daily).unwrap(), paused);
         daily.clock.set_running(true);
         daily.clock.set_speed(speed);
         for day in 0..730 {
@@ -259,4 +257,33 @@ fn widebody_pacific_map_and_staggered_rotation() {
     assert!((first.progress - 0.5).abs() < 0.01);
     assert_eq!(crate::map::flights(&restart(&g)), flights);
     g.validate_operations().unwrap();
+}
+
+#[test]
+fn single_economy_fare_sweep_matches_fresh_quotes() {
+    for (model, origin, destination) in [
+        ("a330_300", "EDDF", "RJTT"),
+        ("b777_300er", "SBGR", "EDDF"),
+        ("a320_200", "EDDF", "EDDM"),
+    ] {
+        let mut g = game(model, origin, destination);
+        g.set_cabin_layout(1, 0).unwrap();
+        let mut prepared =
+            economy::QuoteMarket::new(&g.routes[0], model, &g.market_routes()).unwrap();
+        for fare in [0, 100, 400, 800, 100_000, 800, 400, 100, 0] {
+            g.set_ticket_price(1, fare).unwrap();
+            g.set_business_ticket_price(1, (fare * 2).min(100_000))
+                .unwrap();
+            let route = &g.routes[0];
+            let supply = g.market_routes();
+            prepared.reprice_single_economy(route);
+            for fuel in [50, 80, 120] {
+                let fresh = economy::quote_at_price(route, model, &supply, fuel).unwrap();
+                let reused =
+                    economy::quote_prepared(route, model, &supply, fuel, None, &mut prepared)
+                        .unwrap();
+                assert_eq!(reused, fresh, "{model} fare={fare} fuel={fuel}");
+            }
+        }
+    }
 }
