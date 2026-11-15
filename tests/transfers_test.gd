@@ -20,6 +20,9 @@ func _run() -> void:
 	assert(route["expected_daily_connecting"] > 0)
 	assert(route["connections"].size() > 0)
 	assert(route["expected_daily_local"] + route["expected_daily_connecting"] == route["expected_daily_passengers"])
+	var own: Dictionary = sim.get_route_competition(1)[0]
+	assert(own["connecting_per_day"] == route["expected_daily_connecting"])
+	assert(own["local_per_day"] == route["expected_daily_local"])
 	main._sync_view()
 	main._show_page(2)
 	var panel = main.routes_panel

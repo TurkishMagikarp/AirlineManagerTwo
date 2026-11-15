@@ -2577,7 +2577,13 @@ mod tests {
         for c in &g.competitors {
             assert!(c.game.fleet.len() <= MAX_FLEET);
             c.game.validate_routes().unwrap();
-            assert!(c.game.history.as_ref().unwrap().batches.len() < 5000);
+            let batches = c.game.history.as_ref().unwrap().batches.len();
+            assert!(
+                batches < 5000,
+                "{}: {batches} archive batches for {} flights",
+                c.game.airline.as_ref().unwrap().name,
+                c.game.finance.totals.flights
+            );
         }
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("expanded.json");

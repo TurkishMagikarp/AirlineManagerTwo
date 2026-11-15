@@ -932,6 +932,7 @@ impl SimulationClock {
             /// Departures per day in each direction.
             frequency: f64,
             passengers: f64,
+            connecting: f64,
             action: &'a str,
         }
         let supply = self.game.market_routes();
@@ -962,28 +963,29 @@ impl SimulationClock {
                     .map(|p| 43200.0 / p.interval_seconds as f64)
                     .unwrap_or(0.0);
                 let company_supply = company.prioritize_market(&supply);
-                let passengers = demand::estimate_at(
+                let seats = cabins::offer(r, plane).map_or(model.seats, |o| o.seats);
+                let estimate = demand::estimate_at(
                     r,
-                    model.seats,
+                    seats,
                     &company_supply,
                     self.game.clock.elapsed().as_secs(),
                 )
-                .map(|e| e.per_departure)
-                .unwrap_or(0)
-                .min(i64::from(model.seats)) as f64
-                    * frequency;
+                .unwrap_or_default();
+                let passengers = estimate.per_departure as f64 * frequency;
+                let connecting = estimate.connecting as f64 * frequency;
                 offers.push(Offer {
                     airline: airline.name.as_str(),
                     route: r,
                     model: &plane.model_id,
-                    seats: model.seats,
+                    seats,
                     frequency,
                     passengers,
+                    connecting,
                     action,
                 });
             }
         }
-        let total: f64 = offers.iter().map(|o| o.passengers).sum();
+        let total: f64 = offers.iter().map(|o| o.passengers - o.connecting).sum();
         offers
             .into_iter()
             .map(|o| {
@@ -991,7 +993,8 @@ impl SimulationClock {
                     "airline" => o.airline, "ticket_eur" => o.route.ticket_eur, "model" => o.model,
                     "seats" => o.seats, "departures_per_day_per_direction" => o.frequency,
                     "passengers_per_day" => o.passengers,
-                    "share_percent" => if total > 0.0 { o.passengers * 100.0 / total } else { 0.0 },
+                    "local_per_day" => o.passengers - o.connecting, "connecting_per_day" => o.connecting,
+                    "share_percent" => if total > 0.0 { (o.passengers - o.connecting) * 100.0 / total } else { 0.0 },
                     "active" => o.route.plan.is_some(), "last_action" => o.action
                 }
             })

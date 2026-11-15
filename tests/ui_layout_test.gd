@@ -666,12 +666,12 @@ func _transfer_views(sim: RefCounted) -> void:
 		root.size = dimensions
 		for frame in range(5): await process_frame
 		var scroll: ScrollContainer = panel.get_parent().get_parent()
-		for target in [panel.route_tree, panel.connections_label, panel.results_tree]:
+		for target in [panel.route_tree, panel.connections_label, panel.results_tree, panel.competition_label]:
 			scroll.ensure_control_visible(target)
 			for frame in range(5): await process_frame
 			if not capture_dir.is_empty():
 				await RenderingServer.frame_post_draw
-				var name := "routes-transfers" if target == panel.route_tree else "routes-feeds" if target == panel.connections_label else "routes-transfer-results"
+				var name := "routes-transfers" if target == panel.route_tree else "routes-feeds" if target == panel.connections_label else "routes-transfer-results" if target == panel.results_tree else "routes-transfer-competition"
 				assert(root.get_texture().get_image().save_png(capture_dir.path_join("%s-%dx%d.png" % [name, dimensions.x, dimensions.y])) == OK)
 	assert(sim.stop_schedule(2).is_empty())
 	panel.refresh()

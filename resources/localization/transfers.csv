@@ -9,3 +9,4 @@ TRANSFER_PATH,%s – %s – %s · %.1f Pax/Tag,%s – %s – %s · %.1f pax/day
 TRANSFER_RESULT,Lokal: %d · Umsteiger: %d (Economy),Local: %d · Connecting: %d (economy)
 TRANSFER_REVENUE,Umsteigeranteil: %s,Connecting share: %s
 TRANSFER_COUNTS,%s–%s · Lokal %d / Umstieg %d Pax/Tag →,%s–%s · Local %d / Connecting %d pax/day →
+TRANSFER_COMPETITION,Lokal %.1f / Umstieg %.1f Pax/Tag · Umsteiger stammen aus weiteren O&D-Märkten.,Local %.1f / Connecting %.1f pax/day · Connecting passengers come from other O&D markets.
