@@ -22,7 +22,8 @@ use std::time::Duration;
 // v32: transfer counters/revenue default to zero on every stored result.
 // Old airborne quotes and all historical amounts remain unchanged.
 // v33: player milestones; missing legacy state is sampled at the load instant.
-pub(crate) const VERSION: u32 = 33;
+// v34: shared world economic cycle. Legacy timelines start neutral at load.
+pub(crate) const VERSION: u32 = 34;
 // Bounded input, including centuries of fuel/seasonal quotes for the player
 // and both AI airlines in the million-flight finance restart scenario.
 // Version 17 retains per-class quotes, which also split more archive batches.
@@ -38,6 +39,8 @@ struct SaveGame {
 // Future simulation data belongs here, not in the UI or a serialized Godot object.
 #[derive(Serialize, Deserialize)]
 struct GameState {
+    #[serde(default)]
+    world_economy: Option<crate::world_economy::Cycle>,
     #[serde(default)]
     milestones: Option<crate::milestones::State>,
     #[serde(default)]
@@ -101,6 +104,8 @@ pub fn save(path: &Path, game: &Game) -> Result<(), String> {
     if game.fuel_market.started_at > game.clock.elapsed().as_secs() {
         return Err("Ungültiger Treibstoffmarkt.".into());
     }
+    game.world_economy
+        .validate(game.clock.elapsed().as_secs())?;
     game.validate_milestones()?;
     game.validate_fleet()?;
     game.validate_routes()?;
@@ -117,6 +122,7 @@ pub fn save(path: &Path, game: &Game) -> Result<(), String> {
     let data = SaveGame {
         version: VERSION,
         state: GameState {
+            world_economy: Some(game.world_economy),
             milestones: game.milestones.clone(),
             ferries: game.ferries.clone(),
             used_market: game.used_market.clone(),
@@ -306,7 +312,18 @@ pub(crate) fn load_versioned(path: &Path) -> Result<(Game, u32), String> {
     if fuel_market.started_at > clock.elapsed().as_secs() {
         return Err("Ungültiger Treibstoffmarkt.".into());
     }
+    let world_economy = if data.version >= 34 {
+        data.state.world_economy.ok_or("Weltwirtschaft fehlt.")?
+    } else {
+        crate::world_economy::Cycle {
+            seed: fuel_market.seed ^ 0x45434f4e4f4d59,
+            started_at: clock.elapsed().as_secs(),
+            ..Default::default()
+        }
+    };
+    world_economy.validate(clock.elapsed().as_secs())?;
     let mut game = Game {
+        world_economy,
         milestones: data.state.milestones,
         departure_markets: Default::default(),
         commercial_revision: 0,
@@ -388,6 +405,8 @@ pub(crate) fn load_versioned(path: &Path) -> Result<(Game, u32), String> {
             c.game.fuel_market = game.fuel_market.clone();
         }
     }
+    game.world_economy
+        .validate(game.clock.elapsed().as_secs())?;
     game.validate_milestones()?;
     game.validate_fleet()?;
     game.validate_routes()?;
@@ -453,6 +472,14 @@ pub(crate) fn load_versioned(path: &Path) -> Result<(Game, u32), String> {
     game.validate_finance()?;
     game.validate_history()?;
     game.validate_tax()?;
+    for c in &mut game.competitors {
+        if data.version < 34 {
+            c.game.world_economy = game.world_economy;
+        }
+        c.game
+            .world_economy
+            .validate(game.clock.elapsed().as_secs())?;
+    }
     game.validate_competitors()?;
     if data.version < 9 && game.airline.is_some() {
         game.competitors = crate::competition::initial_competitors_at(game.clock.elapsed())?;
@@ -465,6 +492,9 @@ pub(crate) fn load_versioned(path: &Path) -> Result<(Game, u32), String> {
         }
     }
     for c in &mut game.competitors {
+        if data.version < 34 {
+            c.game.world_economy = game.world_economy;
+        }
         if data.version < 16 {
             c.game.fuel_market = game.fuel_market.clone();
         }
@@ -475,6 +505,8 @@ pub(crate) fn load_versioned(path: &Path) -> Result<(Game, u32), String> {
     if data.version < 33 && game.milestones.is_none() {
         game.migrate_milestones()?;
     }
+    game.world_economy
+        .validate(game.clock.elapsed().as_secs())?;
     game.validate_milestones()?;
     Ok((game, data.version))
 }

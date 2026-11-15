@@ -139,7 +139,16 @@ impl Game {
                 if p.business_seats > 0 {
                     return None;
                 }
-                let m = crate::demand::market(r, 0).ok()?;
+                let m = crate::demand::market_in_economy(
+                    r,
+                    0,
+                    crate::world_economy::Context {
+                        cycle: self.world_economy,
+                        quoted_at: self.clock.elapsed().as_secs(),
+                    },
+                    None,
+                )
+                .ok()?;
                 if m.business / m.total() < RULES.ai_business_share_min {
                     return None;
                 }

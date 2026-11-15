@@ -28,9 +28,9 @@ func _run() -> void:
 		if not _slot_fixture():
 			return
 		var original: String = _snapshot()[0]
-		var saved := original.replace('"version":33', '"version":26') if mode.ends_with("v26") else original
+		var saved := original.replace('"version":34', '"version":26') if mode.ends_with("v26") else original
 		_write(slot_path, saved)
-		if not _check(main.simulation.load_game(slot_path).is_empty() and _snapshot()[0] == original, "v26/v27 identity load preserves all player/AI schedules, money and seeds"):
+		if not _check(main.simulation.load_game(slot_path).is_empty() and preload("res://tests/insurance_fixture.gd").without_economy(_snapshot()[0]) == preload("res://tests/insurance_fixture.gd").without_economy(original), "v26/v27 identity load preserves all player/AI schedules, money and seeds"):
 			return
 		_store(slot_path + ".initial", _snapshot())
 	if not await _slot_views():

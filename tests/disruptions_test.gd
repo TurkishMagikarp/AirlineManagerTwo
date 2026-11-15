@@ -269,9 +269,9 @@ func _restart_family(mode: String) -> bool:
 			if not _restore_disruption(disruption_path):
 				return false
 			_advance(120)
-			var old := _without_disruptions(_snapshot()[0]).replace('"version":33', '"version":25')
+			var old := _without_disruptions(_snapshot()[0]).replace('"version":34', '"version":25')
 			_write(disruption_path, old)
-			if not _restore_disruption(disruption_path) or not _check(_without_disruptions(_snapshot()[0]) == old.replace('"version":25', '"version":33'), "v25 migration changes only disruption defaults for all owners"):
+			if not _restore_disruption(disruption_path) or not _check(_without_disruptions(_snapshot()[0]) == old.replace('"version":25', '"version":34'), "v25 migration changes only disruption defaults for all owners"):
 				return false
 		else:
 			_advance(2993)
@@ -310,6 +310,7 @@ func _restart_family(mode: String) -> bool:
 	return true
 
 func _without_disruptions(world: String) -> String:
+	world = preload("res://tests/insurance_fixture.gd").without_economy(world)
 	for name in ["reputation", "disruption", "otp", "late", "delay_seconds", "care"]:
 		var key := '"%s":' % name
 		while world.contains(key):

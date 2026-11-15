@@ -171,6 +171,7 @@ fn rotation_v14_migrates_single_assignment_and_v15_rejects_inconsistent_lists() 
     }
     std::fs::write(&path, serde_json::to_vec(&value).unwrap()).unwrap();
     g.migrate_insurance_fixture();
+    g.migrate_world_economy_fixture();
     assert_eq!(state(&save::load(&path).unwrap()), state(&g));
     for ids in [
         serde_json::json!([1, 1]),

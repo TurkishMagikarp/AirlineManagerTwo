@@ -107,6 +107,7 @@ fn airport_charges_v23_identity_migration_freezes_all_owners_and_next_departure_
     v["version"] = 23.into();
     std::fs::write(&path, serde_json::to_vec(&v).unwrap()).unwrap();
     let mut migrated = save::load(&path).unwrap();
+    old.migrate_world_economy_fixture();
     assert_eq!(
         serde_json::to_value(&migrated).unwrap(),
         serde_json::to_value(&old).unwrap()

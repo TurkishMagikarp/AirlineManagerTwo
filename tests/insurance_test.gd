@@ -58,7 +58,7 @@ func _run() -> void:
 				return
 			_advance(120)
 			var original: String = _snapshot()[0]
-			var old := _without_insurance(original).replace('"version":33', '"version":22')
+			var old := _without_insurance(original).replace('"version":34', '"version":22')
 			_write(path, old)
 			if not _check(not '"insurance"' in old and not '"insurance_costs"' in old and sim.load_game(path).is_empty() and _without_insurance(_snapshot()[0]) == _without_insurance(original), "v22 migration preserves all money, history, fleet and frozen departure offers byte-for-byte"):
 				return
@@ -227,6 +227,7 @@ func _capture(label: String, dimensions: Vector2i) -> void:
 		_check(root.get_texture().get_image().save_png(capture_dir.path_join("insurance-%s-%dx%d.png" % [label, dimensions.x, dimensions.y])) == OK, "Real render capture")
 
 func _without_insurance(text: String) -> String:
+	text = preload("res://tests/insurance_fixture.gd").without_economy(text)
 	text = RegEx.create_from_string('"insurance":\\{(?:[^{}]|\\{[^{}]*\\})*\\},?').sub(text, "", true)
 	return RegEx.create_from_string(',?"insurance_costs":\\[[^\\[\\]]*\\]').sub(text, "", true)
 

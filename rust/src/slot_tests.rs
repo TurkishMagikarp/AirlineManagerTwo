@@ -91,6 +91,7 @@ fn slots_v26_overcapacity_migration_preserves_all_frequencies() {
     v["version"] = 26.into();
     std::fs::write(&path, serde_json::to_vec(&v).unwrap()).unwrap();
     let mut loaded = crate::save::load(&path).unwrap();
+    g.migrate_world_economy_fixture();
     assert_eq!(loaded.slot_usage("EDDF"), 126);
     assert_eq!(
         serde_json::to_value(&g).unwrap(),

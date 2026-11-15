@@ -57,7 +57,7 @@ pub fn estimate(
         .cloned()
         .collect();
     let passengers = demand::market_passengers(&offers, time)?;
-    estimate_loaded(route, model_id, supply, &passengers)
+    Ok(Market::new(route, model_id, supply)?.estimate_at(&passengers, time))
 }
 
 #[derive(Clone)]
@@ -83,6 +83,7 @@ pub fn estimate_loaded(
 #[derive(Clone)]
 pub struct Market {
     base: f64,
+    economy: Option<crate::world_economy::Context>,
     target: Option<usize>,
     shares: Vec<Share>,
     models: Vec<&'static aircraft::Model>,
@@ -91,6 +92,7 @@ impl Market {
     pub fn new(route: &Route, model_id: &str, supply: &[demand::Offer]) -> Result<Self, String> {
         let mut market = Self {
             base: 0.0,
+            economy: supply.iter().find_map(|o| o.economy),
             target: None,
             shares: Vec::new(),
             models: Vec::new(),
@@ -126,11 +128,22 @@ impl Market {
     }
 
     /// Reuse allocation storage, but refresh every payload limit and spill round.
+    #[cfg(test)]
     pub fn estimate(&mut self, passengers: &[i64]) -> i64 {
+        self.estimate_at(passengers, None)
+    }
+
+    pub fn estimate_at(&mut self, passengers: &[i64], time: Option<u64>) -> i64 {
         let Some(target) = self.target else {
             return 0;
         };
-        let base = self.base;
+        let base = self.base
+            * self.economy.map_or(1.0, |c| {
+                crate::world_economy::factor(
+                    c.index(time),
+                    crate::world_economy::RULES.cargo_reaction,
+                )
+            });
         let shares = &mut self.shares;
         for (i, share) in shares.iter_mut().enumerate() {
             share.limit = (capacity(self.models[i], passengers[i]) as f64 * share.frequency)

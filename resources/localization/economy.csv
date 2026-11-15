@@ -1,0 +1,9 @@
+keys,de,en
+ECONOMY_TITLE,Weltwirtschaft,World economy
+ECONOMY_BOOM,Boom,Boom
+ECONOMY_NORMAL,Normal,Normal
+ECONOMY_DOWNTURN,Abschwung,Downturn
+ECONOMY_TOOLTIP,Nachfrage gegenüber dem Normalniveau (100 %): Geschäftsreisen reagieren stärker als Urlaubsreisen; auch Bauchfracht folgt der Konjunktur. Kosten bleiben gleich.,Demand against normal (100%): business reacts more strongly than leisure; belly cargo also follows the economy. Costs are unchanged.
+ECONOMY_TOAST,Weltwirtschaft: %s,World economy: %s
+DEMAND_SEASON_FACTORS,Saison · Geschäft %s × · Urlaub %s ×,Season · Business %s × · Leisure %s ×
+DEMAND_ECONOMY_FACTORS,Konjunktur · Geschäft %s × · Urlaub %s × · Fracht %s ×,Economy · Business %s × · Leisure %s × · Cargo %s ×

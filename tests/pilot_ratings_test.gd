@@ -55,7 +55,7 @@ func _run() -> void:
 			# v24 has no ratings or training. Strip only the new employee fields;
 			# do not round u64 seeds or financial remainders through Godot JSON.
 			var before: String = _snapshot()[0]
-			var old := _without_ratings(before).replace('"version":33', '"version":24')
+			var old := _without_ratings(before).replace('"version":34', '"version":24')
 			if not _check(not '"rating"' in old and not '"training"' in old and '"version":24' in old, "Legacy fixture contains no post-v24 employee fields"):
 				return
 			_write(path, old)
@@ -299,6 +299,7 @@ func _fleet(owner: Dictionary) -> Array:
 	return owner["fleet"]["aircraft"] if owner["fleet"] is Dictionary else owner["fleet"]
 
 func _without_ratings(world: String) -> String:
+	world = preload("res://tests/insurance_fixture.gd").without_economy(world)
 	world = RegEx.create_from_string(',?"rating":(?:"[^"]*"|null)').sub(world, "", true)
 	return RegEx.create_from_string(',?"training":null').sub(world, "", true)
 

@@ -145,6 +145,10 @@ static func panel(parent: Node, title: String, accessory: Control = null, flush:
 	body.set_meta("panel_shell", shell)
 	return body
 
+static func decimal(value: float, places: int = 1) -> String:
+	var result := ("%." + str(places) + "f") % value
+	return result.replace(".", ",") if TranslationServer.get_locale().begins_with("de") else result
+
 static func metric(parent: Node, title: String, support: Control = null) -> Label:
 	var shell := PanelContainer.new()
 	shell.custom_minimum_size.x = METRIC_MIN_WIDTH

@@ -949,6 +949,7 @@ mod tests {
         }
         std::fs::write(&path, serde_json::to_vec(&data).unwrap()).unwrap();
         let loaded = crate::save::load(&path).unwrap();
+        legacy.migrate_world_economy_fixture();
         assert_eq!(state(&legacy), state(&loaded));
         assert!(loaded.is_maintenance_base("EDDF"));
         assert!(!loaded.is_maintenance_base("EDDM"));
@@ -1337,6 +1338,7 @@ mod tests {
         g.migrate_tax().unwrap();
         g.marketing.settled_at = 100;
         g.migrate_insurance_fixture();
+        g.migrate_world_economy_fixture();
         assert!(loaded.advance(86400.0));
         assert!(g.advance(86400.0));
         assert_eq!(state(&loaded), state(&g));

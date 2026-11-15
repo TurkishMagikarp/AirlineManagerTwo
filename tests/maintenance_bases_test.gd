@@ -40,11 +40,11 @@ func _run() -> void:
 			var pattern := RegEx.create_from_string('"maintenance_bases":\\[[^\\]]*\\],')
 			if not _check(pattern.search_all(world).size() == 3, "Player and both AI have maintenance-base arrays"):
 				return
-			var old := pattern.sub(world, "", true).replace('"version":33', '"version":28')
+			var old := pattern.sub(world, "", true).replace('"version":34', '"version":28')
 			if not _check(not '"maintenance_bases"' in old and '"version":28' in old, "Legacy fixture omits new field for every owner"):
 				return
 			_write(base_path, old)
-			if not _check(sim.load_game(base_path).is_empty() and _snapshot() == expected, "v28 migration only restores empty explicit bases and version; all other world bytes and APIs match v29 baseline"):
+			if not _check(sim.load_game(base_path).is_empty() and preload("res://tests/insurance_fixture.gd").without_economy_snapshot(_snapshot()) == preload("res://tests/insurance_fixture.gd").without_economy_snapshot(expected), "v28 migration only restores empty explicit bases and version; all other world bytes and APIs match v29 baseline"):
 				return
 		elif not _check(sim.save_game(base_path).is_empty(), "Save v29 with running home and outstation checks and a fee-paying base"):
 			return

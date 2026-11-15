@@ -33,6 +33,13 @@ func _run() -> void:
 		quit(0)
 		return
 	assert(sim.found_airline("Meridian Air", "DE", "EDDF").is_empty())
+	if OS.get_environment("AIRLINE_UI_CAPTURE_ECONOMY_ONLY") == "1":
+		await _economy_views(sim)
+		main.queue_free()
+		await process_frame
+		print("PASS: normal, boom and downturn economy cards in both languages and sizes")
+		quit(0)
+		return
 	if OS.get_environment("AIRLINE_UI_CAPTURE_MILESTONES_ONLY") == "1":
 		await _milestone_views(sim)
 		main.queue_free()
@@ -140,6 +147,14 @@ func _run() -> void:
 				await RenderingServer.frame_post_draw
 				assert(root.get_texture().get_image().save_png(capture_dir.path_join("%s-content-%dx%d.png" % [["overview", "fleet", "routes", "map", "finances", "staff"][page], dimensions.x, dimensions.y])) == OK)
 			if page == 2 and not capture_dir.is_empty():
+				scroll.ensure_control_visible(main.routes_panel.season_label)
+				for frame in range(5): await process_frame
+				scroll.ensure_control_visible(main.routes_panel.season_label)
+				scroll.scroll_vertical += 32
+				for frame in range(5): await process_frame
+				assert(root.get_visible_rect().encloses(main.routes_panel.season_label.get_global_rect()))
+				await RenderingServer.frame_post_draw
+				assert(root.get_texture().get_image().save_png(capture_dir.path_join("route-demand-factors-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
 				scroll.ensure_control_visible(main.routes_panel.destination)
 				for frame in range(5): await process_frame
 				await _capture_picker(main.routes_panel.destination, "route-airport", dimensions)
@@ -736,3 +751,27 @@ func _milestone_views(sim: RefCounted) -> void:
 			if not capture_dir.is_empty():
 				await RenderingServer.frame_post_draw
 				assert(root.get_texture().get_image().save_png(capture_dir.path_join("milestones-toast-680x520.png")) == OK)
+
+func _economy_views(sim: RefCounted) -> void:
+	var captured: Array[String] = []
+	for week in range(520):
+		var economy: Dictionary = sim.get_world_economy()
+		if not captured.has(economy.phase):
+			captured.append(economy.phase)
+			for language in ["de", "en"]:
+				TranslationServer.set_locale(language)
+				for dimensions in [Vector2i(1440, 1000), Vector2i(680, 520)]:
+					root.size = dimensions
+					main._sync_view()
+					main._show_page(0)
+					for frame in range(5): await process_frame
+					var scroll: ScrollContainer = main.fleet_panel.get_parent().get_parent()
+					scroll.ensure_control_visible(main.metrics.economy.get_parent().get_parent())
+					for frame in range(5): await process_frame
+					await RenderingServer.frame_post_draw
+					assert(root.get_texture().get_image().save_png(capture_dir.path_join("economy-%s-%s-%dx%d.png" % [economy.phase, language, dimensions.x, dimensions.y])) == OK)
+		if captured.size() == 3: break
+		sim.start()
+		assert(sim.advance(7.0 * 86400.0))
+		sim.pause()
+	assert(captured.size() == 3)

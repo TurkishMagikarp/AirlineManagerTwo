@@ -79,8 +79,18 @@ pub fn market(route: &Route, price: i64) -> Result<Market, String> {
     market_with_season(route, price, None)
 }
 
+#[cfg(test)]
 pub fn market_at(route: &Route, price: i64, time: u64) -> Result<Market, String> {
     market_with_season(route, price, Some(time))
+}
+
+pub fn market_in_economy(
+    route: &Route,
+    price: i64,
+    context: crate::world_economy::Context,
+    time: Option<u64>,
+) -> Result<Market, String> {
+    Ok(MarketInputs::new(route, price)?.at(&crate::world_economy::factors(Some(context), time)))
 }
 
 fn market_with_season(route: &Route, price: i64, time: Option<u64>) -> Result<Market, String> {
@@ -179,6 +189,7 @@ impl MarketInputs {
 /// Ephemeral supply snapshot: capacity is derived from the owning fleet, never saved.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Offer {
+    pub economy: Option<crate::world_economy::Context>,
     pub route: Route,
     pub seats: u32,
     pub business_seats: u32,
@@ -194,6 +205,7 @@ impl Offer {
     pub(crate) fn commercial_clone(&self) -> Self {
         let r = &self.route;
         Self {
+            economy: self.economy,
             route: Route {
                 id: r.id,
                 origin_icao: r.origin_icao.clone(),
@@ -222,6 +234,7 @@ impl Offer {
     }
     pub fn new(route: &Route, seats: u32) -> Self {
         Self {
+            economy: None,
             route: route.clone(),
             seats,
             business_seats: 0,
@@ -647,10 +660,8 @@ impl LocalPrepared {
         if self.neutral_choice != crate::reputation::NEUTRAL_CHOICE.with(|v| v.get()) {
             self.refresh_constants();
         }
-        let season = time.map(season_factors).unwrap_or(Market {
-            business: 1.0,
-            leisure: 1.0,
-        });
+        let season =
+            crate::world_economy::factors(self.matching.iter().find_map(|o| o.economy), time);
         let base = self.base.at(&season);
         let matching = &self.matching;
         let allocations = &mut self.allocations;
@@ -819,6 +830,7 @@ pub(crate) struct Prepared {
     target: Option<usize>,
     loads: Vec<i64>,
     transfer_services: Vec<Option<usize>>,
+    service_seats: Vec<u32>,
     quotes: std::collections::HashMap<Option<u64>, (Estimate, Vec<i64>)>,
     reputation_revision: Option<u64>,
     reputation_scores: Vec<i64>,
@@ -831,6 +843,7 @@ impl Prepared {
             target: None,
             loads: Vec::new(),
             transfer_services: Vec::new(),
+            service_seats: Vec::new(),
             quotes: Default::default(),
             reputation_revision: None,
             reputation_scores: Vec::new(),
@@ -921,6 +934,11 @@ impl Prepared {
             reputation_revision: None,
             reputation_scores,
             quotes: Default::default(),
+            service_seats: routes
+                .iter()
+                .filter(|o| o.route.plan.is_some() && same_market(route, &o.route))
+                .map(|o| o.seats)
+                .collect(),
             transfer_services,
             local: Some(LocalPrepared::prepare(route, seats, routes, false)?),
             network,
@@ -987,41 +1005,85 @@ impl Prepared {
         let (mut result, local_loads) = self.local.as_mut().unwrap().estimate(time);
         self.loads.clear();
         self.loads.extend_from_slice(local_loads);
-        let day = time.map(|t| (t - t % 86400) % YEAR_SECONDS);
-        let (transfer, transfer_loads) = if !display && let Some(cached) = self.quotes.get(&day) {
-            cached.clone()
-        } else {
-            let mut transfer = Estimate::default();
-            let mut transfer_loads = Vec::new();
-            if let (Some(network), Some(target)) = (&self.network, self.target) {
-                let mut n = network.lock().unwrap();
-                n.estimate_for(day, self.reputation_revision, &self.reputation_scores);
-                transfer.connecting = n.passengers[target];
-                transfer.connecting_revenue = n.revenue[target];
-                transfer.daily_connecting =
-                    transfer.connecting as f64 * frequency(&n.offers[target].route);
-                for index in &self.transfer_services {
-                    transfer_loads.push(n.passengers[index.expect("network service")]);
-                }
-                if display {
-                    for (p, daily) in n.paths.iter().zip(&n.daily) {
-                        if *daily > 0.0 && (p.legs[0] == target || p.legs[1] == target) {
-                            transfer.connections.push(Connection {
-                                origin: p.origin.clone(),
-                                hub: p.hub.clone(),
-                                destination: p.destination.clone(),
-                                daily: *daily,
-                            });
+        let day = crate::world_economy::transfer_time(
+            self.local
+                .as_ref()
+                .and_then(|l| l.matching.iter().find_map(|o| o.economy)),
+            time,
+        );
+        if self.quotes.len() >= 512 {
+            self.quotes.clear();
+        }
+        let (mut transfer, mut transfer_loads) =
+            if !display && let Some(cached) = self.quotes.get(&day) {
+                cached.clone()
+            } else {
+                let mut transfer = Estimate::default();
+                let mut transfer_loads = Vec::new();
+                if let (Some(network), Some(target)) = (&self.network, self.target) {
+                    let mut n = network.lock().unwrap();
+                    n.estimate_for(day, self.reputation_revision, &self.reputation_scores);
+                    transfer.connecting = n.passengers[target];
+                    transfer.connecting_revenue = n.revenue[target];
+                    transfer.daily_connecting =
+                        transfer.connecting as f64 * frequency(&n.offers[target].route);
+                    for index in &self.transfer_services {
+                        transfer_loads.push(n.passengers[index.expect("network service")]);
+                    }
+                    if display {
+                        for (p, daily) in n.paths.iter().zip(&n.daily) {
+                            if *daily > 0.0 && (p.legs[0] == target || p.legs[1] == target) {
+                                transfer.connections.push(Connection {
+                                    origin: p.origin.clone(),
+                                    hub: p.hub.clone(),
+                                    destination: p.destination.clone(),
+                                    daily: *daily,
+                                });
+                            }
                         }
                     }
                 }
+                if !display {
+                    self.quotes
+                        .insert(day, (transfer.clone(), transfer_loads.clone()));
+                }
+                (transfer, transfer_loads)
+            };
+        // A daily transfer reservation can meet stronger local demand later
+        // that day. Reallocate the complete network at the actual departure
+        // instant instead of overbooking or discarding one leg of a journey.
+        if self
+            .loads
+            .iter()
+            .zip(&transfer_loads)
+            .zip(&self.service_seats)
+            .any(|((&local, &connecting), &seats)| local + connecting > i64::from(seats))
+            && let (Some(network), Some(target)) = (&self.network, self.target)
+        {
+            let mut n = network.lock().unwrap();
+            n.estimate_for(day, self.reputation_revision, &self.reputation_scores);
+            n.estimate_exact(time);
+            transfer.connecting = n.passengers[target];
+            transfer.connecting_revenue = n.revenue[target];
+            transfer.daily_connecting =
+                transfer.connecting as f64 * frequency(&n.offers[target].route);
+            for (load, index) in transfer_loads.iter_mut().zip(&self.transfer_services) {
+                *load = n.passengers[index.expect("network service")];
             }
-            if !display {
-                self.quotes
-                    .insert(day, (transfer.clone(), transfer_loads.clone()));
+            if display {
+                transfer.connections.clear();
+                for (p, daily) in n.paths.iter().zip(&n.daily) {
+                    if *daily > 0.0 && (p.legs[0] == target || p.legs[1] == target) {
+                        transfer.connections.push(Connection {
+                            origin: p.origin.clone(),
+                            hub: p.hub.clone(),
+                            destination: p.destination.clone(),
+                            daily: *daily,
+                        });
+                    }
+                }
             }
-            (transfer, transfer_loads)
-        };
+        }
         result.connecting = transfer.connecting;
         result.connecting_revenue = transfer.connecting_revenue;
         result.daily_connecting = transfer.daily_connecting;
@@ -1538,7 +1600,15 @@ impl TransferNetwork {
     }
 
     fn estimate(&mut self, time: Option<u64>) {
-        let time = time.map(|t| (t - t % 86400) % YEAR_SECONDS);
+        let time =
+            crate::world_economy::transfer_time(self.offers.iter().find_map(|o| o.economy), time);
+        self.estimate_exact(time);
+    }
+
+    fn estimate_exact(&mut self, time: Option<u64>) {
+        if self.recent.len() >= 512 {
+            self.recent.clear();
+        }
         if self.last == Some(time) {
             return;
         }
@@ -1558,10 +1628,8 @@ impl TransferNetwork {
         self.passengers.fill(0);
         self.revenue.fill(0);
         self.daily.fill(0.0);
-        let season = time.map(season_factors).unwrap_or(Market {
-            business: 1.0,
-            leisure: 1.0,
-        });
+        let season =
+            crate::world_economy::factors(self.offers.iter().find_map(|o| o.economy), time);
         let mut spare: Vec<f64> = self
             .offers
             .iter()
@@ -1737,9 +1805,9 @@ fn estimate_reference(
         .collect();
     let service_indices: Vec<_> = matching.iter().map(|(_, _, index)| *index).collect();
     let matching: Vec<_> = matching.into_iter().map(|(o, _, _)| o).collect();
-    let at = |route: &Route, price| match time {
-        Some(time) => market_at(route, price, time),
-        None => market(route, price),
+    let season = crate::world_economy::factors(matching.iter().find_map(|o| o.economy), time);
+    let at = |route: &Route, price| -> Result<Market, String> {
+        Ok(MarketInputs::new(route, price)?.at(&season))
     };
     let base = at(route, 0)?;
     let mut weights = vec![[0.0; 2]; matching.len()];

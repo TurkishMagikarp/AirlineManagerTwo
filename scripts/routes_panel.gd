@@ -88,6 +88,7 @@ func _ready() -> void:
 	connections_empty = UI.empty_state(tr("TRANSFER_EMPTY"), tr("TRANSFER_HINT"), tr("TRANSFER_SELECT"), func(): route_tree.grab_focus())
 	add_child(connections_empty)
 	season_label = _label("")
+	season_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	season_label.tooltip_text = "Skaliert den Basismarkt vor Preisreaktion und Sitzverteilung. 1,00 = Jahresmittel."
 	add_child(season_label)
 	assignment = _select("Ausgewählte Route: Flugzeugzuweisung")
@@ -338,7 +339,8 @@ func refresh_operations() -> void:
 	season_label.visible = not metrics.is_empty()
 	if not metrics.is_empty():
 		var season: Dictionary = metrics.values()[0]
-		season_label.text = "Saisonfaktor · Geschäft %.2f × · Urlaub %.2f ×" % [season["season_business_factor"], season["season_leisure_factor"]]
+		season_label.text = tr("DEMAND_SEASON_FACTORS") % [UI.decimal(season["season_business_factor"], 2), UI.decimal(season["season_leisure_factor"], 2)]
+		season_label.text += "\n" + tr("DEMAND_ECONOMY_FACTORS") % [UI.decimal(season["economy_business_factor"], 2), UI.decimal(season["economy_leisure_factor"], 2), UI.decimal(season["economy_cargo_factor"], 2)]
 	var tree_root := route_tree.get_root()
 	if tree_root != null:
 		for row in tree_root.get_children():

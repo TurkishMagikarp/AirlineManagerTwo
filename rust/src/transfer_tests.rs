@@ -123,6 +123,7 @@ fn transfers_v31_migration_preserves_old_airborne_and_historical_results() {
     strip(&mut value);
     std::fs::write(&p, serde_json::to_vec(&value).unwrap()).unwrap();
     let mut loaded = save::load(&p).unwrap();
+    g.migrate_world_economy_fixture();
     assert_eq!(state(&g), state(&loaded));
     assert!(g.advance(86400.0));
     assert!(loaded.advance(86400.0));
@@ -179,7 +180,9 @@ fn transfers_stored_quotes_equal_fresh_after_long_run_and_commercial_events() {
                 .find(|p| Some(p.id) == route.aircraft_id)
                 .unwrap()
                 .model_id;
-            for time in [None, Some(60), Some(400 * 86400), Some(401 * 86400 + 123)] {
+            // Stored dispatch markets quote actual departures; annual planning
+            // builds a fresh snapshot at the review date.
+            for time in [Some(60), Some(400 * 86400), Some(401 * 86400 + 123)] {
                 let mut fresh = economy::QuoteMarket::new(route, model, &supply).unwrap();
                 let expected =
                     economy::quote_prepared(route, model, &supply, 100, time, &mut fresh).unwrap();
@@ -287,6 +290,30 @@ fn transfers_reputation_reordering_keeps_stored_seat_reservations_fresh() {
                 .unwrap();
                 assert_eq!(actual, expected, "score={score}, time={time:?}");
             }
+        }
+    }
+}
+
+#[test]
+fn transfers_zero_economy_reactions_preserve_legacy_quotes_exactly() {
+    let g = game();
+    let active = g.market_routes();
+    let mut legacy = active.clone();
+    for offer in &mut legacy {
+        offer.economy = None;
+    }
+    for time in [
+        60,
+        4 * crate::demand::YEAR_SECONDS,
+        4 * crate::demand::YEAR_SECONDS + 43200,
+    ] {
+        for route in &g.routes {
+            let expected = economy::quote_at_time(route, "a320_200", &legacy, 80, time).unwrap();
+            crate::world_economy::ZERO_REACTIONS.with(|v| v.set(true));
+            let actual = economy::quote_at_time(route, "a320_200", &active, 80, time).unwrap();
+            crate::world_economy::ZERO_REACTIONS.with(|v| v.set(false));
+            assert!(expected.connecting_passengers > 0);
+            assert_eq!(actual, expected, "route={} time={time}", route.id);
         }
     }
 }

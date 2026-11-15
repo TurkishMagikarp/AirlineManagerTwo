@@ -33,6 +33,8 @@ pub struct Game {
     pub clock: Clock,
     #[serde(default)]
     pub fuel_market: crate::economy::FuelMarket,
+    #[serde(default)]
+    pub world_economy: crate::world_economy::Cycle,
     pub airline: Option<Airline>,
     pub fleet: Vec<Aircraft>,
     pub next_aircraft_id: u32,
@@ -97,6 +99,7 @@ impl Default for Game {
             fuel_contract: None,
             clock: Clock::default(),
             fuel_market: Default::default(),
+            world_economy: Default::default(),
             airline: None,
             fleet: Vec::new(),
             next_aircraft_id: 1,
