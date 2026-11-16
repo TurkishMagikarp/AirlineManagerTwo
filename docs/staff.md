@@ -59,9 +59,10 @@ Flugpläne und die Technikerzahl für die Flotte eingestellt (ab dem Ladezeitpun
 nichts stehen bleibt. Wartende Wartungen sind additiv (`staffed`, Standard `true`).
 
 ## Noch nicht enthalten
-Mehrere Berechtigungen pro Pilot, Schichten und Ruhezeiten, Gehaltsverhandlung
-oder -erhöhungen, Fluktuation, Einstellungsverzögerung, Kündigungsfristen, Personalmangel *während* eines
-laufenden Flugplans (Personal im Einsatz ist gesperrt, statt Flüge zu kippen).
+Mehrere Berechtigungen pro Pilot, Schichten und Ruhezeiten, individuelle
+Gehaltsverhandlungen, Einstellungsverzögerung und Kündigungsfristen.
+Manuelles Entlassen von Personal im Einsatz bleibt gesperrt; freiwillige
+Kündigungen können einen laufenden Flugplan bis zur Nachbesetzung anhalten.
 
 ## Gehaltsstufen und Arbeitskampf (AIR-244)
 
