@@ -671,6 +671,10 @@ impl LocalPrepared {
             let f = self.frequencies[j];
             let choice = self.choices[j];
             let mut m = self.inputs[j].at(&season);
+            if o.seats == 0 {
+                m.business = 0.0;
+                m.leisure = 0.0;
+            }
             if o.premium {
                 m.leisure = 0.0;
             }
@@ -1827,6 +1831,10 @@ fn estimate_reference(
                 o.route.ticket_eur
             },
         )?;
+        if o.seats == 0 {
+            m.business = 0.0;
+            m.leisure = 0.0;
+        }
         if o.premium {
             m.leisure = 0.0;
         }

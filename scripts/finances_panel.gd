@@ -186,7 +186,7 @@ func _ready() -> void:
 	ferry_history = UI.table(["Landung", "Flugzeug", "Strecke", "Kosten"], [160, 105, 130, 120], 150)
 	ferries.add_child(ferry_history)
 	var routes := UI.panel(self, "ROUTENCONTROLLING  /  ROUTE ANKLICKEN", null, true)
-	route_tree = UI.table(["Route / Strecke", "Flüge", "Tickets", "Kosten", "Ergebnis", "Auslastung", "Fracht kg / EUR"], [190, 65, 115, 115, 115, 95, 150], 210)
+	route_tree = UI.table(["Route / Strecke", "Flüge", "Tickets", "Kosten", "Ergebnis", "Auslastung", "Fracht kg / EUR"], [190, 65, 115, 115, 115, 95, 260], 210)
 	route_tree.item_selected.connect(_select_route)
 	routes.add_child(route_tree)
 	var history := UI.panel(self, "ROUTENDETAILS  /  FLUGARCHIV")
@@ -196,7 +196,7 @@ func _ready() -> void:
 	load_chart = Chart.new()
 	history.add_child(load_chart)
 	history.add_child(UI.label("Auslastung je Zeitabschnitt · Lücken = keine Landungen · nach Sitzplätzen gewichtet", ThemeTokens.SMALL, UI.MUTED))
-	flights_tree = UI.table(["Landung", "Richtung", "Ticket", "Pax / Sitze", "Auslastung", "Tickets", "Kosten", "Ergebnis", "Fracht kg / EUR"], [170, 140, 90, 95, 90, 110, 110, 110, 150], 250)
+	flights_tree = UI.table(["Landung", "Richtung", "Ticket", "Pax / Sitze", "Auslastung", "Tickets", "Kosten", "Ergebnis", "Fracht kg / EUR"], [170, 140, 90, 95, 90, 110, 110, 110, 260], 250)
 	history.add_child(flights_tree)
 	# The archive count grows with the save; wrap actions when its label no longer fits.
 	var paging := HFlowContainer.new()
@@ -284,7 +284,7 @@ func refresh(force: bool = false) -> void:
 	var info: Dictionary = simulation.get_finance_history_info()
 	note.text = "Summen: gesamte erfasste Wirtschaft. Routenarchiv und Diagramme ab %s.\nBei älteren Spielständen fehlt frühere Detailhistorie; sie wird nicht nachberechnet. Flugzeugkäufe insgesamt: %s · Wartungschecks insgesamt: %s · Personalaufwand (Gehälter + Umschulung) insgesamt: %s." % [info.get("since", "—"), UI.money(summary["purchases_eur"]), UI.money(summary["maintenance_eur"]), UI.money(summary["payroll_eur"])]
 	note.text += "\nPassagierbetreuung / Entschädigung (in Kosten und Steuerbasis enthalten): %s." % UI.money(summary["care_eur"])
-	note.text += "\nBauchfracht: %d kg · %s Umsatz (im Ergebnis und in der Ertragsteuer enthalten)." % [summary["cargo_kg"], UI.money(summary["cargo_revenue_eur"])]
+	note.text += "\n" + tr("FREIGHT_FINANCE") % [summary["cargo_kg"], UI.money(summary["cargo_revenue_eur"])]
 	note.text += "\nTreibstoff weltweit: %.2f EUR/kg · %s%d Cent/kg gegenüber vor 30 Tagen (wöchentlich)." % [summary["fuel_cents_per_kg"] / 100.0, "↑ +" if summary["fuel_month_delta_cents"] > 0 else ("↓ " if summary["fuel_month_delta_cents"] < 0 else "→ "), summary["fuel_month_delta_cents"]]
 	note.text += "\nÜberführungen (in Gesamtkosten enthalten): %s." % UI.money(summary["ferry_eur"])
 	note.text += "\nLeasingraten (in Kosten enthalten): %s · Flugzeugjournal netto inkl. Verkäufen, Kautionen, Raten und Rückgaben: %s." % [UI.money(summary["rent_eur"]), UI.money(summary["aircraft_cash_eur"])]
@@ -375,10 +375,10 @@ func _flights() -> void:
 	var rows: Array = simulation.get_route_flight_page(route_id, offset)
 	for f in rows:
 		var row := flights_tree.create_item(root)
-		var values := [f["landing"], "%s → %s" % [f["origin"], f["destination"]], UI.money(f["ticket_eur"]), "%d / %d" % [f["passengers"], f["seats"]], "%.1f %%" % f["load_percent"], UI.money(f["ticket_revenue_eur"]), UI.money(f["costs_eur"]), UI.money(f["profit_eur"]), "%d kg / %s" % [f["cargo_kg"], UI.money(f["cargo_revenue_eur"])]]
+		var values := [f["landing"], "%s → %s" % [f["origin"], f["destination"]], ("—" if f["seats"] == 0 else UI.money(f["ticket_eur"])), "%d / %d" % [f["passengers"], f["seats"]], "%.1f %%" % f["load_percent"], UI.money(f["ticket_revenue_eur"]), UI.money(f["costs_eur"]), UI.money(f["profit_eur"]), "%d kg / %s" % [f["cargo_kg"], UI.money(f["cargo_revenue_eur"])]]
 		for i in range(values.size()):
 			UI.cell_text(row, i, values[i])
-			row.set_tooltip_text(i, "Ticket: %s\nTreibstoff: %s\nFlughäfen: %s\nPersonal: %s\nWartung / Verwaltung: %s\nBordservice (± Standard): %s" % [UI.money(f["ticket_eur"]), UI.money(f["fuel_eur"]), UI.money(f["airport_eur"]), UI.money(f["crew_eur"]), UI.money(f["overhead_eur"]), UI.money(f["service_eur"])])
+			row.set_tooltip_text(i, "Ticket: %s\nTreibstoff: %s\nFlughäfen: %s\nPersonal: %s\nWartung / Verwaltung: %s\nBordservice (± Standard): %s" % [("—" if f["seats"] == 0 else UI.money(f["ticket_eur"])), UI.money(f["fuel_eur"]), UI.money(f["airport_eur"]), UI.money(f["crew_eur"]), UI.money(f["overhead_eur"]), UI.money(f["service_eur"])])
 			row.set_tooltip_text(i, row.get_tooltip_text(i) + "\nBetreuung / Entschädigung: %s" % UI.money(f["care_eur"]))
 		UI.cell_result(row, 7, f["profit_eur"])
 	page_label.text = "%d–%d von %d · neueste zuerst" % [offset + 1 if not rows.is_empty() else 0, offset + rows.size(), flight_count]

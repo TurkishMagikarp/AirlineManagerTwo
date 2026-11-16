@@ -10,6 +10,9 @@
     "b737_800": { "interval_flight_hours": 600, "interval_cycles": 450, "duration_hours": 24, "base_cost_eur": 55000, "cost_per_flight_hour_eur": 150, "cost_per_cycle_eur": 50 },
     "atr72_600": { "interval_flight_hours": 500, "interval_cycles": 600, "duration_hours": 12, "base_cost_eur": 20000, "cost_per_flight_hour_eur": 60, "cost_per_cycle_eur": 30 },
     "a330_300": { "interval_flight_hours": 700, "interval_cycles": 450, "duration_hours": 36, "base_cost_eur": 130000, "cost_per_flight_hour_eur": 280, "cost_per_cycle_eur": 100 },
-    "b777_300er": { "interval_flight_hours": 750, "interval_cycles": 450, "duration_hours": 48, "base_cost_eur": 180000, "cost_per_flight_hour_eur": 380, "cost_per_cycle_eur": 140 }
+    "b777_300er": { "interval_flight_hours": 750, "interval_cycles": 450, "duration_hours": 48, "base_cost_eur": 180000, "cost_per_flight_hour_eur": 380, "cost_per_cycle_eur": 140 },
+    "atr72_600f": {"interval_flight_hours": 500, "interval_cycles": 600, "duration_hours": 12, "base_cost_eur": 20000, "cost_per_flight_hour_eur": 60, "cost_per_cycle_eur": 30},
+    "b737_800bcf": {"interval_flight_hours": 600, "interval_cycles": 450, "duration_hours": 24, "base_cost_eur": 55000, "cost_per_flight_hour_eur": 150, "cost_per_cycle_eur": 50},
+    "b777f": {"interval_flight_hours": 750, "interval_cycles": 450, "duration_hours": 48, "base_cost_eur": 180000, "cost_per_flight_hour_eur": 380, "cost_per_cycle_eur": 140}
   }
 }

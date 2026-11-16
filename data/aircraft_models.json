@@ -53,5 +53,41 @@
     "belly_cargo_kg": 18000,
     "payload_kg": 65000,
     "class": "Widebody"
+  },
+  {
+    "id": "atr72_600f",
+    "name": "ATR 72-600F",
+    "seats": 0,
+    "range_km": 1370,
+    "cruise_kmh": 510,
+    "turnaround_minutes": 30,
+    "belly_cargo_kg": 0,
+    "payload_kg": 9200,
+    "class": "Turboprop",
+    "main_deck_cargo_kg": 9200
+  },
+  {
+    "id": "b737_800bcf",
+    "name": "Boeing 737-800BCF",
+    "seats": 0,
+    "range_km": 3750,
+    "cruise_kmh": 840,
+    "turnaround_minutes": 45,
+    "belly_cargo_kg": 0,
+    "payload_kg": 23000,
+    "class": "Narrowbody",
+    "main_deck_cargo_kg": 23000
+  },
+  {
+    "id": "b777f",
+    "name": "Boeing 777F",
+    "seats": 0,
+    "range_km": 9200,
+    "cruise_kmh": 905,
+    "turnaround_minutes": 120,
+    "belly_cargo_kg": 0,
+    "payload_kg": 102000,
+    "class": "Widebody",
+    "main_deck_cargo_kg": 102000
   }
 ]

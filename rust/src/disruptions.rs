@@ -366,8 +366,8 @@ pub fn percent(t: &Totals) -> f64 {
 }
 pub fn apply(t: &mut Totals, leg: &Leg) -> Result<(), String> {
     let delay = leg.departure - leg.scheduled;
-    t.punctuality_flights = 1;
-    t.late_flights = i64::from(delay > RULES.on_time_threshold_seconds);
+    t.punctuality_flights = i64::from(t.seats > 0);
+    t.late_flights = i64::from(t.seats > 0 && delay > RULES.on_time_threshold_seconds);
     t.delay_seconds = i64::try_from(delay).map_err(|_| "Verspätungsüberlauf.")?;
     if delay > RULES.care_threshold_seconds {
         t.care = t

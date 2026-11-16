@@ -682,7 +682,7 @@ func _model_selected(index: int) -> void:
 		model_details.text = "Kein Flugzeugmodell verfügbar. Bitte Katalog und Preise prüfen."
 		return
 	var model: Dictionary = model_select.get_item_metadata(index)
-	model_details.text = "%s\n%d Sitzplätze   /   %d km Referenzreichweite" % [UI.money(model["price_eur"]), model["seats"], model["range_km"]]
+	model_details.text = ("%s\n%d kg · %d km" % [UI.money(model["price_eur"]), model["main_deck_cargo_kg"], model["range_km"]]) if model.get("freighter", false) else "%s\n%d Sitzplätze   /   %d km Referenzreichweite" % [UI.money(model["price_eur"]), model["seats"], model["range_km"]]
 	model_details.text += "\nLeasing: Kaution %s · Rate %s alle %d Spieltage · erste Rate nach einer Periode. Kaution bei Rückgabe abzüglich Zustandsgebühr." % [UI.money(model["lease_deposit_eur"]), UI.money(model["lease_monthly_eur"]), model["lease_period_days"]]
 
 	_refresh_offers()

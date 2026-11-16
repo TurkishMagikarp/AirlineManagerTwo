@@ -14,6 +14,9 @@
     "b737_800": { "fuel_kg_per_hour": 2600, "fuel_cycle_kg": 550, "airport_base_eur": 1400, "overhead_eur_per_hour": 2400, "overhead_cycle_eur": 700 },
     "atr72_600": { "fuel_kg_per_hour": 750, "fuel_cycle_kg": 120, "airport_base_eur": 600, "overhead_eur_per_hour": 800, "overhead_cycle_eur": 300 },
     "a330_300": { "fuel_kg_per_hour": 5500, "fuel_cycle_kg": 1100, "airport_base_eur": 2800, "overhead_eur_per_hour": 4200, "overhead_cycle_eur": 1200 },
-    "b777_300er": { "fuel_kg_per_hour": 7500, "fuel_cycle_kg": 1500, "airport_base_eur": 3800, "overhead_eur_per_hour": 5400, "overhead_cycle_eur": 1600 }
+    "b777_300er": { "fuel_kg_per_hour": 7500, "fuel_cycle_kg": 1500, "airport_base_eur": 3800, "overhead_eur_per_hour": 5400, "overhead_cycle_eur": 1600 },
+    "atr72_600f": {"fuel_kg_per_hour": 750, "fuel_cycle_kg": 120, "airport_base_eur": 600, "overhead_eur_per_hour": 800, "overhead_cycle_eur": 300},
+    "b737_800bcf": {"fuel_kg_per_hour": 2600, "fuel_cycle_kg": 550, "airport_base_eur": 1400, "overhead_eur_per_hour": 2400, "overhead_cycle_eur": 700},
+    "b777f": {"fuel_kg_per_hour": 7500, "fuel_cycle_kg": 1500, "airport_base_eur": 3800, "overhead_eur_per_hour": 5400, "overhead_cycle_eur": 1600}
   }
 }

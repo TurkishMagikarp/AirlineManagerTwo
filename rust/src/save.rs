@@ -25,7 +25,7 @@ use std::time::Duration;
 // v34: shared world economic cycle. Legacy timelines start neutral at load.
 // v35: route fare autopilot; old saves have no enabled routes or change history.
 // v36: immutable founding difficulty; older worlds keep Standard on every axis.
-pub(crate) const VERSION: u32 = 36;
+pub(crate) const VERSION: u32 = 37;
 // Bounded input, including centuries of fuel/seasonal quotes for the player
 // and both AI airlines in the million-flight finance restart scenario.
 // Version 17 retains per-class quotes, which also split more archive batches.

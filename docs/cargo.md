@@ -77,3 +77,48 @@ Linux-Godot und gerenderte Xvfb-Aufnahmen sind separat vom Rust-Test geprüft;
 Details stehen in `docs/verification-log.md`. START.bat, die tatsächlichen
 PowerShell-Wrapper, Windows-DLL-/Prozessverhalten und natives Windows-Rendering
 bleiben auf dem Rechner des Besitzers zu prüfen.
+
+## Hauptdeckfracht (Spielstand v37)
+
+Dedizierte Frachter haben null Sitze und eine eigene Hauptdeckkapazität. Sie
+nutzen dieselben Kauf-, Leasing-, Gebrauchtmarkt-, Versicherungs-, Überführungs-,
+Wartungs-, Treibstoff-, Slot- und Flughafenregeln. Es gibt keine Tickets,
+Passagiergebühren, Kabinen, Bordservice, Kabinenbesatzung oder Betreuungskosten.
+Frachter zählen nicht zur Passagierauswahl, zu Umsteigeverbindungen oder zur
+Passagier-Pünktlichkeitsreputation. Pilotenberechtigungen werden mit dem
+Passagiergeschwister geteilt (ATR 72, 737, 777).
+
+Der Hauptdeckmarkt ist ein eigener täglicher Pool pro Flughafenpaar und
+Richtung. Er verwendet dieselbe Entfernungs-/Flughafengrößenformel, Preisreaktion,
+Überhangverteilung und den Weltwirtschaftsfaktor wie Bauchfracht, aber
+`main_deck_kg_per_base_passenger` aus `config/cargo.json` (vorläufig 5 kg statt
+0,5 kg). Nur Frachter konkurrieren um diesen Pool. Kapazität und tägliche
+Nachfrage begrenzen die Zuteilung; seltene Flüge können keine Nachfrage ansparen.
+Passagier- und Bauchfrachtresultate bleiben ohne Frachter unverändert.
+Der bestehende Routen-Frachtpreis gilt auch für Hauptdeckfracht.
+
+Gemischte Flotten funktionieren über die bestehenden einzelnen Rotationen einer
+öffentlichen Route. Preise sind weiterhin gemeinsam; Frachter ignorieren die
+Passagierparameter. Bei reinen Frachterrouten deaktiviert die Oberfläche die
+Passagierpreise und den Bordservice, blendet den Preisberater aus und zeigt
+Frachtmenge, erwartete Fracht-Auslastung und gebuchten Frachtumsatz. Der
+Karten-Routendialog zeigt dieselben Daten. Finanzen trennt Ticket- und Frachtumsatz
+weiterhin pro Firma, Route und Flug.
+
+KI-Erweiterungen prüfen die neuen Modelle mit dem normalen Gewinnvergleich,
+Personal-/Wartungs-/Leasingkosten und derselben Liquiditätsreserve. Identische
+Frachtangebote werden nicht mehrfach für wirkungslose Kabinen-/Ticketvarianten
+berechnet. Es gibt keine Frachtprämien. Im EDDF-Standardvergleich kaufen die
+beiden Rivalen in zehn Jahren keine Frachter; Passagierzahlen und Kassenstände
+bleiben exakt gleich. Größere Nachfragepools können Frachter stark bevorzugen;
+die 5-kg-Einstellung ist bewusst konservativ.
+
+v36 → v37 ist eine Identitätsmigration: keine neuen gespeicherten Felder,
+Flugzeuge, Erlöse oder Neuberechnung bestehender Abflugangebote. Die neuen
+Katalogmodelle sind ab dem nächsten Kauf/Erweiterungsentscheid verfügbar.
+`freighter_tests.rs` prüft getrennte Pools, unveränderte Passagier-/Bauchfracht,
+Mischflotten, eingefrorene Preise, Migration, Wartung, Handel, Leasing,
+Überführung und zwei Jahre deterministische KI über Geschwindigkeiten,
+Tages-/Großschritte, Pause und jährlichen Neustart. `freighter_test.gd` bedient
+die echte Kauf-/Routenmaske. Die speziellen Renderaufnahmen entstehen mit
+`AIRLINE_UI_CAPTURE_FREIGHTERS_ONLY=1 tools/godot_check.sh shots <Ordner>`.
