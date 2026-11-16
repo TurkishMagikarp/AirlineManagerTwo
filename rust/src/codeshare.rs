@@ -27,6 +27,9 @@ pub struct Receipt {
     pub revenue: i64,
 }
 pub fn add_receipt(receipts: &mut Vec<Receipt>, other: &Receipt, count: u64) -> Option<()> {
+    if count == 0 {
+        return Some(());
+    }
     let count = i64::try_from(count).ok()?;
     let passengers = other.passengers.checked_mul(count)?;
     let revenue = other.revenue.checked_mul(count)?;

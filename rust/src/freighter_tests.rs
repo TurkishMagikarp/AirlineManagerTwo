@@ -78,7 +78,7 @@ fn freighter_revenue_no_passenger_costs_frozen_quote_and_v36_identity() {
     save::save(&p, &old).unwrap();
     let text = std::fs::read_to_string(&p)
         .unwrap()
-        .replacen("\"version\":37", "\"version\":36", 1);
+        .replacen("\"version\":38", "\"version\":36", 1);
     assert!(text.contains("\"version\":36"));
     std::fs::write(&p, text).unwrap();
     assert_eq!(

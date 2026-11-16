@@ -228,3 +228,16 @@ fn codeshare_restructuring_event_automatically_ends_both_sides() {
     );
     assert_eq!(state(&g), state(&restart(&g)));
 }
+
+#[test]
+fn codeshare_historical_queries_before_first_landing_have_no_receipts() {
+    let mut g = game();
+    let key = partner(&g);
+    g.propose_codeshare(&key).unwrap();
+    assert!(g.advance(3.0 * DAY));
+    assert!(!g.finance.totals.codeshare.is_empty());
+    let mut empty = crate::economy::Totals::default();
+    empty.add(&g.finance.totals, 0).unwrap();
+    assert_eq!(empty, crate::economy::Totals::default());
+    assert_eq!(g.history.as_ref().unwrap().totals(0, 0), empty);
+}

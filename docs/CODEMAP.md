@@ -144,15 +144,15 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 19 pub struct Agreement
 24 pub struct Receipt
 29 pub fn add_receipt(receipts: &mut Vec<Receipt>, other: &Receipt, count: u64) -> Option<()>
-49 pub fn valid_receipts(t: &Totals) -> bool
-73 fn unavailable(g: &Game) -> bool
-76 impl Game
-77 pub fn codeshare_reason(&self, partner: &str) -> Result<(), String>
-111 pub fn propose_codeshare(&mut self, partner: &str) -> Result<(), String>
-121 pub fn end_codeshare(&mut self, partner: &str) -> Result<(), String>
-129 pub(crate) fn review_codeshares(&mut self)
-143 pub(crate) fn apply_codeshares(&self, offers: &mut [Offer])
-166 pub fn validate_codeshares(&self) -> Result<(), String>
+52 pub fn valid_receipts(t: &Totals) -> bool
+76 fn unavailable(g: &Game) -> bool
+79 impl Game
+80 pub fn codeshare_reason(&self, partner: &str) -> Result<(), String>
+114 pub fn propose_codeshare(&mut self, partner: &str) -> Result<(), String>
+124 pub fn end_codeshare(&mut self, partner: &str) -> Result<(), String>
+132 pub(crate) fn review_codeshares(&mut self)
+146 pub(crate) fn apply_codeshares(&self, offers: &mut [Offer])
+169 pub fn validate_codeshares(&self) -> Result<(), String>
 
 ## rust/src/codeshare_standard_tests.rs
 2 pub(super) fn standard_eddf_game() -> Game
@@ -170,6 +170,7 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 162 fn codeshare_world_comparison()
 202 fn codeshare_write_ui_fixture()
 210 fn codeshare_restructuring_event_automatically_ends_both_sides()
+233 fn codeshare_historical_queries_before_first_landing_have_no_receipts()
 
 ## rust/src/competition.rs
 7 const RETRY_AFTER: u32 = 4;
