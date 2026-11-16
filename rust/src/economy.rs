@@ -207,6 +207,14 @@ pub fn flight_cost_ceiling(route: &Route, model_id: &str, fuel_price: i64) -> Re
         .and_then(|v| {
             v.checked_add(
                 route
+                    .loyalty_level
+                    .cost(seats, 0)
+                    .max(route.loyalty_level.cost(seats, seats)),
+            )
+        })
+        .and_then(|v| {
+            v.checked_add(
+                route
                     .service_level
                     .cost(seats, 0)
                     .max(route.service_level.cost(seats, seats))
@@ -312,6 +320,11 @@ pub struct Totals {
     #[serde(default, skip_serializing_if = "zero")]
     pub ancillary: i64,
     #[serde(default, skip_serializing_if = "zero")]
+    pub loyalty_cost: i64,
+    /// Passenger × enrolment basis points, accumulated across the landing day.
+    #[serde(default, skip_serializing_if = "zero")]
+    pub loyalty_enrolment: i64,
+    #[serde(default, skip_serializing_if = "zero")]
     pub business_passengers: i64,
     #[serde(default, skip_serializing_if = "zero")]
     pub business_revenue: i64,
@@ -338,6 +351,7 @@ impl Totals {
             && crate::cargo::valid(self)
             && crate::service::valid(self)
             && crate::ancillaries::valid(self)
+            && crate::loyalty::valid(self)
             && self
                 .fuel
                 .checked_sub(self.fuel_contract_effect)
@@ -368,7 +382,13 @@ impl Totals {
                 == Some(self.revenue)
     }
     pub fn costs(&self) -> i64 {
-        self.fuel + self.airport + self.crew + self.overhead + self.service + self.care
+        self.fuel
+            + self.airport
+            + self.crew
+            + self.overhead
+            + self.service
+            + self.care
+            + self.loyalty_cost
     }
     pub fn profit(&self) -> i64 {
         self.revenue - self.costs()
@@ -405,6 +425,8 @@ impl Totals {
             connecting_passengers,
             connecting_revenue,
             ancillary,
+            loyalty_cost,
+            loyalty_enrolment,
             flights,
             passengers,
             seats,
@@ -685,6 +707,8 @@ pub(crate) fn quote_prepared(
         fuel_contract_effect: 0,
         service: route.service_level.cost(passengers, demand.business),
         ancillary,
+        loyalty_cost: route.loyalty_level.cost(passengers, demand.business),
+        loyalty_enrolment: route.loyalty_level.enrolment(passengers),
         flights: 1,
         passengers,
         seats: seats.into(),
@@ -738,6 +762,7 @@ impl Game {
             business_ticket_eur: crate::cabins::default_business_fare(),
             cargo_rate_cents: crate::cargo::default_rate(),
             ancillary_policy: self.ancillary_policy,
+            loyalty_level: self.loyalty.level,
             service_level: crate::service::Level::Standard,
         };
         let mut supply = self.market_routes();
@@ -771,11 +796,13 @@ impl Game {
     }
     pub fn validate_finance(&self) -> Result<(), String> {
         self.validate_insurance()?;
+        self.validate_loyalty()?;
         let valid = |t: &Totals| {
             crate::disruptions::valid(t)
                 && crate::cargo::valid(t)
                 && crate::service::valid(t)
                 && crate::ancillaries::valid(t)
+                && crate::loyalty::valid(t)
                 && t.fuel
                     .checked_sub(t.fuel_contract_effect)
                     .is_some_and(|v| v >= 0)
@@ -804,6 +831,7 @@ impl Game {
                     .and_then(|v| v.checked_add(t.overhead))
                     .and_then(|v| v.checked_add(t.service))
                     .and_then(|v| v.checked_add(t.care))
+                    .and_then(|v| v.checked_add(t.loyalty_cost))
                     .is_some_and(|costs| costs >= 0)
         };
         if !valid(&self.finance.totals)
@@ -836,7 +864,9 @@ impl Game {
         if t.flights <= HISTORY_LIMIT as i64 && sum != *t {
             return Err("Unvollständige Finanzsummen.".into());
         }
-        if sum.ancillary > t.ancillary
+        if sum.loyalty_cost > t.loyalty_cost
+            || sum.loyalty_enrolment > t.loyalty_enrolment
+            || sum.ancillary > t.ancillary
             || sum.care > t.care
             || sum.punctuality_flights > t.punctuality_flights
             || sum.late_flights > t.late_flights
@@ -878,6 +908,8 @@ mod tests {
             overhead: 3,
             service: 3,
             ancillary: 17,
+            loyalty_cost: 7,
+            loyalty_enrolment: 12000,
             business_passengers: 3,
             business_revenue: 200,
             business_seats: 5,
@@ -1187,6 +1219,7 @@ mod tests {
                     let route = Route {
                         cargo_rate_cents: crate::cargo::default_rate(),
                         ancillary_policy: Default::default(),
+                        loyalty_level: Default::default(),
                         service_level: Default::default(),
                         business_ticket_eur: crate::cabins::default_business_fare(),
                         id: 1,

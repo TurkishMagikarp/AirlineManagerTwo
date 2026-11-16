@@ -1,0 +1,16 @@
+keys,de,en
+LOYALTY_TITLE,VIELFLIEGERPROGRAMM,FREQUENT FLYER PROGRAMME
+LOYALTY_NONE,Ohne,None
+LOYALTY_BASIC,Basis,Basic
+LOYALTY_GENEROUS,Plus,Plus
+LOYALTY_MEMBERS,MITGLIEDER,MEMBERS
+LOYALTY_TREND,LETZTER TAG · ±,LAST DAY · ±
+LOYALTY_BONUS,MARKTBONUS,MARKET BONUS
+LOYALTY_COST,PRÄMIENKOSTEN,REWARD COST
+LOYALTY_PERIOD,Zeitraum bis,Period ending
+LOYALTY_COST_PERIOD,Prämienkosten · EUR je Zeitabschnitt,Reward cost · EUR per period
+LOYALTY_CHANGED,Treuestufe geändert. Gilt ab dem nächsten Abflug.,Loyalty level changed. Applies from the next departure.
+LOYALTY_RATE,%s: Economy %s / Business %s je Passagier · Aufnahme %.0f %%,%s: Economy %s / Business %s per passenger · Enrolment %.0f %%
+LOYALTY_EFFECT,Bis +%s %% Marktgewicht bei %s Mitgliedern · täglich %s %% Abgänge.,Up to +%s %% market weight at %s members · daily lapse %s %%.
+LOYALTY_NOTE,"Plus = großzügig. Aufnahme nach beförderten Passagieren; Tagesabschluss für alle Airlines gemeinsam. Prämien bei Abflug fixiert, bei Landung gebucht und steuerlich abziehbar. Ohne stoppt neue Prämien und Aufnahme; Mitglieder verfallen weiter. Frachter und Überführungen sind ausgenommen.","Plus = Generous. Enrolment follows carried passengers; all airlines close the day together. Rewards are fixed at departure, booked on landing and tax deductible. None stops new rewards and enrolment; existing members keep lapsing. Freighters and ferries are excluded."
+LOYALTY_ROUTE_COST,Prämienkosten (in Kosten enthalten): %s,Reward cost (included in costs): %s

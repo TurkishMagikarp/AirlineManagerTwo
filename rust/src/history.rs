@@ -578,6 +578,10 @@ mod tests {
     }
     #[test]
     fn million_flight_finance_scenario_stays_within_budget() {
+        // Optional paired baseline: every owner remains on the neutral None path.
+        let _loyalty_none = std::env::var_os("AIRLINE_PERF_LOYALTY_NONE")
+            .is_some()
+            .then(crate::loyalty::legacy_ai_scenario);
         // Match finances_test.gd: two player fares, normal AI airlines, and an
         // endowment to keep the intentionally loss-making service flying.
         let mut g = game();

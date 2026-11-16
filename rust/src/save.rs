@@ -29,7 +29,8 @@ use std::time::Duration;
 // v38: player–AI codeshares and frozen leg receipts; older saves have none.
 // v40: per-group pay, morale and dated departure holds; old owners start neutral.
 // v41: airline-wide ancillary fees; v40 income and airborne results remain unchanged.
-pub(crate) const VERSION: u32 = 41;
+// v42: airline-wide loyalty; old members, costs and enrolment start at zero.
+pub(crate) const VERSION: u32 = 42;
 // Bounded input, including centuries of fuel/seasonal quotes for the player
 // and both AI airlines in the million-flight finance restart scenario.
 // Version 17 retains per-class quotes, which also split more archive batches.
@@ -47,6 +48,8 @@ struct SaveGame {
 struct GameState {
     #[serde(default)]
     ancillary_policy: crate::ancillaries::Policy,
+    #[serde(default)]
+    loyalty: Option<crate::loyalty::Loyalty>,
     #[serde(default)]
     orders: Vec<crate::orders::Order>,
     #[serde(default = "crate::game::initial_order_id")]
@@ -142,6 +145,7 @@ pub fn save(path: &Path, game: &Game) -> Result<(), String> {
         version: VERSION,
         state: GameState {
             ancillary_policy: game.ancillary_policy,
+            loyalty: Some(game.loyalty.clone()),
             orders: game.orders.clone(),
             next_order_id: game.next_order_id,
             codeshares: game.codeshares.clone(),
@@ -283,6 +287,9 @@ pub(crate) fn load_versioned(path: &Path) -> Result<(Game, u32), String> {
     if value["version"].as_u64().is_some_and(|v| v < 41) {
         crate::ancillaries::migrate(&mut value["state"]);
     }
+    if value["version"].as_u64().is_some_and(|v| v < 42) {
+        crate::loyalty::migrate(&mut value["state"]);
+    }
     // v26 is an additive migration: absent cursors and punctuality/care
     // fields deserialize to None/zero for every owner and archived result.
     // Initialize a cursor only when play advances; an existing airborne quote
@@ -368,6 +375,7 @@ pub(crate) fn load_versioned(path: &Path) -> Result<(Game, u32), String> {
     world_economy.validate(clock.elapsed().as_secs())?;
     let mut game = Game {
         ancillary_policy: data.state.ancillary_policy,
+        loyalty: data.state.loyalty.ok_or("Treuedaten fehlen.")?,
         orders: if data.version < 39 {
             Vec::new()
         } else {

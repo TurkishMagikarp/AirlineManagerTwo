@@ -41,6 +41,13 @@ func _run() -> void:
 		quit(0)
 		return
 	assert(sim.found_airline("Meridian Air", "DE", "EDDF").is_empty())
+	if OS.get_environment("AIRLINE_UI_CAPTURE_LOYALTY_ONLY") == "1":
+		await _loyalty_views(sim)
+		main.queue_free()
+		await process_frame
+		print("PASS: loyalty Finances controls, metrics, cost table and route report at both sizes/languages")
+		quit(0)
+		return
 	if OS.get_environment("AIRLINE_UI_CAPTURE_ANCILLARIES_ONLY") == "1":
 		await _ancillary_views(sim)
 		main.queue_free()
@@ -1123,3 +1130,38 @@ func _ancillary_views(sim: RefCounted) -> void:
 					assert(root.get_visible_rect().encloses(control.get_global_rect()))
 					await RenderingServer.frame_post_draw
 					assert(root.get_texture().get_image().save_png(capture_dir.path_join("ancillary-finances-%s-%dx%d.png" % [view[1], dimensions.x, dimensions.y])) == OK)
+
+func _loyalty_views(sim: RefCounted) -> void:
+	assert(sim.buy_aircraft("atr72_600").is_empty())
+	sim.hire_missing_staff()
+	assert(sim.create_route("EDDF", "EDDM", 1).is_empty())
+	assert(sim.schedule_route(1, 1, 120).is_empty())
+	assert(sim.set_loyalty_level("generous").is_empty())
+	sim.start()
+	sim.advance(10.0 * 86400.0)
+	sim.pause()
+	main._sync_view()
+	for language in ["de", "en"]:
+		TranslationServer.set_locale(language)
+		for dimensions in [Vector2i(1440, 1000), Vector2i(680, 520)]:
+			root.size = dimensions
+			main._show_page(4)
+			main.finances_panel.refresh(true)
+			var finance = main.finances_panel
+			finance.route_tree.get_root().get_first_child().select(0)
+			finance._select_route()
+			var scroll: ScrollContainer = main.fleet_panel.get_parent().get_parent()
+			for view in [[finance.loyalty_buttons[0], "controls"], [finance.loyalty_status, "rates"], [finance.loyalty_history, "history"], [finance.detail, "report"]]:
+				var target: Control = view[0]
+				for frame in range(5): await process_frame
+				if view[1] == "controls":
+					var shell: Control = finance.loyalty_status.get_parent().get_meta("panel_shell")
+					scroll.scroll_vertical += int(shell.get_global_rect().position.y - scroll.get_global_rect().position.y)
+				else:
+					scroll.ensure_control_visible(target)
+				for frame in range(5): await process_frame
+				assert(root.get_visible_rect().encloses(target.get_global_rect()))
+				assert(main.size.x <= dimensions.x)
+				if not capture_dir.is_empty():
+					await RenderingServer.frame_post_draw
+					assert(root.get_texture().get_image().save_png(capture_dir.path_join("loyalty-%s-%s-%dx%d.png" % [language, view[1], dimensions.x, dimensions.y])) == OK)

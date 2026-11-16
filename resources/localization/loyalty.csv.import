@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://dyeu6esgf5dvf"
+
+[deps]
+
+files=["res://resources/localization/loyalty.de.translation", "res://resources/localization/loyalty.en.translation"]
+
+source_file="res://resources/localization/loyalty.csv"
+dest_files=["res://resources/localization/loyalty.de.translation", "res://resources/localization/loyalty.en.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true
