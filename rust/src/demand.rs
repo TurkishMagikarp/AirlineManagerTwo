@@ -189,6 +189,7 @@ impl MarketInputs {
 /// Ephemeral supply snapshot: capacity is derived from the owning fleet, never saved.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Offer {
+    pub codeshare_partners: Vec<String>,
     pub economy: Option<crate::world_economy::Context>,
     pub route: Route,
     pub seats: u32,
@@ -200,11 +201,17 @@ pub struct Offer {
     pub owner: String,
 }
 impl Offer {
+    fn connects_with(&self, other: &Self) -> bool {
+        self.owner == other.owner
+            || (self.codeshare_partners.contains(&other.owner)
+                && other.codeshare_partners.contains(&self.owner))
+    }
     /// Only commercial fields enter demand; never copy frozen results or
     /// disruption cursors into a prepared market.
     pub(crate) fn commercial_clone(&self) -> Self {
         let r = &self.route;
         Self {
+            codeshare_partners: self.codeshare_partners.clone(),
             economy: self.economy,
             route: Route {
                 id: r.id,
@@ -234,6 +241,7 @@ impl Offer {
     }
     pub fn new(route: &Route, seats: u32) -> Self {
         Self {
+            codeshare_partners: Vec::new(),
             economy: None,
             route: route.clone(),
             seats,
@@ -249,6 +257,7 @@ impl Offer {
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Estimate {
+    pub codeshare: Vec<crate::codeshare::Receipt>,
     pub business: i64,
     pub connecting: i64,
     pub connecting_revenue: i64,
@@ -821,6 +830,7 @@ impl LocalPrepared {
 /// rate model. A path is identified by its ultimate endpoints and transfer airport.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Connection {
+    pub partner: String,
     pub origin: String,
     pub hub: String,
     pub destination: String,
@@ -868,7 +878,7 @@ impl Prepared {
         let eligible = own.is_some_and(|a| {
             a.seats > a.business_seats
                 && routes.iter().any(|b| {
-                    a.owner == b.owner
+                    a.connects_with(b)
                         && b.route.plan.is_some()
                         && b.seats > b.business_seats
                         && !same_market(route, &b.route)
@@ -1029,6 +1039,7 @@ impl Prepared {
                     n.estimate_for(day, self.reputation_revision, &self.reputation_scores);
                     transfer.connecting = n.passengers[target];
                     transfer.connecting_revenue = n.revenue[target];
+                    transfer.codeshare = n.codeshare_for(target);
                     transfer.daily_connecting =
                         transfer.connecting as f64 * frequency(&n.offers[target].route);
                     for index in &self.transfer_services {
@@ -1038,6 +1049,7 @@ impl Prepared {
                         for (p, daily) in n.paths.iter().zip(&n.daily) {
                             if *daily > 0.0 && (p.legs[0] == target || p.legs[1] == target) {
                                 transfer.connections.push(Connection {
+                                    partner: n.partner_for(p, target),
                                     origin: p.origin.clone(),
                                     hub: p.hub.clone(),
                                     destination: p.destination.clone(),
@@ -1069,6 +1081,7 @@ impl Prepared {
             n.estimate_exact(time);
             transfer.connecting = n.passengers[target];
             transfer.connecting_revenue = n.revenue[target];
+            transfer.codeshare = n.codeshare_for(target);
             transfer.daily_connecting =
                 transfer.connecting as f64 * frequency(&n.offers[target].route);
             for (load, index) in transfer_loads.iter_mut().zip(&self.transfer_services) {
@@ -1079,6 +1092,7 @@ impl Prepared {
                 for (p, daily) in n.paths.iter().zip(&n.daily) {
                     if *daily > 0.0 && (p.legs[0] == target || p.legs[1] == target) {
                         transfer.connections.push(Connection {
+                            partner: n.partner_for(p, target),
                             origin: p.origin.clone(),
                             hub: p.hub.clone(),
                             destination: p.destination.clone(),
@@ -1088,6 +1102,7 @@ impl Prepared {
                 }
             }
         }
+        result.codeshare = transfer.codeshare;
         result.connecting = transfer.connecting;
         result.connecting_revenue = transfer.connecting_revenue;
         result.daily_connecting = transfer.daily_connecting;
@@ -1150,6 +1165,7 @@ thread_local! {
 /// Bounded independently of economic snapshots, including networks with no paths.
 #[derive(Clone, PartialEq, Eq)]
 struct TopologyLeg {
+    partners: Vec<String>,
     owner: String,
     id: u32,
     origin: String,
@@ -1219,6 +1235,7 @@ fn transfer_topology(offers: &[Offer]) -> Result<std::sync::Arc<TransferTopology
     let legs: Vec<_> = offers
         .iter()
         .map(|o| TopologyLeg {
+            partners: o.codeshare_partners.clone(),
             owner: o.owner.clone(),
             id: o.route.id,
             origin: o.route.origin_icao.clone(),
@@ -1235,7 +1252,7 @@ fn transfer_topology(offers: &[Offer]) -> Result<std::sync::Arc<TransferTopology
         let mut paths = Vec::new();
         for (i, a) in offers.iter().enumerate() {
             for (j, b) in offers.iter().enumerate().skip(i + 1) {
-                if a.owner != b.owner
+                if !a.connects_with(b)
                     || same_market(&a.route, &b.route)
                     || !legs[i].economy
                     || !legs[j].economy
@@ -1415,6 +1432,49 @@ impl TransferSupply {
     }
 }
 impl TransferNetwork {
+    fn partner_for(&self, path: &TransferPath, target: usize) -> String {
+        let other = if path.legs[0] == target {
+            path.legs[1]
+        } else {
+            path.legs[0]
+        };
+        if self.offers[other].owner == self.offers[target].owner {
+            String::new()
+        } else {
+            self.offers[other].owner.clone()
+        }
+    }
+    fn codeshare_for(&self, target: usize) -> Vec<crate::codeshare::Receipt> {
+        let mut receipts = Vec::new();
+        if self.offers[target].codeshare_partners.is_empty() {
+            return receipts;
+        }
+        for (path, daily) in self.paths.iter().zip(&self.daily) {
+            if !path.legs.contains(&target) || *daily == 0.0 {
+                continue;
+            }
+            let partner = self.partner_for(path, target);
+            if partner.is_empty() {
+                continue;
+            }
+            let leg = usize::from(path.legs[1] == target);
+            let units = (daily / path.quantum).round();
+            let passengers =
+                (units * (path.quantum / frequency(&self.offers[target].route)).round()) as i64;
+            crate::codeshare::add_receipt(
+                &mut receipts,
+                &crate::codeshare::Receipt {
+                    partner,
+                    passengers,
+                    revenue: passengers * path.fare[leg],
+                },
+                1,
+            )
+            .expect("bounded quote");
+        }
+        receipts
+    }
+
     fn new(offers: Vec<Offer>) -> Result<Self, String> {
         #[cfg(test)]
         TRANSFER_COUNTS.with(|c| {
@@ -1667,11 +1727,17 @@ impl TransferNetwork {
                     + m.paths
                         .iter()
                         .zip(&m.weights)
-                        .map(|(&p, w)| w[s][1] * self.reputation_factors[self.paths[p].legs[0]])
+                        .map(|(&p, w)| {
+                            w[s][1]
+                                * self.reputation_factors[self.paths[p].legs[0]]
+                                    .min(self.reputation_factors[self.paths[p].legs[1]])
+                        })
                         .sum::<f64>();
                 for (&p, weights) in m.paths.iter().zip(&m.weights) {
                     let [w, weight] = weights[s];
-                    let weight = weight * self.reputation_factors[self.paths[p].legs[0]];
+                    let weight = weight
+                        * self.reputation_factors[self.paths[p].legs[0]]
+                            .min(self.reputation_factors[self.paths[p].legs[1]]);
                     self.daily[p] += (remaining * weight / denominator)
                         .min(remaining * w * self.paths[p].frequency.min(1.0));
                 }
@@ -2229,6 +2295,93 @@ mod tests {
                 .connecting,
             positive
         );
+    }
+
+    #[test]
+    fn codeshare_mixed_allocation_capacity_rounding_fares_and_lower_reputation() {
+        let same_owner = transfer_offers();
+        let mut mixed = same_owner.clone();
+        mixed[1].owner = "partner".into();
+        assert_eq!(
+            estimate(&mixed[0].route, mixed[0].seats, &mixed)
+                .unwrap()
+                .connecting,
+            0
+        );
+        mixed[0].codeshare_partners = vec!["partner".into()];
+        assert_eq!(
+            estimate(&mixed[0].route, mixed[0].seats, &mixed)
+                .unwrap()
+                .connecting,
+            0
+        );
+        mixed[1].codeshare_partners = vec!["hub".into()];
+        for seats in [40, 300, 1000] {
+            for unequal in [false, true] {
+                let mut supply = mixed.clone();
+                supply[0].seats = seats;
+                if unequal {
+                    supply[1].route.plan.as_mut().unwrap().interval_seconds *= 2;
+                }
+                let mut n = TransferNetwork::new(supply.clone()).unwrap();
+                for time in [None, Some(0), Some(180 * 86400)] {
+                    n.estimate(time);
+                    assert_eq!(n.paths.len(), 1);
+                    let path = &n.paths[0];
+                    let [a, b] = path.legs;
+                    let units = (n.daily[0] / path.quantum).round();
+                    assert_eq!(
+                        n.passengers[a] as f64 * frequency(&supply[a].route),
+                        n.passengers[b] as f64 * frequency(&supply[b].route)
+                    );
+                    assert_eq!(n.daily[0], units * path.quantum);
+                    let d1 = MarketInputs::new(&supply[a].route, 0).unwrap().km;
+                    let d2 = MarketInputs::new(&supply[b].route, 0).unwrap().km;
+                    assert_eq!(path.fare[0], (300.0 * d1 / (d1 + d2)).floor() as i64);
+                    assert_eq!(path.fare[0] + path.fare[1], 300);
+                    for (i, o) in supply.iter().enumerate() {
+                        let e =
+                            estimate_with_season(&o.route, o.seats, &supply, time, None).unwrap();
+                        let local = LocalPrepared::new(&o.route, o.seats, &supply)
+                            .unwrap()
+                            .estimate(time)
+                            .0;
+                        assert_eq!(e.per_departure - e.connecting, local.per_departure);
+                        assert!(e.per_departure <= i64::from(o.seats));
+                        assert_eq!(e.business, local.business);
+                        if i < 2 && e.connecting > 0 {
+                            assert_eq!(e.codeshare.len(), 1);
+                            assert_eq!(e.codeshare[0].passengers, n.passengers[i]);
+                            assert_eq!(e.codeshare[0].revenue, n.revenue[i]);
+                        }
+                    }
+                }
+            }
+        }
+        // With neutral scores, splitting ownership changes no allocation or money.
+        for i in 0..2 {
+            let original =
+                estimate(&same_owner[i].route, same_owner[i].seats, &same_owner).unwrap();
+            let split = estimate(&mixed[i].route, mixed[i].seats, &mixed).unwrap();
+            assert!(split.connecting > 0);
+            assert_eq!(original.connecting, split.connecting);
+            assert_eq!(original.connecting_revenue, split.connecting_revenue);
+        }
+        mixed[0].reputation = -500_000;
+        mixed[1].reputation = 500_000;
+        let mut low = mixed.clone();
+        low[1].reputation = -500_000;
+        let mut neutral = mixed.clone();
+        neutral[0].reputation = 0;
+        neutral[1].reputation = 0;
+        let mut a = TransferNetwork::new(mixed).unwrap();
+        a.estimate(None);
+        let mut b = TransferNetwork::new(low).unwrap();
+        b.estimate(None);
+        let mut c = TransferNetwork::new(neutral).unwrap();
+        c.estimate(None);
+        assert_eq!(a.daily, b.daily);
+        assert!(a.daily[0] <= c.daily[0]);
     }
 
     #[test]

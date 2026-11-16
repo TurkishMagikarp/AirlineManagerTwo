@@ -34,6 +34,7 @@ var cargo_status: Label
 var ticket_input: SpinBox
 var ticket_button: Button
 var results_tree: Tree
+var codeshare_panel: VBoxContainer
 var competition_label: Label
 var connections_label: Label
 var connections_empty: Control
@@ -248,6 +249,9 @@ func _ready() -> void:
 		UI.field_from_label(control)
 	for pair in [[ticket_input, "EUR"], [business_input, "EUR"], [cargo_input, "EUR/kg"], [delay_input, "min"], [interval_input, "min"]]:
 		UI.field_from_label(pair[0], pair[1], ticket_button.tooltip_text if pair[0] == ticket_input else "")
+	codeshare_panel = preload("res://scripts/codeshare_panel.gd").new()
+	codeshare_panel.simulation = simulation
+	add_child(codeshare_panel)
 	competition_label = _label("Route auswählen, um den gemeinsamen Passagiermarkt zu sehen.")
 	var competition_panel := UI.panel(self, "05  /  WETTBEWERB · GEMEINSAMER STRECKENMARKT")
 	competition_panel.add_child(competition_label)
@@ -498,7 +502,8 @@ func _update_connections(route: Dictionary) -> void:
 	connections_label.visible = not connections.is_empty()
 	var lines: PackedStringArray = [tr("TRANSFER_COUNTS") % [route.get("origin_icao", ""), route.get("destination_icao", ""), route.get("expected_daily_local", 0), route.get("expected_daily_connecting", 0)], tr("TRANSFER_FEEDS")]
 	for connection in connections:
-		lines.append(tr("TRANSFER_PATH") % [connection["origin"], connection["hub"], connection["destination"], connection["daily"]])
+		var partner: String = connection.get("partner", "")
+		lines.append((tr("TRANSFER_PATH") % [connection["origin"], connection["hub"], connection["destination"], connection["daily"]]) + (" · " + tr("CODESHARE_VIA") % partner if not partner.is_empty() else ""))
 	connections_label.text = "\n".join(lines)
 
 
@@ -528,6 +533,7 @@ func _update_schedule_controls(route: Dictionary) -> void:
 
 
 func _refresh_competition() -> void:
+	if codeshare_panel != null: codeshare_panel.refresh()
 	if competition_label == null:
 		return
 	var route := _route()

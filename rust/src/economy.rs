@@ -288,6 +288,8 @@ fn zero(value: &i64) -> bool {
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Totals {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub codeshare: Vec<crate::codeshare::Receipt>,
     #[serde(default, skip_serializing_if = "zero")]
     pub connecting_passengers: i64,
     #[serde(default, skip_serializing_if = "zero")]
@@ -329,7 +331,8 @@ pub struct Totals {
 }
 impl Totals {
     pub fn valid_cabins(&self, economy_fare: i64) -> bool {
-        crate::disruptions::valid(self)
+        crate::codeshare::valid_receipts(self)
+            && crate::disruptions::valid(self)
             && crate::cargo::valid(self)
             && crate::service::valid(self)
             && self
@@ -381,6 +384,9 @@ impl Totals {
         }
     }
     pub fn add(&mut self, other: &Self, count: u64) -> Option<()> {
+        for receipt in &other.codeshare {
+            crate::codeshare::add_receipt(&mut self.codeshare, receipt, count)?;
+        }
         let count = i64::try_from(count).ok()?;
         macro_rules! add { ($($f:ident),*) => { $(self.$f = self.$f.checked_add(other.$f.checked_mul(count)?)?;)* }; }
         add!(
@@ -653,6 +659,7 @@ pub(crate) fn quote_prepared(
     let seconds = market.flight_seconds as i64;
     let rates = market.rates;
     Ok(Totals {
+        codeshare: demand.codeshare,
         connecting_passengers: demand.connecting,
         connecting_revenue: demand.connecting_revenue,
         care: 0,

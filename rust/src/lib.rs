@@ -12,6 +12,9 @@ mod cargo;
 #[cfg(test)]
 mod cargo_tests;
 mod clock;
+mod codeshare;
+#[cfg(test)]
+mod codeshare_tests;
 mod competition;
 mod demand;
 mod difficulty;
@@ -948,6 +951,69 @@ impl SimulationClock {
     }
 
     #[func]
+    fn propose_codeshare(&mut self, partner: GString) -> GString {
+        self.game
+            .propose_codeshare(&partner.to_string())
+            .err()
+            .unwrap_or_default()
+            .as_str()
+            .into()
+    }
+    #[func]
+    fn end_codeshare(&mut self, partner: GString) -> GString {
+        self.game
+            .end_codeshare(&partner.to_string())
+            .err()
+            .unwrap_or_default()
+            .as_str()
+            .into()
+    }
+    #[func]
+    fn get_codeshares(&self) -> Array<VarDictionary> {
+        let mut partners: std::collections::BTreeSet<String> = self
+            .game
+            .competitors
+            .iter()
+            .map(|c| c.game.market_owner_key())
+            .collect();
+        partners.extend(
+            self.game
+                .finance
+                .totals
+                .codeshare
+                .iter()
+                .map(|r| r.partner.clone()),
+        );
+        partners
+            .into_iter()
+            .map(|partner| {
+                let active = self.game.codeshares.iter().any(|a| a.partner == partner);
+                let receipt = self
+                    .game
+                    .finance
+                    .totals
+                    .codeshare
+                    .iter()
+                    .find(|r| r.partner == partner);
+                let reason = if active {
+                    String::new()
+                } else {
+                    self.game
+                        .codeshare_reason(&partner)
+                        .err()
+                        .unwrap_or_default()
+                };
+                let name = partner
+                    .split_once(':')
+                    .map_or(partner.as_str(), |(_, name)| name);
+                vdict! { "partner" => partner.as_str(), "name" => name, "active" => active,
+                "reason" => reason.as_str(), "passengers" => receipt.map_or(0, |r| r.passengers),
+                "revenue" => receipt.map_or(0, |r| r.revenue) }
+            })
+            .collect()
+    }
+
+    #[func]
     fn get_competitors(&self) -> Array<VarDictionary> {
         self.game
             .competitors
@@ -1131,7 +1197,7 @@ impl SimulationClock {
                         }
                         estimate.daily_connecting += e.daily_connecting;
                         for c in &e.connections {
-                            connections.push(&vdict! { "origin" => c.origin.as_str(), "hub" => c.hub.as_str(), "destination" => c.destination.as_str(), "daily" => c.daily });
+                            connections.push(&vdict! { "origin" => c.origin.as_str(), "hub" => c.hub.as_str(), "destination" => c.destination.as_str(), "daily" => c.daily, "partner" => c.partner.split_once(':').map_or("", |(_, name)| name) });
                         }
                         estimate.daily_passengers += e.daily_passengers;
                         estimate.daily_spill += e.daily_spill;
@@ -2193,3 +2259,6 @@ fn jump_dictionary(result: Result<jumps::ResultSummary, &'static str>) -> VarDic
 
 #[cfg(test)]
 mod freighter_tests;
+
+#[cfg(test)]
+mod codeshare_standard_tests;

@@ -2,7 +2,7 @@ keys,de,en
 TRANSFER_MARKET_HEADER,Markt / Lokal / Umstieg →,Market / Local / Transfer →
 TRANSFER_FED,Umstieg geprägt,Transfer fed
 TRANSFER_EMPTY,Keine Umsteiger,No connecting passengers
-TRANSFER_HINT,Zwei aktive Routen derselben Airline können freie Economy-Sitze für Verbindungen nutzen.,Two active routes of the same airline can use spare economy seats for connections.
+TRANSFER_HINT,Zwei aktive Routen derselben Airline oder ihrer Codeshare-Partner können freie Economy-Sitze für Verbindungen nutzen.,Two active routes of the same airline or its codeshare partners can use spare economy seats for connections.
 TRANSFER_SELECT,Route auswählen,Select route
 TRANSFER_FEEDS,Umsteigeverbindungen · ca. Pax/Tag und Richtung,Connections · approx. pax/day each way
 TRANSFER_PATH,%s – %s – %s · %.1f Pax/Tag,%s – %s – %s · %.1f pax/day
@@ -10,3 +10,26 @@ TRANSFER_RESULT,Lokal: %d · Umsteiger: %d (Economy),Local: %d · Connecting: %d
 TRANSFER_REVENUE,Umsteigeranteil: %s,Connecting share: %s
 TRANSFER_COUNTS,%s–%s · Lokal %d / Umstieg %d Pax/Tag →,%s–%s · Local %d / Connecting %d pax/day →
 TRANSFER_COMPETITION,Lokal %.1f / Umstieg %.1f Pax/Tag · Umsteiger stammen aus weiteren O&D-Märkten.,Local %.1f / Connecting %.1f pax/day · Connecting passengers come from other O&D markets.
+CODESHARE_TITLE,CODESHARE / PARTNERNETZ,CODESHARE / PARTNER NETWORK
+CODESHARE_HINT,Economy-Umsteiger über Partnerflüge. Keine Gebühr; sofort kündbar. Eigene Pax und Umsatz werden bei Landung verbucht.,Economy connections via partner flights. No fee; immediate cancellation. Your pax and revenue are posted at landing.
+CODESHARE_EMPTY,Noch keine Partner,No partners yet
+CODESHARE_EMPTY_HINT,Wähle einen Rivalen mit Flugplänen an einem gemeinsamen Flughafen.,Choose a rival with active schedules at a shared airport.
+CODESHARE_SELECT,Partner auswählen,Select a partner
+CODESHARE_PARTNER,Partner,Partner
+CODESHARE_PAX,Eigene Pax,Your pax
+CODESHARE_REVENUE,Eigener Umsatz,Your revenue
+CODESHARE_AVAILABLE,Ohne Vertrag,No agreement
+CODESHARE_ACTIVE,Aktiv,Active
+CODESHARE_PROPOSE,Codeshare vorschlagen,Propose codeshare
+CODESHARE_END,Codeshare beenden,End codeshare
+CODESHARE_MISSING,Diese Airline ist nicht mehr verfügbar.,This airline is no longer available.
+CODESHARE_EXISTS,Codeshare bereits aktiv.,Codeshare already active.
+CODESHARE_FINANCES,Abgelehnt: Finanznot oder Restrukturierung.,Declined: financial distress or restructuring.
+CODESHARE_LIMIT,Abgelehnt: Partnerlimit erreicht.,Declined: partner limit reached.
+CODESHARE_NO_HUB,Abgelehnt: kein gemeinsamer aktiver Flughafen.,Declined: no shared airport with active schedules.
+CODESHARE_SIGNED,Codeshare abgeschlossen. Bitte speichern.,Codeshare signed. Please save.
+CODESHARE_ENDED,Codeshare beendet. Bitte speichern.,Codeshare ended. Please save.
+CODESHARE_END_QUESTION,Codeshare mit %s beenden?,End codeshare with %s?
+CODESHARE_END_HINT,Neue Abflüge erhalten keine Partner-Umsteiger. Laufende Flüge und bisherige Einnahmen bleiben erhalten.,New departures receive no partner connections. Airborne bookings and past revenue remain fixed.
+CODESHARE_CANCEL,Behalten,Keep agreement
+CODESHARE_VIA,Partner: %s,Partner: %s

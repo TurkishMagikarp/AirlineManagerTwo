@@ -35,7 +35,7 @@ func _run() -> void:
 	assert(sim.get_airline_info() == before)
 	var path := ProjectSettings.globalize_path("user://difficulty-test.json")
 	assert(sim.save_game(path).is_empty())
-	assert(JSON.parse_string(FileAccess.get_file_as_string(path))["version"] == 37)
+	assert(JSON.parse_string(FileAccess.get_file_as_string(path))["version"] == 38)
 	assert(sim.load_game(path).is_empty())
 	assert(sim.get_airline_info() == before)
 	main._sync_view()
@@ -48,5 +48,5 @@ func _run() -> void:
 	assert(sim.get_airline_info() == before)
 	main.queue_free()
 	await process_frame
-	print("PASS: standard defaults, preset with manual override, nonstandard form founding, Rust validation, overview and v37 round trip")
+	print("PASS: standard defaults, preset with manual override, nonstandard form founding, Rust validation, overview and v38 round trip")
 	quit(0)

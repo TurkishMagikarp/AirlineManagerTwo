@@ -316,7 +316,7 @@ impl Game {
     }
 
     pub fn market_routes(&self) -> Vec<crate::demand::Offer> {
-        std::iter::once(self)
+        let mut offers: Vec<_> = std::iter::once(self)
             .chain(self.competitors.iter().map(|c| &*c.game))
             .flat_map(|g| {
                 g.routes.iter().filter_map(|r| {
@@ -325,7 +325,9 @@ impl Game {
                     Some(offer)
                 })
             })
-            .collect()
+            .collect();
+        self.apply_codeshares(&mut offers);
+        offers
     }
 
     pub fn validate_competitors(&self) -> Result<(), String> {
@@ -344,6 +346,7 @@ impl Game {
                 || g.world_economy.started_at != self.world_economy.started_at
                 || !g.used_market.listings.is_empty()
                 || !g.competitors.is_empty()
+                || !g.codeshares.is_empty()
                 || g.clock.elapsed() != self.clock.elapsed()
                 || c.next_review <= self.clock.elapsed().as_secs()
                 || c.next_review - self.clock.elapsed().as_secs()
@@ -653,6 +656,7 @@ impl Game {
             {
                 return false;
             }
+            staged.review_codeshares();
             // Remove the whole AI company, including aircraft, plans, staff and
             // event sources. Its already settled flights remain in other ledgers.
             let previous_companies = staged.competitors.len();
@@ -682,6 +686,7 @@ impl Game {
             if staged.apply_pricing().is_err() {
                 return false;
             }
+            staged.review_codeshares();
             if end.as_secs().is_multiple_of(crate::reputation::DAY) && end.subsec_nanos() == 0 {
                 staged.evaluate_milestones();
             }

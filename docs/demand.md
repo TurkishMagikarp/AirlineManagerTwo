@@ -185,7 +185,8 @@ Zusätzlich bleiben bis zu 128 Topologien (einschließlich leerer Netze) erhalte
 Pfadpaare und Umwegprüfung ändern sich nur mit Strecken, Eigentümer, Flugplan
 oder verfügbarer Economy-Kabine. Verdrängen einer Topologie ändert lediglich
 den Aufwand beim nächsten Aufbau. Ohne zwei aktive, unterschiedliche Strecken
-derselben Airline an einem gemeinsamen Flughafen entfällt die Topologieprüfung.
+derselben Airline oder aktiver Vertragspartner an einem gemeinsamen Flughafen
+entfällt die Topologieprüfung.
 Abflüge prüfen nur Pfade, die ihren eigenen Streckenmarkt berühren. Erreicht
 selbst die maximale saisonale Kaufbereitschaft kein gemeinsames Ratenquantum,
 steht die Umsteigerzahl bereits mit null fest. Lokale Sitzreservierungen werden
@@ -193,7 +194,8 @@ nur für tatsächlich beteiligte Teilstrecken vorbereitet. Unveränderliche
 Geografie wird je Flughafenpaar wiederverwendet. Die Daten gehören nicht zum
 Spielstand; ein Cache-Neuaufbau muss dasselbe Ergebnis liefern.
 Keine Uhr in Godot, keine zeitlich abgestimmten Anschlüsse, Mindestumsteigezeiten,
-Codeshares, Interline-Verbindungen, speziellen Transfergebühren oder neue Kabinenbalance.
+KI–KI-Codeshares, Interline ohne Vertrag, spezielle Transfergebühren oder neue Kabinenbalance.
+Spieler–KI-Codeshares ergänzen die Pfade gemäß [Codeshares](codeshare.md).
 
 ## Anzeige, Spielstände und Tests
 

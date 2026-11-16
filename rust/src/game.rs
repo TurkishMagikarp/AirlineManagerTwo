@@ -8,6 +8,8 @@ use std::collections::HashSet;
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Game {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub codeshares: Vec<crate::codeshare::Agreement>,
     #[serde(
         default,
         skip_serializing_if = "crate::difficulty::Settings::is_standard"
@@ -94,6 +96,7 @@ impl Game {
 impl Default for Game {
     fn default() -> Self {
         Self {
+            codeshares: Vec::new(),
             difficulty: Default::default(),
             pricing: Vec::new(),
             milestones: None,
