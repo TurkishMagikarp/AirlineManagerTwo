@@ -45,3 +45,22 @@ auf diesem Linux-Server nicht geprüft.
 - `tools/godot_check.sh tests`: 51 bestanden, null Fehler; ein Windows-Neustarttreiber übersprungen.
 - Die bisherigen Rust-/Godot-Migrationsfixtures wurden auf die neue aktuelle Version 39 umgestellt; historische Zielversionen bleiben erhalten.
 - `AIRLINE_ENFORCE_PERF_BUDGET=1 cargo test --locked --manifest-path rust/Cargo.toml million_flight -- --test-threads=1 --nocapture`: beide Tests bestanden. Gemessener Finance-Advance **283,961326566 s** bei 300 s Budget; 5.779.250 Flüge einschließlich KI, Transferzähler `(37450, 106623, 106623)`. Der frühere veröffentlichte Wert war 259,468 s.
+
+### Untersuchung des Zeitunterschieds
+
+Ein direkt anschließender, allein laufender Test auf main bestand ebenfalls:
+Advance **273,252597309 s**, einschließlich Save/Load/Fortsetzung 397,934811810 s.
+Der Branch benötigte dafür 283,961326566 s beziehungsweise 413,527532312 s.
+Beide hatten exakt 5.779.250 Flüge und dieselben Transferzähler. Die Save-Datei
+wuchs nur um die 90 Bytes der drei leeren Bestellbücher/Kennungsfelder.
+
+Die Advance-Differenz beträgt +3,919 %; die unabhängige Phase danach
+(Speichern/Laden/Fortsetzen) skaliert mit praktisch demselben Faktor (+3,917 %).
+Während des Branch-Advance zeigte der Prozess ungefähr 94–95 % eines CPU-Kerns,
+beim main-Vergleich ungefähr 98 %. Zusammen mit dem ebenfalls über dem alten
+259,468-s-Wert liegenden main-Lauf spricht dies für CPU-Verfügbarkeit bzw.
+Laufzeitvariation als Ursache des Wallclock-Unterschieds, nicht für zusätzliche
+Flüge oder Marktallokationen. Das ist eine Schlussfolgerung aus den Messungen,
+keine isolierte Profiler-Messung. Die neue Regel bleibt außerhalb der
+Flugprojektion; beide erzwungenen Branch-Stressfälle und der main-Vergleich
+sind grün. Das unveränderte 300-s-Limit bleibt aktiv.
