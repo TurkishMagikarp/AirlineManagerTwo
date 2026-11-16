@@ -8,6 +8,10 @@ use std::collections::HashSet;
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Game {
+    #[serde(default)]
+    pub orders: Vec<crate::orders::Order>,
+    #[serde(default = "initial_order_id")]
+    pub next_order_id: u64,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub codeshares: Vec<crate::codeshare::Agreement>,
     #[serde(
@@ -67,6 +71,10 @@ pub struct Game {
     pub resolution: crate::financing::Resolution,
 }
 
+pub(crate) fn initial_order_id() -> u64 {
+    1
+}
+
 fn next_market_revision() -> u64 {
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
     NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
@@ -96,6 +104,8 @@ impl Game {
 impl Default for Game {
     fn default() -> Self {
         Self {
+            orders: Vec::new(),
+            next_order_id: 1,
             codeshares: Vec::new(),
             difficulty: Default::default(),
             pricing: Vec::new(),
@@ -276,6 +286,7 @@ impl Game {
 
     pub fn validate_fleet(&self) -> Result<(), String> {
         self.validate_trading()?;
+        self.validate_orders()?;
         if self.next_aircraft_id == 0 || (self.airline.is_none() && !self.fleet.is_empty()) {
             return Err("Ungültige Flottendaten im Spielstand.".into());
         }

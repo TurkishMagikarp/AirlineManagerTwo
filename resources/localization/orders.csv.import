@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://vgqeswwhvyye"
+
+[deps]
+
+files=["res://resources/localization/orders.de.translation", "res://resources/localization/orders.en.translation"]
+
+source_file="res://resources/localization/orders.csv"
+dest_files=["res://resources/localization/orders.de.translation", "res://resources/localization/orders.en.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

@@ -9,6 +9,7 @@
     "salary_reserve": 30,
     "idle": 40,
     "training": 50,
-    "reputation": 15
+    "reputation": 15,
+    "delivery": 5
   }
 }

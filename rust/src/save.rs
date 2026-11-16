@@ -25,8 +25,9 @@ use std::time::Duration;
 // v34: shared world economic cycle. Legacy timelines start neutral at load.
 // v35: route fare autopilot; old saves have no enabled routes or change history.
 // v36: immutable founding difficulty; older worlds keep Standard on every axis.
+// v39: factory positions and frozen deposits; old owners have no open orders.
 // v38: player–AI codeshares and frozen leg receipts; older saves have none.
-pub(crate) const VERSION: u32 = 38;
+pub(crate) const VERSION: u32 = 39;
 // Bounded input, including centuries of fuel/seasonal quotes for the player
 // and both AI airlines in the million-flight finance restart scenario.
 // Version 17 retains per-class quotes, which also split more archive batches.
@@ -42,6 +43,10 @@ struct SaveGame {
 // Future simulation data belongs here, not in the UI or a serialized Godot object.
 #[derive(Serialize, Deserialize)]
 struct GameState {
+    #[serde(default)]
+    orders: Vec<crate::orders::Order>,
+    #[serde(default = "crate::game::initial_order_id")]
+    next_order_id: u64,
     #[serde(default)]
     codeshares: Vec<crate::codeshare::Agreement>,
     #[serde(default)]
@@ -132,6 +137,8 @@ pub fn save(path: &Path, game: &Game) -> Result<(), String> {
     let data = SaveGame {
         version: VERSION,
         state: GameState {
+            orders: game.orders.clone(),
+            next_order_id: game.next_order_id,
             codeshares: game.codeshares.clone(),
             difficulty: Some(game.difficulty),
             pricing: game.pricing.clone(),
@@ -260,6 +267,14 @@ pub(crate) fn load_versioned(path: &Path) -> Result<(Game, u32), String> {
             }
         }
     }
+    if value["version"].as_u64().is_some_and(|v| v < 39)
+        && let Some(owners) = value["state"]["competitors"].as_array_mut()
+    {
+        for owner in owners {
+            owner["game"]["orders"] = serde_json::json!([]);
+            owner["game"]["next_order_id"] = 1.into();
+        }
+    }
     // v26 is an additive migration: absent cursors and punctuality/care
     // fields deserialize to None/zero for every owner and archived result.
     // Initialize a cursor only when play advances; an existing airborne quote
@@ -344,6 +359,16 @@ pub(crate) fn load_versioned(path: &Path) -> Result<(Game, u32), String> {
     };
     world_economy.validate(clock.elapsed().as_secs())?;
     let mut game = Game {
+        orders: if data.version < 39 {
+            Vec::new()
+        } else {
+            data.state.orders
+        },
+        next_order_id: if data.version < 39 {
+            1
+        } else {
+            data.state.next_order_id
+        },
         difficulty: if data.version >= 36 {
             data.state.difficulty.ok_or("Schwierigkeit fehlt.")?
         } else {

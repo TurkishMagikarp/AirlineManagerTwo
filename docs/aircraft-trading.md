@@ -65,3 +65,42 @@ bestehende Kreditregel greift. Keine Subventionen.
   späterer Eigentümerwechsel erfasst wurde; `acquired_at` bleibt unverändert.
 - Das Flottenpanel zeigt Rust-Angebote mit Modell, Alter, Zustand, Preis,
   Flugstunden, Zyklen und Verkäufer sowie einer Kaufen-Schaltfläche.
+
+## Herstellerbestellungen (Spielstandversion 39)
+
+Die zusätzliche Beschaffungsart in **Flotte → Beschaffung** reserviert eine oder
+mehrere fabrikneue Maschinen. Sofortkauf, Leasing und Gebrauchtmarkt bleiben
+verfügbar. Regeln stehen in `rust/src/orders.rs`, alle vorläufigen Werte in
+`config/manufacturer_orders.json`.
+
+- Der gemeinsame Katalogpreis wird je Stück um 5 % (ab einer), 7,5 % (ab drei)
+  beziehungsweise 10 % (ab fünf Maschinen) reduziert und auf ganze EUR
+  abgerundet. Die heutige Schwierigkeit verändert den Katalogpreis nicht.
+  20 % des rabattierten Stückpreises werden als Anzahlung abgerundet; die
+  Restzahlung ist exakt Stückpreis minus Anzahlung.
+- ATR-Passagiermaschinen kommen nach 30 Tagen, schmale Passagiermaschinen nach
+  60, Großraumflugzeuge nach 120–150 Tagen; Frachter nach 60–150 Tagen.
+  Lieferungen erfolgen am ersten Mitternachtstermin nach der Mindestvorlaufzeit, weitere
+  Maschinen derselben Bestellung im Abstand von sieben Tagen. Maximal zwölf
+  Positionen dürfen offen sein. Das Angebot zeigt sämtliche Termine vorab.
+- Bei Lieferung wird die Restzahlung abgebucht. Die Maschine ist neu, geparkt
+  und an der Heimatbasis; Personal, Versicherung, Wartung und Zulassung eines
+  Flugplans folgen denselben Regeln wie beim Sofortkauf. Ein voller Slotbestand
+  verhindert den Erwerb nicht, aber weiterhin die Aufnahme neuer Flüge.
+- Reicht das Guthaben nicht, erscheint eine Meldung in der Aufmerksamkeitsliste
+  und ein Zeitsprung hält an. Jeden folgenden Mitternachtstermin wird erneut
+  geprüft, einschließlich des siebten Tags. Bleibt die Zahlung aus, entfällt
+  die Position ohne Erstattung. Auch manuelle Stornierung, Insolvenz und
+  Restrukturierung verlieren die Anzahlung. Keine Weiterverkäufe von Positionen.
+- Anzahlung und Restzahlung erscheinen als Flugzeuginvestitionen im bestehenden
+  Kaufjournal; operative Gewinne werden dadurch nicht verändert. Ein Storno
+  erzeugt keinen zweiten Aufwand und keine Rückzahlung.
+- Gesunde KI-Airlines ersetzen den ansonsten voll finanzierbaren Neukauf der
+  dritten Maschine durch eine einzelne Herstellerbestellung.
+  Die normale Betriebsreserve muss zusätzlich zum vollen Kaufpreis reichen;
+  während eine Position offen ist, erfolgt kein weiterer Flottenausbau. Nach
+  Lieferung bewertet die normale Wochenprüfung den Einsatz der geparkten
+  Maschine. Keine Sonderpreise und keine Subventionen.
+- Versionen 1–38 laden für alle Eigentümer ohne offene Positionen. Guthaben,
+  bestehende Maschinen und historische Zahlungen bleiben erhalten. Offene
+  Positionen speichern Preis, Anzahlung, Termin und Zahlungsrückstand.

@@ -414,6 +414,9 @@ impl Game {
         if self
             .next_pricing_event()
             .is_none_or(|t| t > target.elapsed().as_secs())
+            && self
+                .next_order_event()
+                .is_none_or(|t| t > target.elapsed().as_secs())
             && self.ferries.is_empty()
             && crate::reputation::next_day(self.clock.elapsed().as_secs())
                 > target.elapsed().as_secs()
@@ -522,7 +525,8 @@ impl Game {
                 .min()
                 .unwrap_or(u64::MAX);
             // Maintenance starts, ends and forced groundings of every company.
-            let maintenance = std::iter::once(staged.next_pricing_event())
+            let maintenance = std::iter::once(staged.next_order_event())
+                .chain(std::iter::once(staged.next_pricing_event()))
                 .chain(std::iter::once(staged.next_ferry_event()))
                 .chain(std::iter::once(staged.next_maintenance_event()))
                 .chain(std::iter::once(staged.next_rotation_event()))
@@ -534,6 +538,7 @@ impl Game {
                 .chain(std::iter::once(staged.next_insurance_event()))
                 .chain(staged.competitors.iter().flat_map(|c| {
                     [
+                        c.game.next_order_event(),
                         c.game.next_ferry_event(),
                         c.game.next_maintenance_event(),
                         c.game.next_rotation_event(),
@@ -642,6 +647,7 @@ impl Game {
                 || staged.apply_payroll().is_err()
                 || staged.apply_marketing().is_err()
                 || staged.apply_financing().is_err()
+                || staged.apply_orders().is_err()
                 || staged.competitors.iter_mut().any(|c| {
                     c.game.apply_insurance().is_err()
                         || c.game.apply_rotation_removals().is_err()
@@ -652,6 +658,7 @@ impl Game {
                         || c.game.apply_payroll().is_err()
                         || c.game.apply_marketing().is_err()
                         || c.game.apply_financing().is_err()
+                        || c.game.apply_orders().is_err()
                 })
             {
                 return false;
@@ -1490,7 +1497,7 @@ impl Competitor {
                 )
             })
             .collect();
-        if free.is_empty() && g.fleet.len() < MAX_FLEET {
+        if free.is_empty() && g.orders.is_empty() && g.fleet.len() + g.orders.len() < MAX_FLEET {
             for l in &g.used_market.listings {
                 let p = &l.aircraft;
                 let rules = crate::maintenance::rules(&p.model_id)?;
@@ -1639,6 +1646,22 @@ impl Competitor {
             business_seats: business,
             ..
         } = quote;
+        // Only an otherwise affordable new purchase may become a factory order.
+        // Existing services earn during the lead time; the normal expansion search
+        // configures the delivered, parked aircraft at the following weekly review.
+        if plane.is_none()
+            && used.is_none()
+            && !leased
+            && self.game.orders.is_empty()
+            && self.game.fleet.len() >= crate::orders::RULES.ai_min_fleet
+            && (self.game.fleet.len() + 1).is_multiple_of(crate::orders::RULES.ai_order_every)
+            && self.game.fleet.len() < crate::orders::RULES.ai_max_fleet
+            && self.game.fleet.len() < MAX_FLEET
+        {
+            self.game.place_order(&model, 1)?;
+            self.last_action = format!("{} beim Hersteller bestellt · Anzahlung bezahlt", model);
+            return Ok(());
+        }
         // Hire first (atomic): without cash for the crew the expansion is dropped.
         if let Err(error) = self.game.equip_staff_for(&model) {
             self.last_action = format!("Expansion abgebrochen · {error}");
@@ -2230,6 +2253,80 @@ mod tests {
     }
 
     #[test]
+    fn manufacturer_ai_orders_selected_growth_once_and_waits_for_delivery() {
+        let mut c = frequency_ai();
+        let fleet = c.game.fleet.len();
+        let cash = c.game.cash();
+        let staff = c.game.staff.clone();
+        let quote = c.game.quote_order("atr72_600", 1).unwrap();
+        let routes = c.game.routes.clone();
+        c.acquire_expansion(ExpansionChoice {
+            used: None,
+            plane: None,
+            model: "atr72_600".into(),
+            quote: ExpansionQuote {
+                route: routes[0].clone(),
+                interval: 360,
+                business_seats: 0,
+                layout_fee: 0,
+                profit: 100_000,
+                costs: 50_000,
+            },
+            leased: false,
+            score: 100_000,
+        })
+        .unwrap();
+        assert_eq!(c.game.fleet.len(), fleet);
+        assert_eq!(c.game.orders.len(), 1);
+        assert_eq!(c.game.cash(), cash - quote.deposit_per_aircraft);
+        assert_eq!(
+            serde_json::to_value(&c.game.staff).unwrap(),
+            serde_json::to_value(staff).unwrap()
+        );
+        assert_eq!(
+            serde_json::to_value(&c.game.routes).unwrap(),
+            serde_json::to_value(routes).unwrap()
+        );
+        // The second parked aircraft is already owned. Let the ordinary planner
+        // use it, then ensure pending factory positions prevent duplicate buying.
+        c.expand(&[]).unwrap();
+        c.expand(&[]).unwrap();
+        assert_eq!(c.game.orders.len(), 1);
+        assert_eq!(c.game.fleet.len(), fleet);
+        c.game.validate_history().unwrap();
+    }
+
+    #[test]
+    fn manufacturer_restructuring_cancels_player_and_ai_orders_without_refund() {
+        let mut player = Game::default();
+        player.found("Factory rescue", "DE", "EDDF").unwrap();
+        let ai = initial_competitors().unwrap().remove(0).game;
+        for mut game in [player, *ai] {
+            game.place_order("atr72_600", 1).unwrap();
+            let cash = game.cash();
+            let history = serde_json::to_value(&game.history).unwrap();
+            game.financing.overdue = 1;
+            game.observe_distress();
+            let start = crate::financing::RULES.distress_grace_days * 86400;
+            game.clock = Clock::from_state(Duration::from_secs(start), true, 1).unwrap();
+            game.apply_resolution();
+            assert!(game.orders.is_empty());
+            assert_eq!(game.cash(), cash);
+            assert_eq!(serde_json::to_value(&game.history).unwrap(), history);
+            assert!(game.resolution.deadline.is_some());
+            game.clock = Clock::from_state(
+                Duration::from_secs(start + crate::financing::RULES.restructuring_days * 86400),
+                true,
+                1,
+            )
+            .unwrap();
+            game.apply_resolution();
+            assert!(game.insolvent());
+            assert!(game.orders.is_empty());
+        }
+    }
+
+    #[test]
     fn seasonal_ai_growth_uses_annual_view_and_weak_weeks_keep_viable_rotations() {
         let mut results = Vec::new();
         for day in [45, 180, 350] {
@@ -2346,6 +2443,12 @@ mod tests {
             c.game.history.as_mut().unwrap().opening_balance += shift;
             c.game.airline.as_mut().unwrap().capital_eur = capital;
             c.expand(&[]).unwrap();
+            if let Some(order) = c.game.orders.first() {
+                // Healthy outright growth may now wait for the manufacturer.
+                let until_delivery = order.delivery_at - c.game.clock.elapsed().as_secs();
+                assert!(c.game.advance(until_delivery as f64));
+                c.expand(&[]).unwrap();
+            }
             assert_eq!(
                 c.game.routes.last().unwrap().parent_route_id,
                 Some(1),
@@ -3242,5 +3345,31 @@ mod slot_admission_tests {
             c.game.routes.len() > 1,
             "AI should find another profitable destination"
         );
+    }
+}
+
+#[cfg(test)]
+mod manufacturer_audit {
+    #[test]
+    fn manufacturer_orders_eddf_rival_comparison_two_and_ten_years() {
+        let mut game = crate::game::Game::default();
+        game.found("Manufacturer Audit", "DE", "EDDF").unwrap();
+        game.clock.set_running(true);
+        for day in 1..=3650 {
+            assert!(game.advance(86400.0));
+            if day == 730 || day == 3650 {
+                for rival in &game.competitors {
+                    println!(
+                        "MANUFACTURER_AUDIT day={day} airline={} fleet={} cash={} insolvent={} distressed={}",
+                        rival.game.airline.as_ref().unwrap().name,
+                        rival.game.fleet.len(),
+                        rival.game.cash(),
+                        rival.game.insolvent(),
+                        rival.game.distressed()
+                    );
+                }
+            }
+        }
+        game.validate_competitors().unwrap();
     }
 }

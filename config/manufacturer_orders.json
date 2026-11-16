@@ -1,0 +1,33 @@
+{
+  "lead_days": {
+    "atr72_600": 30,
+    "a320_200": 60,
+    "b737_800": 60,
+    "a330_300": 120,
+    "b777_300er": 150,
+    "atr72_600f": 60,
+    "b737_800bcf": 90,
+    "b777f": 150
+  },
+  "stagger_days": 7,
+  "deposit_bps": 2000,
+  "discount_tiers": [
+    [
+      1,
+      500
+    ],
+    [
+      3,
+      750
+    ],
+    [
+      5,
+      1000
+    ]
+  ],
+  "grace_days": 7,
+  "max_open_orders": 12,
+  "ai_min_fleet": 2,
+  "ai_order_every": 3,
+  "ai_max_fleet": 3
+}

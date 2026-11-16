@@ -1,0 +1,35 @@
+keys,de,en
+ORDER_TITLE,HERSTELLER / BESTELLUNG,MANUFACTURER / ORDER
+ORDER_HINT,Günstiger vorausplanen: Anzahlung heute; Restzahlung je Lieferung. Sofortkauf und Leasing bleiben unten verfügbar.,Plan ahead for a lower price: deposit today; balance at each delivery. Immediate purchase and leasing remain available below.
+ORDER_MODEL,Modell,Model
+ORDER_QUANTITY,Anzahl,Quantity
+ORDER_PLACE,Flugzeuge bestellen,Place aircraft order
+ORDER_OPEN,OFFENE BESTELLUNGEN,OPEN ORDERS
+ORDER_EMPTY,Keine offenen Bestellungen,No open orders
+ORDER_EMPTY_HINT,Bestelle neue Flugzeuge mit geplanter Lieferung. Die Anzahlung wird sofort gebucht.,Order new aircraft for scheduled delivery. The deposit is charged immediately.
+ORDER_SELECT,Modell auswählen,Select a model
+ORDER_DATE,Liefertermin,Delivery date
+ORDER_BALANCE,Restzahlung,Balance due
+ORDER_STATUS,Status,Status
+ORDER_SCHEDULED,Geplant,Scheduled
+ORDER_HELD,Unbezahlt,Held
+ORDER_CANCEL,Lieferung stornieren,Cancel delivery
+ORDER_SELECT_ROW,Wähle eine offene Lieferung aus.,Select an open delivery.
+ORDER_LOSS_HINT,Bei Stornierung oder ausbleibender Restzahlung verfällt die Anzahlung.,Cancellation or failure to pay the balance forfeits the deposit.
+ORDER_NO_CASH,Nicht genügend Guthaben für die Anzahlung.,Insufficient funds for the deposit.
+ORDER_QUOTE,"Stückpreis nach Mengenrabatt: %s
+Anzahlung jetzt gesamt: %s
+Restzahlung je Lieferung: %s","Unit price after volume discount: %s
+Total deposit due now: %s
+Balance due per delivery: %s"
+ORDER_DELIVERIES,Geplante Liefertermine:,Expected delivery dates:
+ORDER_CONFIRM,%d × %s bestellen?,Order %d × %s?
+ORDER_BACK,Abbrechen,Go back
+ORDER_PLACED,Bestellung aufgegeben und Anzahlung gebucht. Bitte speichern.,Order placed and deposit charged. Please save.
+ORDER_CANCEL_CONFIRM,Lieferung von %s stornieren?,Cancel %s delivery?
+ORDER_CANCEL_LOSS,Diese Lieferung wird storniert. Die Anzahlung von %s verfällt ohne Erstattung.,This delivery will be cancelled. The %s deposit is forfeited without refund.
+ORDER_CANCELLED,Lieferung storniert. Die Anzahlung ist verfallen. Bitte speichern.,Delivery cancelled. Deposit forfeited. Please save.
+ORDER_GRACE,Bei fehlender Restzahlung: täglicher Lieferversuch bis %s; danach verfällt die Lieferung.,If the balance is unpaid: daily delivery attempts until %s; the delivery is then cancelled.
+ORDER_SELECTION,Anzahlung für diese Lieferung: %s (bei Stornierung verloren).,Deposit for this delivery: %s (forfeited on cancellation).
+ORDER_DELIVERY_WINDOW,Lieferfenster: %s bis %s,Delivery window: %s to %s
+ORDER_SAVE_HINT,Bestellungen geändert · bitte Spielstand speichern.,Orders changed · please save the game.
