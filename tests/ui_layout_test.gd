@@ -41,6 +41,13 @@ func _run() -> void:
 		quit(0)
 		return
 	assert(sim.found_airline("Meridian Air", "DE", "EDDF").is_empty())
+	if OS.get_environment("AIRLINE_UI_CAPTURE_ORDERS_ONLY") == "1":
+		await _order_views(sim)
+		main.queue_free()
+		await process_frame
+		print("PASS: manufacturer order preview, open orders and confirmations at both sizes")
+		quit(0)
+		return
 	if OS.get_environment("AIRLINE_UI_CAPTURE_CODESHARE_ONLY") == "1":
 		await _codeshare_views(sim)
 		main.queue_free()
@@ -964,3 +971,62 @@ func _codeshare_views(sim: RefCounted) -> void:
 		await process_frame
 		panel.dialog.danger_button.pressed.emit()
 		await process_frame
+
+func _order_views(sim: RefCounted) -> void:
+	main._sync_view()
+	main._show_page(1)
+	main.fleet_tabs.current_tab = 1
+	var panel = main.orders_panel
+	var scroll: ScrollContainer = main.fleet_panel.get_parent().get_parent()
+	panel.quantity.value = 2
+	for dimensions in [Vector2i(1440, 1000), Vector2i(680, 520)]:
+		root.size = dimensions
+		for frame in range(5): await process_frame
+		scroll.ensure_control_visible(panel.place)
+		scroll.scroll_vertical += 16
+		for frame in range(5): await process_frame
+		await RenderingServer.frame_post_draw
+		assert(root.get_texture().get_image().save_png(capture_dir.path_join("fleet-order-preview-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
+		panel.place.pressed.emit()
+		for frame in range(5): await process_frame
+		await RenderingServer.frame_post_draw
+		assert(root.get_visible_rect().encloses(panel.dialog.get_visible_rect()))
+		assert(root.get_texture().get_image().save_png(capture_dir.path_join("fleet-order-confirm-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
+		panel.dialog.get_cancel_button().pressed.emit()
+		await process_frame
+	panel.place.pressed.emit()
+	panel.dialog.get_ok_button().pressed.emit()
+	await process_frame
+	for dimensions in [Vector2i(1440, 1000), Vector2i(680, 520)]:
+		root.size = dimensions
+		for frame in range(5): await process_frame
+		scroll.ensure_control_visible(panel.cancel)
+		scroll.scroll_vertical += 16
+		for frame in range(5): await process_frame
+		await RenderingServer.frame_post_draw
+		assert(root.get_texture().get_image().save_png(capture_dir.path_join("fleet-orders-open-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
+		panel.cancel.pressed.emit()
+		for frame in range(5): await process_frame
+		await RenderingServer.frame_post_draw
+		assert(root.get_visible_rect().encloses(panel.dialog.get_visible_rect()))
+		assert(root.get_texture().get_image().save_png(capture_dir.path_join("fleet-order-cancel-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
+		panel.dialog.get_cancel_button().pressed.emit()
+		await process_frame
+
+	# The first delivery can be paid; the second is held using the remaining cash.
+	sim.start()
+	assert(sim.advance(67.0 * 86400.0))
+	sim.pause()
+	panel.refresh()
+	assert(panel.rows.any(func(entry: Dictionary): return entry["status"] == "ORDER_HELD"))
+	main._sync_view()
+	main._show_page(1)
+	main.fleet_tabs.current_tab = 1
+	for dimensions in [Vector2i(1440, 1000), Vector2i(680, 520)]:
+		root.size = dimensions
+		for frame in range(5): await process_frame
+		scroll.ensure_control_visible(panel.cancel)
+		scroll.scroll_vertical += 16
+		for frame in range(5): await process_frame
+		await RenderingServer.frame_post_draw
+		assert(root.get_texture().get_image().save_png(capture_dir.path_join("fleet-orders-held-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)

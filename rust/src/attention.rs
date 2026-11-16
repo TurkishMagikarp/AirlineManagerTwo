@@ -28,6 +28,7 @@ static RULES: LazyLock<Rules> = LazyLock::new(|| {
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Entry {
+    pub order_id: u64,
     pub kind: &'static str,
     pub priority: u32,
     pub text: String,
@@ -45,6 +46,7 @@ impl Game {
         let mut entries = Vec::new();
         let mut add = |kind, text, page, route_id, aircraft_id, employee_id| {
             entries.push(Entry {
+                order_id: 0,
                 kind,
                 priority: RULES.priorities[kind],
                 text,
@@ -204,7 +206,37 @@ impl Game {
                 );
             }
         }
-        entries.sort_by_key(|e| (e.priority, e.kind, e.route_id, e.aircraft_id, e.employee_id));
+        for o in &self.orders {
+            if o.held_since.is_some() {
+                entries.push(Entry {
+                    order_id: o.id,
+                    kind: "delivery",
+                    priority: RULES.priorities["delivery"],
+                    text: format!(
+                        "Herstellerlieferung #{} wartet: {} EUR Restzahlung, Frist {}",
+                        o.id,
+                        o.unit_price - o.deposit,
+                        operations::display_time(
+                            o.delivery_at + crate::orders::RULES.grace_days * 86400
+                        )
+                    ),
+                    page: "fleet",
+                    route_id: 0,
+                    aircraft_id: 0,
+                    employee_id: 0,
+                });
+            }
+        }
+        entries.sort_by_key(|e| {
+            (
+                e.priority,
+                e.kind,
+                e.route_id,
+                e.aircraft_id,
+                e.employee_id,
+                e.order_id,
+            )
+        });
         entries
     }
 }

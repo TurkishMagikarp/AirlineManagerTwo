@@ -76,9 +76,11 @@ fn freighter_revenue_no_passenger_costs_frozen_quote_and_v36_identity() {
     let d = tempfile::tempdir().unwrap();
     let p = d.path().join("v36.json");
     save::save(&p, &old).unwrap();
-    let text = std::fs::read_to_string(&p)
-        .unwrap()
-        .replacen("\"version\":38", "\"version\":36", 1);
+    let text = std::fs::read_to_string(&p).unwrap().replacen(
+        &format!("\"version\":{}", save::VERSION),
+        "\"version\":36",
+        1,
+    );
     assert!(text.contains("\"version\":36"));
     std::fs::write(&p, text).unwrap();
     assert_eq!(

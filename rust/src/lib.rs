@@ -51,6 +51,9 @@ mod marketing_tests;
 mod milestone_tests;
 mod milestones;
 mod operations;
+mod orders;
+#[cfg(test)]
+mod orders_tests;
 mod pricing;
 #[cfg(test)]
 mod pricing_tests;
@@ -162,7 +165,7 @@ impl SimulationClock {
                 vdict! {
                     "kind" => e.kind, "priority" => e.priority as i64, "text" => e.text.as_str(),
                     "page" => e.page, "route_id" => e.route_id, "aircraft_id" => e.aircraft_id,
-                    "employee_id" => e.employee_id
+                    "employee_id" => e.employee_id, "order_id" => e.order_id as i64
                 }
             })
             .collect()
@@ -1289,6 +1292,67 @@ impl SimulationClock {
             Ok(()) => GString::new(),
             Err(error) => error.as_str().into(),
         }
+    }
+
+    #[func]
+    fn get_order_limit(&self) -> i64 {
+        orders::RULES.max_open_orders as i64
+    }
+
+    #[func]
+    fn quote_order(&self, model_id: GString, quantity: u32) -> VarDictionary {
+        match self.game.quote_order(&model_id.to_string(), quantity) {
+            Ok(q) => {
+                let dates: PackedStringArray = q
+                    .delivery_dates
+                    .iter()
+                    .map(|t| GString::from(operations::display_time(*t).as_str()))
+                    .collect();
+                let total_deposit = q.deposit_per_aircraft * i64::from(quantity);
+                vdict! {
+                    "error" => "", "unit_price" => q.unit_price,
+                    "deposit_per_aircraft" => q.deposit_per_aircraft,
+                    "total_deposit" => total_deposit, "balance" => q.balance,
+                    "delivery_dates" => &dates,
+                    "can_afford" => self.game.airline.as_ref().is_some_and(|a| a.capital_eur >= total_deposit)
+                }
+            }
+            Err(error) => vdict! { "error" => error.as_str() },
+        }
+    }
+
+    #[func]
+    fn place_order(&mut self, model_id: GString, quantity: u32) -> GString {
+        self.game
+            .place_order(&model_id.to_string(), quantity)
+            .err()
+            .unwrap_or_default()
+            .as_str()
+            .into()
+    }
+
+    #[func]
+    fn cancel_order(&mut self, order_id: i64) -> GString {
+        self.game
+            .cancel_order(order_id as u64)
+            .err()
+            .unwrap_or_default()
+            .as_str()
+            .into()
+    }
+
+    #[func]
+    fn get_orders(&self) -> Array<VarDictionary> {
+        self.game.orders.iter().map(|o| {
+            vdict! {
+                "id" => o.id as i64,
+                "model" => aircraft::model(&o.model_id).map_or("?", |m| m.name.as_str()),
+                "delivery_date" => operations::display_time(o.delivery_at).as_str(),
+                "grace_deadline" => operations::display_time(o.delivery_at + orders::RULES.grace_days * 86400).as_str(),
+                "balance" => o.unit_price - o.deposit, "deposit" => o.deposit,
+                "status" => if o.held_since.is_some() { "ORDER_HELD" } else { "ORDER_SCHEDULED" }
+            }
+        }).collect()
     }
 
     #[func]

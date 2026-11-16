@@ -89,7 +89,11 @@ impl Game {
     /// Called only after all bills at an event have settled. Recovery wins at
     /// the deadline when that event's final balance covers every obligation.
     pub fn apply_resolution(&mut self) {
-        if self.insolvent() || self.airline.is_none() {
+        if self.insolvent() {
+            self.orders.clear();
+            return;
+        }
+        if self.airline.is_none() {
             return;
         }
         if !self.distressed() {
@@ -101,6 +105,9 @@ impl Game {
         let since = *self.resolution.distress_since.get_or_insert(now);
         let start = since.saturating_add(RULES.distress_grace_days * DAY);
         if now >= start {
+            // Deposits were expensed when placed. Cancelling outstanding positions
+            // removes future balances without creating a refund or a new posting.
+            self.orders.clear();
             let deadline = start.saturating_add(RULES.restructuring_days * DAY);
             self.resolution.deadline = Some(deadline);
             if now >= deadline {

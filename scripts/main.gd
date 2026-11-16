@@ -71,6 +71,7 @@ var cancel_founding_button: Button
 var founding_status: Label
 var founding_capital: Label
 var new_game_button: Button
+var orders_panel: VBoxContainer
 var used_rows: VBoxContainer
 var used_signature := ""
 var fleet_panel: VBoxContainer
@@ -588,6 +589,10 @@ func _build_fleet(content: VBoxContainer) -> void:
 		fleet_sections.append(section)
 	fleet_tabs.tab_changed.connect(_fleet_tab_changed)
 	var grid := fleet_sections[1]
+	orders_panel = preload("res://scripts/orders_panel.gd").new()
+	orders_panel.simulation = simulation
+	orders_panel.changed.connect(_orders_changed)
+	grid.add_child(orders_panel)
 	var shop := UI.panel(grid, "BESCHAFFUNG  /  FLUGZEUGMARKT")
 	var purchase := HBoxContainer.new()
 	purchase.add_theme_constant_override("separation", 12)
@@ -672,6 +677,13 @@ func _build_fleet(content: VBoxContainer) -> void:
 	fleet_operations = UI.panel(fleet_sections[0], "LIVE-BETRIEB  /  FLOTTE & NETZWERK")
 	_model_selected(model_select.selected)
 	_fleet_tab_changed(0)
+
+
+func _orders_changed() -> void:
+	_refresh_time()
+	_refresh_attention()
+	_refresh_fleet()
+	save_status.text = tr("ORDER_SAVE_HINT")
 
 
 func _model_selected(index: int) -> void:
@@ -838,6 +850,7 @@ func _refresh_fleet() -> void:
 	maintenance_status.visible = not maintenance_status.text.is_empty()
 	_refresh_offers()
 	_refresh_used_market()
+	orders_panel.refresh()
 	_render_operations(fleet_operations)
 	var fleet: Array = simulation.get_fleet()
 	var airline: Dictionary = simulation.get_airline_info()
@@ -1358,6 +1371,13 @@ func _open_attention(entry: Dictionary) -> void:
 	if page == 1:
 		selected_aircraft = entry["aircraft_id"]
 	_show_page(page)
+	if page == 1 and entry.get("kind", "") == "delivery":
+		fleet_tabs.current_tab = 1
+		orders_panel.select_order(entry.get("order_id", 0))
+		var scroll := fleet_panel.get_parent().get_parent() as ScrollContainer
+		scroll.call_deferred("ensure_control_visible", orders_panel.table)
+		orders_panel.table.grab_focus()
+		return
 	if page == 1:
 		fleet_tree.ensure_cursor_is_visible()
 		fleet_tree.grab_focus()

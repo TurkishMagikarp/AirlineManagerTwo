@@ -64,8 +64,21 @@ impl ResultSummary {
 
 // Text contains changing figures; identity is the existing attention kind/target.
 fn same_entry(a: &Entry, b: &Entry) -> bool {
-    (a.kind, a.page, a.route_id, a.aircraft_id, a.employee_id)
-        == (b.kind, b.page, b.route_id, b.aircraft_id, b.employee_id)
+    (
+        a.kind,
+        a.page,
+        a.route_id,
+        a.aircraft_id,
+        a.employee_id,
+        a.order_id,
+    ) == (
+        b.kind,
+        b.page,
+        b.route_id,
+        b.aircraft_id,
+        b.employee_id,
+        b.order_id,
+    )
 }
 
 impl Game {
@@ -96,7 +109,13 @@ impl Game {
         staged.clock = Clock::from_state(start, true, 1).ok_or(error)?;
         let mut reason = String::new();
         while staged.clock.elapsed() < target {
-            let chunk = (target - staged.clock.elapsed()).min(Duration::from_secs(DAY));
+            let mut chunk = (target - staged.clock.elapsed()).min(Duration::from_secs(DAY));
+            if let Some(event) = staged.next_order_event() {
+                let until = Duration::from_secs(event).saturating_sub(staged.clock.elapsed());
+                if !until.is_zero() {
+                    chunk = chunk.min(until);
+                }
+            }
             if !staged.advance(chunk.as_secs_f64()) {
                 return Err(error);
             }
