@@ -90,7 +90,12 @@ pub fn market_in_economy(
     context: crate::world_economy::Context,
     time: Option<u64>,
 ) -> Result<Market, String> {
-    Ok(MarketInputs::new(route, price)?.at(&crate::world_economy::factors(Some(context), time)))
+    Ok(MarketInputs::new(route, price)?.at(&crate::world_economy::route_factors(
+        Some(context),
+        time,
+        &route.origin_icao,
+        &route.destination_icao,
+    )))
 }
 
 fn market_with_season(route: &Route, price: i64, time: Option<u64>) -> Result<Market, String> {
@@ -677,8 +682,16 @@ impl LocalPrepared {
         if self.neutral_choice != crate::reputation::NEUTRAL_CHOICE.with(|v| v.get()) {
             self.refresh_constants();
         }
-        let season =
-            crate::world_economy::factors(self.matching.iter().find_map(|o| o.economy), time);
+        let (origin, destination) = self
+            .matching
+            .first()
+            .map_or(("", ""), |o| (&*o.route.origin_icao, &*o.route.destination_icao));
+        let season = crate::world_economy::route_factors(
+            self.matching.iter().find_map(|o| o.economy),
+            time,
+            origin,
+            destination,
+        );
         let base = self.base.at(&season);
         let matching = &self.matching;
         let allocations = &mut self.allocations;
@@ -1715,15 +1728,28 @@ impl TransferNetwork {
         self.passengers.fill(0);
         self.revenue.fill(0);
         self.daily.fill(0.0);
-        let season =
-            crate::world_economy::factors(self.offers.iter().find_map(|o| o.economy), time);
+        let economy = self.offers.iter().find_map(|o| o.economy);
+        let season = crate::world_economy::factors(economy, time);
         let mut spare: Vec<f64> = self
             .offers
             .iter()
             .map(|o| frequency(&o.route) * f64::from(o.seats - o.business_seats))
             .collect();
         for m in &mut self.markets {
-            let base = m.base.at(&season);
+            let base = if economy.is_some() && time.is_some() {
+                m.base.at(&crate::world_economy::with_events(
+                    Market {
+                        business: season.business,
+                        leisure: season.leisure,
+                    },
+                    economy,
+                    time,
+                    &m.endpoints.origin_icao,
+                    &m.endpoints.destination_icao,
+                ))
+            } else {
+                m.base.at(&season)
+            };
             let mut residual = [base.business, base.leisure];
             if let Some(local) = &mut m.local {
                 local.estimate(time);
@@ -1900,7 +1926,12 @@ fn estimate_reference(
         .collect();
     let service_indices: Vec<_> = matching.iter().map(|(_, _, index)| *index).collect();
     let matching: Vec<_> = matching.into_iter().map(|(o, _, _)| o).collect();
-    let season = crate::world_economy::factors(matching.iter().find_map(|o| o.economy), time);
+    let season = crate::world_economy::route_factors(
+        matching.iter().find_map(|o| o.economy),
+        time,
+        &route.origin_icao,
+        &route.destination_icao,
+    );
     let at = |route: &Route, price| -> Result<Market, String> {
         Ok(MarketInputs::new(route, price)?.at(&season))
     };

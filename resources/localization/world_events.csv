@@ -1,0 +1,18 @@
+keys,de,en
+EVENTS_TITLE,EREIGNISSE  /  REGIONALE NACHFRAGE,EVENTS  /  REGIONAL DEMAND
+EVENTS_PLACE,Ort,Place
+EVENTS_KIND,Art,Kind
+EVENTS_DATES,Zeitraum,Dates
+EVENTS_EFFECT,Wirkung,Effect
+EVENTS_STATUS,Status,Status
+EVENTS_UPCOMING,Angekündigt,Upcoming
+EVENTS_ACTIVE,Aktiv,Active
+EVENTS_BOOM,Boom,Boom
+EVENTS_SLUMP,Flaute,Slump
+EVENTS_NONE,Keine angekündigten Ereignisse.,No announced events.
+EVENTS_DAYS,Tag %d – %d,Day %d – %d
+EVENTS_EFFECT_VALUE,Urlaub %s · Geschäft %s,Leisure %s · Business %s
+EVENTS_TOOLTIP,"%s: Nachfrage von und nach %s · Urlaub %s · Geschäft %s · Fracht %s. Öffentliche Vorschau, für alle Airlines gleich. Kosten, Treibstoff und Slots bleiben unverändert.","%s: demand to and from %s · leisure %s · business %s · cargo %s. Public forecast, identical for every airline. Costs, fuel and slots are unchanged."
+EVENTS_MINE,Betrifft dein Netz,Affects your network
+DEMAND_EVENT_FACTORS,Ereignis · Geschäft %s × · Urlaub %s × · Fracht %s ×,Event · Business %s × · Leisure %s × · Cargo %s ×
+DEMAND_EVENT_NAMES,Ereignis: %s,Event: %s

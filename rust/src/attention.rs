@@ -19,6 +19,7 @@ static RULES: LazyLock<Rules> = LazyLock::new(|| {
         "salary_reserve",
         "idle",
         "training",
+        "event",
     ] {
         assert!(r.priorities.contains_key(key), "Priorität fehlt: {key}");
     }
@@ -143,6 +144,27 @@ impl Game {
             .collect();
         if !nearly_full.is_empty() {
             add("slots", nearly_full.join(" · "), "routes", 0, 0, 0);
+        }
+        let now = self.clock.elapsed().as_secs();
+        let mine: Vec<&str> = std::iter::once(airline.home_airport_icao.as_str())
+            .chain(self.routes.iter().flat_map(|r| {
+                [r.origin_icao.as_str(), r.destination_icao.as_str()]
+            }))
+            .collect();
+        let mut announced = Vec::new();
+        for e in crate::world_events::visible_at(&self.world_economy, now) {
+            if mine.iter().any(|icao| e.touches(icao)) {
+                announced.push(Entry {
+                    order_id: e.id,
+                    kind: "event",
+                    priority: RULES.priorities["event"],
+                    text: e.text(),
+                    page: "overview",
+                    route_id: 0,
+                    aircraft_id: 0,
+                    employee_id: 0,
+                });
+            }
         }
         for p in &self.fleet {
             if let Ok(n) = staff::needs(&p.model_id)
@@ -275,6 +297,7 @@ impl Game {
                 });
             }
         }
+        entries.extend(announced);
         entries.sort_by_key(|e| {
             (
                 e.priority,

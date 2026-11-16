@@ -103,6 +103,9 @@ mod widebody_tests;
 mod world_economy;
 #[cfg(test)]
 mod world_economy_tests;
+mod world_events;
+#[cfg(test)]
+mod world_events_tests;
 
 use game::Game;
 use godot::prelude::*;
@@ -588,6 +591,45 @@ impl SimulationClock {
         "business" => world_economy::factor(index, r.business_reaction),
         "leisure" => world_economy::factor(index, r.leisure_reaction),
         "cargo" => world_economy::factor(index, r.cargo_reaction) }
+    }
+
+    /// Public forecast: announced, not yet finished events, soonest first.
+    #[func]
+    fn get_world_events(&self) -> Array<VarDictionary> {
+        let now = self.game.clock.elapsed().as_secs();
+        let mine: Vec<&str> = self
+            .game
+            .airline
+            .iter()
+            .map(|a| a.home_airport_icao.as_str())
+            .chain(self.game.routes.iter().flat_map(|r| [r.origin_icao.as_str(), r.destination_icao.as_str()]))
+            .collect();
+        let airports = airports::catalog().map(|c| &c.airports[..]).unwrap_or(&[]);
+        world_events::visible_at(&self.game.world_economy, now)
+            .iter()
+            .map(|e| {
+                let f = e.factors();
+                let covered: PackedStringArray = airports
+                    .iter()
+                    .filter(|a| e.touches(&a.icao))
+                    .map(|a| GString::from(a.icao.as_str()))
+                    .collect();
+                let (scope, code) = match e.place {
+                    world_events::Place::Airport(code) => ("airport", code),
+                    world_events::Place::Country(code) => ("country", code),
+                };
+                vdict! {
+                    "id" => e.id as i64, "kind" => e.kind.key(), "scope" => scope, "place_code" => code,
+                    "place" => e.place_name().as_str(),
+                    "status" => if e.is_active(now) { "active" } else { "upcoming" },
+                    "announced_at" => e.announced_at() as i64, "starts_at" => e.starts_at() as i64,
+                    "ends_at" => e.ends_at() as i64,
+                    "business" => f.business, "leisure" => f.leisure, "cargo" => f.cargo,
+                    "mine" => mine.iter().any(|icao| e.touches(icao)),
+                    "airports" => &covered
+                }
+            })
+            .collect()
     }
 
     #[func]
@@ -1190,6 +1232,12 @@ impl SimulationClock {
                 let market = demand::market_in_economy(r, r.ticket_eur, context, Some(now)).ok()?;
                 let base = demand::market_in_economy(r, 0, context, Some(now)).ok()?;
                 let index = self.game.world_economy.index_at(now);
+                let route_event = world_events::route_factors(&self.game.world_economy, now, &r.origin_icao, &r.destination_icao);
+                let (event_kinds, event_places): (PackedStringArray, PackedStringArray) = world_events::visible_at(&self.game.world_economy, now)
+                    .iter()
+                    .filter(|e| e.is_active(now) && (e.touches(&r.origin_icao) || e.touches(&r.destination_icao)))
+                    .map(|e| (GString::from(e.kind.key()), GString::from(e.place_name().as_str())))
+                    .unzip();
                 let services: Vec<_> = self.game.routes.iter().filter(|s| s.public_id() == r.id).collect();
                 let aircraft_ids: Array<u32> = services.iter().filter_map(|s| s.aircraft_id).collect();
                 let has_plan = services.iter().any(|s| s.plan.is_some());
@@ -1255,6 +1303,10 @@ impl SimulationClock {
                     "economy_business_factor" => world_economy::factor(index, world_economy::RULES.business_reaction),
                     "economy_leisure_factor" => world_economy::factor(index, world_economy::RULES.leisure_reaction),
                     "economy_cargo_factor" => world_economy::factor(index, world_economy::RULES.cargo_reaction),
+                    "event_kinds" => &event_kinds, "event_places" => &event_places,
+                    "event_business_factor" => route_event.map_or(1.0, |e| e.business),
+                    "event_leisure_factor" => route_event.map_or(1.0, |e| e.leisure),
+                    "event_cargo_factor" => route_event.map_or(1.0, |e| e.cargo),
                     "season_business_factor" => season.business,
                     "season_leisure_factor" => season.leisure,
                     "daily_demand" => market.total().floor() as i64,

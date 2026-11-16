@@ -549,6 +549,9 @@ mod tests {
     #[test]
     #[ignore = "short diagnostic finance profile; run explicitly with --ignored"]
     fn profile_twenty_thousand_flights() {
+        if std::env::var_os("AIRLINE_PERF_EVENTS").is_some() {
+            crate::world_events::DISABLED.with(|v| v.set(false));
+        }
         // Match finances_test.gd: two player fares, normal AI airlines, and an
         // endowment to keep the intentionally loss-making service flying.
         let mut g = game();
@@ -578,6 +581,9 @@ mod tests {
     }
     #[test]
     fn million_flight_finance_scenario_stays_within_budget() {
+        if std::env::var_os("AIRLINE_PERF_EVENTS").is_some() {
+            crate::world_events::DISABLED.with(|v| v.set(false));
+        }
         // Optional paired baseline: every owner remains on the neutral None path.
         let _loyalty_none = std::env::var_os("AIRLINE_PERF_LOYALTY_NONE")
             .is_some()

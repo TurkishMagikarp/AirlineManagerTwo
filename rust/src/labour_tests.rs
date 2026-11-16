@@ -247,6 +247,7 @@ fn labour_v39_migration_is_neutral_for_every_owner_and_retains_airborne_money() 
     strip(&mut value);
     std::fs::write(&path, serde_json::to_vec(&value).unwrap()).unwrap();
     let mut loaded = save::load(&path).unwrap();
+    g.adopt_events_from(&loaded);
     assert_eq!(g.cash(), loaded.cash());
     assert_eq!(g.finance, loaded.finance);
     assert_eq!(g.routes, loaded.routes);

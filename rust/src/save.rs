@@ -30,12 +30,14 @@ use std::time::Duration;
 // v40: per-group pay, morale and dated departure holds; old owners start neutral.
 // v41: airline-wide ancillary fees; v40 income and airborne results remain unchanged.
 // v42: airline-wide loyalty; old members, costs and enrolment start at zero.
-pub(crate) const VERSION: u32 = 42;
+// v43: regional world events; older saves announce their first event after loading.
+pub(crate) const VERSION: u32 = 43;
 // Bounded input, including centuries of fuel/seasonal quotes for the player
 // and both AI airlines in the million-flight finance restart scenario.
 // Version 17 retains per-class quotes, which also split more archive batches.
 // v26 adds disruption boundaries to centuries of AI/player history.
-pub(crate) const MAX_BYTES: u64 = 256 * 1024 * 1024;
+// v43 world events change demand totals per period and split more batches (~+6 %).
+pub(crate) const MAX_BYTES: u64 = 320 * 1024 * 1024;
 
 #[derive(Serialize, Deserialize)]
 struct SaveGame {
@@ -363,7 +365,7 @@ pub(crate) fn load_versioned(path: &Path) -> Result<(Game, u32), String> {
     if fuel_market.started_at > clock.elapsed().as_secs() {
         return Err("Ungültiger Treibstoffmarkt.".into());
     }
-    let world_economy = if data.version >= 34 {
+    let mut world_economy = if data.version >= 34 {
         data.state.world_economy.ok_or("Weltwirtschaft fehlt.")?
     } else {
         crate::world_economy::Cycle {
@@ -372,6 +374,9 @@ pub(crate) fn load_versioned(path: &Path) -> Result<(Game, u32), String> {
             ..Default::default()
         }
     };
+    if data.version < 43 {
+        world_economy.events_from = clock.elapsed().as_secs();
+    }
     world_economy.validate(clock.elapsed().as_secs())?;
     let mut game = Game {
         ancillary_policy: data.state.ancillary_policy,
@@ -559,6 +564,9 @@ pub(crate) fn load_versioned(path: &Path) -> Result<(Game, u32), String> {
     for c in &mut game.competitors {
         if data.version < 34 {
             c.game.world_economy = game.world_economy;
+        }
+        if data.version < 43 {
+            c.game.world_economy.events_from = game.world_economy.events_from;
         }
         c.game
             .world_economy

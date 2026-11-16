@@ -43,6 +43,9 @@ pub struct Cycle {
     pub started_at: u64,
     /// Last delivered period; notification delivery is saved, independent of UI frames.
     pub notified_period: u64,
+    /// Events are only announced from this time on; older saves start it at load.
+    #[serde(default)]
+    pub events_from: u64,
 }
 impl Default for Cycle {
     fn default() -> Self {
@@ -51,6 +54,7 @@ impl Default for Cycle {
             seed: 0x45434f4e4f4d59,
             started_at: 0,
             notified_period: 0,
+            events_from: 0,
         }
     }
 }
@@ -118,7 +122,7 @@ impl Cycle {
         10000 + self.crises.scale(index - 10000)
     }
     pub fn validate(&self, now: u64) -> Result<(), String> {
-        if self.started_at > now || self.notified_period > self.period(now) {
+        if self.started_at > now || self.events_from > now || self.notified_period > self.period(now) {
             return Err("Ungültige Weltwirtschaft.".into());
         }
         Ok(())
@@ -152,6 +156,33 @@ impl Context {
         self.cycle.index_at(time.unwrap_or(self.quoted_at))
     }
 }
+/// Shared market for one route: season, economy and regional events.
+pub fn route_factors(
+    context: Option<Context>,
+    time: Option<u64>,
+    origin: &str,
+    destination: &str,
+) -> crate::demand::Market {
+    with_events(factors(context, time), context, time, origin, destination)
+}
+
+/// Annual planning (`time == None`) ignores events like it ignores the season.
+pub fn with_events(
+    mut market: crate::demand::Market,
+    context: Option<Context>,
+    time: Option<u64>,
+    origin: &str,
+    destination: &str,
+) -> crate::demand::Market {
+    if let (Some(context), Some(time)) = (context, time)
+        && let Some(e) = crate::world_events::route_factors(&context.cycle, time, origin, destination)
+    {
+        market.business *= e.business;
+        market.leisure *= e.leisure;
+    }
+    market
+}
+
 pub fn factors(context: Option<Context>, time: Option<u64>) -> crate::demand::Market {
     let mut season = time
         .map(crate::demand::season_factors)
