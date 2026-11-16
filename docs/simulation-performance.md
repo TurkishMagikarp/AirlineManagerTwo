@@ -157,6 +157,23 @@ and overflow; and compare recent-ledger updates with the previous full stable-so
 algorithm, including equal keys and deferred arrivals. The existing reschedule
 collision test covers the forecast cache too.
 
+## Final validation
+
+- `cargo build --locked --manifest-path rust/Cargo.toml`: passed.
+- `cargo test --locked --manifest-path rust/Cargo.toml -- --test-threads=2`:
+  351 passed, 0 failed, 7 ignored; doc tests passed. The ignored profile and
+  Standard EDDF audit were run explicitly as described above.
+- `cargo clippy --locked --manifest-path rust/Cargo.toml`: passed without warnings.
+- `tools/godot_check.sh tests`: 51 passed, 0 failed; the Windows-only
+  `save_restart` driver was skipped by the runner.
+- Both prebuilt enforced million-flight tests passed. Six focused cache,
+  arithmetic, ordering and forecast regressions also passed.
+
+The full Rust suite includes pause, 1x/4x/16x, frame partitioning, large/small
+steps, time jumps, annual restart, old-save migration and save/reload equivalence.
+Godot checks exercise the shared extension through simulation, economy, finance,
+transfer, cargo, codeshare, orders and UI integration scripts.
+
 No UI changed and no screenshots were requested or taken. Linux Godot checks
 use the available server renderer. Windows `START.bat`, the PowerShell restart
 drivers and a real GPU remain unverified here.
