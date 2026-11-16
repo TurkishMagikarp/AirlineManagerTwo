@@ -1110,3 +1110,16 @@ func _ancillary_views(sim: RefCounted) -> void:
 			assert(main.size.x <= dimensions.x)
 			await RenderingServer.frame_post_draw
 			assert(root.get_texture().get_image().save_png(capture_dir.path_join("ancillary-%s-policy-%dx%d.png" % ["finances" if page == 4 else "routes", dimensions.x, dimensions.y])) == OK)
+
+			if page == 4:
+				main.finances_panel.chart_select.select(5)
+				main.finances_panel._chart()
+				main.finances_panel.route_tree.get_root().get_first_child().select(0)
+				main.finances_panel._select_route()
+				for view in [[main.finances_panel.chart, "chart"], [main.finances_panel.detail, "report"]]:
+					var control: Control = view[0]
+					scroll.ensure_control_visible(control)
+					for frame in range(5): await process_frame
+					assert(root.get_visible_rect().encloses(control.get_global_rect()))
+					await RenderingServer.frame_post_draw
+					assert(root.get_texture().get_image().save_png(capture_dir.path_join("ancillary-finances-%s-%dx%d.png" % [view[1], dimensions.x, dimensions.y])) == OK)
