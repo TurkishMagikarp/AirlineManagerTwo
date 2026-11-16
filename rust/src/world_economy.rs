@@ -1,7 +1,11 @@
 //! Shared, integer mean-reverting macroeconomy. Derived period values are cached;
 //! no random draws depend on frames, flights, owners or lookup order.
 use serde::{Deserialize, Serialize};
-use std::{cell::RefCell, collections::HashMap, sync::LazyLock};
+use std::{
+    cell::{Cell, RefCell},
+    collections::HashMap,
+    sync::LazyLock,
+};
 
 #[derive(Deserialize)]
 pub struct Rules {
@@ -51,6 +55,9 @@ impl Default for Cycle {
     }
 }
 thread_local! {
+    // The same period is queried by passengers, freight and each fare candidate.
+    // Keep the raw index so different crisis settings can share this exact lookup.
+    static RECENT: Cell<Option<(u64, usize, i64)>> = const { Cell::new(None) };
     static TIMELINES: RefCell<HashMap<u64, Vec<i64>>> = RefCell::new(HashMap::new());
 }
 #[cfg(test)]
@@ -79,7 +86,13 @@ impl Cycle {
     }
     pub fn index_at(&self, time: u64) -> i64 {
         let period = self.period(time) as usize;
-        TIMELINES.with(|cache| {
+        if let Some((seed, cached_period, index)) = RECENT.with(Cell::get)
+            && seed == self.seed
+            && cached_period == period
+        {
+            return 10000 + self.crises.scale(index - 10000);
+        }
+        let index = TIMELINES.with(|cache| {
             let mut cache = cache.borrow_mut();
             if !cache.contains_key(&self.seed) && cache.len() >= 4 {
                 cache.clear();
@@ -99,8 +112,10 @@ impl Cycle {
                         .clamp(RULES.minimum, RULES.maximum),
                 );
             }
-            10000 + self.crises.scale(values[period] - 10000)
-        })
+            values[period]
+        });
+        RECENT.with(|cache| cache.set(Some((self.seed, period, index))));
+        10000 + self.crises.scale(index - 10000)
     }
     pub fn validate(&self, now: u64) -> Result<(), String> {
         if self.started_at > now || self.notified_period > self.period(now) {

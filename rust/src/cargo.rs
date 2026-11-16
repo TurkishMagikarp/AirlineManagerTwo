@@ -80,6 +80,7 @@ pub fn estimate(
 #[derive(Clone)]
 struct Share {
     passenger_index: usize,
+    passengers: i64,
     frequency: f64,
     willingness: f64,
     limit: f64,
@@ -101,6 +102,7 @@ pub fn estimate_loaded(
 #[derive(Clone)]
 pub struct Market {
     base: f64,
+    last: Option<(f64, i64)>,
     economy: Option<crate::world_economy::Context>,
     target: Option<usize>,
     shares: Vec<Share>,
@@ -110,6 +112,7 @@ impl Market {
     pub fn new(route: &Route, model_id: &str, supply: &[demand::Offer]) -> Result<Self, String> {
         let mut market = Self {
             base: 0.0,
+            last: None,
             economy: supply.iter().find_map(|o| o.economy),
             target: None,
             shares: Vec::new(),
@@ -141,6 +144,7 @@ impl Market {
             )?);
             market.shares.push(Share {
                 passenger_index,
+                passengers: 0,
                 frequency: 43200.0 / o.route.plan.as_ref().unwrap().interval_seconds as f64,
                 willingness: (1.0
                     - o.route.cargo_rate_cents as f64 / RULES.zero_demand_rate_cents as f64)
@@ -169,10 +173,21 @@ impl Market {
                     crate::world_economy::RULES.cargo_reaction,
                 )
             });
+        // Payload limits depend only on these integer loads and this exact
+        // economy-adjusted base. Reuse a result only when every input agrees.
+        if let Some((previous_base, kg)) = self.last
+            && previous_base == base
+            && self
+                .shares
+                .iter()
+                .all(|s| s.passengers == passengers[s.passenger_index])
+        {
+            return kg;
+        }
         let shares = &mut self.shares;
         for (i, share) in shares.iter_mut().enumerate() {
-            share.limit = (capacity(self.models[i], passengers[share.passenger_index]) as f64
-                * share.frequency)
+            share.passengers = passengers[share.passenger_index];
+            share.limit = (capacity(self.models[i], share.passengers) as f64 * share.frequency)
                 .min(base * share.willingness);
             share.allocated = 0.0;
         }
@@ -200,7 +215,9 @@ impl Market {
             remaining = (remaining - used).max(0.0);
         }
         let own = &shares[target];
-        (own.allocated / own.frequency.max(1.0)).floor() as i64
+        let kg = (own.allocated / own.frequency.max(1.0)).floor() as i64;
+        self.last = Some((base, kg));
+        kg
     }
 }
 impl Game {

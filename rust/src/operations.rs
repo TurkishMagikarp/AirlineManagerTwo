@@ -545,6 +545,27 @@ pub fn movement(route: &Route, model: &str, now: u64) -> Result<Movement, String
     })
 }
 
+/// Existing results are canonical. Sort the staged arrivals alone and append
+/// when they follow the ledger; deferred older arrivals retain the full merge path.
+fn append_recent(
+    recent: &mut Vec<crate::economy::FlightResult>,
+    mut settled: Vec<crate::economy::FlightResult>,
+) {
+    settled.sort_by_key(|f| (f.landing, f.route_id));
+    let ordered = match (recent.last(), settled.first()) {
+        (Some(last), Some(first)) => {
+            (last.landing, last.route_id) <= (first.landing, first.route_id)
+        }
+        _ => true,
+    };
+    recent.append(&mut settled);
+    if !ordered {
+        recent.sort_by_key(|f| (f.landing, f.route_id));
+    }
+    let excess = recent.len().saturating_sub(crate::economy::HISTORY_LIMIT);
+    recent.drain(..excess);
+}
+
 impl Game {
     pub fn require_no_plan(&self, id: u32) -> Result<(), String> {
         if self
@@ -825,14 +846,7 @@ impl Game {
             None if delta == 0 => None,
             None => return false,
         };
-        self.finance.recent.append(&mut recent);
-        self.finance.recent.sort_by_key(|f| (f.landing, f.route_id));
-        let excess = self
-            .finance
-            .recent
-            .len()
-            .saturating_sub(crate::economy::HISTORY_LIMIT);
-        self.finance.recent.drain(..excess);
+        append_recent(&mut self.finance.recent, recent);
         self.reputation.observe(
             totals.punctuality_flights - self.finance.totals.punctuality_flights,
             totals.late_flights - self.finance.totals.late_flights,
@@ -991,6 +1005,47 @@ mod tests {
         assert!(timings(&route, "unknown").is_err());
         route.destination_icao.clone_from(&route.origin_icao);
         assert!(timings(&route, "atr72_600").is_err());
+    }
+
+    #[test]
+    fn recent_append_matches_full_stable_sort_for_ordered_and_deferred_arrivals() {
+        let g = game();
+        let template =
+            crate::operations::departure_quote(&g.routes[0], "atr72_600", 0, &g.market_routes())
+                .unwrap();
+        for old_count in [0, 1, crate::economy::HISTORY_LIMIT] {
+            for new_count in [0, 1, 17, crate::economy::HISTORY_LIMIT + 19] {
+                for first in [0, 10, 1000] {
+                    let old: Vec<_> = (0..old_count)
+                        .map(|i| {
+                            let mut f = template.clone();
+                            f.landing = i as u64 * 2;
+                            f.route_id = 1;
+                            f
+                        })
+                        .collect();
+                    let arrivals: Vec<_> = (0..new_count)
+                        .rev()
+                        .map(|i| {
+                            let mut f = template.clone();
+                            f.landing = first + i as u64;
+                            f.route_id = 1 + (i % 2) as u32;
+                            // Distinguish equal-key entries to check stable ordering.
+                            f.ticket_eur += 1;
+                            f
+                        })
+                        .collect();
+                    let mut expected = old.clone();
+                    expected.extend(arrivals.clone());
+                    expected.sort_by_key(|f| (f.landing, f.route_id));
+                    let excess = expected.len().saturating_sub(crate::economy::HISTORY_LIMIT);
+                    expected.drain(..excess);
+                    let mut actual = old;
+                    super::append_recent(&mut actual, arrivals);
+                    assert_eq!(actual, expected);
+                }
+            }
+        }
     }
 
     #[test]

@@ -269,7 +269,7 @@ pub fn project(route: &Route, model: &str, now: u64) -> Result<Projection, Strin
 // A plan's immutable seed, baseline wear and schedule completely determine
 // its future landings. Retain a few forecasts across frames; this cache is
 // disposable and never serialized or consulted for settlement.
-#[derive(PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 struct ForecastKey {
     seed: u64,
     acquired: u64,
@@ -285,6 +285,11 @@ struct ForecastKey {
 type Forecasts = std::collections::HashMap<(u64, u64), (ForecastKey, u64)>;
 thread_local! {
     static FORECASTS: std::cell::RefCell<Forecasts> = std::cell::RefCell::new(Forecasts::new());
+    // Direct recent hits avoid hashing; collisions fall back to the existing map.
+    // Every hit still checks the complete immutable schedule key.
+    static RECENT_FORECASTS: std::cell::RefCell<[Option<(ForecastKey, u64)>; 64]> = const {
+        std::cell::RefCell::new([const { None }; 64])
+    };
 }
 
 /// Actual arrival of an outstanding landing, used by maintenance and insurance.
@@ -315,17 +320,30 @@ pub fn landing_at(route: &Route, model: &str, index: u64) -> Result<u64, String>
         // Hash only the plan seed and requested index on this hot path. The
         // complete immutable key still guards hits across reschedules and saves.
         let bucket = (key.seed, key.index);
+        let slot = ((key.seed ^ key.index.rotate_left(17)) & 63) as usize;
+        if let Some(landing) = RECENT_FORECASTS.with(|recent| {
+            recent.borrow()[slot]
+                .as_ref()
+                .filter(|(stored, _)| *stored == key)
+                .map(|(_, landing)| *landing)
+        }) {
+            return Ok(landing);
+        }
         if let Some(landing) = FORECASTS.with(|f| {
             f.borrow()
                 .get(&bucket)
                 .filter(|(stored, _)| *stored == key)
                 .map(|(_, landing)| *landing)
         }) {
+            RECENT_FORECASTS.with(|recent| recent.borrow_mut()[slot] = Some((key, landing)));
             return Ok(landing);
         }
         while cursor.index <= index {
             let leg = cursor.next_timed(route, model, flight, ground)?;
             if leg.index == index {
+                RECENT_FORECASTS.with(|recent| {
+                    recent.borrow_mut()[slot] = Some((key.clone(), leg.landing));
+                });
                 FORECASTS.with(|f| {
                     let mut f = f.borrow_mut();
                     if f.len() >= 128 {

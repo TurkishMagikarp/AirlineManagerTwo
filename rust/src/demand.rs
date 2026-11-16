@@ -201,6 +201,17 @@ pub struct Offer {
     pub owner: String,
 }
 impl Offer {
+    fn allocation_order(&self, other: &Self) -> std::cmp::Ordering {
+        self.route
+            .ticket_eur
+            .cmp(&other.route.ticket_eur)
+            .then_with(|| frequency(&self.route).total_cmp(&frequency(&other.route)))
+            .then(self.seats.cmp(&other.seats))
+            .then(self.premium.cmp(&other.premium))
+            .then(self.route.service_level.cmp(&other.route.service_level))
+            .then(self.awareness.cmp(&other.awareness))
+            .then(self.reputation.cmp(&other.reputation))
+    }
     fn connects_with(&self, other: &Self) -> bool {
         self.owner == other.owner
             || (self.codeshare_partners.contains(&other.owner)
@@ -434,17 +445,7 @@ impl LocalPrepared {
             .drain(..)
             .zip(self.service_indices.drain(..))
             .collect();
-        ordered.sort_by(|(a, _), (b, _)| {
-            a.route
-                .ticket_eur
-                .cmp(&b.route.ticket_eur)
-                .then_with(|| frequency(&a.route).total_cmp(&frequency(&b.route)))
-                .then(a.seats.cmp(&b.seats))
-                .then(a.premium.cmp(&b.premium))
-                .then(a.route.service_level.cmp(&b.route.service_level))
-                .then(a.awareness.cmp(&b.awareness))
-                .then(a.reputation.cmp(&b.reputation))
-        });
+        ordered.sort_by(|(a, _), (b, _)| a.allocation_order(b));
         self.own_indices.clear();
         for (i, (offer, service)) in ordered.into_iter().enumerate() {
             if service == own {
@@ -480,7 +481,17 @@ impl LocalPrepared {
             }
         }
         if changed {
-            self.canonicalize(own);
+            if self
+                .matching
+                .windows(2)
+                .all(|pair| pair[0].allocation_order(&pair[1]) != std::cmp::Ordering::Greater)
+            {
+                // Reputation changes choice weights, not prices or capacities.
+                // Keep their storage and reduction order when already canonical.
+                self.refresh_constants();
+            } else {
+                self.canonicalize(own);
+            }
         }
     }
 
@@ -521,19 +532,18 @@ impl LocalPrepared {
             .filter(|o| o.route.plan.is_some() && same_market(route, &o.route))
             .map(Offer::commercial_clone)
             .collect();
-        let mut own = routes
-            .iter()
-            .find(|o| same_offer(route, &o.route))
-            .map(Offer::commercial_clone)
-            .unwrap_or_else(|| Offer::new(route, seats));
-        own.seats = seats;
-        if own.business_seats > seats {
+        let own = routes.iter().find(|o| same_offer(route, &o.route));
+        if own.is_some_and(|o| o.business_seats > seats) {
             return Err("Ungültige Kabinenkapazität.".into());
         }
         if !matching
             .iter()
             .any(|o| o.seats == seats && same_offer(route, &o.route))
         {
+            let mut own = own
+                .map(Offer::commercial_clone)
+                .unwrap_or_else(|| Offer::new(route, seats));
+            own.seats = seats;
             if let Some(o) = matching.iter_mut().find(|o| same_offer(route, &o.route)) {
                 *o = own;
             } else {
@@ -547,54 +557,34 @@ impl LocalPrepared {
         };
         // Both cabins participate in this same segmented allocator and spill loop.
         // Premium has no leisure weight; unsatisfied business can spill to economy.
-        let mut own_indices = Vec::new();
         let service_count = matching.len();
-        let mut service_indices = Vec::new();
-        let mut cabins = Vec::new();
+        let mut cabins = Vec::with_capacity(service_count * 2);
         let own_index = matching
             .iter()
             .position(|o| o.seats == seats && same_offer(route, &o.route))
             .unwrap();
-        for (index, o) in matching.into_iter().enumerate() {
+        for (index, mut economy) in matching.into_iter().enumerate() {
             let is_own = index == own_index;
-            let mut economy = o.clone();
-            economy.seats -= o.business_seats;
-            if is_own {
-                own_indices.push(cabins.len());
-            }
-            service_indices.push(index);
-            cabins.push(economy);
-            if o.business_seats > 0 {
-                let mut business = o;
+            let business = if economy.business_seats > 0 {
+                let mut business = economy.clone();
                 business.seats = business.business_seats;
                 business.route.ticket_eur = business.route.business_ticket_eur;
                 business.premium = true;
-                if is_own {
-                    own_indices.push(cabins.len());
-                }
-                service_indices.push(index);
-                cabins.push(business);
+                Some(business)
+            } else {
+                None
+            };
+            economy.seats -= economy.business_seats;
+            cabins.push((economy, is_own, index));
+            if let Some(business) = business {
+                cabins.push((business, is_own, index));
             }
         }
-        // Preserve identity independently of equal prices/IDs across owners.
-        let mut matching: Vec<_> = cabins
-            .into_iter()
-            .enumerate()
-            .map(|(i, o)| (o, own_indices.contains(&i), service_indices[i]))
-            .collect();
+        // Tag cabins as they are built, avoiding intermediate offer copies.
+        let mut matching = cabins;
         // Economic keys give a canonical floating-point reduction order even when
         // owner order, route IDs or direction differ. Equal keys are interchangeable.
-        matching.sort_by(|(a, _, _), (b, _, _)| {
-            a.route
-                .ticket_eur
-                .cmp(&b.route.ticket_eur)
-                .then_with(|| frequency(&a.route).total_cmp(&frequency(&b.route)))
-                .then(a.seats.cmp(&b.seats))
-                .then(a.premium.cmp(&b.premium))
-                .then(a.route.service_level.cmp(&b.route.service_level))
-                .then(a.awareness.cmp(&b.awareness))
-                .then(a.reputation.cmp(&b.reputation))
-        });
+        matching.sort_by(|(a, _, _), (b, _, _)| a.allocation_order(b));
         let own_indices: Vec<_> = matching
             .iter()
             .enumerate()
@@ -844,6 +834,7 @@ pub(crate) struct Prepared {
     target: Option<usize>,
     loads: Vec<i64>,
     transfer_services: Vec<Option<usize>>,
+    transfer_loads: Vec<i64>,
     service_seats: Vec<u32>,
     quotes: std::collections::HashMap<Option<u64>, (Estimate, Vec<i64>)>,
     reputation_revision: Option<u64>,
@@ -857,6 +848,7 @@ impl Prepared {
             target: None,
             loads: Vec::new(),
             transfer_services: Vec::new(),
+            transfer_loads: Vec::new(),
             service_seats: Vec::new(),
             quotes: Default::default(),
             reputation_revision: None,
@@ -954,6 +946,7 @@ impl Prepared {
                 .map(|o| o.seats)
                 .collect(),
             transfer_services,
+            transfer_loads: Vec::new(),
             local: Some(LocalPrepared::prepare(route, seats, routes, false)?),
             network,
             target,
@@ -1028,50 +1021,51 @@ impl Prepared {
         if self.quotes.len() >= 512 {
             self.quotes.clear();
         }
-        let (mut transfer, mut transfer_loads) =
-            if !display && let Some(cached) = self.quotes.get(&day) {
-                cached.clone()
-            } else {
-                let mut transfer = Estimate::default();
-                let mut transfer_loads = Vec::new();
-                if let (Some(network), Some(target)) = (&self.network, self.target) {
-                    let mut n = network.lock().unwrap();
-                    n.estimate_for(day, self.reputation_revision, &self.reputation_scores);
-                    transfer.connecting = n.passengers[target];
-                    transfer.connecting_revenue = n.revenue[target];
-                    transfer.codeshare = n.codeshare_for(target);
-                    transfer.daily_connecting =
-                        transfer.connecting as f64 * frequency(&n.offers[target].route);
-                    for index in &self.transfer_services {
-                        transfer_loads.push(n.passengers[index.expect("network service")]);
-                    }
-                    if display {
-                        for (p, daily) in n.paths.iter().zip(&n.daily) {
-                            if *daily > 0.0 && (p.legs[0] == target || p.legs[1] == target) {
-                                transfer.connections.push(Connection {
-                                    partner: n.partner_for(p, target),
-                                    origin: p.origin.clone(),
-                                    hub: p.hub.clone(),
-                                    destination: p.destination.clone(),
-                                    daily: *daily,
-                                });
-                            }
+        let mut transfer = if !display && let Some(cached) = self.quotes.get(&day) {
+            self.transfer_loads.clone_from(&cached.1);
+            cached.0.clone()
+        } else {
+            let mut transfer = Estimate::default();
+            self.transfer_loads.clear();
+            if let (Some(network), Some(target)) = (&self.network, self.target) {
+                let mut n = network.lock().unwrap();
+                n.estimate_for(day, self.reputation_revision, &self.reputation_scores);
+                transfer.connecting = n.passengers[target];
+                transfer.connecting_revenue = n.revenue[target];
+                transfer.codeshare = n.codeshare_for(target);
+                transfer.daily_connecting =
+                    transfer.connecting as f64 * frequency(&n.offers[target].route);
+                for index in &self.transfer_services {
+                    self.transfer_loads
+                        .push(n.passengers[index.expect("network service")]);
+                }
+                if display {
+                    for (p, daily) in n.paths.iter().zip(&n.daily) {
+                        if *daily > 0.0 && (p.legs[0] == target || p.legs[1] == target) {
+                            transfer.connections.push(Connection {
+                                partner: n.partner_for(p, target),
+                                origin: p.origin.clone(),
+                                hub: p.hub.clone(),
+                                destination: p.destination.clone(),
+                                daily: *daily,
+                            });
                         }
                     }
                 }
-                if !display {
-                    self.quotes
-                        .insert(day, (transfer.clone(), transfer_loads.clone()));
-                }
-                (transfer, transfer_loads)
-            };
+            }
+            if !display {
+                self.quotes
+                    .insert(day, (transfer.clone(), self.transfer_loads.clone()));
+            }
+            transfer
+        };
         // A daily transfer reservation can meet stronger local demand later
         // that day. Reallocate the complete network at the actual departure
         // instant instead of overbooking or discarding one leg of a journey.
         if self
             .loads
             .iter()
-            .zip(&transfer_loads)
+            .zip(&self.transfer_loads)
             .zip(&self.service_seats)
             .any(|((&local, &connecting), &seats)| local + connecting > i64::from(seats))
             && let (Some(network), Some(target)) = (&self.network, self.target)
@@ -1084,7 +1078,7 @@ impl Prepared {
             transfer.codeshare = n.codeshare_for(target);
             transfer.daily_connecting =
                 transfer.connecting as f64 * frequency(&n.offers[target].route);
-            for (load, index) in transfer_loads.iter_mut().zip(&self.transfer_services) {
+            for (load, index) in self.transfer_loads.iter_mut().zip(&self.transfer_services) {
                 *load = n.passengers[index.expect("network service")];
             }
             if display {
@@ -1109,8 +1103,8 @@ impl Prepared {
         result.connections = transfer.connections;
         result.per_departure += result.connecting;
         result.daily_passengers += result.daily_connecting;
-        for (load, connecting) in self.loads.iter_mut().zip(transfer_loads) {
-            *load += connecting;
+        for (load, connecting) in self.loads.iter_mut().zip(&self.transfer_loads) {
+            *load += *connecting;
         }
         (result, &self.loads)
     }
@@ -2054,6 +2048,41 @@ mod tests {
         }
         g.clock.set_running(true);
         g
+    }
+
+    #[test]
+    fn reputation_refresh_matches_fresh_allocation_with_stable_and_changed_order() {
+        let mut offers = vec![transfer_offers()[0].clone(); 2];
+        offers[0].owner = "first".into();
+        offers[1].owner = "second".into();
+        offers[1].route.id += 100;
+        let route = offers[0].route.clone();
+        let seats = offers[0].seats;
+        let mut retained = LocalPrepared::new(&route, seats, &offers).unwrap();
+        for scores in [
+            [400000, 600000],
+            [450000, 650000],
+            [800000, 650000],
+            [650000, 650000],
+            [400000, 600000],
+        ] {
+            for (offer, score) in offers.iter_mut().zip(scores) {
+                offer.reputation = score;
+            }
+            retained.set_reputation(|owner| {
+                offers
+                    .iter()
+                    .find(|o| o.owner == owner)
+                    .map(|o| o.reputation)
+            });
+            let mut fresh = LocalPrepared::new(&route, seats, &offers).unwrap();
+            for time in [None, Some(123), Some(2345678)] {
+                let (actual, loads) = retained.estimate(time);
+                let (expected, expected_loads) = fresh.estimate(time);
+                assert_eq!(actual, expected);
+                assert_eq!(loads, expected_loads);
+            }
+        }
     }
 
     #[test]
