@@ -1,0 +1,5 @@
+{
+  "included": {"economy_eur": 0, "business_eur": 0, "attractiveness": 1.0},
+  "standard": {"economy_eur": 8, "business_eur": 4, "attractiveness": 0.98},
+  "aggressive": {"economy_eur": 20, "business_eur": 10, "attractiveness": 0.94}
+}

@@ -7,6 +7,10 @@ use std::collections::HashSet;
 pub struct Route {
     #[serde(default = "crate::cargo::default_rate")]
     pub cargo_rate_cents: i64,
+    /// Commercial mirror of the owner policy for standalone market/quote APIs.
+    /// Updated together by Game; validation rejects inconsistent saved mirrors.
+    #[serde(default)]
+    pub ancillary_policy: crate::ancillaries::Policy,
     pub service_level: crate::service::Level,
     #[serde(default = "crate::cabins::default_business_fare")]
     pub business_ticket_eur: i64,
@@ -108,6 +112,7 @@ impl Game {
         self.commercial_changed();
         self.routes.push(Route {
             cargo_rate_cents: crate::cargo::default_rate(),
+            ancillary_policy: self.ancillary_policy,
             service_level: Default::default(),
             business_ticket_eur: crate::cabins::default_business_fare(),
             id: self.next_route_id,
@@ -388,6 +393,9 @@ impl Game {
         }
         let mut ids = HashSet::new();
         for route in &self.routes {
+            if route.ancillary_policy != self.ancillary_policy {
+                return Err("Widersprüchliche Zusatzgebühren.".into());
+            }
             if !(0..=crate::cargo::RULES.maximum_rate_cents).contains(&route.cargo_rate_cents)
                 || !(0..=100_000).contains(&route.ticket_eur)
                 || !(0..=100_000).contains(&route.business_ticket_eur)

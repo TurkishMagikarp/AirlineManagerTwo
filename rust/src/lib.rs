@@ -2,6 +2,9 @@ mod aircraft;
 #[cfg(test)]
 mod airport_charge_tests;
 mod airports;
+mod ancillaries;
+#[cfg(test)]
+mod ancillary_tests;
 mod attention;
 #[cfg(test)]
 mod attention_tests;
@@ -258,9 +261,9 @@ impl SimulationClock {
                     "route_id" => id, "origin" => a, "destination" => b, "active" => active,
                     "connecting_passengers" => t.connecting_passengers, "local_passengers" => t.passengers - t.connecting_passengers,
                     "connecting_revenue_eur" => t.connecting_revenue,
-                    "business_revenue_eur" => t.business_revenue, "economy_revenue_eur" => t.revenue - t.business_revenue - t.cargo_revenue,
+                    "business_revenue_eur" => t.business_revenue, "economy_revenue_eur" => t.revenue - t.business_revenue - t.cargo_revenue - t.ancillary,
                     "business_passengers" => t.business_passengers, "economy_passengers" => t.passengers - t.business_passengers,
-                    "care_eur" => t.care, "punctuality_percent" => disruptions::percent(&t), "punctuality_flights" => t.punctuality_flights, "service_eur" => t.service, "flights" => t.flights, "cargo_kg" => t.cargo_kg, "cargo_revenue_eur" => t.cargo_revenue, "ticket_revenue_eur" => t.revenue - t.cargo_revenue,
+                    "care_eur" => t.care, "punctuality_percent" => disruptions::percent(&t), "punctuality_flights" => t.punctuality_flights, "service_eur" => t.service, "ancillary_revenue_eur" => t.ancillary, "flights" => t.flights, "cargo_kg" => t.cargo_kg, "cargo_revenue_eur" => t.cargo_revenue, "ticket_revenue_eur" => t.revenue - t.cargo_revenue - t.ancillary,
                     "revenue_eur" => t.revenue, "costs_eur" => t.costs(),
                     "profit_eur" => t.profit(), "load_percent" => t.load_percent()
                 }
@@ -309,6 +312,7 @@ impl SimulationClock {
             let period_profit = i128::from(t.revenue - previous.revenue) - period_costs;
             let row = vdict! { "seconds" => time as i64, "time" => operations::display_time(time).as_str(),
                 "balance" => h.balance(time), "revenue" => t.revenue - previous.revenue,
+                "ancillary" => t.ancillary - previous.ancillary,
                 "tax" => (tax - previous_tax).min(i128::from(i64::MAX)) as i64,
                 "costs" => period_costs.min(i128::from(i64::MAX)) as i64,
                 "profit" => period_profit.clamp(i128::from(i64::MIN), i128::from(i64::MAX)) as i64,
@@ -666,7 +670,7 @@ impl SimulationClock {
         "fuel_month_delta_cents" => self.game.fuel_market.price_at(self.game.clock.elapsed().as_secs()) - self.game.fuel_market.price_at(self.game.clock.elapsed().as_secs().saturating_sub(30 * 86400)),
         "connecting_passengers" => t.connecting_passengers, "connecting_revenue_eur" => t.connecting_revenue,
         "local_passengers" => t.passengers - t.connecting_passengers,
-        "flights" => t.flights, "passengers" => t.passengers, "cargo_kg" => t.cargo_kg, "cargo_revenue_eur" => t.cargo_revenue, "ticket_revenue_eur" => t.revenue - t.cargo_revenue,
+        "flights" => t.flights, "passengers" => t.passengers, "cargo_kg" => t.cargo_kg, "cargo_revenue_eur" => t.cargo_revenue, "ticket_revenue_eur" => t.revenue - t.cargo_revenue - t.ancillary,
                     "revenue_eur" => t.revenue,
         "reputation_percent" => self.game.reputation.percent(),
         "reputation_trend" => self.game.reputation.trend_text(),
@@ -679,7 +683,7 @@ impl SimulationClock {
         "maintenance_eur" => maintenance, "payroll_eur" => payroll,
         "rent_eur" => rent.min(i128::from(i64::MAX)) as i64,
         "aircraft_cash_eur" => aircraft_cash.clamp(i128::from(i64::MIN), i128::from(i64::MAX)) as i64,
-        "fuel_eur" => t.fuel, "airport_eur" => t.airport, "crew_eur" => t.crew, "overhead_eur" => t.overhead, "care_eur" => t.care, "punctuality_percent" => disruptions::percent(t), "punctuality_flights" => t.punctuality_flights, "service_eur" => t.service,
+        "fuel_eur" => t.fuel, "airport_eur" => t.airport, "crew_eur" => t.crew, "overhead_eur" => t.overhead, "care_eur" => t.care, "punctuality_percent" => disruptions::percent(t), "punctuality_flights" => t.punctuality_flights, "service_eur" => t.service, "ancillary_revenue_eur" => t.ancillary,
         "costs_eur" => costs.min(i128::from(i64::MAX)) as i64,
         "profit_eur" => profit.clamp(i128::from(i64::MIN), i128::from(i64::MAX)) as i64, "purchases_eur" => purchases,
         "load_percent" => t.load_percent() }
@@ -1242,6 +1246,7 @@ impl SimulationClock {
                     "estimated_service_eur" => service_cost / active_count.max(1),
                     "estimated_airport_eur" => airport_cost / active_count.max(1),
                     "actual_service_eur" => actual.service,
+                    "actual_ancillary_revenue_eur" => actual.ancillary,
                     "punctuality_percent" => disruptions::percent(&actual), "punctuality_flights" => actual.punctuality_flights,
                     "economy_business_factor" => world_economy::factor(index, world_economy::RULES.business_reaction),
                     "economy_leisure_factor" => world_economy::factor(index, world_economy::RULES.leisure_reaction),
@@ -1468,6 +1473,36 @@ impl SimulationClock {
     fn set_cargo_rate(&mut self, route_id: u32, cents: i64) -> GString {
         self.game
             .set_cargo_rate(route_id, cents)
+            .err()
+            .unwrap_or_default()
+            .as_str()
+            .into()
+    }
+
+    #[func]
+    fn get_ancillary_policy(&self) -> VarDictionary {
+        let p = self.game.ancillary_policy;
+        let options: Array<VarDictionary> = [
+            ancillaries::Policy::Included,
+            ancillaries::Policy::Standard,
+            ancillaries::Policy::Aggressive,
+        ]
+        .into_iter()
+        .map(|p| {
+            vdict! {
+                "policy" => p.name(), "economy_eur" => p.rate().economy_eur,
+                "business_eur" => p.rate().business_eur,
+                "attractiveness_percent" => p.rate().attractiveness * 100.0
+            }
+        })
+        .collect();
+        vdict! { "policy" => p.name(), "options" => &options, "can_change" => self.game.require_active().is_ok() }
+    }
+
+    #[func]
+    fn set_ancillary_policy(&mut self, policy: GString) -> GString {
+        ancillaries::Policy::parse(&policy.to_string())
+            .and_then(|p| self.game.set_ancillary_policy(p))
             .err()
             .unwrap_or_default()
             .as_str()
@@ -2348,11 +2383,11 @@ fn flight_dictionary(f: &economy::FlightResult) -> VarDictionary {
     "connecting_revenue_eur" => t.connecting_revenue,
     "passengers" => t.passengers, "seats" => t.seats, "load_percent" => t.load_percent(),
     "business_passengers" => t.business_passengers, "economy_passengers" => t.passengers - t.business_passengers,
-    "business_revenue_eur" => t.business_revenue, "economy_revenue_eur" => t.revenue - t.business_revenue - t.cargo_revenue,
+    "business_revenue_eur" => t.business_revenue, "economy_revenue_eur" => t.revenue - t.business_revenue - t.cargo_revenue - t.ancillary,
     "business_seats" => t.business_seats, "economy_seats" => t.seats - t.business_seats,
-    "cargo_kg" => t.cargo_kg, "cargo_revenue_eur" => t.cargo_revenue, "ticket_revenue_eur" => t.revenue - t.cargo_revenue,
+    "cargo_kg" => t.cargo_kg, "cargo_revenue_eur" => t.cargo_revenue, "ticket_revenue_eur" => t.revenue - t.cargo_revenue - t.ancillary,
                     "revenue_eur" => t.revenue, "fuel_eur" => t.fuel, "airport_eur" => t.airport,
-    "crew_eur" => t.crew, "overhead_eur" => t.overhead, "care_eur" => t.care, "punctuality_percent" => disruptions::percent(t), "punctuality_flights" => t.punctuality_flights, "service_eur" => t.service, "costs_eur" => t.costs(), "profit_eur" => t.profit() }
+    "crew_eur" => t.crew, "overhead_eur" => t.overhead, "care_eur" => t.care, "punctuality_percent" => disruptions::percent(t), "punctuality_flights" => t.punctuality_flights, "service_eur" => t.service, "ancillary_revenue_eur" => t.ancillary, "costs_eur" => t.costs(), "profit_eur" => t.profit() }
 }
 
 fn jump_dictionary(result: Result<jumps::ResultSummary, &'static str>) -> VarDictionary {

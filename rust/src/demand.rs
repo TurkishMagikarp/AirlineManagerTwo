@@ -209,6 +209,11 @@ impl Offer {
             .then(self.seats.cmp(&other.seats))
             .then(self.premium.cmp(&other.premium))
             .then(self.route.service_level.cmp(&other.route.service_level))
+            .then(
+                self.route
+                    .ancillary_policy
+                    .cmp(&other.route.ancillary_policy),
+            )
             .then(self.awareness.cmp(&other.awareness))
             .then(self.reputation.cmp(&other.reputation))
     }
@@ -231,6 +236,7 @@ impl Offer {
                 aircraft_id: r.aircraft_id,
                 parent_route_id: r.parent_route_id,
                 cargo_rate_cents: r.cargo_rate_cents,
+                ancillary_policy: r.ancillary_policy,
                 service_level: r.service_level,
                 ticket_eur: r.ticket_eur,
                 business_ticket_eur: r.business_ticket_eur,
@@ -296,6 +302,7 @@ pub(crate) fn same_offer(a: &Route, b: &Route) -> bool {
         && a.business_ticket_eur == b.business_ticket_eur
         && a.cargo_rate_cents == b.cargo_rate_cents
         && a.service_level == b.service_level
+        && a.ancillary_policy == b.ancillary_policy
         && a.plan.as_ref().map(|p| p.interval_seconds)
             == b.plan.as_ref().map(|p| p.interval_seconds)
 }
@@ -389,10 +396,12 @@ impl LocalPrepared {
         for (j, o) in self.matching.iter().enumerate() {
             let f = frequency(&o.route);
             self.frequencies[j] = f;
-            self.choices[j] = crate::marketing::attractiveness(o.awareness)
-                * crate::reputation::attractiveness(o.reputation)
-                * o.route.service_level.rate().attractiveness
-                * f;
+            self.choices[j] = o.route.ancillary_policy.weight(
+                crate::marketing::attractiveness(o.awareness)
+                    * crate::reputation::attractiveness(o.reputation)
+                    * o.route.service_level.rate().attractiveness
+                    * f,
+            );
         }
         #[cfg(test)]
         {
@@ -1585,7 +1594,12 @@ impl TransferNetwork {
                     .enumerate()
                 {
                     let w = willingness * CONFIG.transfer_penalty;
-                    let weight = path.frequency * w / (1.0 - w).max(1e-9);
+                    let weight = offers[path.legs[0]].route.ancillary_policy.weight(
+                        offers[path.legs[1]]
+                            .route
+                            .ancillary_policy
+                            .weight(path.frequency * w / (1.0 - w).max(1e-9)),
+                    );
                     weights[segment] = [w, weight];
                     if w > 0.0 {
                         frequencies[segment] += path.frequency;
@@ -1859,6 +1873,7 @@ fn estimate_reference(
             .then(a.seats.cmp(&b.seats))
             .then(a.premium.cmp(&b.premium))
             .then(a.route.service_level.cmp(&b.route.service_level))
+            .then(a.route.ancillary_policy.cmp(&b.route.ancillary_policy))
             .then(a.awareness.cmp(&b.awareness))
             .then(a.reputation.cmp(&b.reputation))
     });
@@ -1906,11 +1921,12 @@ fn estimate_reference(
             if w > 0.0 && !o.premium {
                 frequency_sum[i] += f;
             }
-            weights[j][i] = crate::marketing::attractiveness(o.awareness)
-                * crate::reputation::attractiveness(o.reputation)
-                * o.route.service_level.rate().attractiveness
-                * f
-                * w
+            weights[j][i] = o.route.ancillary_policy.weight(
+                crate::marketing::attractiveness(o.awareness)
+                    * crate::reputation::attractiveness(o.reputation)
+                    * o.route.service_level.rate().attractiveness
+                    * f,
+            ) * w
                 / (1.0 - w).max(1e-9)
                 * if o.premium {
                     crate::cabins::RULES.business_preference

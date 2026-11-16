@@ -320,6 +320,7 @@ impl Game {
             ticket_eur: 0,
             business_ticket_eur: 0,
             cargo_rate_cents: 0,
+            ancillary_policy: Default::default(),
             service_level: crate::service::Level::default(),
             plan: None,
         };

@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://b8b5bw8u65jdx"
+
+[deps]
+
+files=["res://resources/localization/ancillaries.de.translation", "res://resources/localization/ancillaries.en.translation"]
+
+source_file="res://resources/localization/ancillaries.csv"
+dest_files=["res://resources/localization/ancillaries.de.translation", "res://resources/localization/ancillaries.en.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

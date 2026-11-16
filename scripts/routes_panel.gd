@@ -434,8 +434,9 @@ func refresh_operations() -> void:
 			UI.cell_text(row, i, values[i])
 			row.set_tooltip_text(i, "Ticket: %s\nTreibstoff: %s\nFlughäfen: %s\nPersonal: %s\nWartung / Verwaltung: %s\nBordservice (± Standard): %s" % [UI.money(result["ticket_eur"]), UI.money(result["fuel_eur"]), UI.money(result["airport_eur"]), UI.money(result["crew_eur"]), UI.money(result["overhead_eur"]), UI.money(result["service_eur"])])
 			row.set_tooltip_text(i, row.get_tooltip_text(i) + "\nBetreuung / Entschädigung: %s" % UI.money(result["care_eur"]))
+		row.set_tooltip_text(4, row.get_tooltip_text(4) + "\n" + tr("ANCILLARY_ROUTE_REVENUE") % UI.money(result["ancillary_revenue_eur"]))
 		var tooltip := row.get_tooltip_text(4)
-		var parts: Array = []
+		var parts: Array = [[tr("ANCILLARY_REVENUE"), UI.money(result["ancillary_revenue_eur"])]]
 		for pair in [["Treibstoff", "fuel_eur"], ["Flughäfen", "airport_eur"], ["Personal", "crew_eur"], ["Wartung / Verwaltung", "overhead_eur"], ["Bordservice (± Standard)", "service_eur"], ["Betreuung / Entschädigung", "care_eur"], ["Kosten", "costs_eur"]]:
 			parts.append([pair[0], UI.money(result[pair[1]])])
 		var breakdowns: Dictionary = results_tree.get_meta("breakdowns")
@@ -514,6 +515,8 @@ func _update_service_cost(route: Dictionary) -> void:
 	for control in [ticket_input, ticket_button, business_input, business_button, service_select]:
 		control.tooltip_text = tr("FREIGHTER_TOOLTIP") if route.get("freighter_only", false) else ""
 	service_cost.text = "" if route.is_empty() or route.get("freighter_only", false) else "Flughafengebühren Start + Ziel: %s je Abflug (Ø aktive Flugzeuge; ohne Plan 0).\nBordservice gegenüber Standard: Y %s / J %s je Passagier · erwartet %s je Abflug (Ø aktive Flugzeuge) · bisher %s.\nStandard ist in den Grundkosten enthalten; Basic spart, Premium kostet zusätzlich. Laufende Flüge bleiben unverändert." % [UI.money(route["estimated_airport_eur"]), UI.money(route["service_economy_eur"]), UI.money(route["service_business_eur"]), UI.money(route["estimated_service_eur"]), UI.money(route["actual_service_eur"])]
+	if not route.is_empty() and not route.get("freighter_only", false):
+		service_cost.text += "\n" + tr("ANCILLARY_ROUTE_REVENUE") % UI.money(route["actual_ancillary_revenue_eur"])
 
 
 # Maintenance starts and ends while time runs, so this follows live route data.

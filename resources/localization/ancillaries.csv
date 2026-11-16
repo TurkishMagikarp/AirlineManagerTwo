@@ -1,0 +1,15 @@
+keys,de,en
+ANCILLARY_REVENUE,ZUSATZUMSÄTZE,ANCILLARY REVENUE
+ANCILLARY_TITLE,ZUSATZGEBÜHREN · AIRLINEWEIT,ANCILLARY FEES · AIRLINE-WIDE
+ANCILLARY_INCLUDED_SHORT,Inkl.,Incl.
+ANCILLARY_STANDARD_SHORT,Std.,Std.
+ANCILLARY_AGGRESSIVE_SHORT,Max.,Max.
+ANCILLARY_INCLUDED,Inklusive,Included
+ANCILLARY_STANDARD,Standardgebühren,Standard fees
+ANCILLARY_AGGRESSIVE,Aggressive Gebühren,Aggressive fees
+ANCILLARY_RATE,%s: Economy %s / Business %s je Passagier · Attraktivität %.0f %%,%s: Economy %s / Business %s per passenger · attractiveness %.0f%%
+ANCILLARY_NOTE,"Ab dem nächsten Abflug; laufende Flüge bleiben unverändert. Gepäck und Sitzwahl zusammengefasst. Gilt je geflogenem Abschnitt, auch für Umsteiger; keine Gebühren für Frachter. Der Attraktivitätsfaktor wirkt auf das Marktgewicht, nicht direkt auf die Passagierzahl.","Applies from the next departure; airborne flights keep their result. Bags and seat selection combined. Charged per operated leg, including connections; freighters pay none. Attractiveness multiplies market weight, not passenger counts directly."
+ANCILLARY_CHANGED,Zusatzgebühren geändert.,Ancillary fees changed.
+ANCILLARY_ROUTE_REVENUE,Zusatzumsätze (gebuchte Landungen): %s.,Ancillary revenue (settled landings): %s.
+ANCILLARY_OPERATING_REVENUE,Betriebseinnahmen · EUR je Zeitabschnitt,Operating revenue · EUR per period
+ANCILLARY_PERIOD,Zusatzumsätze · EUR je Zeitabschnitt,Ancillary revenue · EUR per period

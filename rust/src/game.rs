@@ -9,6 +9,8 @@ use std::collections::HashSet;
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Game {
     #[serde(default)]
+    pub ancillary_policy: crate::ancillaries::Policy,
+    #[serde(default)]
     pub orders: Vec<crate::orders::Order>,
     #[serde(default = "initial_order_id")]
     pub next_order_id: u64,
@@ -104,6 +106,7 @@ impl Game {
 impl Default for Game {
     fn default() -> Self {
         Self {
+            ancillary_policy: Default::default(),
             orders: Vec::new(),
             next_order_id: 1,
             codeshares: Vec::new(),
