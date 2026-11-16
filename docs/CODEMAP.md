@@ -728,10 +728,10 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 502 fn million_flights_are_lossless_compact_and_random_access()
 551 fn profile_twenty_thousand_flights()
 580 fn million_flight_finance_scenario_stays_within_budget()
-661 fn frame_partitioning_and_simultaneous_routes_match_archive()
-686 fn price_changes_preserve_old_load_costs_and_deleted_routes()
-707 fn legacy_migration_starts_at_known_balance_without_fabricating_flights()
-733 fn corrupt_archive_is_rejected_and_overflow_leaves_it_unchanged()
+665 fn frame_partitioning_and_simultaneous_routes_match_archive()
+690 fn price_changes_preserve_old_load_costs_and_deleted_routes()
+711 fn legacy_migration_starts_at_known_balance_without_fabricating_flights()
+737 fn corrupt_archive_is_rejected_and_overflow_leaves_it_unchanged()
 
 ## rust/src/insurance.rs
 7 const DAY: u64 = 86400;
