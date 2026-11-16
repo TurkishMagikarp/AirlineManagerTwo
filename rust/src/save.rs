@@ -33,13 +33,40 @@ use std::time::Duration;
 // v43: regional world events; older saves announce their first event after loading.
 // v44: airport weather; older saves apply their first weather after loading.
 pub(crate) const VERSION: u32 = 44;
-// Bounded input, including centuries of fuel/seasonal quotes for the player
-// and both AI airlines in the million-flight finance restart scenario.
-// Version 17 retains per-class quotes, which also split more archive batches.
-// v26 adds disruption boundaries to centuries of AI/player history.
-// v43 world events change demand totals per period and split more batches (~+6 %).
-// v44 weather delays split more archive batches (~+9 %).
-pub(crate) const MAX_BYTES: u64 = 360 * 1024 * 1024;
+// Largest save file the game writes. Saves above COMPRESS_THRESHOLD are
+// LZ4-frame compressed (the finance archive repeats keys and values heavily),
+// so this limit tracks real disk size instead of growing with every feature
+// that splits more archive batches.
+pub(crate) const MAX_BYTES: u64 = 64 * 1024 * 1024;
+// Largest uncompressed JSON document, written or read: a memory guard that
+// also stays valid for old uncompressed saves.
+pub(crate) const MAX_JSON_BYTES: u64 = 360 * 1024 * 1024;
+// Small saves stay plain, readable JSON.
+const COMPRESS_THRESHOLD: usize = 1024 * 1024;
+const LZ4_MAGIC: [u8; 4] = [0x04, 0x22, 0x4D, 0x18];
+
+fn compress(json: &[u8]) -> Result<Vec<u8>, String> {
+    let info = lz4_flex::frame::FrameInfo::new()
+        .block_size(lz4_flex::frame::BlockSize::Max4MB)
+        .block_mode(lz4_flex::frame::BlockMode::Linked)
+        .content_checksum(true);
+    let mut encoder = lz4_flex::frame::FrameEncoder::with_frame_info(info, Vec::new());
+    encoder
+        .write_all(json)
+        .map_err(|error| format!("Spielstand konnte nicht komprimiert werden: {error}"))?;
+    encoder
+        .finish()
+        .map_err(|error| format!("Spielstand konnte nicht komprimiert werden: {error}"))
+}
+
+fn decompress(packed: &[u8]) -> Result<Vec<u8>, String> {
+    let mut json = Vec::new();
+    lz4_flex::frame::FrameDecoder::new(packed)
+        .take(MAX_JSON_BYTES + 1)
+        .read_to_end(&mut json)
+        .map_err(|_| "Spielstand ist beschädigt oder unvollständig.".to_string())?;
+    Ok(json)
+}
 
 #[derive(Serialize, Deserialize)]
 struct SaveGame {
@@ -189,8 +216,19 @@ pub fn save(path: &Path, game: &Game) -> Result<(), String> {
             },
         },
     };
-    let bytes = serde_json::to_vec(&data)
+    let json = serde_json::to_vec(&data)
         .map_err(|error| format!("Spielstand konnte nicht erzeugt werden: {error}"))?;
+    if json.len() as u64 > MAX_JSON_BYTES {
+        return Err(format!(
+            "Spielstand ist zu groß: {} Bytes (Limit {MAX_JSON_BYTES}).",
+            json.len()
+        ));
+    }
+    let bytes = if json.len() > COMPRESS_THRESHOLD {
+        compress(&json)?
+    } else {
+        json
+    };
     if bytes.len() as u64 > MAX_BYTES {
         return Err(format!(
             "Spielstand ist zu groß: {} Bytes (Limit {MAX_BYTES}).",
@@ -224,17 +262,35 @@ pub fn load(path: &Path) -> Result<Game, String> {
 pub(crate) fn load_versioned(path: &Path) -> Result<(Game, u32), String> {
     let file = File::open(path).map_err(|error| format!("Spielstand nicht lesbar: {error}"))?;
     let mut bytes = Vec::new();
-    file.take(MAX_BYTES + 1)
+    file.take(MAX_JSON_BYTES + 1)
         .read_to_end(&mut bytes)
         .map_err(|error| format!("Spielstand nicht lesbar: {error}"))?;
-    if bytes.len() as u64 > MAX_BYTES {
+    if bytes.starts_with(&LZ4_MAGIC) {
+        if bytes.len() as u64 > MAX_BYTES {
+            return Err(format!(
+                "Spielstand ist zu groß: {} Bytes (Limit {MAX_BYTES}).",
+                bytes.len()
+            ));
+        }
+        bytes = decompress(&bytes)?;
+    }
+    if bytes.len() as u64 > MAX_JSON_BYTES {
         return Err(format!(
-            "Spielstand ist zu groß: {} Bytes (Limit {MAX_BYTES}).",
+            "Spielstand ist zu groß: {} Bytes (Limit {MAX_JSON_BYTES}).",
             bytes.len()
         ));
     }
-    let mut value: serde_json::Value = serde_json::from_slice(&bytes)
-        .map_err(|_| "Spielstand ist beschädigt oder unvollständig.".to_string())?;
+    let corrupt = || "Spielstand ist beschädigt oder unvollständig.".to_string();
+    // Current-version saves need no migration, so skip the generic Value tree.
+    #[derive(Deserialize)]
+    struct Peek {
+        version: u32,
+    }
+    let peek: Peek = serde_json::from_slice(&bytes).map_err(|_| corrupt())?;
+    if peek.version == VERSION {
+        return finish_load(serde_json::from_slice(&bytes).map_err(|_| corrupt())?);
+    }
+    let mut value: serde_json::Value = serde_json::from_slice(&bytes).map_err(|_| corrupt())?;
     if value["version"].as_u64().is_some_and(|v| v < 15) {
         crate::route_save::migrate(&mut value["state"]);
     }
@@ -298,8 +354,10 @@ pub(crate) fn load_versioned(path: &Path) -> Result<(Game, u32), String> {
     // fields deserialize to None/zero for every owner and archived result.
     // Initialize a cursor only when play advances; an existing airborne quote
     // is then frozen through its original landing, without replaying history.
-    let data: SaveGame = serde_json::from_value(value)
-        .map_err(|_| "Spielstand ist beschädigt oder unvollständig.".to_string())?;
+    finish_load(serde_json::from_value(value).map_err(|_| corrupt())?)
+}
+
+fn finish_load(data: SaveGame) -> Result<(Game, u32), String> {
     if !(1..=VERSION).contains(&data.version) {
         return Err(format!(
             "Nicht unterstützte Spielstand-Version: {}.",
@@ -745,11 +803,49 @@ mod tests {
     fn rejects_oversized_saves_and_write_errors() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("large.json");
-        fs::write(&path, vec![b' '; MAX_BYTES as usize + 1]).unwrap();
+        fs::write(&path, vec![b' '; MAX_JSON_BYTES as usize + 1]).unwrap();
         assert!(load(&path).is_err());
+        // Compressed: file too large, or a small file that inflates past the limit.
+        let mut huge = LZ4_MAGIC.to_vec();
+        huge.resize(MAX_BYTES as usize + 1, 0);
+        fs::write(&path, huge).unwrap();
+        assert!(load(&path).err().unwrap().contains("zu groß"));
+        fs::write(&path, compress(&vec![b' '; MAX_JSON_BYTES as usize + 1]).unwrap()).unwrap();
+        assert!(fs::metadata(&path).unwrap().len() < MAX_BYTES);
+        assert!(load(&path).err().unwrap().contains("zu groß"));
         // A directory cannot be overwritten as a save file.
         assert!(save(dir.path(), &Game::default()).is_err());
         assert!(dir.path().is_dir());
+    }
+
+    #[test]
+    fn large_saves_are_compressed_and_round_trip_exactly() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("big.sav");
+        let mut game = Game::default();
+        game.found("Big Air", "DE", "EDDF").unwrap();
+        save(&path, &game).unwrap();
+        assert!(fs::read(&path).unwrap().starts_with(b"{"));
+        let count = 200_000;
+        game.history.as_mut().unwrap().purchases = (0..count)
+            .map(|_| crate::history::Purchase { time: 0, amount: 1 })
+            .collect();
+        game.airline.as_mut().unwrap().capital_eur -= count as i64;
+        game.validate_history().unwrap();
+        save(&path, &game).unwrap();
+        let packed = fs::read(&path).unwrap();
+        assert!(packed.starts_with(&LZ4_MAGIC));
+        assert!(packed.len() < COMPRESS_THRESHOLD);
+        assert_eq!(load(&path).unwrap().history, game.history);
+        let mut cut = packed.clone();
+        cut.truncate(packed.len() / 2);
+        fs::write(&path, &cut).unwrap();
+        assert!(load(&path).is_err());
+        let mut flipped = packed;
+        let middle = flipped.len() / 2;
+        flipped[middle] ^= 0x55;
+        fs::write(&path, &flipped).unwrap();
+        assert!(load(&path).is_err());
     }
 
     #[test]
@@ -880,7 +976,7 @@ mod tests {
         game.found("Large Fleet Air", "DE", "EDDF").unwrap();
         save(&path, &game).unwrap();
         let previous = fs::read(&path).unwrap();
-        let count = MAX_BYTES as usize / 10;
+        let count = MAX_JSON_BYTES as usize / 10;
         game.history.as_mut().unwrap().purchases =
             vec![crate::history::Purchase { time: 0, amount: 1 }; count];
         game.airline.as_mut().unwrap().capital_eur -= count as i64;

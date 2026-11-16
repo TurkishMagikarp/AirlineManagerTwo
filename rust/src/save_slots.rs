@@ -128,7 +128,7 @@ fn read_header_metadata(slot: &Path, id: &str) -> Result<Header, String> {
         || h.game_time.is_empty()
         || h.game_time.len() > 128
         || h.bytes == 0
-        || h.bytes > save::MAX_BYTES
+        || h.bytes > save::MAX_JSON_BYTES
     {
         return Err("Beschädigter Spielstandkopf.".into());
     }

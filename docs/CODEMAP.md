@@ -729,11 +729,12 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 455 fn settled_cache_matches_scans_after_merges_groups_and_reload()
 502 fn million_flights_are_lossless_compact_and_random_access()
 551 fn profile_twenty_thousand_flights()
-583 fn million_flight_finance_scenario_stays_within_budget()
-671 fn frame_partitioning_and_simultaneous_routes_match_archive()
-696 fn price_changes_preserve_old_load_costs_and_deleted_routes()
-717 fn legacy_migration_starts_at_known_balance_without_fabricating_flights()
-743 fn corrupt_archive_is_rejected_and_overflow_leaves_it_unchanged()
+584 fn save_size_profile()
+683 fn million_flight_finance_scenario_stays_within_budget()
+772 fn frame_partitioning_and_simultaneous_routes_match_archive()
+797 fn price_changes_preserve_old_load_costs_and_deleted_routes()
+818 fn legacy_migration_starts_at_known_balance_without_fabricating_flights()
+844 fn corrupt_archive_is_rejected_and_overflow_leaves_it_unchanged()
 
 ## rust/src/insurance.rs
 7 const DAY: u64 = 86400;
@@ -1354,15 +1355,15 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 5 fn scenario(price: Option<i64>) -> Game
 20 fn ten_year_scenarios_reconcile_and_survive_annual_restart()
 149 fn ten_years_of_daily_fare_changes_remain_saveable_and_lossless()
-196 fn mixed_three_company_markets_remain_bounded_on_every_airport_pair()
-242 fn subsecond_frames_match_single_step_at_every_speed()
-264 fn first_diff(a: &serde_json::Value, b: &serde_json::Value, path: &str) -> Option<String>
-289 fn sustained_high_fuel_keeps_viable_player_and_both_ai_alive()
-290 struct Reset;
-291 impl Drop for Reset
-292 fn drop(&mut self)
-357 fn two_year_catalogue_ai_audit()
-433 fn worldwide_ai_two_year_budget()
+195 fn mixed_three_company_markets_remain_bounded_on_every_airport_pair()
+241 fn subsecond_frames_match_single_step_at_every_speed()
+263 fn first_diff(a: &serde_json::Value, b: &serde_json::Value, path: &str) -> Option<String>
+288 fn sustained_high_fuel_keeps_viable_player_and_both_ai_alive()
+289 struct Reset;
+290 impl Drop for Reset
+291 fn drop(&mut self)
+356 fn two_year_catalogue_ai_audit()
+432 fn worldwide_ai_two_year_budget()
 
 ## rust/src/reputation.rs
 5 pub const DAY: u64 = 86400;
@@ -1439,27 +1440,35 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 
 ## rust/src/save.rs
 35 pub(crate) const VERSION: u32 = 44;
-42 pub(crate) const MAX_BYTES: u64 = 360 * 1024 * 1024;
-45 struct SaveGame
-52 struct GameState
-105 struct SavedRoutes
-112 struct SavedFleet
-118 struct SavedClock
-125 pub fn save(path: &Path, game: &Game) -> Result<(), String>
-220 pub fn load(path: &Path) -> Result<Game, String>
-224 pub(crate) fn load_versioned(path: &Path) -> Result<(Game, u32), String>
-619 mod tests
-623 fn routes_roundtrip_migration_and_rejecting_corrupt_assignments()
-690 fn exact_roundtrip_and_overwrite_for_all_clock_states()
-715 fn rejects_missing_corrupt_truncated_invalid_and_future_saves()
-745 fn rejects_oversized_saves_and_write_errors()
-756 fn migrates_clock_only_v1_without_fabricating_a_company()
-770 fn rejects_invalid_company_data()
-790 fn fleet_and_balance_roundtrip_and_identifiers_continue_after_load()
-816 fn v2_company_migrates_without_buying_aircraft_or_changing_balance()
-834 fn rejects_corrupt_fleet_instead_of_silently_losing_aircraft()
-876 fn oversized_archive_cannot_overwrite_a_loadable_save()
-897 fn all_save_versions_preserve_catalogue_company_state()
+40 pub(crate) const MAX_BYTES: u64 = 64 * 1024 * 1024;
+43 pub(crate) const MAX_JSON_BYTES: u64 = 360 * 1024 * 1024;
+45 const COMPRESS_THRESHOLD: usize = 1024 * 1024;
+46 const LZ4_MAGIC: [u8; 4] = [0x04, 0x22, 0x4D, 0x18];
+48 fn compress(json: &[u8]) -> Result<Vec<u8>, String>
+62 fn decompress(packed: &[u8]) -> Result<Vec<u8>, String>
+72 struct SaveGame
+79 struct GameState
+132 struct SavedRoutes
+139 struct SavedFleet
+145 struct SavedClock
+152 pub fn save(path: &Path, game: &Game) -> Result<(), String>
+258 pub fn load(path: &Path) -> Result<Game, String>
+262 pub(crate) fn load_versioned(path: &Path) -> Result<(Game, u32), String>
+286 struct Peek
+360 fn finish_load(data: SaveGame) -> Result<(Game, u32), String>
+677 mod tests
+681 fn routes_roundtrip_migration_and_rejecting_corrupt_assignments()
+748 fn exact_roundtrip_and_overwrite_for_all_clock_states()
+773 fn rejects_missing_corrupt_truncated_invalid_and_future_saves()
+803 fn rejects_oversized_saves_and_write_errors()
+822 fn large_saves_are_compressed_and_round_trip_exactly()
+852 fn migrates_clock_only_v1_without_fabricating_a_company()
+866 fn rejects_invalid_company_data()
+886 fn fleet_and_balance_roundtrip_and_identifiers_continue_after_load()
+912 fn v2_company_migrates_without_buying_aircraft_or_changing_balance()
+930 fn rejects_corrupt_fleet_instead_of_silently_losing_aircraft()
+972 fn oversized_archive_cannot_overwrite_a_loadable_save()
+993 fn all_save_versions_preserve_catalogue_company_state()
 
 ## rust/src/save_slot_tests.rs
 3 fn game() -> Game

@@ -166,8 +166,7 @@ fn ten_years_of_daily_fare_changes_remain_saveable_and_lossless() {
     let bytes = std::fs::metadata(&path).unwrap().len();
     println!("CHURN save_bytes={bytes}");
     // Version 26 retains punctuality/care counters and splits batches at
-    // disruptions. Keep ten years of daily fare churn below 12 MiB, with
-    // at least 244 MiB headroom under the 256 MiB disk limit.
+    // disruptions. Keep ten years of daily fare churn below 12 MiB.
     assert!(bytes < 12 * 1024 * 1024);
     let mut loaded = crate::save::load(&path).unwrap();
     assert_eq!(

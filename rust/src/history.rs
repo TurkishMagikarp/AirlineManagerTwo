@@ -580,6 +580,106 @@ mod tests {
         crate::demand::TRANSFER_COUNTS.with(|c| eprintln!("Transfer counts: {:?}", c.get()));
     }
     #[test]
+    #[ignore = "AIR-281 save size diagnostic"]
+    fn save_size_profile() {
+        let flights: f64 = std::env::var("AIRLINE_PROFILE_FLIGHTS")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(1_000_000.0);
+        let mut g = game();
+        g.competitors = crate::competition::initial_competitors().unwrap();
+        g.airline.as_mut().unwrap().capital_eur += 100_000_000_000;
+        g.history.as_mut().unwrap().opening_balance += 100_000_000_000;
+        if std::env::var_os("AIRLINE_PROFILE_ORDINARY").is_some() {
+            // Mid-sized fleet, fifteen years.
+            let pairs = [("EDDF", "LIRF"), ("EDDF", "EGCC"), ("EDDF", "EDLP"), ("EDDF", "EDFH"), ("EDDF", "EDDM")];
+            for (i, (a, b)) in pairs.iter().enumerate() {
+                g.buy_aircraft("atr72_600").unwrap();
+                let id = i as u32 + 2;
+                g.create_route(a, b, id).unwrap_or_else(|e| panic!("{a}-{b}: {e}"));
+                g.set_ticket_price(id, 120).unwrap();
+            }
+            g.staff_up();
+            for i in 0..pairs.len() as u32 {
+                g.schedule(i + 2, i + 2, 360).unwrap();
+            }
+            assert!(g.advance(15.0 * 365.0 * 86400.0));
+        } else {
+            g.buy_aircraft("atr72_600").unwrap();
+            g.create_route("EDDF", "EDDM", 2).unwrap();
+            g.set_ticket_price(2, 134).unwrap();
+            g.staff_up();
+            g.schedule(2, 1, 120).unwrap();
+            assert!(g.advance(60.0 + 7200.0 * flights));
+        }
+        let path = std::path::PathBuf::from(std::env::var("AIRLINE_PROFILE_OUT").unwrap());
+        let t = std::time::Instant::now();
+        crate::save::save(&path, &g).unwrap();
+        eprintln!("PROFILE save {:?}", t.elapsed());
+        eprintln!("PROFILE size {}", std::fs::metadata(&path).unwrap().len());
+        let t = std::time::Instant::now();
+        let _l = crate::save::load(&path).unwrap();
+        eprintln!("PROFILE load {:?}", t.elapsed());
+        let v = serde_json::to_value(&g).unwrap();
+        let _ = v;
+        let raw: serde_json::Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap_or(serde_json::Value::Null);
+        if let Some(state) = raw.get("state") {
+            let mut parts = Vec::new();
+            for (k, val) in state.as_object().unwrap() {
+                parts.push((serde_json::to_vec(val).unwrap().len(), k.clone()));
+            }
+            parts.sort();
+            for (n, k) in parts.iter().rev().take(8) { eprintln!("PROFILE state.{k} {n}"); }
+            for (i, c) in state["competitors"].as_array().unwrap().iter().enumerate() {
+                let mut parts = Vec::new();
+                for (k, val) in c["game"].as_object().unwrap() {
+                    parts.push((serde_json::to_vec(val).unwrap().len(), k.clone()));
+                }
+                parts.sort();
+                for (n, k) in parts.iter().rev().take(4) { eprintln!("PROFILE comp{i}.{k} {n}"); }
+            }
+        }
+        for (name, h) in std::iter::once(("player", g.history.as_ref().unwrap()))
+            .chain(g.competitors.iter().map(|c| ("ai", c.game.history.as_ref().unwrap())))
+        {
+            let n = h.batches.len();
+            eprintln!("PROFILE {name} batches {n} flights {}", h.batches.iter().map(|b| b.count).sum::<u64>());
+            let one = serde_json::to_vec(&h.batches[n / 2]).unwrap();
+            eprintln!("PROFILE {name} sample batch {} bytes: {}", one.len(), String::from_utf8_lossy(&one));
+            let mut by_route = std::collections::BTreeMap::<u32, (usize, u64)>::new();
+            for b in &h.batches { let e = by_route.entry(b.route_id).or_default(); e.0 += 1; e.1 += b.count; }
+            eprintln!("PROFILE {name} per route (batches, flights): {by_route:?}");
+            let mut hist = std::collections::BTreeMap::<u64, usize>::new();
+            for b in &h.batches { *hist.entry(b.count.min(64).next_power_of_two()).or_default() += 1; }
+            eprintln!("PROFILE {name} batch size histogram {hist:?}");
+            // why adjacent batches of same route differ
+            let mut diff = std::collections::BTreeMap::<String, usize>::new();
+            let mut last: std::collections::BTreeMap<u32, &Batch> = Default::default();
+            for b in &h.batches {
+                if let Some(p) = last.insert(b.route_id, b) {
+                    let (a, c) = (serde_json::to_value(&p.totals).unwrap(), serde_json::to_value(&b.totals).unwrap());
+                    let mut keys: Vec<String> = Vec::new();
+                    for k in a.as_object().unwrap().keys().chain(c.as_object().unwrap().keys()) {
+                        if a.get(k) != c.get(k) && !keys.contains(k) { keys.push(k.clone()); }
+                    }
+                    if p.ticket_eur != b.ticket_eur { keys.push("ticket".into()); }
+                    if p.interval != b.interval { keys.push("interval".into()); }
+                    keys.sort();
+                    *diff.entry(keys.join(",")).or_default() += 1;
+                }
+            }
+            let mut d: Vec<_> = diff.into_iter().collect();
+            d.sort_by_key(|x| std::cmp::Reverse(x.1));
+            for (k, n) in d.iter().take(8) { eprintln!("PROFILE {name} split-by [{k}] x{n}"); }
+            let sec = |label: &str, len: usize| eprintln!("PROFILE {name} {label} {len}");
+            sec("batches bytes", serde_json::to_vec(&h.batches).unwrap().len());
+            sec("maintenance", h.maintenance.len());
+            sec("payroll", h.payroll.len());
+            sec("purchases", h.purchases.len());
+            sec("taxes", h.taxes.len());
+        }
+    }
+    #[test]
     fn million_flight_finance_scenario_stays_within_budget() {
         if std::env::var_os("AIRLINE_PERF_EVENTS").is_some() {
             crate::world_events::DISABLED.with(|v| v.set(false));
@@ -646,10 +746,11 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("finance-stress.json");
         crate::save::save(&path, &g).unwrap();
-        eprintln!(
-            "Finance stress save: {} bytes",
-            std::fs::metadata(&path).unwrap().len()
-        );
+        let saved = std::fs::metadata(&path).unwrap().len();
+        eprintln!("Finance stress save: {saved} bytes");
+        // Measured ~28 MB compressed (~264 MB of JSON); keep honest headroom
+        // below the limit instead of raising it per feature.
+        assert!(saved < crate::save::MAX_BYTES / 2);
         let mut loaded = crate::save::load(&path).unwrap();
         assert_eq!(
             serde_json::to_value(&loaded).unwrap(),
