@@ -27,6 +27,8 @@ var selected_id := 0
 var staff_signature := ""
 var staff_empty: Control
 var aircraft_empty: Control
+var pay_cards: Dictionary = {}
+var pay_dialog: UI.DecisionDialog
 var training_rows: VBoxContainer
 
 func _ready() -> void:
@@ -38,6 +40,33 @@ func _ready() -> void:
 	grid.resized.connect(func(): grid.columns = 4 if grid.size.x >= 1150 else (2 if grid.size.x >= 600 else 1))
 	for item in [["employees", "MITARBEITER"], ["payroll", "GEHÄLTER PRO MONAT"], ["next_pay", "NÄCHSTE GEHALTSZAHLUNG"], ["missing", "PERSONALMANGEL"]]:
 		metrics[item[0]] = UI.metric(grid, item[1])
+	for key in ["pilot", "cabin_crew", "technician"]:
+		var card := UI.panel(self, tr("STAFF_PAY_" + key.to_upper()))
+		var status := HBoxContainer.new()
+		card.add_child(status)
+		var progress := UI.progress(0)
+		card.add_child(progress)
+		var factors := UI.label("", ThemeTokens.SMALL, UI.MUTED)
+		factors.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		card.add_child(factors)
+		var row := HBoxContainer.new()
+		card.add_child(row)
+		var slider := HSlider.new()
+		slider.step = 1
+		slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		slider.custom_minimum_size.y = 36
+		row.add_child(slider)
+		var value := UI.label("", ThemeTokens.DATA)
+		row.add_child(value)
+		var preview := UI.label("", ThemeTokens.SMALL, UI.MUTED)
+		preview.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		card.add_child(preview)
+		var apply := Button.new()
+		apply.text = tr("STAFF_PAY_APPLY")
+		apply.pressed.connect(func(): _confirm_pay(key))
+		card.add_child(apply)
+		pay_cards[key] = {"status": status, "progress": progress, "factors": factors, "slider": slider, "value": value, "preview": preview, "apply": apply, "row": {}}
+		slider.value_changed.connect(func(_v): _pay_preview(key))
 	var shortage := UI.panel(self, "ENGPÄSSE")
 	shortage_label = UI.label("", ThemeTokens.BODY)
 	shortage_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -163,6 +192,7 @@ func refresh(force: bool = false) -> void:
 			UI.cell_text(row, i, values[i])
 		UI.cell_status(row, 0, rating["rating"], "neutral")
 	train_button.text = "Umschulung auf gewähltes Muster · %s · %d Tage" % [UI.money(overview["conversion_cost_eur"]), overview["conversion_days"]]
+	_pay_groups(overview)
 	_roles(overview)
 	_aircraft(overview)
 	_staff(staff)
@@ -332,3 +362,58 @@ func _training(staff: Array, duration_days: int) -> void:
 		sentence.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		training_rows.add_child(sentence)
 		training_rows.add_child(UI.progress(percent, "info"))
+
+func _pay_groups(overview: Dictionary) -> void:
+	for group: Dictionary in overview["roles"]:
+		var card: Dictionary = pay_cards[group["role"]]
+		var previous: Dictionary = card["row"]
+		card["row"] = group
+		var slider: HSlider = card["slider"]
+		slider.min_value = overview["pay_min"]
+		slider.max_value = overview["pay_max"]
+		if previous.is_empty() or previous["pending_percent"] != group["pending_percent"]:
+			slider.set_value_no_signal(group["pending_percent"])
+		var kind: String = {"calm": "go", "unrest": "caution", "warning": "caution", "strike": "stop"}[group["labour_state"]]
+		for child in card["status"].get_children():
+			card["status"].remove_child(child)
+			child.queue_free()
+		card["status"].add_child(UI.status_chip(tr("STAFF_STATE_" + str(group["labour_state"]).to_upper()), kind))
+		if not group["labour_date"].is_empty():
+			var date := UI.label(group["labour_date"], ThemeTokens.SMALL)
+			date.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			date.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			card["status"].add_child(date)
+		card["progress"].get_child(0).value = group["morale"]
+		card["progress"].get_child(1).text = tr("STAFF_MORALE") % group["morale"]
+		var factors: Array[String] = [tr("STAFF_PAY_TARGET") % [group["pay_percent"], group["pay_target"]]]
+		if group["understaffed"]: factors.append(tr("STAFF_FACTOR_SHORT"))
+		if group["missed_payroll"]: factors.append(tr("STAFF_FACTOR_MISSED"))
+		if group["restructuring"]: factors.append(tr("STAFF_FACTOR_RESTRUCTURE"))
+		card["factors"].text = " · ".join(factors)
+		_pay_preview(group["role"])
+
+func _pay_preview(key: String) -> void:
+	var card: Dictionary = pay_cards[key]
+	if card["row"].is_empty(): return
+	var percent := int(card["slider"].value)
+	var quote: Dictionary = simulation.preview_staff_pay(key, percent)
+	card["value"].text = "%d %%" % percent
+	card["preview"].text = tr("STAFF_PAY_PREVIEW") % [UI.money(quote["cost"]), UI.money(quote["delta"]), card["row"]["pending_percent"]]
+	card["apply"].disabled = percent == card["row"]["pending_percent"] or not simulation.has_airline()
+
+func _confirm_pay(key: String) -> void:
+	var card: Dictionary = pay_cards[key]
+	var percent := int(card["slider"].value)
+	pay_dialog = UI.dialog(self, tr("STAFF_PAY_CONFIRM") % percent, card["preview"].text + "\n" + tr("STAFF_PAY_TIMING"), tr("STAFF_PAY_BACK"), tr("STAFF_PAY_APPLY"), func():
+		var error: String = simulation.set_staff_pay(key, percent)
+		card["preview"].text = tr("STAFF_PAY_SAVED") if error.is_empty() else error
+		refresh(true)
+		changed.emit())
+	pay_dialog.get_ok_button().theme_type_variation = "PrimaryButton"
+	pay_dialog.popup_centered()
+
+func focus_pay_group(index: int) -> void:
+	if index < 0 or index >= role_keys.size(): return
+	var slider: HSlider = pay_cards[role_keys[index]]["slider"]
+	get_parent().get_parent().ensure_control_visible(slider.get_parent().get_parent())
+	slider.grab_focus()

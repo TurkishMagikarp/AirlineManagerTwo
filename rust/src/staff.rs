@@ -80,7 +80,7 @@ pub struct Needs {
 }
 
 #[derive(Deserialize)]
-struct Config {
+pub(crate) struct Config {
     conversion_cost_eur: i64,
     conversion_days: u64,
     payroll_period_days: u64,
@@ -88,6 +88,7 @@ struct Config {
     max_employees: usize,
     max_hire_batch: u32,
     salary_eur_per_period: Salaries,
+    pub labour: crate::labour::Rules,
     models: std::collections::HashMap<String, Needs>,
     first_names: Vec<String>,
     last_names: Vec<String>,
@@ -97,6 +98,7 @@ static CONFIG: LazyLock<Result<Config, String>> = LazyLock::new(|| {
     let c: Config = serde_json::from_str(include_str!("../../config/staff.json"))
         .map_err(|_| "Personalkonfiguration ist ungültig.".to_string())?;
     let invalid = || "Personalkonfiguration enthält ungültige Werte.".to_string();
+    c.labour.validate()?;
     let s = &c.salary_eur_per_period;
     if c.conversion_cost_eur <= 0
         || !(1..=365).contains(&c.conversion_days)
@@ -104,9 +106,10 @@ static CONFIG: LazyLock<Result<Config, String>> = LazyLock::new(|| {
         || c.salary_reserve_periods > 12
         || !(1..=100_000).contains(&c.max_employees)
         || !(1..=1000).contains(&c.max_hire_batch)
-        || [s.pilot, s.cabin_crew, s.technician]
-            .iter()
-            .any(|v| !(1..=1_000_000).contains(v))
+        || [s.pilot, s.cabin_crew, s.technician].iter().any(|v| {
+            !(1..=1_000_000).contains(v)
+                || *v * i64::from(c.labour.maximum_pay_percent) / 100 > 1_000_000
+        })
         || c.first_names.is_empty()
         || c.last_names.is_empty()
     {
@@ -130,7 +133,7 @@ static CONFIG: LazyLock<Result<Config, String>> = LazyLock::new(|| {
     Ok(c)
 });
 
-fn config() -> Result<&'static Config, String> {
+pub(crate) fn config() -> Result<&'static Config, String> {
     CONFIG.as_ref().map_err(Clone::clone)
 }
 
@@ -165,6 +168,10 @@ pub struct Employee {
     pub name: String,
     /// Salary per payroll period (a 30-day "month" by default).
     pub salary_eur: i64,
+    #[serde(default)]
+    pub salary_since: Option<u64>,
+    #[serde(default)]
+    pub salary_remainder: u64,
     pub hired_at: u64,
     /// Salary is settled up to this instant.
     pub paid_until: u64,
@@ -200,6 +207,13 @@ pub fn conversion_terms() -> (i64, u64) {
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Staff {
     pub employees: Vec<Employee>,
+    #[serde(default)]
+    pub labour: [crate::labour::Group; 3],
+    #[serde(default)]
+    pub labour_period: u64,
+    /// Cumulative voluntary departures; a zero value permits the legacy staffing fast path.
+    #[serde(default)]
+    pub resignations: u64,
     /// 0 in older saves; ids start at 1.
     #[serde(default)]
     pub next_id: u32,
@@ -279,7 +293,7 @@ impl Game {
             .filter(|n| n.rating == rating)
             .map(|n| n.pilots)
             .sum();
-        demand.saturating_sub(self.rated_available(rating))
+        (demand + self.rated_busy(rating)).saturating_sub(self.rated_count(rating))
     }
 
     /// Atomic UI convenience: retain the shared batch limit across all ratings.
@@ -324,6 +338,7 @@ impl Game {
         for e in &mut self.staff.employees[start..] {
             e.rating = Some(rating.into());
         }
+        self.refresh_labour_holds()?;
         Ok(())
     }
 
@@ -374,13 +389,19 @@ impl Game {
             .min()
     }
 
-    pub(crate) fn complete_training(&mut self) {
+    pub(crate) fn complete_training(&mut self) -> Result<(), String> {
+        let mut changed = false;
         let now = self.clock.elapsed().as_secs();
         for e in &mut self.staff.employees {
             if e.training.as_ref().is_some_and(|t| t.ends_at <= now) {
                 e.rating = Some(e.training.take().unwrap().rating);
+                changed = true;
             }
         }
+        if changed {
+            self.refresh_labour_holds()?;
+        }
+        Ok(())
     }
 
     pub(crate) fn migrate_ratings(&mut self) -> Result<(), String> {
@@ -487,6 +508,13 @@ impl Game {
     }
 
     pub fn require_crew(&self, model_id: &str) -> Result<(), String> {
+        let n = needs(model_id)?;
+        if Role::ALL.into_iter().any(|r| {
+            (r != Role::CabinCrew || n.cabin_crew > 0)
+                && self.labour_group(r).strike_until.is_some()
+        }) {
+            return Err("Streik: keine neuen Abflüge bis zum Streikende.".into());
+        }
         let (pilots, cabin) = self.crew_shortage(model_id)?;
         if pilots == 0 && cabin == 0 {
             return Ok(());
@@ -610,7 +638,7 @@ impl Game {
         for (role, count) in hires {
             cost = cost
                 .checked_add(
-                    salary(*role)?
+                    self.pay_salary(*role)
                         .checked_mul(i64::from(*count))
                         .ok_or("Finanzüberlauf.")?,
                 )
@@ -634,13 +662,18 @@ impl Game {
             .ok_or("Keine weitere Mitarbeiterkennung verfügbar.")?;
         let mut id = first_id;
         let mut staff = self.staff.clone();
+        if staff.employees.is_empty() {
+            staff.labour_period = now / period_seconds()? * period_seconds()?;
+        }
         for (role, count) in hires {
             for _ in 0..*count {
                 staff.employees.push(Employee {
                     id,
                     role: *role,
                     name: Self::employee_name(id)?,
-                    salary_eur: salary(*role)?,
+                    salary_eur: self.pay_salary(*role),
+                    salary_since: None,
+                    salary_remainder: 0,
                     hired_at: now,
                     paid_until: now,
                     rating: (*role == Role::Pilot).then(|| self.default_rating()),
@@ -657,6 +690,7 @@ impl Game {
             self.fleet = previous_fleet;
             return Err(error);
         }
+        self.refresh_labour_holds()?;
         Ok(())
     }
 
@@ -697,8 +731,15 @@ impl Game {
     fn accrued(e: &Employee, until: u64) -> Result<i64, String> {
         let period = i128::from(period_seconds()?);
         // Cumulative rounding carries fractional EUR across payroll boundaries.
-        let earned = i128::from(e.salary_eur) * i128::from(until.saturating_sub(e.hired_at));
-        let paid = i128::from(e.salary_eur) * i128::from(e.paid_until.saturating_sub(e.hired_at));
+        let earned = i128::from(e.salary_eur)
+            * i128::from(until.saturating_sub(e.salary_since.unwrap_or(e.hired_at)))
+            + i128::from(e.salary_remainder);
+        let paid = i128::from(e.salary_eur)
+            * i128::from(
+                e.paid_until
+                    .saturating_sub(e.salary_since.unwrap_or(e.hired_at)),
+            )
+            + i128::from(e.salary_remainder);
         i64::try_from(earned / period - paid / period).map_err(|_| "Finanzüberlauf.".to_string())
     }
 
@@ -742,13 +783,21 @@ impl Game {
         self.remove_employee(i)
     }
 
+    pub(crate) fn resign_employee(&mut self, i: usize) -> Result<(), String> {
+        self.remove_employee(i)?;
+        self.staff.resignations = self.staff.resignations.saturating_add(1);
+        Ok(())
+    }
+
     fn remove_employee(&mut self, i: usize) -> Result<(), String> {
         let now = self.clock.elapsed().as_secs();
         let e = &self.staff.employees[i];
         let mut pay = Self::accrued(e, now)?;
         // Final settlement rounds up, preventing repeated short employment from
         // providing free labor. Existing archived payments remain untouched.
-        let earned = i128::from(e.salary_eur) * i128::from(now.saturating_sub(e.hired_at));
+        let earned = i128::from(e.salary_eur)
+            * i128::from(now.saturating_sub(e.salary_since.unwrap_or(e.hired_at)))
+            + i128::from(e.salary_remainder);
         if earned % i128::from(period_seconds()?) != 0 {
             pay = pay.checked_add(1).ok_or("Finanzüberlauf.")?;
         }
@@ -843,7 +892,7 @@ impl Game {
 
     /// Settle all salaries up to the latest payroll boundary at or before now.
     pub(crate) fn apply_payroll(&mut self) -> Result<(), String> {
-        if self.airline.is_none() || self.staff.employees.is_empty() {
+        if self.airline.is_none() {
             return Ok(());
         }
         let period = period_seconds()?;
@@ -866,6 +915,9 @@ impl Game {
         }
         self.airline.as_mut().unwrap().capital_eur = balance;
         self.record_payroll(due, total);
+        if due > self.staff.labour_period {
+            self.close_labour_period(due, balance < 0)?;
+        }
         Ok(())
     }
 
@@ -890,6 +942,7 @@ impl Game {
     pub fn validate_staff(&self) -> Result<(), String> {
         let invalid = || "Ungültige Personaldaten im Spielstand.".to_string();
         let now = self.clock.elapsed().as_secs();
+        self.validate_labour()?;
         if self.airline.is_none() && !self.staff.employees.is_empty() {
             return Err(invalid());
         }
@@ -911,6 +964,9 @@ impl Game {
                 || !(1..=1_000_000).contains(&e.salary_eur)
                 || e.name.is_empty()
                 || e.name.chars().count() > 80
+                || e.salary_remainder >= period_seconds()?
+                || e.salary_since
+                    .is_some_and(|t| t < e.hired_at || t > e.paid_until)
                 || e.hired_at > now
                 || e.paid_until < e.hired_at
                 || e.paid_until > now
@@ -921,19 +977,27 @@ impl Game {
         if self.staff.employees.windows(2).any(|w| w[0].id >= w[1].id) {
             return Err(invalid());
         }
+        let shortage = ratings()
+            .iter()
+            .any(|r| self.rated_count(r) < self.rated_busy(r))
+            || self.staff_count(Role::CabinCrew) < self.busy_staff(Role::CabinCrew);
+        if shortage
+            && self.routes.iter().any(|r| r.plan.is_some())
+            && !self.routes.iter().any(|r| {
+                r.plan
+                    .as_ref()
+                    .and_then(|p| p.disruption.as_ref())
+                    .is_some_and(|c| c.staff_hold.is_some())
+            })
+        {
+            return Err(invalid());
+        }
         if let Some(h) = &self.history
             && (h
                 .payroll
                 .iter()
                 .any(|p| p.time < h.since || p.time > now || p.amount <= 0)
                 || h.payroll.windows(2).any(|p| p[0].time > p[1].time))
-        {
-            return Err(invalid());
-        }
-        if ratings()
-            .iter()
-            .any(|r| self.rated_count(r) < self.rated_busy(r))
-            || self.staff_count(Role::CabinCrew) < self.busy_staff(Role::CabinCrew)
         {
             return Err(invalid());
         }

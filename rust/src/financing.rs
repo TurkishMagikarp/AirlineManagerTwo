@@ -91,6 +91,7 @@ impl Game {
     pub fn apply_resolution(&mut self) {
         if self.insolvent() {
             self.orders.clear();
+            self.clear_labour_action();
             return;
         }
         if self.airline.is_none() {
@@ -113,6 +114,7 @@ impl Game {
             if now >= deadline {
                 self.resolution.insolvent_at = Some(deadline);
                 self.clock.set_running(false);
+                self.clear_labour_action();
             }
         }
     }

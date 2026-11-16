@@ -200,56 +200,56 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 318 pub fn market_routes(&self) -> Vec<crate::demand::Offer>
 333 pub fn validate_competitors(&self) -> Result<(), String>
 393 pub fn advance(&mut self, seconds: f64) -> bool
-712 impl Competitor
-713 fn close_loss_route(
-736 fn review(&mut self, supply: &[crate::demand::Offer]) -> bool
-1026 fn review_rotations(&mut self, supply: &[crate::demand::Offer]) -> Result<Vec<u32>, String>
-1177 fn plan_maintenance(&mut self, next_review: u64)
-1192 fn expansion_quotes(
-1433 fn expand(&mut self, supply: &[crate::demand::Offer]) -> Result<(), String>
-1634 fn acquire_expansion(&mut self, choice: ExpansionChoice) -> Result<(), String>
-1719 fn retry(&mut self, i: usize, supply: &[crate::demand::Offer]) -> bool
-1831 mod tests
-1833 fn ai_planning_is_direct_only_while_actual_flights_keep_transfers()
-1875 fn widebody_ai_expansion_quote_audit()
-1914 fn cabin_expansion_behavior_audit()
-1998 fn widebody_expansion_installs_quoted_cabin_fare_and_books_fee()
-2091 fn configured_starters_cover_running_costs_even_at_maximum_fuel()
-2126 fn worldwide_starters_are_local_and_distant_and_old_companies_load_verbatim()
-2178 fn legacy_companies_remain_solvent_with_cabin_search()
-2199 fn used_market_ai_growth_uses_shared_purchase_and_wear()
-2244 fn frequency_ai() -> Competitor
-2256 fn manufacturer_ai_orders_selected_growth_once_and_waits_for_delivery()
-2300 fn manufacturer_restructuring_cancels_player_and_ai_orders_without_refund()
-2330 fn seasonal_ai_growth_uses_annual_view_and_weak_weeks_keep_viable_rotations()
-2387 fn frequency_growth_uses_shared_assignment_and_respects_cap()
-2423 fn frequency_growth_can_buy_or_lease_and_weak_loads_reduce_service()
-2496 fn frequency_review_keeps_a_service_during_maintenance()
-2516 fn frequency_growth_skips_maintenance_wrong_location_and_weak_market()
-2537 fn frequency_weak_airborne_service_retires_once_across_steps_speeds_and_restart()
-2608 fn trading_ai_leases_only_affordable_profitable_growth_and_sells_in_distress()
-2668 fn trading_ai_lease_economy_is_bounded_and_deterministic_over_two_years()
-2710 fn game() -> Game
-2722 fn state(g: &Game) -> serde_json::Value
-2727 fn airborne_loss_reviews_close_after_ground_time_even_across_restart()
-2783 fn previous_v9_saves_default_new_review_fields_and_reject_corruption()
-2804 fn expansion_reuses_parked_aircraft_and_competes_for_existing_market()
-2845 fn expansion_spends_real_cash_and_obeys_budget_range_and_fleet_limit()
-2889 fn ai_airlines_pay_for_regular_checks_before_reaching_the_limit()
-2946 fn route_reviews_charge_the_planned_maintenance_share_per_landing()
-2993 fn losses_are_measured_per_route_not_hidden_by_profitable_routes()
-3019 fn common_market_price_frequency_capacity_and_separate_ledgers()
-3073 fn mixed_fares_and_frequencies_never_duplicate_the_base_market()
-3107 fn speed_steps_reviews_and_restart_produce_identical_results()
-3136 fn losses_close_service_without_erasing_aircraft_or_finances()
-3171 fn unprofitable_markets_keep_rivals_idle_until_the_next_retry()
-3202 fn old_saves_keep_departure_snapshot_and_start_rivals_only_at_load_time()
-3233 fn price_reviews_preserve_airborne_quotes_for_both_owners()
-3260 fn invalid_ai_saves_and_overflow_cannot_partially_commit()
-3318 mod slot_admission_tests
-3320 fn slots_ai_full_hub_skips_purchase_and_full_destination_uses_other_markets()
-3352 mod manufacturer_audit
-3354 fn manufacturer_orders_eddf_rival_comparison_two_and_ten_years()
+724 impl Competitor
+725 fn close_loss_route(
+748 fn review(&mut self, supply: &[crate::demand::Offer]) -> bool
+1038 fn review_rotations(&mut self, supply: &[crate::demand::Offer]) -> Result<Vec<u32>, String>
+1189 fn plan_maintenance(&mut self, next_review: u64)
+1204 fn expansion_quotes(
+1445 fn expand(&mut self, supply: &[crate::demand::Offer]) -> Result<(), String>
+1646 fn acquire_expansion(&mut self, choice: ExpansionChoice) -> Result<(), String>
+1731 fn retry(&mut self, i: usize, supply: &[crate::demand::Offer]) -> bool
+1843 mod tests
+1845 fn ai_planning_is_direct_only_while_actual_flights_keep_transfers()
+1887 fn widebody_ai_expansion_quote_audit()
+1926 fn cabin_expansion_behavior_audit()
+2010 fn widebody_expansion_installs_quoted_cabin_fare_and_books_fee()
+2103 fn configured_starters_cover_running_costs_even_at_maximum_fuel()
+2138 fn worldwide_starters_are_local_and_distant_and_old_companies_load_verbatim()
+2190 fn legacy_companies_remain_solvent_with_cabin_search()
+2211 fn used_market_ai_growth_uses_shared_purchase_and_wear()
+2256 fn frequency_ai() -> Competitor
+2268 fn manufacturer_ai_orders_selected_growth_once_and_waits_for_delivery()
+2312 fn manufacturer_restructuring_cancels_player_and_ai_orders_without_refund()
+2342 fn seasonal_ai_growth_uses_annual_view_and_weak_weeks_keep_viable_rotations()
+2399 fn frequency_growth_uses_shared_assignment_and_respects_cap()
+2435 fn frequency_growth_can_buy_or_lease_and_weak_loads_reduce_service()
+2508 fn frequency_review_keeps_a_service_during_maintenance()
+2528 fn frequency_growth_skips_maintenance_wrong_location_and_weak_market()
+2549 fn frequency_weak_airborne_service_retires_once_across_steps_speeds_and_restart()
+2620 fn trading_ai_leases_only_affordable_profitable_growth_and_sells_in_distress()
+2680 fn trading_ai_lease_economy_is_bounded_and_deterministic_over_two_years()
+2722 fn game() -> Game
+2734 fn state(g: &Game) -> serde_json::Value
+2739 fn airborne_loss_reviews_close_after_ground_time_even_across_restart()
+2795 fn previous_v9_saves_default_new_review_fields_and_reject_corruption()
+2816 fn expansion_reuses_parked_aircraft_and_competes_for_existing_market()
+2857 fn expansion_spends_real_cash_and_obeys_budget_range_and_fleet_limit()
+2901 fn ai_airlines_pay_for_regular_checks_before_reaching_the_limit()
+2958 fn route_reviews_charge_the_planned_maintenance_share_per_landing()
+3005 fn losses_are_measured_per_route_not_hidden_by_profitable_routes()
+3031 fn common_market_price_frequency_capacity_and_separate_ledgers()
+3085 fn mixed_fares_and_frequencies_never_duplicate_the_base_market()
+3119 fn speed_steps_reviews_and_restart_produce_identical_results()
+3148 fn losses_close_service_without_erasing_aircraft_or_finances()
+3183 fn unprofitable_markets_keep_rivals_idle_until_the_next_retry()
+3214 fn old_saves_keep_departure_snapshot_and_start_rivals_only_at_load_time()
+3245 fn price_reviews_preserve_airborne_quotes_for_both_owners()
+3272 fn invalid_ai_saves_and_overflow_cannot_partially_commit()
+3330 mod slot_admission_tests
+3332 fn slots_ai_full_hub_skips_purchase_and_full_destination_uses_other_markets()
+3364 mod manufacturer_audit
+3366 fn manufacturer_orders_eddf_rival_comparison_two_and_ten_years()
 
 ## rust/src/demand.rs
 7 struct Config
@@ -425,24 +425,24 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 33 pub static RULES: LazyLock<Rules> = LazyLock::new(||
 57 pub struct Leg
 65 pub struct Cursor
-77 pub fn technical_delay(
-101 impl Cursor
-103 pub fn next(&self, route: &Route, model: &str) -> Result<Leg, String>
-107 fn next_timed(
-153 pub fn landed(&mut self, leg: Leg) -> Result<(), String>
-160 pub fn validate(route: &Route, plane: &crate::aircraft::Aircraft) -> Result<(), String>
-195 pub struct Projection
-201 pub fn project(route: &Route, model: &str, now: u64) -> Result<Projection, String>
-273 struct ForecastKey
-285 type Forecasts = std::collections::HashMap<(u64, u64), (ForecastKey, u64)>;
-287 static FORECASTS: std::cell::RefCell<Forecasts> = std::cell::RefCell::new(Forecasts::new());
-290 static RECENT_FORECASTS: std::cell::RefCell<[Option<(ForecastKey, u64)>; 64]> = const
-296 pub fn landing_at(route: &Route, model: &str, index: u64) -> Result<u64, String>
-370 pub fn valid(t: &Totals) -> bool
-378 pub fn percent(t: &Totals) -> f64
-385 pub fn apply(t: &mut Totals, leg: &Leg) -> Result<(), String>
-399 impl Game
-400 pub(crate) fn initialize_disruptions(&mut self) -> Result<(), String>
+80 pub fn technical_delay(
+104 impl Cursor
+106 pub fn next(&self, route: &Route, model: &str) -> Result<Leg, String>
+110 fn next_timed(
+164 pub fn landed(&mut self, leg: Leg) -> Result<(), String>
+171 pub fn validate(route: &Route, plane: &crate::aircraft::Aircraft) -> Result<(), String>
+209 pub struct Projection
+215 pub fn project(route: &Route, model: &str, now: u64) -> Result<Projection, String>
+287 struct ForecastKey
+300 type Forecasts = std::collections::HashMap<(u64, u64), (ForecastKey, u64)>;
+302 static FORECASTS: std::cell::RefCell<Forecasts> = std::cell::RefCell::new(Forecasts::new());
+305 static RECENT_FORECASTS: std::cell::RefCell<[Option<(ForecastKey, u64)>; 64]> = const
+311 pub fn landing_at(route: &Route, model: &str, index: u64) -> Result<u64, String>
+386 pub fn valid(t: &Totals) -> bool
+394 pub fn percent(t: &Totals) -> f64
+401 pub fn apply(t: &mut Totals, leg: &Leg) -> Result<(), String>
+415 impl Game
+416 pub(crate) fn initialize_disruptions(&mut self) -> Result<(), String>
 
 ## rust/src/economy.rs
 14 pub struct FuelMarket
@@ -539,21 +539,21 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 65 pub fn require_active(&self) -> Result<(), String>
 75 pub fn observe_distress(&mut self)
 91 pub fn apply_resolution(&mut self)
-120 pub fn reschedule_fee(&self) -> i64
-125 pub fn can_reschedule(&self) -> bool
-132 pub fn reschedule_loan(&mut self) -> Result<(), String>
-157 pub fn cash(&self) -> i64
-161 pub fn distressed(&self) -> bool
-165 pub fn financing_status(&self) -> &'static str
-179 pub fn require_solvent(&self) -> Result<(), String>
-188 pub fn loan_interest(&self) -> i64
-196 pub fn loan_payment(&self) -> i64
-205 fn post_financing(&mut self, cash: i64, principal: i64, interest: i64) -> Result<(), String>
-228 pub fn borrow(&mut self, amount: i64) -> Result<(), String>
-253 pub fn repay(&mut self, amount: i64) -> Result<(), String>
-270 pub fn next_financing_event(&self) -> Option<u64>
-359 pub fn apply_financing(&mut self) -> Result<(), String>
-427 pub fn validate_financing(&self) -> Result<(), String>
+122 pub fn reschedule_fee(&self) -> i64
+127 pub fn can_reschedule(&self) -> bool
+134 pub fn reschedule_loan(&mut self) -> Result<(), String>
+159 pub fn cash(&self) -> i64
+163 pub fn distressed(&self) -> bool
+167 pub fn financing_status(&self) -> &'static str
+181 pub fn require_solvent(&self) -> Result<(), String>
+190 pub fn loan_interest(&self) -> i64
+198 pub fn loan_payment(&self) -> i64
+207 fn post_financing(&mut self, cash: i64, principal: i64, interest: i64) -> Result<(), String>
+230 pub fn borrow(&mut self, amount: i64) -> Result<(), String>
+255 pub fn repay(&mut self, amount: i64) -> Result<(), String>
+272 pub fn next_financing_event(&self) -> Option<u64>
+361 pub fn apply_financing(&mut self) -> Result<(), String>
+429 pub fn validate_financing(&self) -> Result<(), String>
 
 ## rust/src/financing_tests.rs
 8 const DAY: f64 = 86400.0;
@@ -575,8 +575,8 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 433 fn restructuring_sale_recovers_and_failed_rescue_keeps_original_deadline()
 459 fn restructuring_ai_exit_and_player_terminal_are_deterministic_across_steps_and_restart()
 526 fn restructuring_v13_migration_starts_fresh_grace_without_replaying_costs()
-566 fn restructuring_recovery_before_grace_and_at_deadline_wins()
-596 fn restructuring_ai_uses_the_same_one_time_paid_reschedule()
+569 fn restructuring_recovery_before_grace_and_at_deadline_wins()
+599 fn restructuring_ai_uses_the_same_one_time_paid_reschedule()
 
 ## rust/src/freighter_tests.rs
 2 const DAY: f64 = 86400.0;
@@ -772,6 +772,51 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 84 impl Game
 87 pub fn jump(&mut self, game_seconds: f64) -> Result<ResultSummary, &'static str>
 
+## rust/src/labour.rs
+9 const DAY: u64 = 86_400;
+11 pub struct Rules
+32 impl Rules
+33 pub fn validate(&self) -> Result<(), String>
+61 pub fn target(&self, pay: u32) -> i32
+74 pub fn rules() -> &'static Rules
+79 pub struct Group
+92 impl Default for Group
+93 fn default() -> Self
+110 pub struct Hold
+116 impl Game
+117 pub fn labour_group(&self, role: Role) -> &Group
+120 pub fn pay_salary(&self, role: Role) -> i64
+123 pub fn pay_preview(&self, role: Role, percent: u32) -> Result<i64, String>
+129 pub fn set_pay_level(&mut self, role: Role, percent: u32) -> Result<(), String>
+147 pub fn next_labour_event(&self) -> Option<u64>
+156 pub(crate) fn migrate_labour(&mut self)
+162 pub(crate) fn close_labour_period(&mut self, due: u64, missed: bool) -> Result<(), String>
+250 pub(crate) fn apply_labour_events(&mut self) -> Result<(), String>
+274 pub(crate) fn ai_labour_policy(&mut self) -> Result<(), String>
+296 pub(crate) fn clear_labour_action(&mut self)
+302 pub(crate) fn validate_labour(&self) -> Result<(), String>
+327 pub(crate) fn refresh_labour_holds(&mut self) -> Result<(), String>
+
+## rust/src/labour_tests.rs
+6 const DAY: f64 = 86_400.0;
+7 fn game() -> Game
+16 fn state(g: &Game) -> serde_json::Value
+19 fn reload(g: &Game) -> Game
+25 fn warning(g: &mut Game, role: Role, at: u64)
+34 fn labour_market_pay_is_neutral_and_changes_start_with_next_period()
+69 fn labour_resignations_remove_rated_pilots_and_hiring_releases_grounded_plan()
+111 fn labour_warning_raise_averts_strike_and_jump_stops_on_strike()
+138 fn labour_strike_preserves_airborne_and_is_identical_across_speeds_steps_pause_reload()
+187 fn labour_ai_policy_and_financial_factors_use_shared_rules_and_terminal_cleanup()
+216 fn labour_v39_migration_is_neutral_for_every_owner_and_retains_airborne_money()
+228 fn strip(v: &mut serde_json::Value)
+272 fn labour_first_hire_after_empty_period_does_not_replay_pay_or_morale()
+294 fn labour_cabin_strike_does_not_block_freighters_and_technician_strike_blocks_schedules()
+319 fn labour_understaffing_cooldown_and_threshold_boundaries()
+350 fn labour_ai_strike_reaches_same_event_boundaries_and_survives_restart()
+383 fn labour_market_pay_does_not_immunize_financially_distressed_owners_from_strikes()
+398 fn labour_ferry_dispatch_is_blocked_but_an_airborne_ferry_finishes()
+
 ## rust/src/lib.rs
 1 mod aircraft;
 3 mod airport_charge_tests;
@@ -804,163 +849,167 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 41 mod insurance_tests;
 43 mod jump_tests;
 44 mod jumps;
-45 mod maintenance;
-46 mod map;
-47 mod marketing;
-49 mod marketing_tests;
-51 mod milestone_tests;
-52 mod milestones;
-53 mod operations;
-54 mod orders;
-56 mod orders_tests;
-57 mod pricing;
-59 mod pricing_tests;
-61 mod quality;
-62 mod reputation;
-64 mod reputation_tests;
-66 mod rotation_tests;
-67 mod route_save;
-68 mod routes;
-69 mod save;
-71 mod save_slot_tests;
-72 mod save_slots;
-74 mod seasonal_tests;
-75 mod service;
-77 mod service_tests;
-79 mod slot_tests;
-80 mod slots;
-81 mod staff;
-83 mod staff_tests;
-84 mod tax;
-86 mod tax_tests;
-87 mod trading;
-89 mod trading_tests;
-91 mod transfer_tests;
-93 mod widebody_tests;
-94 mod world_economy;
-96 mod world_economy_tests;
-101 struct AirlineSimulation;
-110 struct SimulationClock
-117 impl IRefCounted for SimulationClock
-118 fn init(base: Base<RefCounted>) -> Self
-128 impl SimulationClock
-130 fn get_milestones(&self) -> Array<VarDictionary>
-152 fn take_milestone_notifications(&mut self) -> PackedStringArray
-160 fn get_attention_snapshot(&self) -> Array<VarDictionary>
-176 fn get_active_flights(&self) -> Array<VarDictionary>
-193 fn get_finance_history_info(&self) -> VarDictionary
-207 fn get_tax_history(&self) -> Array<VarDictionary>
-226 fn get_route_finances(&self) -> Array<VarDictionary>
-269 fn get_route_flight_page(&self, route_id: u32, offset: i64) -> Array<VarDictionary>
-284 fn get_finance_series(&self, route_id: u32) -> Array<VarDictionary>
-321 fn get_map_airports(&self) -> Array<VarDictionary>
-349 fn get_map_routes(&self) -> Array<VarDictionary>
-370 fn get_competitor_routes(&self) -> Array<VarDictionary>
-386 fn get_map_competitor_routes(&self) -> Array<PackedVector2Array>
-405 fn get_map_flights(&self) -> Array<VarDictionary>
-423 fn get_economy_rules(&self) -> GString
-428 fn set_ticket_price(&mut self, route_id: u32, price: i64) -> GString
-438 fn get_fare_suggestion(&self, id: u32) -> VarDictionary
-448 fn apply_fare_suggestion(&mut self, id: u32) -> GString
-458 fn set_pricing_autopilot(&mut self, id: u32, enabled: bool) -> GString
-468 fn set_marketing_budget(&mut self, budget: i64) -> GString
-478 fn start_fuel_contract(&mut self, share: u32, months: u32) -> GString
-488 fn get_fuel_contract(&self) -> VarDictionary
-504 fn get_marketing(&self) -> VarDictionary
-513 fn get_marketing_history(&self) -> Array<VarDictionary>
-522 fn get_insurance(&self) -> VarDictionary
-554 fn set_insurance(&mut self, level: GString) -> GString
-570 fn get_world_economy(&self) -> VarDictionary
-583 fn take_economy_notifications(&mut self) -> PackedStringArray
-593 fn get_financial_summary(&self) -> VarDictionary
-686 fn get_financing(&self) -> VarDictionary
-712 fn reschedule_loan(&mut self) -> GString
-722 fn borrow_money(&mut self, amount: i64) -> GString
-732 fn repay_loan(&mut self, amount: i64) -> GString
-742 fn get_flight_results(&self) -> Array<VarDictionary>
-763 fn schedule_route(
-778 fn stop_schedule(&mut self, route_id: u32) -> GString
-788 fn get_operations(&self) -> Array<VarDictionary>
-880 fn preview_route(
-907 fn create_route(&mut self, origin: GString, destination: GString, aircraft_id: u32) -> GString
-917 fn assign_route(&mut self, route_id: u32, aircraft_id: u32) -> GString
-927 fn add_route_aircraft(&mut self, route_id: u32, aircraft_id: u32) -> GString
-937 fn remove_route_aircraft(&mut self, route_id: u32, aircraft_id: u32) -> GString
-947 fn delete_route(&mut self, route_id: u32) -> GString
-957 fn propose_codeshare(&mut self, partner: GString) -> GString
-966 fn end_codeshare(&mut self, partner: GString) -> GString
-975 fn get_codeshares(&self) -> Array<VarDictionary>
-1020 fn get_competitors(&self) -> Array<VarDictionary>
-1087 fn get_route_competition(&self, route_id: u32) -> Array<VarDictionary>
-1091 struct Offer<'a>
-1169 fn get_routes(&self) -> Array<VarDictionary>
-1270 fn get_aircraft_models(&self) -> Array<VarDictionary>
-1290 fn buy_aircraft(&mut self, model_id: GString) -> GString
-1298 fn get_order_limit(&self) -> i64
-1303 fn quote_order(&self, model_id: GString, quantity: u32) -> VarDictionary
-1325 fn place_order(&mut self, model_id: GString, quantity: u32) -> GString
-1335 fn cancel_order(&mut self, order_id: i64) -> GString
-1345 fn get_orders(&self) -> Array<VarDictionary>
-1359 fn get_used_market(&self) -> Array<VarDictionary>
-1390 fn buy_used_aircraft(&mut self, listing_id: i64) -> GString
-1400 fn lease_aircraft(&mut self, model_id: GString) -> GString
-1410 fn sell_aircraft(&mut self, aircraft_id: u32) -> GString
-1420 fn return_aircraft(&mut self, aircraft_id: u32) -> GString
-1430 fn get_aircraft_cash_history(&self) -> Array<VarDictionary>
-1455 fn set_cabin_layout(&mut self, aircraft_id: u32, business_seats: u32) -> GString
-1465 fn set_cargo_rate(&mut self, route_id: u32, cents: i64) -> GString
-1475 fn set_service_level(&mut self, route_id: u32, level: GString) -> GString
-1485 fn set_business_ticket_price(&mut self, route_id: u32, price: i64) -> GString
-1495 fn preview_ferry(&self, aircraft_id: u32, destination: GString) -> VarDictionary
-1505 fn send_ferry(&mut self, aircraft_id: u32, destination: GString) -> GString
-1515 fn get_ferry_archive(&self, offset: i64) -> Array<VarDictionary>
-1532 fn get_fleet(&self) -> Array<VarDictionary>
-1588 fn set_maintenance_base(&mut self, icao: GString, open: bool) -> GString
-1598 fn get_maintenance_airports(&self) -> Array<VarDictionary>
-1619 fn request_maintenance(&mut self, aircraft_id: u32) -> GString
-1630 fn cancel_maintenance(&mut self, aircraft_id: u32) -> GString
-1641 fn get_staff(&self) -> Array<VarDictionary>
-1667 fn get_staff_overview(&self) -> VarDictionary
-1764 fn hire_pilots(&mut self, rating: GString, count: u32) -> GString
-1774 fn train_pilot(&mut self, id: u32, rating: GString) -> GString
-1785 fn hire_staff(&mut self, role: GString, count: i64) -> GString
-1796 fn hire_missing_staff(&mut self) -> GString
-1825 fn dismiss_staff(&mut self, employee_id: u32) -> GString
-1835 fn get_countries(&self) -> Array<VarDictionary>
-1851 fn get_airports(&self, country_code: GString) -> Array<VarDictionary>
-1873 fn get_starting_capital(&self) -> GString
-1881 fn get_difficulty_options(&self) -> GString
-1893 fn found_airline_with_levels(
-1916 fn has_airline(&self) -> bool
-1921 fn found_airline(&mut self, name: GString, country: GString, airport: GString) -> GString
-1933 fn get_airline_info(&self) -> VarDictionary
-1963 fn get_save_slots(&self, user_dir: GString) -> VarDictionary
-1986 fn save_slot(&self, user_dir: GString, id: i64, name: GString, overwrite: bool) -> GString
-2005 fn load_slot(&mut self, user_dir: GString, id: i64, backup: bool) -> GString
-2028 fn delete_save_slot(&self, user_dir: GString, id: i64) -> GString
-2044 fn save_game(&self, path: GString) -> GString
-2055 fn load_game(&mut self, path: GString) -> GString
-2069 fn start(&mut self)
-2076 fn pause(&mut self)
-2081 fn is_running(&self) -> bool
-2086 fn set_speed(&mut self, multiplier: i64) -> bool
-2091 fn get_speed(&self) -> i64
-2096 fn advance(&mut self, real_seconds: f64) -> bool
-2101 fn get_jump_options(&self) -> Array<VarDictionary>
-2114 fn jump(&mut self, game_seconds: f64) -> VarDictionary
-2121 fn begin_jump(&mut self, game_seconds: f64) -> bool
-2134 fn poll_jump(&mut self) -> VarDictionary
-2156 fn get_elapsed_seconds(&self) -> f64
-2161 fn get_display_time(&self) -> GString
-2166 impl SimulationClock
-2168 fn route_maintenance_status(&self, route: &routes::Route) -> String
-2209 fn idle_crew_demand(&self) -> (u32, u32)
-2226 fn route_staff_status(&self, route: &routes::Route) -> String
-2244 fn maintenance_info(&self, p: usize, plane: &aircraft::Aircraft) -> VarDictionary
-2298 fn flight_dictionary(f: &economy::FlightResult) -> VarDictionary
-2313 fn jump_dictionary(result: Result<jumps::ResultSummary, &'static str>) -> VarDictionary
-2325 mod freighter_tests;
-2328 mod codeshare_standard_tests;
+45 mod labour;
+47 mod labour_tests;
+48 mod maintenance;
+49 mod map;
+50 mod marketing;
+52 mod marketing_tests;
+54 mod milestone_tests;
+55 mod milestones;
+56 mod operations;
+57 mod orders;
+59 mod orders_tests;
+60 mod pricing;
+62 mod pricing_tests;
+64 mod quality;
+65 mod reputation;
+67 mod reputation_tests;
+69 mod rotation_tests;
+70 mod route_save;
+71 mod routes;
+72 mod save;
+74 mod save_slot_tests;
+75 mod save_slots;
+77 mod seasonal_tests;
+78 mod service;
+80 mod service_tests;
+82 mod slot_tests;
+83 mod slots;
+84 mod staff;
+86 mod staff_tests;
+87 mod tax;
+89 mod tax_tests;
+90 mod trading;
+92 mod trading_tests;
+94 mod transfer_tests;
+96 mod widebody_tests;
+97 mod world_economy;
+99 mod world_economy_tests;
+104 struct AirlineSimulation;
+113 struct SimulationClock
+120 impl IRefCounted for SimulationClock
+121 fn init(base: Base<RefCounted>) -> Self
+131 impl SimulationClock
+133 fn get_milestones(&self) -> Array<VarDictionary>
+155 fn take_milestone_notifications(&mut self) -> PackedStringArray
+163 fn get_attention_snapshot(&self) -> Array<VarDictionary>
+179 fn get_active_flights(&self) -> Array<VarDictionary>
+196 fn get_finance_history_info(&self) -> VarDictionary
+210 fn get_tax_history(&self) -> Array<VarDictionary>
+229 fn get_route_finances(&self) -> Array<VarDictionary>
+272 fn get_route_flight_page(&self, route_id: u32, offset: i64) -> Array<VarDictionary>
+287 fn get_finance_series(&self, route_id: u32) -> Array<VarDictionary>
+324 fn get_map_airports(&self) -> Array<VarDictionary>
+352 fn get_map_routes(&self) -> Array<VarDictionary>
+373 fn get_competitor_routes(&self) -> Array<VarDictionary>
+389 fn get_map_competitor_routes(&self) -> Array<PackedVector2Array>
+408 fn get_map_flights(&self) -> Array<VarDictionary>
+426 fn get_economy_rules(&self) -> GString
+431 fn set_ticket_price(&mut self, route_id: u32, price: i64) -> GString
+441 fn get_fare_suggestion(&self, id: u32) -> VarDictionary
+451 fn apply_fare_suggestion(&mut self, id: u32) -> GString
+461 fn set_pricing_autopilot(&mut self, id: u32, enabled: bool) -> GString
+471 fn set_marketing_budget(&mut self, budget: i64) -> GString
+481 fn start_fuel_contract(&mut self, share: u32, months: u32) -> GString
+491 fn get_fuel_contract(&self) -> VarDictionary
+507 fn get_marketing(&self) -> VarDictionary
+516 fn get_marketing_history(&self) -> Array<VarDictionary>
+525 fn get_insurance(&self) -> VarDictionary
+557 fn set_insurance(&mut self, level: GString) -> GString
+573 fn get_world_economy(&self) -> VarDictionary
+586 fn take_economy_notifications(&mut self) -> PackedStringArray
+596 fn get_financial_summary(&self) -> VarDictionary
+689 fn get_financing(&self) -> VarDictionary
+715 fn reschedule_loan(&mut self) -> GString
+725 fn borrow_money(&mut self, amount: i64) -> GString
+735 fn repay_loan(&mut self, amount: i64) -> GString
+745 fn get_flight_results(&self) -> Array<VarDictionary>
+766 fn schedule_route(
+781 fn stop_schedule(&mut self, route_id: u32) -> GString
+791 fn get_operations(&self) -> Array<VarDictionary>
+883 fn preview_route(
+910 fn create_route(&mut self, origin: GString, destination: GString, aircraft_id: u32) -> GString
+920 fn assign_route(&mut self, route_id: u32, aircraft_id: u32) -> GString
+930 fn add_route_aircraft(&mut self, route_id: u32, aircraft_id: u32) -> GString
+940 fn remove_route_aircraft(&mut self, route_id: u32, aircraft_id: u32) -> GString
+950 fn delete_route(&mut self, route_id: u32) -> GString
+960 fn propose_codeshare(&mut self, partner: GString) -> GString
+969 fn end_codeshare(&mut self, partner: GString) -> GString
+978 fn get_codeshares(&self) -> Array<VarDictionary>
+1023 fn get_competitors(&self) -> Array<VarDictionary>
+1090 fn get_route_competition(&self, route_id: u32) -> Array<VarDictionary>
+1094 struct Offer<'a>
+1172 fn get_routes(&self) -> Array<VarDictionary>
+1273 fn get_aircraft_models(&self) -> Array<VarDictionary>
+1293 fn buy_aircraft(&mut self, model_id: GString) -> GString
+1301 fn get_order_limit(&self) -> i64
+1306 fn quote_order(&self, model_id: GString, quantity: u32) -> VarDictionary
+1328 fn place_order(&mut self, model_id: GString, quantity: u32) -> GString
+1338 fn cancel_order(&mut self, order_id: i64) -> GString
+1348 fn get_orders(&self) -> Array<VarDictionary>
+1362 fn get_used_market(&self) -> Array<VarDictionary>
+1393 fn buy_used_aircraft(&mut self, listing_id: i64) -> GString
+1403 fn lease_aircraft(&mut self, model_id: GString) -> GString
+1413 fn sell_aircraft(&mut self, aircraft_id: u32) -> GString
+1423 fn return_aircraft(&mut self, aircraft_id: u32) -> GString
+1433 fn get_aircraft_cash_history(&self) -> Array<VarDictionary>
+1458 fn set_cabin_layout(&mut self, aircraft_id: u32, business_seats: u32) -> GString
+1468 fn set_cargo_rate(&mut self, route_id: u32, cents: i64) -> GString
+1478 fn set_service_level(&mut self, route_id: u32, level: GString) -> GString
+1488 fn set_business_ticket_price(&mut self, route_id: u32, price: i64) -> GString
+1498 fn preview_ferry(&self, aircraft_id: u32, destination: GString) -> VarDictionary
+1508 fn send_ferry(&mut self, aircraft_id: u32, destination: GString) -> GString
+1518 fn get_ferry_archive(&self, offset: i64) -> Array<VarDictionary>
+1535 fn get_fleet(&self) -> Array<VarDictionary>
+1591 fn set_maintenance_base(&mut self, icao: GString, open: bool) -> GString
+1601 fn get_maintenance_airports(&self) -> Array<VarDictionary>
+1622 fn request_maintenance(&mut self, aircraft_id: u32) -> GString
+1633 fn cancel_maintenance(&mut self, aircraft_id: u32) -> GString
+1644 fn get_staff(&self) -> Array<VarDictionary>
+1670 fn get_staff_overview(&self) -> VarDictionary
+1779 fn hire_pilots(&mut self, rating: GString, count: u32) -> GString
+1789 fn train_pilot(&mut self, id: u32, rating: GString) -> GString
+1800 fn hire_staff(&mut self, role: GString, count: i64) -> GString
+1810 fn set_staff_pay(&mut self, role: GString, percent: u32) -> GString
+1820 fn preview_staff_pay(&self, role: GString, percent: u32) -> VarDictionary
+1840 fn hire_missing_staff(&mut self) -> GString
+1870 fn dismiss_staff(&mut self, employee_id: u32) -> GString
+1880 fn get_countries(&self) -> Array<VarDictionary>
+1896 fn get_airports(&self, country_code: GString) -> Array<VarDictionary>
+1918 fn get_starting_capital(&self) -> GString
+1926 fn get_difficulty_options(&self) -> GString
+1938 fn found_airline_with_levels(
+1961 fn has_airline(&self) -> bool
+1966 fn found_airline(&mut self, name: GString, country: GString, airport: GString) -> GString
+1978 fn get_airline_info(&self) -> VarDictionary
+2008 fn get_save_slots(&self, user_dir: GString) -> VarDictionary
+2031 fn save_slot(&self, user_dir: GString, id: i64, name: GString, overwrite: bool) -> GString
+2050 fn load_slot(&mut self, user_dir: GString, id: i64, backup: bool) -> GString
+2073 fn delete_save_slot(&self, user_dir: GString, id: i64) -> GString
+2089 fn save_game(&self, path: GString) -> GString
+2100 fn load_game(&mut self, path: GString) -> GString
+2114 fn start(&mut self)
+2121 fn pause(&mut self)
+2126 fn is_running(&self) -> bool
+2131 fn set_speed(&mut self, multiplier: i64) -> bool
+2136 fn get_speed(&self) -> i64
+2141 fn advance(&mut self, real_seconds: f64) -> bool
+2146 fn get_jump_options(&self) -> Array<VarDictionary>
+2159 fn jump(&mut self, game_seconds: f64) -> VarDictionary
+2166 fn begin_jump(&mut self, game_seconds: f64) -> bool
+2179 fn poll_jump(&mut self) -> VarDictionary
+2201 fn get_elapsed_seconds(&self) -> f64
+2206 fn get_display_time(&self) -> GString
+2211 impl SimulationClock
+2213 fn route_maintenance_status(&self, route: &routes::Route) -> String
+2254 fn idle_crew_demand(&self) -> (u32, u32)
+2271 fn route_staff_status(&self, route: &routes::Route) -> String
+2289 fn maintenance_info(&self, p: usize, plane: &aircraft::Aircraft) -> VarDictionary
+2343 fn flight_dictionary(f: &economy::FlightResult) -> VarDictionary
+2358 fn jump_dictionary(result: Result<jumps::ResultSummary, &'static str>) -> VarDictionary
+2370 mod freighter_tests;
+2373 mod codeshare_standard_tests;
 
 ## rust/src/maintenance.rs
 20 const RESUME_DELAY: u64 = 60;
@@ -1003,28 +1052,28 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 506 pub fn cancel_maintenance(&mut self, aircraft_id: u32) -> Result<(), String>
 527 pub(crate) fn begin_visit(&mut self, p: usize) -> Result<(), String>
 605 fn finish_visit(&mut self, p: usize) -> Result<(), String>
-664 pub(crate) fn apply_maintenance(&mut self) -> Result<(), String>
-704 pub fn validate_maintenance(&self) -> Result<(), String>
-759 mod tests
-762 fn game() -> Game
-774 fn state(g: &Game) -> serde_json::Value
-778 fn flight() -> u64
-784 fn landings(g: &Game) -> u64
-793 fn bases_prices_actions_freeze_and_ai_parity()
-846 fn bases_unscheduled_away_and_running_price_stays_fixed()
-868 fn bases_idle() -> Game
-879 fn bases_fees_speeds_steps_pause_restart_and_migration()
-967 fn bases_v29_process_restart()
-1015 fn landings_accumulate_exact_flight_time_and_cycles()
-1029 fn parked_request_debits_once_blocks_departures_and_resumes_from_location()
-1088 fn airborne_request_finishes_the_flight_then_enters_the_hangar()
-1128 fn pending_order_can_be_cancelled_until_the_check_starts()
-1172 fn planned_cost_per_flight_spreads_one_regular_check_over_its_interval()
-1184 fn reaching_the_limit_forces_a_longer_more_expensive_check_at_landing()
-1215 fn repeated_checks_are_identical_for_any_step_size_speed_and_restart()
-1249 fn insufficient_funds_and_fresh_aircraft_leave_state_unchanged()
-1263 fn deleted_route_is_not_resumed_and_corrupt_saves_are_rejected()
-1309 fn version_nine_saves_load_with_fresh_aircraft_and_no_maintenance()
+665 pub(crate) fn apply_maintenance(&mut self) -> Result<(), String>
+705 pub fn validate_maintenance(&self) -> Result<(), String>
+760 mod tests
+763 fn game() -> Game
+775 fn state(g: &Game) -> serde_json::Value
+779 fn flight() -> u64
+785 fn landings(g: &Game) -> u64
+794 fn bases_prices_actions_freeze_and_ai_parity()
+847 fn bases_unscheduled_away_and_running_price_stays_fixed()
+869 fn bases_idle() -> Game
+880 fn bases_fees_speeds_steps_pause_restart_and_migration()
+968 fn bases_v29_process_restart()
+1016 fn landings_accumulate_exact_flight_time_and_cycles()
+1030 fn parked_request_debits_once_blocks_departures_and_resumes_from_location()
+1089 fn airborne_request_finishes_the_flight_then_enters_the_hangar()
+1129 fn pending_order_can_be_cancelled_until_the_check_starts()
+1173 fn planned_cost_per_flight_spreads_one_regular_check_over_its_interval()
+1185 fn reaching_the_limit_forces_a_longer_more_expensive_check_at_landing()
+1216 fn repeated_checks_are_identical_for_any_step_size_speed_and_restart()
+1250 fn insufficient_funds_and_fresh_aircraft_leave_state_unchanged()
+1264 fn deleted_route_is_not_resumed_and_corrupt_saves_are_rejected()
+1310 fn version_nine_saves_load_with_fresh_aircraft_and_no_maintenance()
 
 ## rust/src/map.rs
 7 pub struct CompetitorRoute
@@ -1114,38 +1163,38 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 170 pub fn ferry(&self, id: u32) -> Option<&Ferry>
 174 pub fn validate_ferries(&self) -> Result<(), String>
 275 pub fn require_ferry_aircraft(&self, id: u32) -> Result<(), String>
-298 pub fn quote_ferry(&self, id: u32, destination: &str) -> Result<Ferry, String>
-343 pub fn send_ferry(&mut self, id: u32, destination: &str) -> Result<(), String>
-351 pub fn next_ferry_event(&self) -> Option<u64>
-358 pub(crate) fn apply_ferries(&mut self) -> Result<(), String>
-422 pub struct Movement
-434 pub fn display_time(seconds: u64) -> String
-447 struct Timing
-455 static TIMINGS: std::cell::RefCell<Vec<Timing>> = const { std::cell::RefCell::new(Vec::new()) };
-458 pub fn timings(route: &Route, model_id: &str) -> Result<(u64, u64), String>
-490 pub fn movement(route: &Route, model: &str, now: u64) -> Result<Movement, String>
-550 fn append_recent(
-569 impl Game
-570 pub fn require_no_plan(&self, id: u32) -> Result<(), String>
-581 pub fn schedule(
-611 pub(crate) fn schedule_service(
-674 pub fn stop_schedule(&mut self, id: u32) -> Result<(), String>
-692 pub(crate) fn stop_service(&mut self, id: u32) -> Result<(), String>
-714 pub(crate) fn advance_company_to(
-893 pub fn validate_operations(&self) -> Result<(), String>
-966 mod tests
-968 fn game() -> Game
-980 fn timing_cache_separates_endpoints_models_and_catalogs()
-1011 fn recent_append_matches_full_stable_sort_for_ordered_and_deferred_arrivals()
-1052 fn staged_settlements_keep_recent_ledger_on_later_route_or_cash_failure()
-1086 fn departure_snapshot_survives_supply_changes_and_restart_until_settlement()
-1156 fn parallel_opposite_services_are_order_independent_with_mixed_steps()
-1200 fn v7_airborne_migration_freezes_once_and_v8_rejects_corrupt_snapshots()
-1248 fn simultaneous_services_and_minimum_interval_keep_exact_boundaries()
-1281 fn exact_departure_landing_ground_and_return_boundaries()
-1314 fn large_steps_equal_small_steps_at_all_speeds_and_never_double_count()
-1361 fn schedule_validation_and_save_restore_in_every_phase()
-1397 fn corrupt_operation_saves_rejected_and_v4_migrates_without_flights()
+304 pub fn quote_ferry(&self, id: u32, destination: &str) -> Result<Ferry, String>
+349 pub fn send_ferry(&mut self, id: u32, destination: &str) -> Result<(), String>
+357 pub fn next_ferry_event(&self) -> Option<u64>
+364 pub(crate) fn apply_ferries(&mut self) -> Result<(), String>
+428 pub struct Movement
+440 pub fn display_time(seconds: u64) -> String
+453 struct Timing
+461 static TIMINGS: std::cell::RefCell<Vec<Timing>> = const { std::cell::RefCell::new(Vec::new()) };
+464 pub fn timings(route: &Route, model_id: &str) -> Result<(u64, u64), String>
+496 pub fn movement(route: &Route, model: &str, now: u64) -> Result<Movement, String>
+556 fn append_recent(
+575 impl Game
+576 pub fn require_no_plan(&self, id: u32) -> Result<(), String>
+587 pub fn schedule(
+617 pub(crate) fn schedule_service(
+681 pub fn stop_schedule(&mut self, id: u32) -> Result<(), String>
+699 pub(crate) fn stop_service(&mut self, id: u32) -> Result<(), String>
+721 pub(crate) fn advance_company_to(
+899 pub fn validate_operations(&self) -> Result<(), String>
+972 mod tests
+974 fn game() -> Game
+986 fn timing_cache_separates_endpoints_models_and_catalogs()
+1017 fn recent_append_matches_full_stable_sort_for_ordered_and_deferred_arrivals()
+1058 fn staged_settlements_keep_recent_ledger_on_later_route_or_cash_failure()
+1092 fn departure_snapshot_survives_supply_changes_and_restart_until_settlement()
+1162 fn parallel_opposite_services_are_order_independent_with_mixed_steps()
+1206 fn v7_airborne_migration_freezes_once_and_v8_rejects_corrupt_snapshots()
+1254 fn simultaneous_services_and_minimum_interval_keep_exact_boundaries()
+1287 fn exact_departure_landing_ground_and_return_boundaries()
+1320 fn large_steps_equal_small_steps_at_all_speeds_and_never_double_count()
+1367 fn schedule_validation_and_save_restore_in_every_phase()
+1403 fn corrupt_operation_saves_rejected_and_v4_migrates_without_flights()
 
 ## rust/src/orders.rs
 11 const DAY: u64 = 86400;
@@ -1298,28 +1347,28 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 518 fn assignments_are_exclusive_and_deletion_or_unassigning_releases_aircraft()
 
 ## rust/src/save.rs
-30 pub(crate) const VERSION: u32 = 39;
-35 pub(crate) const MAX_BYTES: u64 = 256 * 1024 * 1024;
-38 struct SaveGame
-45 struct GameState
-94 struct SavedRoutes
-101 struct SavedFleet
-107 struct SavedClock
-114 pub fn save(path: &Path, game: &Game) -> Result<(), String>
-207 pub fn load(path: &Path) -> Result<Game, String>
-211 pub(crate) fn load_versioned(path: &Path) -> Result<(Game, u32), String>
-577 mod tests
-581 fn routes_roundtrip_migration_and_rejecting_corrupt_assignments()
-648 fn exact_roundtrip_and_overwrite_for_all_clock_states()
-673 fn rejects_missing_corrupt_truncated_invalid_and_future_saves()
-703 fn rejects_oversized_saves_and_write_errors()
-714 fn migrates_clock_only_v1_without_fabricating_a_company()
-728 fn rejects_invalid_company_data()
-748 fn fleet_and_balance_roundtrip_and_identifiers_continue_after_load()
-774 fn v2_company_migrates_without_buying_aircraft_or_changing_balance()
-792 fn rejects_corrupt_fleet_instead_of_silently_losing_aircraft()
-834 fn oversized_archive_cannot_overwrite_a_loadable_save()
-855 fn all_save_versions_preserve_catalogue_company_state()
+31 pub(crate) const VERSION: u32 = 40;
+36 pub(crate) const MAX_BYTES: u64 = 256 * 1024 * 1024;
+39 struct SaveGame
+46 struct GameState
+95 struct SavedRoutes
+102 struct SavedFleet
+108 struct SavedClock
+115 pub fn save(path: &Path, game: &Game) -> Result<(), String>
+208 pub fn load(path: &Path) -> Result<Game, String>
+212 pub(crate) fn load_versioned(path: &Path) -> Result<(Game, u32), String>
+584 mod tests
+588 fn routes_roundtrip_migration_and_rejecting_corrupt_assignments()
+655 fn exact_roundtrip_and_overwrite_for_all_clock_states()
+680 fn rejects_missing_corrupt_truncated_invalid_and_future_saves()
+710 fn rejects_oversized_saves_and_write_errors()
+721 fn migrates_clock_only_v1_without_fabricating_a_company()
+735 fn rejects_invalid_company_data()
+755 fn fleet_and_balance_roundtrip_and_identifiers_continue_after_load()
+781 fn v2_company_migrates_without_buying_aircraft_or_changing_balance()
+799 fn rejects_corrupt_fleet_instead_of_silently_losing_aircraft()
+841 fn oversized_archive_cannot_overwrite_a_loadable_save()
+862 fn all_save_versions_preserve_catalogue_company_state()
 
 ## rust/src/save_slot_tests.rs
 3 fn game() -> Game
@@ -1423,62 +1472,63 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 59 pub fn parse(key: &str) -> Result<Self, String>
 68 struct Salaries
 75 pub struct Needs
-83 struct Config
-96 static CONFIG: LazyLock<Result<Config, String>> = LazyLock::new(||
-133 fn config() -> Result<&'static Config, String>
-137 pub fn needs(model_id: &str) -> Result<&'static Needs, String>
-144 pub fn salary(role: Role) -> Result<i64, String>
-153 pub fn period_seconds() -> Result<u64, String>
-157 pub fn max_hire_batch() -> u32
-162 pub struct Employee
-178 pub struct Training
-183 pub fn ratings() -> Vec<String>
-195 pub fn conversion_terms() -> (i64, u64)
-201 pub struct Staff
-211 pub enum Activity
-220 impl Activity
-221 pub fn label(self) -> &'static str
-231 impl Game
-232 fn default_rating(&self) -> String
-240 pub fn rated_busy(&self, rating: &str) -> u32
-254 pub fn rated_count(&self, rating: &str) -> u32
-264 pub fn rated_available(&self, rating: &str) -> u32
-269 pub fn idle_pilot_shortage(&self, rating: &str) -> u32
-286 pub fn hire_missing_rated_staff(&mut self, cabin: u32, technicians: u32) -> Result<(), String>
-318 pub fn hire_pilots(&mut self, rating: &str, count: u32) -> Result<(), String>
-330 pub fn train_pilot(&mut self, id: u32, rating: &str) -> Result<(), String>
-369 pub fn next_training_event(&self) -> Option<u64>
-377 pub(crate) fn complete_training(&mut self)
-386 pub(crate) fn migrate_ratings(&mut self) -> Result<(), String>
-407 pub fn staff_count(&self, role: Role) -> u32
-417 pub fn reserved_crew(&self) -> (u32, u32)
-441 pub fn busy_technicians(&self) -> u32
-453 pub fn busy_staff(&self, role: Role) -> u32
-461 pub fn available_staff(&self, role: Role) -> u32
-470 pub fn technician_target(&self) -> u32
-480 pub fn crew_shortage(&self, model_id: &str) -> Result<(u32, u32), String>
-489 pub fn require_crew(&self, model_id: &str) -> Result<(), String>
-508 pub fn staff_activity(&self) -> Vec<Activity>
-550 pub fn salary_reserve(&self) -> Result<i64, String>
-557 pub fn monthly_payroll(&self) -> i64
-564 fn employee_name(id: u32) -> Result<String, String>
-577 pub(crate) fn hire_batch(
-663 pub fn hire_staff(&mut self, role: Role, count: u32) -> Result<(), String>
-672 pub fn equip_staff_for(&mut self, model_id: &str) -> Result<(), String>
-697 fn accrued(e: &Employee, until: u64) -> Result<i64, String>
-705 pub fn accrued_payroll(&self) -> Result<i64, String>
-712 fn record_payroll(&mut self, time: u64, amount: i64)
-723 pub fn dismiss_staff(&mut self, id: u32) -> Result<(), String>
-745 fn remove_employee(&mut self, i: usize) -> Result<(), String>
-770 pub fn dismiss_surplus(&mut self) -> Result<(), String>
-796 pub(crate) fn assign_waiting_technicians(&mut self) -> Result<(), String>
-824 pub fn next_payroll_event(&self) -> Option<u64>
-834 pub fn next_payroll_amount(&self) -> Result<i64, String>
-845 pub(crate) fn apply_payroll(&mut self) -> Result<(), String>
-874 pub(crate) fn grandfather_staff(&mut self) -> Result<(), String>
-890 pub fn validate_staff(&self) -> Result<(), String>
-945 impl Game
-947 pub fn staff_up(&mut self)
+83 pub(crate) struct Config
+97 static CONFIG: LazyLock<Result<Config, String>> = LazyLock::new(||
+136 pub(crate) fn config() -> Result<&'static Config, String>
+140 pub fn needs(model_id: &str) -> Result<&'static Needs, String>
+147 pub fn salary(role: Role) -> Result<i64, String>
+156 pub fn period_seconds() -> Result<u64, String>
+160 pub fn max_hire_batch() -> u32
+165 pub struct Employee
+185 pub struct Training
+190 pub fn ratings() -> Vec<String>
+202 pub fn conversion_terms() -> (i64, u64)
+208 pub struct Staff
+225 pub enum Activity
+234 impl Activity
+235 pub fn label(self) -> &'static str
+245 impl Game
+246 fn default_rating(&self) -> String
+254 pub fn rated_busy(&self, rating: &str) -> u32
+268 pub fn rated_count(&self, rating: &str) -> u32
+278 pub fn rated_available(&self, rating: &str) -> u32
+283 pub fn idle_pilot_shortage(&self, rating: &str) -> u32
+300 pub fn hire_missing_rated_staff(&mut self, cabin: u32, technicians: u32) -> Result<(), String>
+332 pub fn hire_pilots(&mut self, rating: &str, count: u32) -> Result<(), String>
+345 pub fn train_pilot(&mut self, id: u32, rating: &str) -> Result<(), String>
+384 pub fn next_training_event(&self) -> Option<u64>
+392 pub(crate) fn complete_training(&mut self) -> Result<(), String>
+407 pub(crate) fn migrate_ratings(&mut self) -> Result<(), String>
+428 pub fn staff_count(&self, role: Role) -> u32
+438 pub fn reserved_crew(&self) -> (u32, u32)
+462 pub fn busy_technicians(&self) -> u32
+474 pub fn busy_staff(&self, role: Role) -> u32
+482 pub fn available_staff(&self, role: Role) -> u32
+491 pub fn technician_target(&self) -> u32
+501 pub fn crew_shortage(&self, model_id: &str) -> Result<(u32, u32), String>
+510 pub fn require_crew(&self, model_id: &str) -> Result<(), String>
+536 pub fn staff_activity(&self) -> Vec<Activity>
+578 pub fn salary_reserve(&self) -> Result<i64, String>
+585 pub fn monthly_payroll(&self) -> i64
+592 fn employee_name(id: u32) -> Result<String, String>
+605 pub(crate) fn hire_batch(
+697 pub fn hire_staff(&mut self, role: Role, count: u32) -> Result<(), String>
+706 pub fn equip_staff_for(&mut self, model_id: &str) -> Result<(), String>
+731 fn accrued(e: &Employee, until: u64) -> Result<i64, String>
+746 pub fn accrued_payroll(&self) -> Result<i64, String>
+753 fn record_payroll(&mut self, time: u64, amount: i64)
+764 pub fn dismiss_staff(&mut self, id: u32) -> Result<(), String>
+786 pub(crate) fn resign_employee(&mut self, i: usize) -> Result<(), String>
+792 fn remove_employee(&mut self, i: usize) -> Result<(), String>
+819 pub fn dismiss_surplus(&mut self) -> Result<(), String>
+845 pub(crate) fn assign_waiting_technicians(&mut self) -> Result<(), String>
+873 pub fn next_payroll_event(&self) -> Option<u64>
+883 pub fn next_payroll_amount(&self) -> Result<i64, String>
+894 pub(crate) fn apply_payroll(&mut self) -> Result<(), String>
+926 pub(crate) fn grandfather_staff(&mut self) -> Result<(), String>
+942 pub fn validate_staff(&self) -> Result<(), String>
+1009 impl Game
+1011 pub fn staff_up(&mut self)
 
 ## rust/src/staff_tests.rs
 8 const DAY: f64 = 86_400.0;
@@ -1748,8 +1798,8 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 1328 func _refresh_attention() -> void:
 1353 func _resize_frame() -> void:
 1369 func _open_attention(entry: Dictionary) -> void:
-1390 func _refresh_overview_register() -> void:
-1402 func _render_operations(parent: VBoxContainer) -> void:
+1393 func _refresh_overview_register() -> void:
+1405 func _render_operations(parent: VBoxContainer) -> void:
 
 ## scripts/map_background.gd
 1 extends Control
@@ -1879,21 +1929,25 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 2 const ThemeTokens = preload("res://scripts/ui/operations_theme.gd")
 5 const UI = preload("res://scripts/ui/components.gd")
 6 signal changed
-32 func _ready() -> void:
-130 func _process(delta: float) -> void:
-138 func refresh(force: bool = false) -> void:
-174 func _roles(overview: Dictionary) -> void:
-189 func _aircraft(overview: Dictionary) -> void:
-220 func _staff(staff: Array) -> void:
-246 func _shortage(overview: Dictionary) -> void:
-264 func _selection_changed() -> void:
-277 func _report(error: String, success: String, field: Control = null) -> void:
-286 func _hire() -> void:
-293 func _hire_missing() -> void:
-296 func _dismiss() -> void:
-301 func _train() -> void:
-305 func focus_employee(id: int) -> void:
-319 func _training(staff: Array, duration_days: int) -> void:
+34 func _ready() -> void:
+159 func _process(delta: float) -> void:
+167 func refresh(force: bool = false) -> void:
+204 func _roles(overview: Dictionary) -> void:
+219 func _aircraft(overview: Dictionary) -> void:
+250 func _staff(staff: Array) -> void:
+276 func _shortage(overview: Dictionary) -> void:
+294 func _selection_changed() -> void:
+307 func _report(error: String, success: String, field: Control = null) -> void:
+316 func _hire() -> void:
+323 func _hire_missing() -> void:
+326 func _dismiss() -> void:
+331 func _train() -> void:
+335 func focus_employee(id: int) -> void:
+349 func _training(staff: Array, duration_days: int) -> void:
+366 func _pay_groups(overview: Dictionary) -> void:
+395 func _pay_preview(key: String) -> void:
+404 func _confirm_pay(key: String) -> void:
+415 func focus_pay_group(index: int) -> void:
 
 ## scripts/ui/components.gd
 1 extends RefCounted

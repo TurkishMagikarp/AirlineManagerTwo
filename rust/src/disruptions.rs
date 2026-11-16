@@ -70,8 +70,11 @@ pub struct Cursor {
     pub base_index: u64,
     pub index: u64,
     pub previous: Option<Leg>,
-    /// A migrated airborne quote must retain its departure and arrival.
+    /// A dispatched quote retains its departure and arrival across migrations
+    /// and changes to the holds for later departures.
     pub frozen: Option<Leg>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub staff_hold: Option<Box<crate::labour::Hold>>,
 }
 
 pub fn technical_delay(
@@ -136,6 +139,14 @@ impl Cursor {
             .max(self.previous.as_ref().map_or(0, |l| l.ready))
             .checked_add(delay)
             .ok_or("Flugplan-Zeitüberlauf.")?;
+        let mut departure = departure;
+        if let Some(h) = &self.staff_hold
+            && self.index >= h.index
+            && departure >= h.from
+            && departure < h.until
+        {
+            departure = h.until;
+        }
         let landing = departure
             .checked_add(flight)
             .ok_or("Flugplan-Zeitüberlauf.")?;
@@ -172,7 +183,9 @@ pub fn validate(route: &Route, plane: &crate::aircraft::Aircraft) -> Result<(), 
             && l.departure.checked_add(flight) == Some(l.landing)
             && l.landing.checked_add(ground) == Some(l.ready)
     };
-    if c.index != p.completed_flights
+    if c.staff_hold.as_ref().is_some_and(|h| {
+        h.from > h.until || h.until > u64::MAX / 2 || h.index > c.index.saturating_add(1)
+    }) || c.index != p.completed_flights
         || c.base_index > c.index
         || c.acquired_at != plane.acquired_at.unwrap_or(0)
         || c.wear.added(c.index - c.base_index, flight).as_ref() != Some(&plane.wear)
@@ -182,7 +195,8 @@ pub fn validate(route: &Route, plane: &crate::aircraft::Aircraft) -> Result<(), 
         || (c.index > 0) != c.previous.is_some()
         || c.frozen.as_ref().is_some_and(|l| {
             !valid_leg(l)
-                || l.index != c.base_index
+                || l.index < c.base_index
+                || l.index > c.index
                 || (l.index == c.index
                     && p.airborne.as_ref().is_none_or(|f| f.landing != l.landing))
         })
@@ -281,6 +295,7 @@ struct ForecastKey {
     ground: u64,
     index: u64,
     frozen: Option<Leg>,
+    staff_hold: Option<Box<crate::labour::Hold>>,
 }
 type Forecasts = std::collections::HashMap<(u64, u64), (ForecastKey, u64)>;
 thread_local! {
@@ -316,6 +331,7 @@ pub fn landing_at(route: &Route, model: &str, index: u64) -> Result<u64, String>
             ground,
             index,
             frozen: cursor.frozen.clone(),
+            staff_hold: cursor.staff_hold.clone(),
         };
         // Hash only the plan seed and requested index on this hot path. The
         // complete immutable key still guards hits across reschedules and saves.
@@ -431,6 +447,7 @@ impl Game {
                 })
             };
             let cursor = Cursor {
+                staff_hold: None,
                 seed: self.incident_seed(plane.id),
                 acquired_at: plane.acquired_at.unwrap_or(0),
                 wear: plane.wear.clone(),

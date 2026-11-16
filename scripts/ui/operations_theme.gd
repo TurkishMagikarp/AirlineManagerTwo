@@ -157,6 +157,18 @@ func button_styles(
 	set_stylebox("focus", type, focus_box())
 
 func _init() -> void:
+	var track := box(SURFACE_SUNKEN, LINE_STRONG, RADIUS_SM, 0, 2)
+	set_stylebox("slider", "HSlider", track)
+	set_stylebox("grabber_area", "HSlider", box(ACCENT_TEXT, TRANSPARENT, RADIUS_SM, 0, 2))
+	set_stylebox("grabber_area_highlight", "HSlider", get_stylebox("grabber_area", "HSlider"))
+	set_stylebox("focus", "HSlider", focus_box())
+	var slider_thumb := GradientTexture2D.new()
+	slider_thumb.width = 4
+	slider_thumb.height = 16
+	slider_thumb.gradient = Gradient.new()
+	slider_thumb.gradient.colors = PackedColorArray([INK, INK])
+	for icon in ["grabber", "grabber_highlight", "grabber_disabled"]:
+		set_icon(icon, "HSlider", slider_thumb)
 	button_styles("MapZoomButton", TRANSPARENT, LINE, SURFACE_SUNKEN, TRANSPARENT, INK)
 	text_style("MapZoomButton", {"family": "mono", "size": 18, "height": 18, "weight": 500, "tracking": 0.0})
 	for state in ["normal", "hover", "pressed", "disabled"]:

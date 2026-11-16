@@ -56,6 +56,36 @@ impl Game {
                 employee_id,
             });
         };
+        for role in staff::Role::ALL {
+            let group = self.labour_group(role);
+            if let Some(end) = group.strike_until {
+                add(
+                    "strike",
+                    format!(
+                        "{} · Streik bis {}",
+                        role.plural(),
+                        operations::display_time(end)
+                    ),
+                    "staff",
+                    0,
+                    0,
+                    role as u32 + 1,
+                );
+            } else if let Some(start) = group.warning_at {
+                add(
+                    "strike_warning",
+                    format!(
+                        "{} · Streikwarnung ab {} · Gehalt anheben",
+                        role.plural(),
+                        operations::display_time(start)
+                    ),
+                    "staff",
+                    0,
+                    0,
+                    role as u32 + 1,
+                );
+            }
+        }
         if airline.capital_eur < RULES.negative_cash_threshold_eur {
             add(
                 "negative_cash",
@@ -115,6 +145,24 @@ impl Game {
             add("slots", nearly_full.join(" · "), "routes", 0, 0, 0);
         }
         for p in &self.fleet {
+            if let Ok(n) = staff::needs(&p.model_id)
+                && self.planned_route(p.id).is_some()
+                && (self.rated_count(&n.rating) < self.rated_busy(&n.rating)
+                    || self.staff_count(staff::Role::CabinCrew) < self.reserved_crew().1)
+            {
+                add(
+                    "crew",
+                    format!(
+                        "{} · Personal nach Kündigungen nachbesetzen ({})",
+                        p.identifier(),
+                        n.rating
+                    ),
+                    "staff",
+                    0,
+                    p.id,
+                    0,
+                );
+            }
             if let Some(i) = self.planned_route(p.id)
                 && let Ok(state) = operations::movement(
                     &self.routes[i],

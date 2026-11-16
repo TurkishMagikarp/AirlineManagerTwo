@@ -41,6 +41,13 @@ func _run() -> void:
 		quit(0)
 		return
 	assert(sim.found_airline("Meridian Air", "DE", "EDDF").is_empty())
+	if OS.get_environment("AIRLINE_UI_CAPTURE_STAFF_ONLY") == "1":
+		await _staff_views(sim)
+		main.queue_free()
+		await process_frame
+		print("PASS: Staff pay controls, all three groups and confirmation at both sizes")
+		quit(0)
+		return
 	if OS.get_environment("AIRLINE_UI_CAPTURE_ORDERS_ONLY") == "1":
 		await _order_views(sim)
 		main.queue_free()
@@ -1030,3 +1037,33 @@ func _order_views(sim: RefCounted) -> void:
 		for frame in range(5): await process_frame
 		await RenderingServer.frame_post_draw
 		assert(root.get_texture().get_image().save_png(capture_dir.path_join("fleet-orders-held-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
+
+func _staff_views(sim: RefCounted) -> void:
+	assert(sim.buy_aircraft("atr72_600").is_empty())
+	assert(sim.hire_missing_staff().is_empty())
+	main._sync_view()
+	main._show_page(5)
+	var panel: Control = main.staff_panel
+	var scroll: ScrollContainer = panel.get_parent().get_parent()
+	for dimensions in [Vector2i(1440, 1000), Vector2i(680, 520)]:
+		root.size = dimensions
+		main._sync_view()
+		main._show_page(5)
+		for key in ["pilot", "cabin_crew", "technician"]:
+			panel.refresh(true)
+			var card: Dictionary = panel.pay_cards[key]
+			for frame in range(5): await process_frame
+			scroll.ensure_control_visible(card["slider"].get_parent().get_parent())
+			for frame in range(5): await process_frame
+			assert(root.get_visible_rect().encloses(card["apply"].get_global_rect()))
+			await RenderingServer.frame_post_draw
+			if not capture_dir.is_empty():
+				assert(root.get_texture().get_image().save_png(capture_dir.path_join("staff-%s-%dx%d.png" % [key, dimensions.x, dimensions.y])) == OK)
+		panel.pay_cards["pilot"]["slider"].value = 85
+		panel._confirm_pay("pilot")
+		for frame in range(5): await process_frame
+		await RenderingServer.frame_post_draw
+		if not capture_dir.is_empty():
+			assert(root.get_texture().get_image().save_png(capture_dir.path_join("staff-confirm-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
+		panel.pay_dialog.queue_free()
+		await process_frame

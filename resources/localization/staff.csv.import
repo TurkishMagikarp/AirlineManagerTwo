@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://ct14ta8ro3u81"
+
+[deps]
+
+files=["res://resources/localization/staff.de.translation", "res://resources/localization/staff.en.translation"]
+
+source_file="res://resources/localization/staff.csv"
+dest_files=["res://resources/localization/staff.de.translation", "res://resources/localization/staff.en.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true
