@@ -575,8 +575,8 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 433 fn restructuring_sale_recovers_and_failed_rescue_keeps_original_deadline()
 459 fn restructuring_ai_exit_and_player_terminal_are_deterministic_across_steps_and_restart()
 526 fn restructuring_v13_migration_starts_fresh_grace_without_replaying_costs()
-566 fn restructuring_recovery_before_grace_and_at_deadline_wins()
-596 fn restructuring_ai_uses_the_same_one_time_paid_reschedule()
+569 fn restructuring_recovery_before_grace_and_at_deadline_wins()
+599 fn restructuring_ai_uses_the_same_one_time_paid_reschedule()
 
 ## rust/src/freighter_tests.rs
 2 const DAY: f64 = 86400.0;

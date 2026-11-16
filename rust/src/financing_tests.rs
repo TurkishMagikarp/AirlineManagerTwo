@@ -546,6 +546,9 @@ fn restructuring_v13_migration_starts_fresh_grace_without_replaying_costs() {
     g.marketing.settled_at = g.clock.elapsed().as_secs();
     g.migrate_insurance_fixture();
     g.migrate_world_economy_fixture();
+    // Labour starts neutral at the last payroll boundary, without replaying
+    // the six periods before this legacy save's day-200 clock.
+    g.staff.labour_period = 180 * 86400;
     assert_eq!(state(&restored), state(&g));
     restored.clock.set_running(true);
     assert!(restored.advance(1.0));
