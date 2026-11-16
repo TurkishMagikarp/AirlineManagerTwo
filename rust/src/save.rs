@@ -25,7 +25,8 @@ use std::time::Duration;
 // v34: shared world economic cycle. Legacy timelines start neutral at load.
 // v35: route fare autopilot; old saves have no enabled routes or change history.
 // v36: immutable founding difficulty; older worlds keep Standard on every axis.
-pub(crate) const VERSION: u32 = 37;
+// v38: player–AI codeshares and frozen leg receipts; older saves have none.
+pub(crate) const VERSION: u32 = 38;
 // Bounded input, including centuries of fuel/seasonal quotes for the player
 // and both AI airlines in the million-flight finance restart scenario.
 // Version 17 retains per-class quotes, which also split more archive batches.
@@ -41,6 +42,8 @@ struct SaveGame {
 // Future simulation data belongs here, not in the UI or a serialized Godot object.
 #[derive(Serialize, Deserialize)]
 struct GameState {
+    #[serde(default)]
+    codeshares: Vec<crate::codeshare::Agreement>,
     #[serde(default)]
     difficulty: Option<crate::difficulty::Settings>,
     #[serde(default)]
@@ -123,11 +126,13 @@ pub fn save(path: &Path, game: &Game) -> Result<(), String> {
     game.validate_finance()?;
     game.validate_history()?;
     game.validate_tax()?;
+    game.validate_codeshares()?;
     game.validate_competitors()?;
     let clock = &game.clock;
     let data = SaveGame {
         version: VERSION,
         state: GameState {
+            codeshares: game.codeshares.clone(),
             difficulty: Some(game.difficulty),
             pricing: game.pricing.clone(),
             world_economy: Some(game.world_economy),
@@ -349,6 +354,11 @@ pub(crate) fn load_versioned(path: &Path) -> Result<(Game, u32), String> {
         } else {
             data.state.pricing
         },
+        codeshares: if data.version < 38 {
+            Vec::new()
+        } else {
+            data.state.codeshares
+        },
         world_economy,
         milestones: data.state.milestones,
         departure_markets: Default::default(),
@@ -506,6 +516,7 @@ pub(crate) fn load_versioned(path: &Path) -> Result<(Game, u32), String> {
             .world_economy
             .validate(game.clock.elapsed().as_secs())?;
     }
+    game.validate_codeshares()?;
     game.validate_competitors()?;
     if data.version < 9 && game.airline.is_some() {
         game.competitors = crate::competition::initial_competitors_at(game.clock.elapsed())?;
