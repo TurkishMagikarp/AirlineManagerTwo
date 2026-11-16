@@ -258,6 +258,7 @@ fn world_economy_phase_changes_do_not_add_attention_or_stop_jumps() {
 impl Game {
     /// Older subsystem migration fixtures also acquire the v34 neutral timeline.
     pub(crate) fn adopt_events_from(&mut self, loaded: &Game) {
+        self.alliances.reviewed_at = loaded.alliances.reviewed_at;
         self.world_economy.events_from = loaded.world_economy.events_from;
         self.world_economy.weather_from = loaded.world_economy.weather_from;
         for c in &mut self.competitors {

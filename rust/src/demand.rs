@@ -202,11 +202,15 @@ pub struct Offer {
     pub cargo_model: Option<String>,
     premium: bool,
     pub awareness: i64,
+    pub alliance_bonus_bps: i64,
     pub loyalty_members: i64,
     pub reputation: i64,
     pub owner: String,
 }
 impl Offer {
+    fn alliance_choice(&self) -> f64 {
+        1.0 + self.alliance_bonus_bps as f64 / 10_000.0
+    }
     fn allocation_order(&self, other: &Self) -> std::cmp::Ordering {
         self.route
             .ticket_eur
@@ -222,6 +226,7 @@ impl Offer {
             )
             .then(self.loyalty_members.cmp(&other.loyalty_members))
             .then(self.awareness.cmp(&other.awareness))
+            .then(self.alliance_bonus_bps.cmp(&other.alliance_bonus_bps))
             .then(self.reputation.cmp(&other.reputation))
     }
     fn connects_with(&self, other: &Self) -> bool {
@@ -260,6 +265,7 @@ impl Offer {
             cargo_model: self.cargo_model.clone(),
             premium: self.premium,
             awareness: self.awareness,
+            alliance_bonus_bps: self.alliance_bonus_bps,
             loyalty_members: self.loyalty_members,
             reputation: self.reputation,
             owner: self.owner.clone(),
@@ -275,6 +281,7 @@ impl Offer {
             cargo_model: None,
             premium: false,
             awareness: 0,
+            alliance_bonus_bps: 0,
             loyalty_members: 0,
             reputation: 0,
             owner: String::new(),
@@ -413,6 +420,7 @@ impl LocalPrepared {
                     crate::marketing::attractiveness(o.awareness)
                         * crate::reputation::attractiveness(o.reputation)
                         * o.route.service_level.rate().attractiveness
+                        * o.alliance_choice()
                         * f,
                 ),
             );
@@ -1917,6 +1925,7 @@ fn estimate_reference(
             .then(a.route.ancillary_policy.cmp(&b.route.ancillary_policy))
             .then(a.loyalty_members.cmp(&b.loyalty_members))
             .then(a.awareness.cmp(&b.awareness))
+            .then(a.alliance_bonus_bps.cmp(&b.alliance_bonus_bps))
             .then(a.reputation.cmp(&b.reputation))
     });
     let own_indices: Vec<_> = matching
@@ -1974,6 +1983,7 @@ fn estimate_reference(
                     crate::marketing::attractiveness(o.awareness)
                         * crate::reputation::attractiveness(o.reputation)
                         * o.route.service_level.rate().attractiveness
+                        * o.alliance_choice()
                         * f,
                 ),
             ) * w

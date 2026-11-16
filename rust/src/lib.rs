@@ -5,6 +5,9 @@ mod airports;
 mod ancillaries;
 #[cfg(test)]
 mod ancillary_tests;
+mod alliances;
+#[cfg(test)]
+mod alliances_tests;
 mod attention;
 #[cfg(test)]
 mod attention_tests;
@@ -314,7 +317,7 @@ impl SimulationClock {
             // Central expenses belong only to the company series, never to
             // every route (which would duplicate them again).
             let costs = i128::from(t.costs()) + if route_id == 0 {
-                h.ferry_through(time) + h.maintenance_through(time) + h.payroll_through(time) + h.interest_through(time) + h.rent_through(time) + h.tax_through(time) + h.marketing_through(time) + h.insurance_through(time)
+                h.ferry_through(time) + h.maintenance_through(time) + h.payroll_through(time) + h.interest_through(time) + h.rent_through(time) + h.tax_through(time) + h.marketing_through(time) + h.insurance_through(time) + h.alliance_fee_through(time)
             } else { 0 };
             let tax = if route_id == 0 { h.tax_through(time) } else { 0 };
             let period_costs = costs - previous_costs;
@@ -725,7 +728,13 @@ impl SimulationClock {
             .flat_map(|h| h.ferries.iter())
             .map(|f| i128::from(f.quote.totals.costs()))
             .sum();
+        let alliance_fees = self
+            .game
+            .history
+            .as_ref()
+            .map_or(0, |h| h.alliance_fee_through(u64::MAX));
         let costs = ferry_cost
+            + alliance_fees
             + insurance
             + marketing
             + tax
@@ -744,6 +753,7 @@ impl SimulationClock {
         "reputation_percent" => self.game.reputation.percent(),
         "reputation_trend" => self.game.reputation.trend_text(),
         "marketing_eur" => marketing.min(i128::from(i64::MAX)) as i64,
+        "alliance_fee_eur" => alliance_fees.min(i128::from(i64::MAX)) as i64,
         "tax_eur" => tax.min(i128::from(i64::MAX)) as i64,
         "tax_year_eur" => last_tax.map_or(0, |a| a.amount),
         "tax_year" => last_tax.map_or(0, |a| a.time / demand::YEAR_SECONDS) as i64,
@@ -1091,6 +1101,86 @@ impl SimulationClock {
                 "revenue" => receipt.map_or(0, |r| r.revenue) }
             })
             .collect()
+    }
+
+    #[func]
+    fn apply_alliance(&mut self, alliance: GString) -> GString {
+        self.game
+            .apply_alliance(&alliance.to_string())
+            .err()
+            .unwrap_or_default()
+            .as_str()
+            .into()
+    }
+    #[func]
+    fn leave_alliance(&mut self) -> GString {
+        self.game
+            .leave_alliance()
+            .err()
+            .unwrap_or_default()
+            .as_str()
+            .into()
+    }
+    /// One row per alliance with members, the player's fee and qualification.
+    #[func]
+    fn get_alliances(&self) -> Array<VarDictionary> {
+        let g = &self.game;
+        let name_of = |owner: &str| -> String {
+            if owner == alliances::PLAYER {
+                return g.airline.as_ref().map_or(String::new(), |a| a.name.clone());
+            }
+            owner.split_once(':').map_or(owner, |(_, n)| n).to_string()
+        };
+        let fee = alliances::monthly_fee(g);
+        let mine = g.alliance_of(alliances::PLAYER);
+        alliances::RULES
+            .alliances
+            .iter()
+            .map(|d| {
+                let members: Array<VarDictionary> = g
+                    .alliance_members(&d.id)
+                    .map(|m| {
+                        vdict! { "name" => name_of(&m.owner).as_str(), "player" => m.owner == alliances::PLAYER,
+                        "leaving" => m.leaving_at.is_some_and(|_| true),
+                        "since" => operations::display_time(m.joined_at).as_str() }
+                    })
+                    .collect();
+                let state = if mine.is_some_and(|m| m.alliance == d.id) {
+                    if mine.is_some_and(|m| m.leaving_at.is_some()) { "leaving" } else { "member" }
+                } else if g.alliances.application.as_ref().is_some_and(|a| a.alliance == d.id) {
+                    "pending"
+                } else {
+                    "none"
+                };
+                let check = if state == "none" { g.alliance_check(alliances::PLAYER, &d.id).err() } else { None };
+                let (overlap, shared) = g.alliance_overlap(alliances::PLAYER, &d.id);
+                let args: Array<GString> = check
+                    .as_ref()
+                    .map_or_else(Vec::new, |r| r.args.iter().map(|a| GString::from(a.as_str())).collect())
+                    .into_iter()
+                    .collect();
+                vdict! { "id" => d.id.as_str(), "name" => d.name.as_str(), "members" => &members,
+                "member_count" => g.alliance_members(&d.id).count() as i64, "state" => state,
+                "qualifies" => state == "none" && check.is_none(),
+                "reason" => check.as_ref().map_or("", |r| r.code), "reason_args" => &args,
+                "overlap_percent" => i64::from(overlap), "shared_airports" => shared as i64,
+                "fee_eur" => fee, "notice_ends" => mine.filter(|m| m.alliance == d.id).and_then(|m| m.leaving_at).map_or_else(String::new, operations::display_time).as_str() }
+            })
+            .collect()
+    }
+    #[func]
+    fn get_alliance_rules(&self) -> VarDictionary {
+        let r = &*alliances::RULES;
+        let g = &self.game;
+        let paid = g.history.as_ref().map_or(0, |h| h.alliance_fee_through(u64::MAX));
+        vdict! { "review_days" => r.review_days as i64, "notice_days" => r.leave_notice_days as i64,
+        "cooldown_days" => r.reapply_cooldown_days as i64, "min_routes" => r.min_routes as i64,
+        "min_reputation" => r.min_reputation_points, "max_overlap" => i64::from(r.max_overlap_percent),
+        "min_cash_months" => r.min_cash_months, "max_members" => r.max_members as i64,
+        "bonus_bps" => r.demand_bonus_bps_per_partner, "bonus_max_bps" => r.demand_bonus_max_bps,
+        "fee_eur" => alliances::monthly_fee(g), "fees_paid_eur" => paid.min(i128::from(i64::MAX)) as i64,
+        "next_review" => g.next_alliance_event().map_or_else(String::new, operations::display_time).as_str(),
+        "pending" => g.alliances.application.as_ref().and_then(|a| alliances::def(&a.alliance)).map_or("", |d| d.name.as_str()) }
     }
 
     #[func]

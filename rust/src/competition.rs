@@ -334,6 +334,7 @@ impl Game {
             })
             .collect();
         self.apply_codeshares(&mut offers);
+        self.apply_alliance_offers(&mut offers);
         offers
     }
 
@@ -356,6 +357,7 @@ impl Game {
                 || !g.used_market.listings.is_empty()
                 || !g.competitors.is_empty()
                 || !g.codeshares.is_empty()
+                || !g.alliances.is_empty()
                 || g.clock.elapsed() != self.clock.elapsed()
                 || c.next_review <= self.clock.elapsed().as_secs()
                 || c.next_review - self.clock.elapsed().as_secs()
@@ -549,6 +551,7 @@ impl Game {
                 .chain(std::iter::once(staged.next_tax_event()))
                 .chain(std::iter::once(staged.next_marketing_event()))
                 .chain(std::iter::once(staged.next_insurance_event()))
+                .chain(std::iter::once(staged.next_alliance_event()))
                 .chain(staged.competitors.iter().flat_map(|c| {
                     [
                         c.game.next_order_event(),
@@ -669,6 +672,7 @@ impl Game {
                 || staged.apply_loyalty().is_err()
                 || staged.apply_financing().is_err()
                 || staged.apply_orders().is_err()
+                || staged.apply_alliances().is_err()
                 || staged.competitors.iter_mut().any(|c| {
                     c.game.apply_insurance().is_err()
                         || c.game.apply_rotation_removals().is_err()
@@ -687,6 +691,7 @@ impl Game {
                 return false;
             }
             staged.review_codeshares();
+            staged.prune_alliances();
             // Remove the whole AI company, including aircraft, plans, staff and
             // event sources. Its already settled flights remain in other ledgers.
             let previous_companies = staged.competitors.len();
@@ -717,6 +722,7 @@ impl Game {
                 return false;
             }
             staged.review_codeshares();
+            staged.prune_alliances();
             if end.as_secs().is_multiple_of(crate::reputation::DAY) && end.subsec_nanos() == 0 {
                 staged.evaluate_milestones();
             }
@@ -1028,7 +1034,7 @@ impl Competitor {
         self.growth_reviews = (self.growth_reviews + 1).min(RETRY_AFTER);
         if closed.is_empty() && self.growth_reviews >= RETRY_AFTER {
             self.growth_reviews = 0;
-            if self.expand(&other_supply).is_err() {
+            if let Err(e) = self.expand(&other_supply) { eprintln!("EXP {e}");
                 return false;
             }
         }
@@ -1592,6 +1598,10 @@ impl Competitor {
         let mut best_week = 0;
         for (used, backlog, plane, model, origin, cost, leased, rent) in options {
             let m = crate::aircraft::model(model)?;
+            // Freighters cannot fly passenger routes.
+            if m.seats == 0 {
+                continue;
+            }
             // Preserve the existing new/lease fallback and route ranking. Evaluate
             // used capital relative to that same-model alternative, over the
             // existing 104-week horizon, including the residual hull values.

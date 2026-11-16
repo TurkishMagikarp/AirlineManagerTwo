@@ -76,6 +76,13 @@ func _run() -> void:
 		print("PASS: manufacturer order preview, open orders and confirmations at both sizes")
 		quit(0)
 		return
+	if OS.get_environment("AIRLINE_UI_CAPTURE_ALLIANCE_ONLY") == "1":
+		await _alliance_views(sim)
+		main.queue_free()
+		await process_frame
+		print("PASS: alliance list, qualification reason, apply and leave dialogs at both sizes")
+		quit(0)
+		return
 	if OS.get_environment("AIRLINE_UI_CAPTURE_CODESHARE_ONLY") == "1":
 		await _codeshare_views(sim)
 		main.queue_free()
@@ -225,6 +232,10 @@ func _run() -> void:
 				assert(root.get_visible_rect().encloses(main.routes_panel.season_label.get_global_rect()))
 				await RenderingServer.frame_post_draw
 				assert(root.get_texture().get_image().save_png(capture_dir.path_join("route-demand-factors-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
+				scroll.scroll_vertical += int(main.routes_panel.alliance_panel.get_global_rect().position.y - scroll.get_global_rect().position.y)
+				for frame in range(5): await process_frame
+				await RenderingServer.frame_post_draw
+				assert(root.get_texture().get_image().save_png(capture_dir.path_join("alliances-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
 				scroll.ensure_control_visible(main.routes_panel.destination)
 				for frame in range(5): await process_frame
 				await _capture_picker(main.routes_panel.destination, "route-airport", dimensions)
@@ -1261,3 +1272,63 @@ func _loyalty_views(sim: RefCounted) -> void:
 				if not capture_dir.is_empty():
 					await RenderingServer.frame_post_draw
 					assert(root.get_texture().get_image().save_png(capture_dir.path_join("loyalty-%s-%s-%dx%d.png" % [language, view[1], dimensions.x, dimensions.y])) == OK)
+
+func _alliance_views(sim: RefCounted) -> void:
+	for target in ["LTFM", "EDDM", "LFPG"]:
+		assert(sim.lease_aircraft("a320_200").is_empty())
+		sim.hire_missing_staff()
+		var plane: int = sim.get_fleet().back()["id"]
+		assert(sim.create_route("EDDF", target, plane).is_empty())
+		var route: int = sim.get_routes().back()["id"]
+		assert(sim.set_ticket_price(route, 120).is_empty())
+		assert(sim.schedule_route(route, 1, 240).is_empty())
+	sim.start()
+	var joined := ""
+	for day in range(1, 181):
+		assert(sim.advance(86400.0))
+		for row: Dictionary in sim.get_alliances():
+			if row["member_count"] > 0 and row["qualifies"]: joined = row["id"]
+		if joined != "": break
+	sim.pause()
+	assert(joined != "")
+	main._sync_view()
+	main._show_page(2)
+	var routes = main.routes_panel
+	var panel = routes.alliance_panel
+	var scroll := routes.get_parent().get_parent() as ScrollContainer
+	for lang in ["de", "en"]:
+		TranslationServer.set_locale(lang)
+		routes.remove_child(panel)
+		panel.queue_free()
+		panel = load("res://scripts/alliance_panel.gd").new()
+		panel.simulation = sim
+		routes.add_child(panel)
+		routes.move_child(panel, routes.codeshare_panel.get_index() + 1)
+		routes.alliance_panel = panel
+		var index := 0
+		for row: Dictionary in panel.rows:
+			if row["id"] == joined: break
+			index += 1
+		panel.choice.select(index)
+		panel.choice.item_selected.emit(index)
+		for dimensions in [Vector2i(1440, 1000), Vector2i(680, 520)]:
+			root.size = dimensions
+			for frame in range(5): await process_frame
+			scroll.scroll_vertical += int(panel.get_global_rect().position.y - scroll.get_global_rect().position.y)
+			for frame in range(5): await process_frame
+			if not capture_dir.is_empty():
+				await RenderingServer.frame_post_draw
+				assert(root.get_texture().get_image().save_png(capture_dir.path_join("alliances-open-%s-%dx%d.png" % [lang, dimensions.x, dimensions.y])) == OK)
+			scroll.ensure_control_visible(panel.result)
+			for frame in range(5): await process_frame
+			if not capture_dir.is_empty():
+				await RenderingServer.frame_post_draw
+				assert(root.get_texture().get_image().save_png(capture_dir.path_join("alliances-open-bottom-%s-%dx%d.png" % [lang, dimensions.x, dimensions.y])) == OK)
+			panel.apply.pressed.emit()
+			for frame in range(5): await process_frame
+			if not capture_dir.is_empty():
+				await RenderingServer.frame_post_draw
+				assert(root.get_texture().get_image().save_png(capture_dir.path_join("alliances-apply-dialog-%s-%dx%d.png" % [lang, dimensions.x, dimensions.y])) == OK)
+			panel.dialog.safe_button.pressed.emit()
+			for frame in range(3): await process_frame
+	TranslationServer.set_locale("de")

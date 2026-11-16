@@ -96,6 +96,13 @@ impl Game {
         {
             return Err("CODESHARE_FINANCES".into());
         }
+        if let Some(mine) = self.alliance_of(crate::alliances::PLAYER)
+            && self
+                .alliance_of(partner)
+                .is_some_and(|m| m.alliance != mine.alliance)
+        {
+            return Err("CODESHARE_RIVAL_ALLIANCE".into());
+        }
         if self.codeshares.len() >= RULES.maximum_partners {
             return Err("CODESHARE_LIMIT".into());
         }

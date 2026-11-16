@@ -77,7 +77,8 @@ impl History {
                 - self.ferry_through(time)
                 - self.rent_through(time)
                 - self.marketing_through(time)
-                - self.insurance_through(time),
+                - self.insurance_through(time)
+                - self.alliance_fee_through(time),
         )
         .map_err(|_| "Gewinnüberlauf.".into())
     }

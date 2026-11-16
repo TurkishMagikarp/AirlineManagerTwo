@@ -77,6 +77,8 @@ pub struct History {
     pub marketing_costs: Vec<Purchase>,
     #[serde(default)]
     pub insurance_costs: Vec<crate::insurance::Expense>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub alliance_fees: Vec<Purchase>,
     #[serde(skip)]
     settled: SettledCache,
 }
@@ -124,6 +126,7 @@ impl History {
             taxes: Vec::new(),
             marketing_costs: Vec::new(),
             insurance_costs: Vec::new(),
+            alliance_fees: Vec::new(),
             settled: SettledCache::default(),
         }
     }
@@ -235,6 +238,7 @@ impl History {
             - self.tax_through(time)
             - self.marketing_through(time)
             - self.insurance_through(time)
+            - self.alliance_fee_through(time)
     }
     pub fn aircraft_cash_through(&self, time: u64) -> i128 {
         self.aircraft_cash
@@ -325,6 +329,7 @@ impl History {
 impl Game {
     pub fn validate_history(&self) -> Result<(), String> {
         self.validate_marketing()?;
+        self.validate_alliances()?;
         self.reputation.validate()?;
         let Some(h) = &self.history else {
             return if self.airline.is_none() {

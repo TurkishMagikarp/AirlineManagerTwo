@@ -1,0 +1,22 @@
+{
+  "review_days": 30,
+  "leave_notice_days": 60,
+  "reapply_cooldown_days": 60,
+  "notice_visible_days": 30,
+  "max_members": 4,
+  "min_reputation_points": 0,
+  "min_routes": 3,
+  "max_overlap_percent": 50,
+  "ai_max_overlap_percent": 30,
+  "ai_leave_below_routes": 2,
+  "min_cash_months": 2,
+  "fee_base_eur": 6000,
+  "fee_per_route_eur": 1500,
+  "demand_bonus_bps_per_partner": 150,
+  "demand_bonus_max_bps": 300,
+  "alliances": [
+    { "id": "aurora", "name": "Aurora Alliance" },
+    { "id": "meridian", "name": "Meridian Wings" },
+    { "id": "zenith", "name": "Zenith Network" }
+  ]
+}
