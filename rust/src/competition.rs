@@ -87,9 +87,9 @@ fn staffing_per_week(game: &Game, model: &str) -> Result<i64, String> {
             .saturating_sub(game.staff_count(Role::Technician)),
     );
     let period = staff::period_seconds()? as i64;
-    let monthly = pilots * staff::salary(Role::Pilot)?
-        + cabin * staff::salary(Role::CabinCrew)?
-        + techs * staff::salary(Role::Technician)?;
+    let monthly = pilots * game.pay_salary(Role::Pilot)
+        + cabin * game.pay_salary(Role::CabinCrew)
+        + techs * game.pay_salary(Role::Technician);
     Ok(monthly * crate::pricing::RULES.fare_review_seconds as i64 / period)
 }
 
@@ -447,6 +447,9 @@ impl Game {
                 .next_training_event()
                 .is_none_or(|t| Duration::from_secs(t) > target.elapsed())
             && self
+                .next_labour_event()
+                .is_none_or(|t| Duration::from_secs(t) > target.elapsed())
+            && self
                 .next_payroll_event()
                 .is_none_or(|t| Duration::from_secs(t) > target.elapsed())
         {
@@ -531,6 +534,7 @@ impl Game {
                 .chain(std::iter::once(staged.next_maintenance_event()))
                 .chain(std::iter::once(staged.next_rotation_event()))
                 .chain(std::iter::once(staged.next_payroll_event()))
+                .chain(std::iter::once(staged.next_labour_event()))
                 .chain(std::iter::once(staged.next_training_event()))
                 .chain(std::iter::once(staged.next_financing_event()))
                 .chain(std::iter::once(staged.next_tax_event()))
@@ -543,6 +547,7 @@ impl Game {
                         c.game.next_maintenance_event(),
                         c.game.next_rotation_event(),
                         c.game.next_payroll_event(),
+                        c.game.next_labour_event(),
                         c.game.next_training_event(),
                         c.game.next_financing_event(),
                         c.game.next_tax_event(),
@@ -638,6 +643,11 @@ impl Game {
                     }
                 }
             }
+            for c in &mut staged.competitors {
+                if c.game.ai_labour_policy().is_err() {
+                    return false;
+                }
+            }
             if staged.apply_insurance().is_err()
                 || staged.apply_rotation_removals().is_err()
                 || staged
@@ -645,6 +655,7 @@ impl Game {
                     .and_then(|()| staged.apply_maintenance())
                     .is_err()
                 || staged.apply_payroll().is_err()
+                || staged.apply_labour_events().is_err()
                 || staged.apply_marketing().is_err()
                 || staged.apply_financing().is_err()
                 || staged.apply_orders().is_err()
@@ -656,6 +667,7 @@ impl Game {
                             .and_then(|()| c.game.apply_maintenance())
                             .is_err()
                         || c.game.apply_payroll().is_err()
+                        || c.game.apply_labour_events().is_err()
                         || c.game.apply_marketing().is_err()
                         || c.game.apply_financing().is_err()
                         || c.game.apply_orders().is_err()

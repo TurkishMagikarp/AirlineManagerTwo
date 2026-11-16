@@ -62,3 +62,39 @@ nichts stehen bleibt. Wartende Wartungen sind additiv (`staffed`, Standard `true
 Mehrere Berechtigungen pro Pilot, Schichten und Ruhezeiten, Gehaltsverhandlung
 oder -erhöhungen, Fluktuation, Einstellungsverzögerung, Kündigungsfristen, Personalmangel *während* eines
 laufenden Flugplans (Personal im Einsatz ist gesperrt, statt Flüge zu kippen).
+
+## Gehaltsstufen und Arbeitskampf (AIR-244)
+
+Jede Rolle hat eine Gehaltsstufe von 85–120 % des Marktgehalts (Start: 100 %)
+und Moral von 0–100 (Start: 75). Alle Grenzen und Reaktionswerte stehen unter
+`labour` in `config/staff.json`. Der Personal-Tab zeigt die Kosten und die
+Differenz für den aktuellen Personalbestand vor der Bestätigung. Eine Änderung
+wird an der nächsten 30-Tage-Grenze wirksam: die endende Periode wird vollständig
+zum alten Satz abgerechnet, danach entsteht Gehalt zum neuen Satz. Bruchteile
+bleiben auch bei einem Satzwechsel erhalten. Die Finanzhistorie enthält weiter
+alle tatsächlichen Gehaltsbuchungen.
+
+Moral bewegt sich ausschließlich am Zahltag um höchstens 10 Punkte zum Ziel:
+bei 85 % Gehalt 20, bei Marktgehalt 75, bei 120 % Gehalt 95 (linear dazwischen).
+Personalmangel, nicht durch Guthaben gedeckte Gehälter und Restrukturierung
+senken das Ziel um 15, 25 bzw. 20 Punkte. Es gibt keinen Zufall und keinen
+zusätzlichen Nachfrage- oder Pünktlichkeitsbonus. Unter 40 Moral kündigen 5 %
+(aufgerundet) der Gruppe, in absteigender Mitarbeiter-ID. Auch gebundene und
+musterberechtigte Piloten können kündigen. Bereits gestartete Flüge landen
+regulär; fehlende Besatzung blockiert weitere Abflüge bis zur Nachbesetzung.
+
+Unter 25 Moral wird ein Streik mit zehn Tagen Vorlauf angekündigt. Eine
+vorgemerkte Gehaltsstufe mit einem Moralziel von mindestens 60 wendet die Warnung
+ab. Bleibt die Moral am angekündigten Datum unter 25, streikt die Gruppe drei
+Tage. Danach gilt eine 90-Tage-Sperre für neue Streiks. Warnung und Streik stehen
+in der Aufmerksamkeitsliste und halten einen Zeitsprung an. Flugpläne behalten
+ihre Route und Position; ein datierter Abflugstopp im bestehenden Störungscursor
+verschiebt den nächsten Abflug. Ein schon gestarteter Flug behält sein
+unverändertes Abflugergebnis. Frachtflugzeuge benötigen kein Kabinenpersonal.
+
+KI-Airlines verwenden denselben Personalzustand und dieselben Regeln. Am
+Zahltag merken sie bei Finanznot 95 % vor, sonst 100 %. Unter 60 Moral stellen
+sie auch in Finanznot wieder Marktgehalt ein. So erzeugt die Sparpolitik allein
+keine Kündigungs- oder Streikspirale; ungedeckte Gehälter und Restrukturierung
+können trotzdem zu Arbeitskampf führen. Migration v39 → v40 initialisiert jede
+Airline mit Marktgehalt und neutraler Moral, ohne rückwirkende Buchungen.

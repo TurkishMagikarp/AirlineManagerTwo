@@ -1384,7 +1384,10 @@ func _open_attention(entry: Dictionary) -> void:
 	elif page == 2:
 		routes_panel.focus_route(entry["route_id"])
 	elif page == 5:
-		staff_panel.focus_employee(entry["employee_id"])
+		if entry.get("kind", "") in ["strike", "strike_warning"]:
+			staff_panel.focus_pay_group(entry["employee_id"] - 1)
+		else:
+			staff_panel.focus_employee(entry["employee_id"])
 
 
 func _refresh_overview_register() -> void:

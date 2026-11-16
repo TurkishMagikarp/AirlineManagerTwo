@@ -27,7 +27,8 @@ use std::time::Duration;
 // v36: immutable founding difficulty; older worlds keep Standard on every axis.
 // v39: factory positions and frozen deposits; old owners have no open orders.
 // v38: player–AI codeshares and frozen leg receipts; older saves have none.
-pub(crate) const VERSION: u32 = 39;
+// v40: per-group pay, morale and dated departure holds; old owners start neutral.
+pub(crate) const VERSION: u32 = 40;
 // Bounded input, including centuries of fuel/seasonal quotes for the player
 // and both AI airlines in the million-flight finance restart scenario.
 // Version 17 retains per-class quotes, which also split more archive batches.
@@ -445,6 +446,12 @@ pub(crate) fn load_versioned(path: &Path) -> Result<(Game, u32), String> {
     };
     if data.version >= 33 && game.airline.is_some() && game.milestones.is_none() {
         return Err("Meilensteine fehlen im Spielstand.".into());
+    }
+    if data.version < 40 {
+        game.migrate_labour();
+        for c in &mut game.competitors {
+            c.game.migrate_labour();
+        }
     }
     game.commercial_changed();
     if data.version < 13 {

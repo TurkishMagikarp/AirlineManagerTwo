@@ -1,0 +1,19 @@
+keys,de,en
+STAFF_PAY_PILOT,PILOTEN · GEHALT UND MORAL,PILOTS · PAY AND MORALE
+STAFF_PAY_CABIN_CREW,KABINENPERSONAL · GEHALT UND MORAL,CABIN CREW · PAY AND MORALE
+STAFF_PAY_TECHNICIAN,TECHNIKER · GEHALT UND MORAL,TECHNICIANS · PAY AND MORALE
+STAFF_PAY_APPLY,Gehaltsstufe vormerken,Set pay level
+STAFF_STATE_CALM,Ruhig,Calm
+STAFF_STATE_UNREST,Unruhe,Unrest
+STAFF_STATE_WARNING,Streikwarnung,Strike warning
+STAFF_STATE_STRIKE,Im Streik,On strike
+STAFF_MORALE,Moral: %d / 100,Morale: %d / 100
+STAFF_PAY_TARGET,Gehalt: %d %% → Moralziel %d. Bewegung nur am Zahltag.,Pay: %d%% → morale target %d. Moves on payroll day.
+STAFF_FACTOR_SHORT,Personalmangel senkt das Ziel,Understaffing lowers the target
+STAFF_FACTOR_MISSED,Gehälter nicht durch Guthaben gedeckt,Payroll not covered by cash
+STAFF_FACTOR_RESTRUCTURE,Restrukturierung senkt das Ziel,Restructuring lowers the target
+STAFF_PAY_PREVIEW,Pro Periode: %s · Änderung: %s · Vorgemerkt: %d %%,Per period: %s · Change: %s · Pending: %d%%
+STAFF_PAY_CONFIRM,Gehalt auf %d %% setzen?,Set pay to %d%%?
+STAFF_PAY_TIMING,Ab der nächsten Periodengrenze. Die laufende Periode wird zum bisherigen Satz bezahlt. Eine Anhebung ins ruhige Band wendet eine Streikwarnung ab; laufende Streiks enden zum angekündigten Datum.,Effective at the next period boundary. The current period is paid at the old rate. A raise into the calm band averts a warning; active strikes end on their announced date.
+STAFF_PAY_SAVED,Gehaltsstufe vorgemerkt.,Pay level scheduled.
+STAFF_PAY_BACK,Abbrechen,Cancel

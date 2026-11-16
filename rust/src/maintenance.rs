@@ -656,6 +656,7 @@ impl Game {
         if operations::movement(&route, &model, visit.end).is_ok() {
             self.commercial_changed();
             self.routes[i] = route;
+            self.refresh_labour_holds()?;
         }
         Ok(())
     }

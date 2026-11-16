@@ -289,6 +289,12 @@ impl Game {
             return Err("Flugzeug ist einer Route zugewiesen.".into());
         }
         let needs = crate::staff::needs(&plane.model_id)?;
+        if [crate::staff::Role::Pilot, crate::staff::Role::Technician]
+            .into_iter()
+            .any(|r| self.labour_group(r).strike_until.is_some())
+        {
+            return Err("Streik: keine neuen Abflüge bis zum Streikende.".into());
+        }
         if self.rated_available(&needs.rating) < needs.pilots {
             return Err(format!("Berechtigte Piloten fehlen: {}.", needs.rating));
         }
@@ -668,6 +674,7 @@ impl Game {
             ..FlightPlan::default()
         });
         self.initialize_disruptions()?;
+        self.refresh_labour_holds()?;
         Ok(())
     }
 
@@ -877,7 +884,6 @@ impl Game {
                 self.reputation_changed();
             }
         }
-        self.complete_training();
         for (r, p, projection, airborne, wear) in updates {
             self.fleet[p].wear = wear;
             self.fleet[p].status = projection.state.status;
@@ -887,7 +893,7 @@ impl Game {
             plan.airborne = airborne;
             plan.disruption = Some(projection.cursor);
         }
-        true
+        self.complete_training().is_ok()
     }
 
     pub fn validate_operations(&self) -> Result<(), String> {

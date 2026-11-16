@@ -42,6 +42,9 @@ mod insurance_tests;
 #[cfg(test)]
 mod jump_tests;
 mod jumps;
+mod labour;
+#[cfg(test)]
+mod labour_tests;
 mod maintenance;
 mod map;
 mod marketing;
@@ -1687,18 +1690,28 @@ impl SimulationClock {
                     .iter()
                     .map(|r| g.idle_pilot_shortage(r))
                     .sum(),
-                staff::Role::CabinCrew => idle_cabin.saturating_sub(available),
+                staff::Role::CabinCrew => {
+                    (idle_cabin + g.reserved_crew().1).saturating_sub(employed)
+                }
                 staff::Role::Technician => g
                     .technician_target()
                     .saturating_sub(employed)
                     .max(waiting_techs.saturating_sub(available)),
             };
             total_missing += i64::from(missing);
+            let labour = g.labour_group(role);
             roles.push(&vdict! {
                 "role" => role.key(), "name" => role.plural(), "singular" => role.label(),
                 "employed" => i64::from(employed), "busy" => i64::from(g.busy_staff(role)),
                 "available" => i64::from(available), "missing" => i64::from(missing),
-                "salary_eur" => staff::salary(role).unwrap_or(0),
+                "pay_percent" => i64::from(labour.pay_percent), "pending_percent" => i64::from(labour.pending_percent),
+                "morale" => i64::from(labour.morale),
+                "labour_state" => if labour.strike_until.is_some() { "strike" } else if labour.warning_at.is_some() { "warning" } else if labour.morale < labour::rules().calm_threshold { "unrest" } else { "calm" },
+                "labour_date" => labour.strike_until.or(labour.warning_at).map(operations::display_time).unwrap_or_default().as_str(),
+                "pay_target" => i64::from(labour::rules().target(labour.pay_percent)),
+                "understaffed" => labour.understaffed, "missed_payroll" => labour.missed_payroll, "restructuring" => labour.restructuring,
+                "resigned" => i64::from(labour.resigned),
+                "salary_eur" => g.pay_salary(role),
                 "monthly_cost_eur" => g.staff.employees.iter().filter(|e| e.role == role).map(|e| e.salary_eur).sum::<i64>()
             });
         }
@@ -1745,6 +1758,8 @@ impl SimulationClock {
             "next_payroll" => next_pay.as_str(),
             "missing_total" => total_missing,
             "payroll_paid_eur" => g.history.as_ref().map(|h| h.payroll_through(u64::MAX).min(i128::from(i64::MAX)) as i64).unwrap_or(0),
+            "pay_min" => i64::from(labour::rules().minimum_pay_percent), "pay_max" => i64::from(labour::rules().maximum_pay_percent),
+            "pay_market" => i64::from(labour::rules().market_pay_percent),
             "max_batch" => i64::from(staff::max_hire_batch())
         };
         let mut types = Array::<VarDictionary>::new();
@@ -1791,6 +1806,35 @@ impl SimulationClock {
         result.err().unwrap_or_default().as_str().into()
     }
 
+    #[func]
+    fn set_staff_pay(&mut self, role: GString, percent: u32) -> GString {
+        staff::Role::parse(&role.to_string())
+            .and_then(|r| self.game.set_pay_level(r, percent))
+            .err()
+            .unwrap_or_default()
+            .as_str()
+            .into()
+    }
+
+    #[func]
+    fn preview_staff_pay(&self, role: GString, percent: u32) -> VarDictionary {
+        let Ok(r) = staff::Role::parse(&role.to_string()) else {
+            return VarDictionary::new();
+        };
+        let Ok(cost) = self.game.pay_preview(r, percent) else {
+            return VarDictionary::new();
+        };
+        let current: i64 = self
+            .game
+            .staff
+            .employees
+            .iter()
+            .filter(|e| e.role == r)
+            .map(|e| e.salary_eur)
+            .sum();
+        vdict! {"cost" => cost, "delta" => cost-current, "percent" => i64::from(percent)}
+    }
+
     /// Hire exactly the staff missing for aircraft that cannot fly yet.
     #[func]
     fn hire_missing_staff(&mut self) -> GString {
@@ -1811,7 +1855,8 @@ impl SimulationClock {
                     .sum::<u32>()
                     .saturating_sub(g.available_staff(staff::Role::Technician)),
             );
-        let cabin = cabin.saturating_sub(g.available_staff(staff::Role::CabinCrew));
+        let cabin =
+            (cabin + g.reserved_crew().1).saturating_sub(g.staff_count(staff::Role::CabinCrew));
         self.game
             .hire_missing_rated_staff(cabin, techs)
             .err()
