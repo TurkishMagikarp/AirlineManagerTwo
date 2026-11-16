@@ -41,6 +41,13 @@ func _run() -> void:
 		quit(0)
 		return
 	assert(sim.found_airline("Meridian Air", "DE", "EDDF").is_empty())
+	if OS.get_environment("AIRLINE_UI_CAPTURE_ANCILLARIES_ONLY") == "1":
+		await _ancillary_views(sim)
+		main.queue_free()
+		await process_frame
+		print("PASS: ancillary Finances and Routes at both sizes")
+		quit(0)
+		return
 	if OS.get_environment("AIRLINE_UI_CAPTURE_STAFF_ONLY") == "1":
 		await _staff_views(sim)
 		main.queue_free()
@@ -733,6 +740,7 @@ func _transfer_views(sim: RefCounted) -> void:
 		var scroll: ScrollContainer = panel.get_parent().get_parent()
 		for target in [panel.route_tree, panel.connections_label, panel.results_tree, panel.competition_label]:
 			scroll.ensure_control_visible(target)
+			scroll.scroll_vertical += 24
 			for frame in range(5): await process_frame
 			if not capture_dir.is_empty():
 				await RenderingServer.frame_post_draw
@@ -1067,3 +1075,51 @@ func _staff_views(sim: RefCounted) -> void:
 			assert(root.get_texture().get_image().save_png(capture_dir.path_join("staff-confirm-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
 		panel.pay_dialog.queue_free()
 		await process_frame
+
+func _ancillary_views(sim: RefCounted) -> void:
+	assert(sim.buy_aircraft("atr72_600").is_empty())
+	sim.hire_missing_staff()
+	assert(sim.create_route("EDDF", "EDDM", 1).is_empty())
+	assert(sim.schedule_route(1, 1, 120).is_empty())
+	assert(sim.set_ancillary_policy("aggressive").is_empty())
+	sim.start()
+	sim.advance(86400.0)
+	sim.pause()
+	main._sync_view()
+	for dimensions in [Vector2i(1440, 1000), Vector2i(680, 520)]:
+		root.size = dimensions
+		for page in [4, 2]:
+			main._show_page(page)
+			var scroll: ScrollContainer = main.fleet_panel.get_parent().get_parent()
+			scroll.scroll_vertical = 0
+			for frame in range(5): await process_frame
+			await RenderingServer.frame_post_draw
+			assert(root.get_texture().get_image().save_png(capture_dir.path_join("ancillary-%s-top-%dx%d.png" % ["finances" if page == 4 else "routes", dimensions.x, dimensions.y])) == OK)
+			var target: Control
+			if page == 4:
+				target = main.finances_panel.ancillary_status
+			else:
+				main.routes_panel.route_tree.get_root().get_first_child().select(0)
+				main.routes_panel._selection_changed()
+				target = main.routes_panel.service_cost
+			for frame in range(5): await process_frame
+			scroll.ensure_control_visible(target)
+			scroll.scroll_vertical += 24
+			for frame in range(5): await process_frame
+			assert(root.get_visible_rect().encloses(target.get_global_rect()))
+			assert(main.size.x <= dimensions.x)
+			await RenderingServer.frame_post_draw
+			assert(root.get_texture().get_image().save_png(capture_dir.path_join("ancillary-%s-policy-%dx%d.png" % ["finances" if page == 4 else "routes", dimensions.x, dimensions.y])) == OK)
+
+			if page == 4:
+				main.finances_panel.chart_select.select(5)
+				main.finances_panel._chart()
+				main.finances_panel.route_tree.get_root().get_first_child().select(0)
+				main.finances_panel._select_route()
+				for view in [[main.finances_panel.chart, "chart"], [main.finances_panel.detail, "report"]]:
+					var control: Control = view[0]
+					scroll.ensure_control_visible(control)
+					for frame in range(5): await process_frame
+					assert(root.get_visible_rect().encloses(control.get_global_rect()))
+					await RenderingServer.frame_post_draw
+					assert(root.get_texture().get_image().save_png(capture_dir.path_join("ancillary-finances-%s-%dx%d.png" % [view[1], dimensions.x, dimensions.y])) == OK)

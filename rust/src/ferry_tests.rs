@@ -42,6 +42,7 @@ fn ferry_empty_physics_frozen_cost_once_and_no_route_results() {
             ticket_eur: 0,
             business_ticket_eur: 0,
             cargo_rate_cents: 0,
+            ancillary_policy: Default::default(),
             service_level: Default::default(),
             plan: None,
         };

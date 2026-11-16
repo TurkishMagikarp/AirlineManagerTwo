@@ -835,6 +835,7 @@ impl Competitor {
             if self.game.dismiss_surplus().is_err() {
                 return false;
             }
+            self.game.review_ancillaries();
             self.last_action =
                 "Finanznot: Expansion ausgesetzt, ungenutztes Personal abgebaut".into();
             let Some(next) = self
@@ -859,6 +860,7 @@ impl Competitor {
         }
         self.game.review_cabins();
         self.game.review_service();
+        self.game.review_ancillaries();
         let mut updated_supply = other_supply.clone();
         updated_supply.extend(self.game.market_routes());
         let supply = updated_supply.as_slice();
@@ -1275,6 +1277,7 @@ impl Competitor {
             }
             let r = Route {
                 cargo_rate_cents: crate::cargo::default_rate(),
+                ancillary_policy: g.ancillary_policy,
                 service_level: Default::default(),
                 business_ticket_eur: crate::cabins::default_business_fare(),
                 id: g.next_route_id,

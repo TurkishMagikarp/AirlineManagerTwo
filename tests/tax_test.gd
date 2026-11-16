@@ -57,7 +57,7 @@ func _run() -> void:
 			return
 		if legacy:
 			# No JSON reserialization: preserve Rust u64/nanosecond values exactly.
-			var contents := FileAccess.get_file_as_string(path).replace('"version":40', '"version":18')
+			var contents := FileAccess.get_file_as_string(path).replace('"version":41', '"version":18')
 			contents = RegEx.create_from_string('"tax":\\{[^}]*\\},|,"tax":\\{[^}]*\\}').sub(contents, "", true)
 			contents = contents.replace('"taxes":[],', '').replace(',"taxes":[]', '')
 			if not _check(JSON.parse_string(contents)["version"] == 18 and not '"tax"' in contents and not '"taxes"' in contents, "True v18 fixture without tax state, including AI"):
@@ -92,7 +92,7 @@ func _run() -> void:
 		var expected: Dictionary = FileAccess.open(path + ".expected", FileAccess.READ).get_var()
 		if not _check(_snapshot() == expected, "Fresh-process continuation equals uninterrupted reference, including AI"):
 			return
-		if not _check(sim.save_game(path).is_empty() and JSON.parse_string(FileAccess.get_file_as_string(path))["version"] == 40, "Resave as v40"):
+		if not _check(sim.save_game(path).is_empty() and JSON.parse_string(FileAccess.get_file_as_string(path))["version"] == 41, "Resave as v41"):
 			return
 	elif not await _layouts("profit"):
 		return
@@ -154,7 +154,7 @@ func _select_tax() -> bool:
 	var menu_rect: Rect2 = popup.get_child(0, true).get_global_rect()
 	if not _check(popup.visible, "Chart selector opens through mouse input"):
 		return false
-	var position := Vector2(popup.position) + menu_rect.position + Vector2(menu_rect.size.x / 2.0, menu_rect.size.y * 4.5 / 5.0)
+	var position := Vector2(popup.position) + menu_rect.position + Vector2(menu_rect.size.x / 2.0, menu_rect.size.y * 4.5 / select.item_count)
 	await _mouse(position)
 	return _check(select.selected == 4, "Mouse selects Ertragsteuer chart series")
 

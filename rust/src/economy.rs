@@ -310,6 +310,8 @@ pub struct Totals {
     pub cargo_revenue: i64,
     pub service: i64,
     #[serde(default, skip_serializing_if = "zero")]
+    pub ancillary: i64,
+    #[serde(default, skip_serializing_if = "zero")]
     pub business_passengers: i64,
     #[serde(default, skip_serializing_if = "zero")]
     pub business_revenue: i64,
@@ -318,7 +320,7 @@ pub struct Totals {
     pub flights: i64,
     pub passengers: i64,
     pub seats: i64,
-    /// Combined ticket and cargo income; cargo_revenue is reported separately.
+    /// Operating income: tickets, cargo and ancillary fees (reported separately).
     pub revenue: i64,
     pub fuel: i64,
     #[serde(default)]
@@ -335,6 +337,7 @@ impl Totals {
             && crate::disruptions::valid(self)
             && crate::cargo::valid(self)
             && crate::service::valid(self)
+            && crate::ancillaries::valid(self)
             && self
                 .fuel
                 .checked_sub(self.fuel_contract_effect)
@@ -361,6 +364,7 @@ impl Totals {
                 .and_then(|v| v.checked_add(self.business_revenue))
                 .and_then(|v| v.checked_add(self.connecting_revenue))
                 .and_then(|v| v.checked_add(self.cargo_revenue))
+                .and_then(|v| v.checked_add(self.ancillary))
                 == Some(self.revenue)
     }
     pub fn costs(&self) -> i64 {
@@ -400,6 +404,7 @@ impl Totals {
         add!(
             connecting_passengers,
             connecting_revenue,
+            ancillary,
             flights,
             passengers,
             seats,
@@ -662,6 +667,7 @@ pub(crate) fn quote_prepared(
     let (demand, passenger_loads) = market.passengers.estimate(departure);
     let passengers = demand.per_departure;
     let business_revenue = demand.business * route.business_ticket_eur;
+    let ancillary = route.ancillary_policy.revenue(passengers, demand.business);
     let cargo_kg = market.cargo.estimate_at(passenger_loads, departure);
     let cargo_revenue = crate::cargo::revenue(cargo_kg, route.cargo_rate_cents);
     let seconds = market.flight_seconds as i64;
@@ -678,6 +684,7 @@ pub(crate) fn quote_prepared(
         cargo_revenue,
         fuel_contract_effect: 0,
         service: route.service_level.cost(passengers, demand.business),
+        ancillary,
         flights: 1,
         passengers,
         seats: seats.into(),
@@ -687,7 +694,8 @@ pub(crate) fn quote_prepared(
         revenue: (passengers - demand.business - demand.connecting) * route.ticket_eur
             + demand.connecting_revenue
             + business_revenue
-            + cargo_revenue,
+            + cargo_revenue
+            + ancillary,
         fuel: ((seconds * rates.fuel_kg_per_hour + rates.fuel_cycle_kg * 3600) * fuel_cents
             + 359999)
             / 360000,
@@ -729,6 +737,7 @@ impl Game {
             ticket_eur: default_ticket(),
             business_ticket_eur: crate::cabins::default_business_fare(),
             cargo_rate_cents: crate::cargo::default_rate(),
+            ancillary_policy: self.ancillary_policy,
             service_level: crate::service::Level::Standard,
         };
         let mut supply = self.market_routes();
@@ -766,6 +775,7 @@ impl Game {
             crate::disruptions::valid(t)
                 && crate::cargo::valid(t)
                 && crate::service::valid(t)
+                && crate::ancillaries::valid(t)
                 && t.fuel
                     .checked_sub(t.fuel_contract_effect)
                     .is_some_and(|v| v >= 0)
@@ -826,7 +836,8 @@ impl Game {
         if t.flights <= HISTORY_LIMIT as i64 && sum != *t {
             return Err("Unvollständige Finanzsummen.".into());
         }
-        if sum.care > t.care
+        if sum.ancillary > t.ancillary
+            || sum.care > t.care
             || sum.punctuality_flights > t.punctuality_flights
             || sum.late_flights > t.late_flights
             || sum.delay_seconds > t.delay_seconds
@@ -866,6 +877,7 @@ mod tests {
             crew: 3,
             overhead: 3,
             service: 3,
+            ancillary: 17,
             business_passengers: 3,
             business_revenue: 200,
             business_seats: 5,
@@ -1174,6 +1186,7 @@ mod tests {
                 for price in prices {
                     let route = Route {
                         cargo_rate_cents: crate::cargo::default_rate(),
+                        ancillary_policy: Default::default(),
                         service_level: Default::default(),
                         business_ticket_eur: crate::cabins::default_business_fare(),
                         id: 1,

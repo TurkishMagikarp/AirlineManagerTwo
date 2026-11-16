@@ -46,6 +46,9 @@ var insurance_choice: OptionButton
 var insurance_result: Label
 var ferry_history: Tree
 var marketing_history: Tree
+var ancillary_buttons: Array[Button] = []
+var ancillary_status: Label
+var ancillary_result: Label
 
 func _ready() -> void:
 	add_theme_constant_override("separation", ThemeTokens.SPACE_4)
@@ -55,11 +58,32 @@ func _ready() -> void:
 	add_child(grid)
 	get_viewport().size_changed.connect(func(): grid.columns = 4 if get_viewport_rect().size.x >= 1280 else 2)
 	grid.columns = 4 if get_viewport_rect().size.x >= 1280 else 2
-	for item in [["balance", "KONTOSTAND"], ["revenue", "TICKETUMSÄTZE"], ["cargo", "FRACHTUMSÄTZE"], ["costs", "GESAMTKOSTEN"], ["profit", "GEWINN / VERLUST"]]:
-		metrics[item[0]] = UI.metric(grid, item[1])
+	for item in [["balance", "KONTOSTAND"], ["revenue", "TICKETUMSÄTZE"], ["cargo", "FRACHTUMSÄTZE"], ["ancillary", "ANCILLARY_REVENUE"], ["costs", "GESAMTKOSTEN"], ["profit", "GEWINN / VERLUST"]]:
+		metrics[item[0]] = UI.metric(grid, tr(item[1]))
 	note = UI.label("", ThemeTokens.SMALL, UI.MUTED)
 	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	add_child(note)
+	var ancillary := UI.panel(self, tr("ANCILLARY_TITLE"))
+	var segments := UI.segment_tray(ancillary)
+	var group := ButtonGroup.new()
+	for i in range(3):
+		var button := Button.new()
+		button.text = tr(["ANCILLARY_INCLUDED_SHORT", "ANCILLARY_STANDARD_SHORT", "ANCILLARY_AGGRESSIVE_SHORT"][i])
+		button.theme_type_variation = "SegmentButton"
+		button.toggle_mode = true
+		button.button_group = group
+		button.pressed.connect(func():
+			var error: String = simulation.set_ancillary_policy(["included", "standard", "aggressive"][i])
+			ancillary_result.text = error if not error.is_empty() else tr("ANCILLARY_CHANGED")
+			refresh(true))
+		segments.add_child(button)
+		ancillary_buttons.append(button)
+	ancillary_status = UI.label("")
+	ancillary_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	ancillary.add_child(ancillary_status)
+	ancillary_result = UI.label("")
+	ancillary_result.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	ancillary.add_child(ancillary_result)
 	var insurance := UI.panel(self, "FLUGZEUGVERSICHERUNG")
 	insurance_status = UI.label("")
 	insurance_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -170,7 +194,7 @@ func _ready() -> void:
 	var company := UI.panel(self, "WIRTSCHAFTLICHE ENTWICKLUNG")
 	chart_select = OptionButton.new()
 	chart_select.fit_to_longest_item = false
-	for title in ["Kontostand · EUR", "Ticket- und Frachteinnahmen · EUR je Zeitabschnitt", "Kosten inkl. Zinsen, Gebühren, Leasing und Steuern · EUR je Zeitabschnitt", "Ergebnis · EUR je Zeitabschnitt", "Ertragsteuer · EUR je Zeitabschnitt"]:
+	for title in ["Kontostand · EUR", tr("ANCILLARY_OPERATING_REVENUE"), "Kosten inkl. Zinsen, Gebühren, Leasing und Steuern · EUR je Zeitabschnitt", "Ergebnis · EUR je Zeitabschnitt", "Ertragsteuer · EUR je Zeitabschnitt", tr("ANCILLARY_PERIOD")]:
 		chart_select.add_item(title)
 	chart_select.item_selected.connect(func(_i: int): _chart())
 	company.add_child(chart_select)
@@ -232,7 +256,7 @@ func refresh(force: bool = false) -> void:
 	var marketing: Dictionary = simulation.get_marketing()
 	var fuel: Dictionary = simulation.get_fuel_contract()
 	var insurance: Dictionary = simulation.get_insurance()
-	var key := "%s/%s/%s/%s/%s/%s" % [summary, airline, financing, marketing, fuel, insurance]
+	var key := "%s/%s/%s/%s/%s/%s/%s" % [summary, airline, financing, marketing, fuel, insurance, simulation.get_ancillary_policy()]
 	if key == signature and not force:
 		return
 	signature = key
@@ -279,6 +303,8 @@ func refresh(force: bool = false) -> void:
 	for field in ["revenue", "costs", "profit"]:
 		metrics[field].text = UI.signed_money(summary[field + "_eur"]) if field == "profit" else UI.money(summary[field + "_eur"])
 	metrics["revenue"].text = UI.money(summary["ticket_revenue_eur"])
+	metrics["ancillary"].text = UI.money(summary["ancillary_revenue_eur"])
+	_refresh_ancillaries()
 	metrics["cargo"].text = UI.money(summary["cargo_revenue_eur"])
 	metrics["profit"].add_theme_color_override("font_color", ThemeTokens.INK if summary["profit_eur"] >= 0 else UI.NEGATIVE)
 	var info: Dictionary = simulation.get_finance_history_info()
@@ -339,11 +365,25 @@ func refresh(force: bool = false) -> void:
 		_reset_flights()
 
 func _chart() -> void:
-	chart.set_series(company_series, ["balance", "revenue", "costs", "profit", "tax"][chart_select.selected])
+	chart.set_series(company_series, ["balance", "revenue", "costs", "profit", "tax", "ancillary"][chart_select.selected])
 	chart.set_comparison("costs" if chart_select.selected == 1 else "revenue" if chart_select.selected == 2 else "")
 	chart_comparison.visible = chart_select.selected in [1, 2]
 	chart_comparison.text = chart_select.get_item_text(2 if chart_select.selected == 1 else 1)
 	chart_comparison.add_theme_color_override("font_color", ThemeTokens.STOP if chart_select.selected == 1 else ThemeTokens.GO)
+
+func _refresh_ancillaries() -> void:
+	var data: Dictionary = simulation.get_ancillary_policy()
+	var lines: PackedStringArray = []
+	for i in range(data["options"].size()):
+		var option: Dictionary = data["options"][i]
+		var title := tr(["ANCILLARY_INCLUDED", "ANCILLARY_STANDARD", "ANCILLARY_AGGRESSIVE"][i])
+		ancillary_buttons[i].set_pressed_no_signal(option["policy"] == data["policy"])
+		ancillary_buttons[i].disabled = not data["can_change"]
+		var line := tr("ANCILLARY_RATE") % [title, UI.money(option["economy_eur"]), UI.money(option["business_eur"]), option["attractiveness_percent"]]
+		ancillary_buttons[i].tooltip_text = line
+		lines.append(line)
+	lines.append(tr("ANCILLARY_NOTE"))
+	ancillary_status.text = "\n".join(lines)
 
 func _loan_action(borrowing: bool) -> void:
 	var error: String = simulation.borrow_money(int(loan_amount.value)) if borrowing else simulation.repay_loan(int(loan_amount.value))
@@ -360,6 +400,7 @@ func _select_route() -> void:
 	route_id = r["route_id"]
 	flight_count = r["flights"]
 	detail.text = "Route #%d · %s–%s · %d Landungen · %s\nFlugkosten ohne zentrale Gehälter und Wartungschecks; diese sind im Unternehmensergebnis enthalten. Historische Crewkosten bleiben erhalten. Kostenaufschlüsselung und Ticketpreis im Flug-Tooltip." % [route_id, r["origin"], r["destination"], flight_count, "Keine Flüge" if flight_count == 0 else "Gewinn" if r["profit_eur"] >= 0 else "Verlust"]
+	detail.text += "\n" + tr("ANCILLARY_ROUTE_REVENUE") % UI.money(r["ancillary_revenue_eur"])
 	detail.text += "\nBordservice (Kosten / Ersparnis gegenüber Standard): %s." % UI.money(r["service_eur"])
 	load_chart.set_series(simulation.get_finance_series(route_id), "load", true)
 	_flights()
