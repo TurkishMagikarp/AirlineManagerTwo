@@ -36,3 +36,15 @@ DIFFICULTY_TIP_COMPETITION,Ändert nur die Anzahl der KI-Airlines; ihre Regeln b
 DIFFICULTY_TIP_CRISES,Ändert die Ausschläge von Konjunktur und Treibstoffpreis bei gleichem Mittelwert.,Changes the swings in the economy and fuel price around the same mean.
 DIFFICULTY_AMOUNT,Startkapital: %s · vorläufige Balance,Starting capital: %s · provisional balance
 DIFFICULTY_SAVED,Feste Startbedingungen · Kapital: %s · Konkurrenz: %s · Krisen: %s,Fixed starting conditions · Capital: %s · Competition: %s · Crises: %s
+FREIGHTER,Frachter,Freighter
+FREIGHTER_TOOLTIP,Frachter transportieren ausschließlich Fracht und keine Passagiere.,Freighters carry freight and no passengers.
+FREIGHT_CAPACITY,Hauptdeckfracht,Main-deck freight
+FREIGHT_RESULTS,"Hauptdeck je Richtung: %d kg/Tag · erwartet %d kg/Abflug · %.1f %% Auslastung · befördert %d kg · %s Frachtumsatz.","Main deck per direction: %d kg/day · expected %d kg/flight · %.1f %% load · carried %d kg · %s freight revenue."
+FREIGHT_RATE,Fracht · EUR pro kg · ab dem nächsten Abflug,Freight · EUR per kg · from the next departure
+FREIGHT_REVENUE,Frachtumsatz,Freight revenue
+FREIGHT_EXPECTED,Frachtprognose,Expected freight
+FREIGHT_FINANCE,Fracht: %d kg · %s Umsatz (im Ergebnis und in der Ertragsteuer enthalten).,Freight: %d kg · %s revenue (included in profit and income tax).
+FREIGHT_ROUTE_MARKET,%d kg/Tag · %s Frachtumsatz,%d kg/day · %s freight revenue
+FREIGHT_LOAD_TOOLTIP,Prognose je Abflug bei aktuellem Frachtpreis und aktueller Nachfrage.,Forecast per departure at the current freight rate and demand.
+FREIGHT_RATE_VALUE,%s EUR/kg,%s EUR/kg
+ROUTE_PRICE,Preis,Price

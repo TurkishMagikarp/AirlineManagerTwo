@@ -41,6 +41,13 @@ func _run() -> void:
 		quit(0)
 		return
 	assert(sim.found_airline("Meridian Air", "DE", "EDDF").is_empty())
+	if OS.get_environment("AIRLINE_UI_CAPTURE_FREIGHTERS_ONLY") == "1":
+		await _freighter_views(sim)
+		main.queue_free()
+		await process_frame
+		print("PASS: freighter Fleet, Routes, Finances and map captures at both sizes")
+		quit(0)
+		return
 	if OS.get_environment("AIRLINE_UI_CAPTURE_FARES_ONLY") == "1":
 		await _fare_views(sim)
 		main.queue_free()
@@ -837,3 +844,38 @@ func _fare_views(sim: RefCounted) -> void:
 				await RenderingServer.frame_post_draw
 				if not capture_dir.is_empty():
 					assert(root.get_texture().get_image().save_png(capture_dir.path_join("routes-%s-%s-%dx%d.png" % [entry[1], locale, dimensions.x, dimensions.y])) == OK)
+
+func _freighter_views(_sim: RefCounted) -> void:
+	await preload("res://tests/freighter_fixture.gd").setup(main, self)
+	for dimensions in [Vector2i(1440, 1000), Vector2i(680, 520)]:
+		root.size = dimensions
+		main._sync_view()
+		for page in [1, 2, 4, 3]:
+			main._show_page(page)
+			if page == 1: main.fleet_tabs.current_tab = 1
+			for frame in range(5): await process_frame
+			var scroll: ScrollContainer = main.routes_panel.get_parent().get_parent()
+			var targets: Array = []
+			if page == 1:
+				targets = [[main.aircraft_cards[5]["shell"].get_child(0).get_child(0), "fleet-freighter"], [main.aircraft_cards[5]["lease"], "fleet-freighter-actions"], [main.used_rows, "used-freighter"]]
+			elif page == 2:
+				targets = [[main.routes_panel.route_tree, "routes-freighter"], [main.routes_panel.cargo_input.get_parent(), "route-freight-form"], [main.routes_panel.results_tree, "route-freight-results"]]
+			elif page == 4:
+				main.finances_panel.route_tree.get_root().get_first_child().select(0)
+				main.finances_panel.route_tree.item_selected.emit()
+				targets = [[main.finances_panel.metrics["cargo"].get_parent().get_parent(), "finances-freighter"], [main.finances_panel.route_tree, "finances-freight-routes"], [main.finances_panel.flights_tree, "finances-freight-flights"]]
+			else:
+				main.map_panel.canvas.selected_route = 1
+				main.map_panel.refresh_flights()
+				targets = [[main.map_panel.card, "map-freighter"]]
+			for target in targets:
+				scroll.ensure_control_visible(target[0])
+				await process_frame
+				scroll.scroll_vertical += int(target[0].get_global_rect().position.y - scroll.get_global_rect().position.y) - 16
+				if target[0] is Tree:
+					for child in target[0].get_children(true):
+						if child is HScrollBar: child.value = child.max_value
+				for frame in range(5): await process_frame
+				if not capture_dir.is_empty():
+					await RenderingServer.frame_post_draw
+					assert(root.get_texture().get_image().save_png(capture_dir.path_join("%s-%dx%d.png" % [target[1], dimensions.x, dimensions.y])) == OK)

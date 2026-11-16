@@ -1053,6 +1053,7 @@ impl Competitor {
             }
             let mut week = 0i128;
             let mut expected = crate::economy::Totals::default();
+            let mut freight_capacity = 0u64;
             let mut annual_week = 0i128;
             let mut observed = false;
             let mut previous_losses = 2;
@@ -1111,6 +1112,8 @@ impl Competitor {
                         * i128::from(crate::pricing::RULES.fare_review_seconds)
                         / i128::from(l.period);
                 }
+                freight_capacity +=
+                    u64::from(crate::aircraft::model(&plane.model_id)?.main_deck_cargo_kg);
                 expected.add(&quote, 1).ok_or("KI-Finanzüberlauf")?;
                 previous_losses = previous_losses.min(previous.losses);
                 self.route_reviews.retain(|v| v.route_id != r.id);
@@ -1123,7 +1126,11 @@ impl Competitor {
             }
             let losses = if observed
                 && ((week < 0 && annual_week < 0)
-                    || expected.load_percent() < FREQUENCY.load_factor_percent)
+                    || (if expected.seats == 0 && freight_capacity > 0 {
+                        expected.cargo_kg as f64 * 100.0 / freight_capacity as f64
+                    } else {
+                        expected.load_percent()
+                    }) < FREQUENCY.load_factor_percent)
             {
                 (previous_losses + 1).min(2)
             } else {
@@ -1218,7 +1225,8 @@ impl Competitor {
                         - 1)
                         / l.period as i64
                 });
-                strong &= q.load_percent() >= FREQUENCY.load_factor_percent
+                strong &= q.model_load_percent(crate::aircraft::model(&p.model_id)?)
+                    >= FREQUENCY.load_factor_percent
                     && (q.profit() - maintenance_per_flight(r, &p.model_id)?)
                         * (crate::pricing::RULES.fare_review_seconds
                             / r.plan.as_ref().unwrap().interval_seconds)
@@ -1304,6 +1312,7 @@ impl Competitor {
             };
             let layouts = match existing_plane {
                 Some(p) => vec![p.business_seats],
+                None if m.seats == 0 => vec![0],
                 None => crate::cabins::RULES
                     .ai_expansion_business_space_percent
                     .iter()
@@ -1318,7 +1327,7 @@ impl Competitor {
                 market.push(g.economy_offer(&r, &cabin_plane)?);
                 let mut single_quote: Option<crate::economy::QuoteMarket> = None;
                 for step in 3..=15 {
-                    if r.parent_route_id.is_some() && step != 3 {
+                    if (r.parent_route_id.is_some() || m.seats == 0) && step != 3 {
                         continue;
                     }
                     if r.parent_route_id.is_none() {
@@ -1381,7 +1390,7 @@ impl Competitor {
                                     / old.plan.as_ref().unwrap().interval_seconds)
                                     as i64;
                         }
-                        if t.load_percent() < FREQUENCY.load_factor_percent {
+                        if t.model_load_percent(m) < FREQUENCY.load_factor_percent {
                             continue;
                         }
                     }

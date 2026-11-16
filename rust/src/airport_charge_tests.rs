@@ -23,7 +23,7 @@ fn airport_charges_cover_endpoints_empty_full_rounding_and_return() {
                 }
                 route.origin_icao = a.icao.clone();
                 route.destination_icao = b.icao.clone();
-                for passengers in [0, 1, i64::from(model.seats)] {
+                for passengers in [0, i64::from(model.seats.min(1)), i64::from(model.seats)] {
                     // Baseline tariffs remain in config; independent arithmetic
                     // verifies each endpoint rounds up separately.
                     let config: serde_json::Value =

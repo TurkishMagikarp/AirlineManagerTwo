@@ -90,7 +90,7 @@ func _ready() -> void:
 	route_table.hide_root = true
 	route_table.column_titles_visible = true
 	route_table.custom_minimum_size.y = 140
-	for i in range(3): route_table.set_column_title(i, [tr("MAP_ROUTE"), tr("MAP_DISTANCE"), tr("MAP_TICKET_PRICE")][i])
+	for i in range(3): route_table.set_column_title(i, [tr("MAP_ROUTE"), tr("MAP_DISTANCE"), tr("ROUTE_PRICE")][i])
 	route_table.item_selected.connect(_select_row)
 	add_child(route_table)
 	var hint := UI.label(tr("MAP_HINT"), ThemeTokens.CODE, UI.MUTED)
@@ -110,7 +110,7 @@ func refresh() -> void:
 	for route in route_rows:
 		var row := route_table.create_item(root)
 		row.set_metadata(0, route["id"])
-		for i in range(3): UI.cell_text(row, i, ["%s–%s" % [route["origin_icao"], route["destination_icao"]], "%.0f km" % route["distance_km"], UI.money(route["ticket_eur"])][i])
+		for i in range(3): UI.cell_text(row, i, ["%s–%s" % [route["origin_icao"], route["destination_icao"]], "%.0f km" % route["distance_km"], (tr("FREIGHT_RATE_VALUE") % UI.decimal(route["cargo_rate_cents"] / 100.0, 2)) if route.get("freighter_only", false) else UI.money(route["ticket_eur"])][i])
 	refresh_flights()
 
 func refresh_flights() -> void:
@@ -178,7 +178,14 @@ func refresh_flights() -> void:
 			_fact(tr("MAP_ARRIVAL"), "%s · %.1f %%" % [flight["arrival"], flight["progress"] * 100])
 			break
 		_fact(tr("MAP_DISTANCE"), "%.0f km" % route["distance_km"])
-		_fact(tr("MAP_TICKET_PRICE"), UI.money(route["ticket_eur"]))
+		if not route.get("freighter_only", false):
+			_fact(tr("MAP_TICKET_PRICE"), UI.money(route["ticket_eur"]))
+		else:
+			var chip := UI.status_chip(tr("FREIGHTER"), "info")
+			chip.tooltip_text = tr("FREIGHTER_TOOLTIP")
+			card_body.add_child(chip)
+			_fact(tr("FREIGHT_EXPECTED"), "%d kg · %.1f %%" % [route["estimated_cargo_kg"], route["freight_load_percent"]])
+			_fact(tr("FREIGHT_REVENUE"), UI.money(route["actual_cargo_revenue_eur"]))
 		for offer in competitors:
 			if _same_pair(route, offer): _add_name(tr("MAP_CONTESTED") % _offer_values(offer))
 		_action(tr("MAP_EDIT_SCHEDULE"), route_id)

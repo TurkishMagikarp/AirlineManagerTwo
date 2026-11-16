@@ -1,4 +1,4 @@
-//! Shared daily belly freight market. Quotes are frozen by the flight engine.
+//! Separate shared daily belly and main-deck freight markets. Quotes are frozen by the flight engine.
 use crate::{aircraft, demand, economy::Totals, game::Game, routes::Route};
 use serde::Deserialize;
 use std::sync::LazyLock;
@@ -9,6 +9,7 @@ pub struct Rules {
     pub maximum_rate_cents: i64,
     zero_demand_rate_cents: i64,
     kg_per_base_passenger: f64,
+    main_deck_kg_per_base_passenger: f64,
     passenger_and_bags_kg: i64,
 }
 pub static RULES: LazyLock<Rules> = LazyLock::new(|| {
@@ -17,6 +18,10 @@ pub static RULES: LazyLock<Rules> = LazyLock::new(|| {
     assert!(r.default_rate_cents > 0 && r.default_rate_cents < r.zero_demand_rate_cents);
     assert!(r.zero_demand_rate_cents <= r.maximum_rate_cents && r.maximum_rate_cents <= 10000);
     assert!(r.kg_per_base_passenger.is_finite() && (0.0..=10.0).contains(&r.kg_per_base_passenger));
+    assert!(
+        r.main_deck_kg_per_base_passenger.is_finite()
+            && (0.0..=1000.0).contains(&r.main_deck_kg_per_base_passenger)
+    );
     assert!((1..=200).contains(&r.passenger_and_bags_kg));
     r
 });
@@ -24,6 +29,9 @@ pub fn default_rate() -> i64 {
     RULES.default_rate_cents
 }
 pub fn capacity(model: &aircraft::Model, passengers: i64) -> i64 {
+    if model.main_deck_cargo_kg > 0 {
+        return i64::from(model.main_deck_cargo_kg.min(model.payload_kg));
+    }
     i64::from(model.belly_cargo_kg)
         .min((i64::from(model.payload_kg) - passengers * RULES.passenger_and_bags_kg).max(0))
 }
@@ -38,8 +46,17 @@ pub fn valid(t: &Totals) -> bool {
             <= i128::from(t.cargo_kg) * i128::from(RULES.maximum_rate_cents) / 100
 }
 
+#[cfg(test)]
 pub fn daily_demand(route: &Route) -> Result<f64, String> {
-    Ok(demand::market(route, 0)?.total() * RULES.kg_per_base_passenger)
+    daily_demand_for(route, false)
+}
+pub fn daily_demand_for(route: &Route, freighter: bool) -> Result<f64, String> {
+    Ok(demand::market(route, 0)?.total()
+        * if freighter {
+            RULES.main_deck_kg_per_base_passenger
+        } else {
+            RULES.kg_per_base_passenger
+        })
 }
 
 /// Water-fill available payload, preserving the outside option for expensive rates.
@@ -62,6 +79,7 @@ pub fn estimate(
 
 #[derive(Clone)]
 struct Share {
+    passenger_index: usize,
     frequency: f64,
     willingness: f64,
     limit: f64,
@@ -100,11 +118,17 @@ impl Market {
         if route.plan.is_none() {
             return Ok(market);
         }
-        market.base = daily_demand(route)?;
-        for o in supply
+        let freighter = aircraft::model(model_id)?.main_deck_cargo_kg > 0;
+        market.base = daily_demand_for(route, freighter)?;
+        for (passenger_index, o) in supply
             .iter()
             .filter(|o| o.route.plan.is_some() && demand::same_market(route, &o.route))
+            .enumerate()
         {
+            let model = aircraft::model(o.cargo_model.as_deref().unwrap_or(model_id))?;
+            if (model.main_deck_cargo_kg > 0) != freighter {
+                continue;
+            }
             let own = demand::same_offer(route, &o.route)
                 && o.cargo_model
                     .as_deref()
@@ -116,6 +140,7 @@ impl Market {
                 o.cargo_model.as_deref().unwrap_or(model_id),
             )?);
             market.shares.push(Share {
+                passenger_index,
                 frequency: 43200.0 / o.route.plan.as_ref().unwrap().interval_seconds as f64,
                 willingness: (1.0
                     - o.route.cargo_rate_cents as f64 / RULES.zero_demand_rate_cents as f64)
@@ -146,7 +171,8 @@ impl Market {
             });
         let shares = &mut self.shares;
         for (i, share) in shares.iter_mut().enumerate() {
-            share.limit = (capacity(self.models[i], passengers[i]) as f64 * share.frequency)
+            share.limit = (capacity(self.models[i], passengers[share.passenger_index]) as f64
+                * share.frequency)
                 .min(base * share.willingness);
             share.allocated = 0.0;
         }

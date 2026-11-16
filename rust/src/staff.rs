@@ -118,7 +118,9 @@ static CONFIG: LazyLock<Result<Config, String>> = LazyLock::new(|| {
             .get(&m.id)
             .ok_or_else(|| format!("Personalbedarf fehlt für {}.", m.id))?;
         if n.rating.is_empty()
-            || [n.pilots, n.cabin_crew, n.technicians]
+            || (m.seats == 0 && n.cabin_crew != 0)
+            || (m.seats > 0 && n.cabin_crew == 0)
+            || [n.pilots, n.technicians]
                 .iter()
                 .any(|v| !(1..=1000).contains(v))
         {

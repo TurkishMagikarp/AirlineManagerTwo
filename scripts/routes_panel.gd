@@ -85,7 +85,7 @@ func _ready() -> void:
 		origin.grab_focus()
 	)
 	add_child(empty_label)
-	route_tree = UI.table(["Route", "Strecke", "Entfernung", "Flugzeug", tr("TRANSFER_MARKET_HEADER"), "Auslastung", tr("FARE_AUTOPILOT")], [65, 140, 110, 170, 220, 100, 145], 180)
+	route_tree = UI.table(["Route", "Strecke", "Entfernung", "Flugzeug", tr("TRANSFER_MARKET_HEADER"), "Auslastung", tr("FARE_AUTOPILOT")], [65, 140, 110, 170, 320, 200, 145], 180)
 	for i in range(6):
 		route_tree.set_column_expand(i, i == 1 or i == 3)
 	route_tree.item_selected.connect(_selection_changed)
@@ -172,7 +172,7 @@ func _ready() -> void:
 			_feedback(simulation.set_business_ticket_price(route["id"], int(business_input.value)), "Business-Preis geändert.", business_input)
 	)
 	add_child(business_button)
-	add_child(_label("Bauchfracht · EUR pro kg · gilt ab dem nächsten Abflug"))
+	add_child(_label(tr("FREIGHT_RATE")))
 	cargo_input = SpinBox.new()
 	cargo_input.get_line_edit().theme_type_variation = "NumericInput"
 	cargo_input.get_line_edit().alignment = HORIZONTAL_ALIGNMENT_RIGHT
@@ -290,7 +290,7 @@ func _arrange_workspace() -> void:
 		if node == operations_label:
 			target = network
 		node.reparent(target)
-	results_tree = UI.table(["Landung / Route", "Strecke", "Pax / Auslastung", "Tickets", "Kosten", "Ergebnis", "Fracht kg / EUR"], [170, 145, 135, 110, 110, 110, 150], 240)
+	results_tree = UI.table(["Landung / Route", "Strecke", "Pax / Auslastung", "Tickets", "Kosten", "Ergebnis", "Fracht kg / EUR"], [170, 145, 135, 110, 110, 110, 260], 240)
 	result_panel.add_child(results_tree)
 	results_empty = UI.empty_state("Noch keine Landungen", "Flugplan: Pendelverkehr mit abwechselndem Hin- und Rückflug. Keine automatische Überführung.", schedule_button.text, func():
 		var next_control: Control = origin if simulation.get_routes().is_empty() else route_tree if _route().is_empty() else schedule_button
@@ -394,13 +394,13 @@ func refresh_operations() -> void:
 			var assigned := ", ".join(names) if not names.is_empty() else "Nicht zugewiesen"
 			var state := reason if not reason.is_empty() else "Flugplan aktiviert." if route["has_plan"] else "Reichweite ausreichend"
 			UI.cell_status(row, 3, assigned + (" · " + state if not names.is_empty() else ""), "stop" if not reason.is_empty() or names.is_empty() else "go" if route["has_plan"] else "neutral")
-			UI.cell_text(row, 4, "%d / %d / %d" % [route["base_daily_market"], route["expected_daily_local"], route["expected_daily_connecting"]])
+			UI.cell_text(row, 4, (tr("FREIGHT_ROUTE_MARKET") % [route["cargo_daily_demand_kg"], UI.money(route["actual_cargo_revenue_eur"])]) if route.get("freighter_only", false) else "%d / %d / %d" % [route["base_daily_market"], route["expected_daily_local"], route["expected_daily_connecting"]])
 			row.set_tooltip_text(0, "Pünktlichkeit: %s · %d erfasste Flüge" % ["—" if route["punctuality_percent"] < 0 else "%.1f %%" % route["punctuality_percent"], route["punctuality_flights"]])
-			row.set_tooltip_text(4, "Pro Tag und Richtung: lokaler Basismarkt / erwartete lokale Passagiere / Umsteiger (aus ihren eigenen O&D-Märkten).\nOhne eigenen Flugplan: keine Beförderung, kein Sitzmangel.\nDurchschnitt pro Abflug: %d Pax" % route["estimated_passengers"])
+			row.set_tooltip_text(4, (row.get_text(4) + "\n" + tr("FREIGHT_LOAD_TOOLTIP")) if route.get("freighter_only", false) else "Pro Tag und Richtung: lokaler Basismarkt / erwartete lokale Passagiere / Umsteiger (aus ihren eigenen O&D-Märkten).\nOhne eigenen Flugplan: keine Beförderung, kein Sitzmangel.\nDurchschnitt pro Abflug: %d Pax" % route["estimated_passengers"])
 			for connection in route["connections"]:
 				row.set_tooltip_text(4, row.get_tooltip_text(4) + "\n%s – %s – %s · %.1f Pax/Tag" % [connection["origin"], connection["hub"], connection["destination"], connection["daily"]])
-			UI.cell_text(row, 5, "%.1f %%" % route["actual_load_percent"] if route["actual_flights"] > 0 else "Keine Flüge")
-			row.set_tooltip_text(5, "Tatsächlich beförderte Passagiere / angebotene Sitze aller archivierten Landungen dieser Route. Bei alten Spielständen ab Archivbeginn.")
+			UI.cell_text(row, 5, ("%d kg · %.1f %%" % [route["estimated_cargo_kg"], route["freight_load_percent"]]) if route.get("freighter_only", false) else "%.1f %%" % route["actual_load_percent"] if route["actual_flights"] > 0 else "Keine Flüge")
+			row.set_tooltip_text(5, tr("FREIGHT_LOAD_TOOLTIP") if route.get("freighter_only", false) else "Tatsächlich beförderte Passagiere / angebotene Sitze aller archivierten Landungen dieser Route. Bei alten Spielständen ab Archivbeginn.")
 			if not String(route["maintenance_status"]).is_empty():
 				row.set_tooltip_text(3, row.get_text(3) + "\n" + route["maintenance_status"])
 			elif not String(route["staff_status"]).is_empty():
@@ -460,7 +460,7 @@ func _selection_changed() -> void:
 	var route := _route()
 	status.text = ""
 	if ticket_button != null:
-		ticket_button.disabled = route.is_empty()
+		ticket_button.disabled = route.is_empty() or route.get("freighter_only", false)
 		ticket_input.editable = not ticket_button.disabled
 		ticket_input.value = route.get("ticket_eur", 100)
 		cargo_button.disabled = route.is_empty()
@@ -468,9 +468,9 @@ func _selection_changed() -> void:
 		cargo_input.max_value = route.get("cargo_max_rate_cents", 0) / 100.0
 		cargo_input.value = route.get("cargo_rate_cents", 0) / 100.0
 		business_input.value = route.get("business_ticket_eur", 200)
-		business_button.disabled = route.is_empty()
-		business_input.editable = not route.is_empty()
-		service_select.disabled = route.is_empty()
+		business_button.disabled = ticket_button.disabled
+		business_input.editable = not ticket_button.disabled
+		service_select.disabled = ticket_button.disabled
 		for i in range(service_select.item_count):
 			if service_select.get_item_metadata(i) == route.get("service_level", "standard"):
 				service_select.select(i)
@@ -494,7 +494,7 @@ func _selection_changed() -> void:
 func _update_connections(route: Dictionary) -> void:
 	var connections: Array = route.get("connections", [])
 	connections_chip.visible = route.get("transfer_fed", false)
-	connections_empty.visible = connections.is_empty()
+	connections_empty.visible = connections.is_empty() and not route.get("freighter_only", false)
 	connections_label.visible = not connections.is_empty()
 	var lines: PackedStringArray = [tr("TRANSFER_COUNTS") % [route.get("origin_icao", ""), route.get("destination_icao", ""), route.get("expected_daily_local", 0), route.get("expected_daily_connecting", 0)], tr("TRANSFER_FEEDS")]
 	for connection in connections:
@@ -504,7 +504,11 @@ func _update_connections(route: Dictionary) -> void:
 
 func _update_service_cost(route: Dictionary) -> void:
 	cargo_status.text = "" if route.is_empty() else "Frachtmarkt je Richtung: %d kg/Tag · bisher befördert: %d kg · %s Umsatz. Passagiere und Gepäck haben Vorrang; hohe Preise verringern die Nachfrage." % [route["cargo_daily_demand_kg"], route["actual_cargo_kg"], UI.money(route["actual_cargo_revenue_eur"])]
-	service_cost.text = "" if route.is_empty() else "Flughafengebühren Start + Ziel: %s je Abflug (Ø aktive Flugzeuge; ohne Plan 0).\nBordservice gegenüber Standard: Y %s / J %s je Passagier · erwartet %s je Abflug (Ø aktive Flugzeuge) · bisher %s.\nStandard ist in den Grundkosten enthalten; Basic spart, Premium kostet zusätzlich. Laufende Flüge bleiben unverändert." % [UI.money(route["estimated_airport_eur"]), UI.money(route["service_economy_eur"]), UI.money(route["service_business_eur"]), UI.money(route["estimated_service_eur"]), UI.money(route["actual_service_eur"])]
+	if route.get("freighter_only", false):
+		cargo_status.text = tr("FREIGHT_RESULTS") % [route["cargo_daily_demand_kg"], route["estimated_cargo_kg"], route["freight_load_percent"], route["actual_cargo_kg"], UI.money(route["actual_cargo_revenue_eur"])]
+	for control in [ticket_input, ticket_button, business_input, business_button, service_select]:
+		control.tooltip_text = tr("FREIGHTER_TOOLTIP") if route.get("freighter_only", false) else ""
+	service_cost.text = "" if route.is_empty() or route.get("freighter_only", false) else "Flughafengebühren Start + Ziel: %s je Abflug (Ø aktive Flugzeuge; ohne Plan 0).\nBordservice gegenüber Standard: Y %s / J %s je Passagier · erwartet %s je Abflug (Ø aktive Flugzeuge) · bisher %s.\nStandard ist in den Grundkosten enthalten; Basic spart, Premium kostet zusätzlich. Laufende Flüge bleiben unverändert." % [UI.money(route["estimated_airport_eur"]), UI.money(route["service_economy_eur"]), UI.money(route["service_business_eur"]), UI.money(route["estimated_service_eur"]), UI.money(route["actual_service_eur"])]
 
 
 # Maintenance starts and ends while time runs, so this follows live route data.
@@ -605,6 +609,8 @@ func focus_route(id: int) -> void:
 
 
 func _update_fare(route: Dictionary) -> void:
+	fare_box.visible = not route.get("freighter_only", false)
+	if not fare_box.visible: return
 	var key := [route.get("id", 0), route.get("ticket_eur", -1), route.get("business_ticket_eur", -1), route.get("has_plan", false), route.get("aircraft_ids", []), route.get("service_level", ""), route.get("cargo_rate_cents", 0)]
 	if key != fare_key:
 		if not route.is_empty():

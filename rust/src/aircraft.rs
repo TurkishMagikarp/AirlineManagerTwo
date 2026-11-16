@@ -10,6 +10,8 @@ pub struct Model {
     pub class: String,
     pub seats: u32,
     pub belly_cargo_kg: u32,
+    #[serde(default)]
+    pub main_deck_cargo_kg: u32,
     pub payload_kg: u32,
     pub range_km: u32,
     pub cruise_kmh: u32,
@@ -42,8 +44,9 @@ static MODELS: LazyLock<Result<Vec<Model>, String>> = LazyLock::new(|| {
         if model.id.is_empty()
             || model.name.is_empty()
             || model.class.trim().is_empty()
-            || model.seats == 0
-            || model.belly_cargo_kg == 0
+            || (model.seats == 0) != (model.main_deck_cargo_kg > 0)
+            || (model.seats > 0 && model.belly_cargo_kg == 0)
+            || model.payload_kg < model.main_deck_cargo_kg
             || model.payload_kg < model.belly_cargo_kg
             || model.range_km == 0
             || model.cruise_kmh == 0
@@ -135,7 +138,7 @@ mod tests {
 
     #[test]
     fn real_model_catalog_and_configured_prices_are_valid() {
-        assert_eq!(models().unwrap().len(), 5);
+        assert_eq!(models().unwrap().len(), 8);
         assert_eq!(model("a320_200").unwrap().seats, 180);
         assert_eq!(model("b737_800").unwrap().seats, 189);
         assert_eq!(model("atr72_600").unwrap().range_km, 1370);

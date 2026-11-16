@@ -1113,6 +1113,9 @@ impl SimulationClock {
                 let services: Vec<_> = self.game.routes.iter().filter(|s| s.public_id() == r.id).collect();
                 let aircraft_ids: Array<u32> = services.iter().filter_map(|s| s.aircraft_id).collect();
                 let has_plan = services.iter().any(|s| s.plan.is_some());
+                let freighter_only = !aircraft_ids.is_empty() && services.iter().filter_map(|s| self.game.fleet.iter().find(|p| Some(p.id) == s.aircraft_id)).all(|p| aircraft::model(&p.model_id).is_ok_and(|m| m.main_deck_cargo_kg > 0));
+                let mut freight_kg = 0;
+                let mut freight_capacity = 0;
                 let mut estimate = demand::Estimate::default();
                 let mut connections: Array<VarDictionary> = Array::new();
                 let mut service_cost = 0;
@@ -1122,6 +1125,10 @@ impl SimulationClock {
                     if let Some(plane) = self.game.fleet.iter().find(|p| Some(p.id) == service.aircraft_id)
                         && let Ok(model) = aircraft::model(&plane.model_id)
                         && let Ok(e) = demand::estimate_at(service, cabins::offer(service, plane).map_or(model.seats, |o| o.seats), &supply, now) {
+                        if let Ok(q) = economy::quote_at_time(service, &plane.model_id, &supply, self.game.fuel_market.price_at(now), now) {
+                            freight_kg += q.cargo_kg;
+                            freight_capacity += cargo::capacity(model, q.passengers);
+                        }
                         estimate.daily_connecting += e.daily_connecting;
                         for c in &e.connections {
                             connections.push(&vdict! { "origin" => c.origin.as_str(), "hub" => c.hub.as_str(), "destination" => c.destination.as_str(), "daily" => c.daily });
@@ -1151,7 +1158,10 @@ impl SimulationClock {
                     "destination_icao" => r.destination_icao.as_str(),
                     "distance_km" => routes::distance_km(&r.origin_icao, &r.destination_icao).unwrap_or(0.0),
                     "aircraft_id" => r.aircraft_id.unwrap_or(0), "aircraft_ids" => &aircraft_ids, "has_plan" => has_plan, "ticket_eur" => r.ticket_eur, "business_ticket_eur" => r.business_ticket_eur,
-                    "cargo_daily_demand_kg" => (cargo::daily_demand(r).unwrap_or(0.0) * world_economy::factor(index, world_economy::RULES.cargo_reaction)).floor() as i64,
+                    "freighter_only" => freighter_only,
+                    "freight_load_percent" => if freight_capacity > 0 { freight_kg as f64 * 100.0 / freight_capacity as f64 } else { 0.0 },
+                    "estimated_cargo_kg" => freight_kg / active_count.max(1),
+                    "cargo_daily_demand_kg" => (cargo::daily_demand_for(r, freighter_only).unwrap_or(0.0) * world_economy::factor(index, world_economy::RULES.cargo_reaction)).floor() as i64,
                     "cargo_rate_cents" => r.cargo_rate_cents, "cargo_max_rate_cents" => cargo::RULES.maximum_rate_cents,
                     "actual_cargo_kg" => actual.cargo_kg, "actual_cargo_revenue_eur" => actual.cargo_revenue,
                     "service_level" => r.service_level.name(),
@@ -1198,6 +1208,7 @@ impl SimulationClock {
             "id" => model.id.as_str(), "name" => model.name.as_str(),
             "class" => model.class.as_str(), "cruise_kmh" => model.cruise_kmh,
             "pilots" => needs.pilots, "cabin_crew" => needs.cabin_crew,
+            "freighter" => model.main_deck_cargo_kg > 0, "main_deck_cargo_kg" => model.main_deck_cargo_kg,
             "belly_cargo_kg" => model.belly_cargo_kg, "payload_kg" => model.payload_kg,
             "seats" => model.seats, "range_km" => model.range_km, "price_eur" => model.price_eur,
             "lease_deposit_eur" => trading::lease_terms(&model.id).map(|t| t.0).unwrap_or(0),
@@ -1412,12 +1423,13 @@ impl SimulationClock {
                     "delay_seconds" => self.game.planned_route(plane.id).and_then(|i| operations::movement(&self.game.routes[i], &plane.model_id, self.game.clock.elapsed().as_secs()).ok()).map_or(0, |s| s.delay_seconds) as i64,
                     "id" => plane.id, "identifier" => plane.identifier().as_str(),
                     "model_id" => plane.model_id.as_str(), "model_name" => name,
+                    "freighter" => aircraft::model(&plane.model_id).is_ok_and(|m| m.main_deck_cargo_kg > 0),
                     "economy_seats" => cabins::layout(plane).map_or(0, |c| c.0),
                     "business_seats" => plane.business_seats,
                     "max_business_seats" => aircraft::model(&plane.model_id).map_or(0, |m| m.seats / cabins::RULES.business_space_ratio),
                     "cabin_space_ratio" => cabins::RULES.business_space_ratio,
                     "cabin_fee_eur" => cabins::RULES.layout_fee_eur,
-                    "can_edit_cabin" => matches!(plane.status, aircraft::AircraftStatus::Parked | aircraft::AircraftStatus::Ground) && plane.maintenance.is_none(),
+                    "can_edit_cabin" => aircraft::model(&plane.model_id).is_ok_and(|m| m.seats > 0) && matches!(plane.status, aircraft::AircraftStatus::Parked | aircraft::AircraftStatus::Ground) && plane.maintenance.is_none(),
                     "location_icao" => plane.location_icao.as_str(),
                     "location_name" => location_name,
                     "status" => match plane.status { aircraft::AircraftStatus::Parked => "parked", aircraft::AircraftStatus::InFlight => "in_flight", aircraft::AircraftStatus::Ground => "ground", aircraft::AircraftStatus::Maintenance => "maintenance" },
@@ -2178,3 +2190,6 @@ fn jump_dictionary(result: Result<jumps::ResultSummary, &'static str>) -> VarDic
         Err(error) => vdict! { "advanced_seconds" => 0, "error" => error, "message" => error },
     }
 }
+
+#[cfg(test)]
+mod freighter_tests;

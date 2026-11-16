@@ -373,6 +373,13 @@ impl Totals {
             self.passengers as f64 * 100.0 / self.seats as f64
         }
     }
+    pub fn model_load_percent(&self, model: &aircraft::Model) -> f64 {
+        if model.main_deck_cargo_kg > 0 {
+            self.cargo_kg as f64 * 100.0 / f64::from(model.main_deck_cargo_kg)
+        } else {
+            self.load_percent()
+        }
+    }
     pub fn add(&mut self, other: &Self, count: u64) -> Option<()> {
         let count = i64::try_from(count).ok()?;
         macro_rules! add { ($($f:ident),*) => { $(self.$f = self.$f.checked_add(other.$f.checked_mul(count)?)?;)* }; }
@@ -458,7 +465,6 @@ pub fn quote_at_price(
     quote_with_time(route, model_id, routes, fuel_cents, None)
 }
 
-#[cfg(test)]
 pub fn quote_at_time(
     route: &Route,
     model_id: &str,
@@ -1159,7 +1165,7 @@ mod tests {
                     g.clock.set_running(true);
                     assert!(g.advance((60 + flight) as f64));
                     let mut operated = t.clone();
-                    operated.punctuality_flights = 1;
+                    operated.punctuality_flights = i64::from(model.seats > 0);
                     operated.late_flights = 0;
                     assert_eq!(g.finance.totals, operated);
                     assert_eq!(g.finance.recent[0].totals, operated);

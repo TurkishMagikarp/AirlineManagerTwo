@@ -15,7 +15,10 @@
     "b737_800": { "rating": "737", "pilots": 4, "cabin_crew": 7, "technicians": 6 },
     "atr72_600": { "rating": "ATR 72", "pilots": 4, "cabin_crew": 3, "technicians": 3 },
     "a330_300": { "rating": "A330", "pilots": 6, "cabin_crew": 12, "technicians": 10 },
-    "b777_300er": { "rating": "777", "pilots": 8, "cabin_crew": 16, "technicians": 14 }
+    "b777_300er": { "rating": "777", "pilots": 8, "cabin_crew": 16, "technicians": 14 },
+    "atr72_600f": {"rating": "ATR 72", "pilots": 4, "cabin_crew": 0, "technicians": 3},
+    "b737_800bcf": {"rating": "737", "pilots": 4, "cabin_crew": 0, "technicians": 6},
+    "b777f": {"rating": "777", "pilots": 8, "cabin_crew": 0, "technicians": 14}
   },
   "first_names": ["Anna", "Mehmet", "Lukas", "Elif", "Jonas", "Sofia", "Emre", "Clara", "Felix", "Leyla", "Noah", "Mira", "Can", "Hanna", "Paul", "Selin", "Ben", "Ida", "Deniz", "Marta"],
   "last_names": ["Schmidt", "Yilmaz", "Weber", "Demir", "Fischer", "Kaya", "Wagner", "Aydin", "Becker", "Celik", "Hoffmann", "Arslan", "Koch", "Sahin", "Richter", "Polat", "Klein", "Aksoy", "Wolf", "Ozturk"]

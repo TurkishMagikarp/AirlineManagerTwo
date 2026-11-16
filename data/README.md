@@ -106,3 +106,18 @@ Leasing, Gebrauchtmarkt, Restwert, Versicherung, Kabine und Gebührenmultiplikat
 nutzen unverändert die gemeinsamen konfigurierten Regeln. Alte Modelle und alle
 bestehenden Werte bleiben erhalten. Keine neuen Save-Felder und keine Migration;
 Spielstandversion 30 bleibt unverändert.
+
+## Frachter (AIR-228, vorläufige Spielwerte)
+
+ATR 72-600F (9.200 kg, 7,4 Mio. EUR), 737-800BCF (23.000 kg,
+11 Mio. EUR) und 777F (102.000 kg, 48 Mio. EUR) ergänzen die Passagiertypen.
+Nutzlasten sind gerundete Referenzgrößen für diese Flugzeugklassen, keine
+zertifizierten Betriebsgrenzen. Kaufpreise sind ausdrücklich erfundene
+Balancingwerte im Preismaßstab des Spiels, keine Marktangebote.
+Reichweiten (1.370/3.750/9.200 km), Geschwindigkeit und Bodenzeiten sind
+vereinfachte Spielannahmen; Kraftstoff-, Verwaltungs- und Wartungswerte stammen
+unverändert vom jeweiligen Passagiergeschwister ATR 72, 737-800 bzw. 777-300ER.
+Auch Pilotenbedarf, Techniker und Musterberechtigungen teilen diese Geschwister;
+Kabinenpersonal entfällt. `main_deck_cargo_kg` ersetzt bei Frachtern die Sitze.
+Die wirtschaftlichen Werte stehen weiterhin in `config/`, die Modellfakten in
+`aircraft_models.json`. Keine Umrüstung bestehender Flugzeuge.

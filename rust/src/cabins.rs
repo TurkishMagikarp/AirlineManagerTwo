@@ -85,6 +85,9 @@ impl Game {
             .position(|p| p.id == id)
             .ok_or("Unbekanntes Flugzeug.")?;
         let plane = &self.fleet[p];
+        if aircraft::model(&plane.model_id)?.seats == 0 {
+            return Err("Frachter transportieren keine Passagiere.".into());
+        }
         if !matches!(
             plane.status,
             AircraftStatus::Parked | AircraftStatus::Ground
