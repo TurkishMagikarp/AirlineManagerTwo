@@ -107,6 +107,10 @@ var metrics: Dictionary = {}
 var finance_breakdown: Label
 var operation_summary: Label
 var economy_signature := ""
+var events_title: Label
+var events_table: Tree
+var events_empty: Label
+var events_signature := ""
 var economy_support: HBoxContainer
 var economy_toast: CanvasLayer
 var metric_grid: GridContainer
@@ -542,6 +546,37 @@ func _notify_economy() -> void:
 		economy_toast = UI.toast(self, tr("ECONOMY_TOAST") % " → ".join(names), true)
 
 
+func _refresh_events() -> void:
+	var events: Array = simulation.get_world_events()
+	var key := str(events) + TranslationServer.get_locale()
+	if key == events_signature: return
+	events_signature = key
+	events_title.text = tr("EVENTS_TITLE")
+	for i in range(5):
+		events_table.set_column_title(i, tr(["EVENTS_PLACE", "EVENTS_KIND", "EVENTS_DATES", "EVENTS_EFFECT", "EVENTS_STATUS"][i]))
+	events_table.clear()
+	events_table.visible = not events.is_empty()
+	events_empty.visible = events.is_empty()
+	events_empty.text = tr("EVENTS_NONE")
+	var root := events_table.create_item()
+	for event in events:
+		var row := events_table.create_item(root)
+		var kind_name := tr("EVENTS_" + str(event["kind"]).to_upper())
+		UI.cell_text(row, 0, event["place"])
+		UI.cell_text(row, 1, kind_name)
+		UI.cell_text(row, 2, tr("EVENTS_DAYS") % [event["starts_at"] / 86400 + 1, event["ends_at"] / 86400])
+		UI.cell_text(row, 3, tr("EVENTS_EFFECT_VALUE") % [_percent_change(event["leisure"]), _percent_change(event["business"])])
+		var tooltip: String = tr("EVENTS_TOOLTIP") % [kind_name, event["place"], _percent_change(event["leisure"]), _percent_change(event["business"]), _percent_change(event["cargo"])]
+		if event["mine"]: tooltip += "\n" + tr("EVENTS_MINE")
+		for i in range(4): row.set_tooltip_text(i, tooltip)
+		var active: bool = event["status"] == "active"
+		UI.cell_status(row, 4, tr("EVENTS_ACTIVE") if active else tr("EVENTS_UPCOMING"), ("go" if event["kind"] == "boom" else "caution") if active else "info")
+
+
+func _percent_change(factor: float) -> String:
+	return ("%+d" % roundi((factor - 1.0) * 100.0)) + (" %" if TranslationServer.get_locale().begins_with("de") else "%")
+
+
 func _refresh_finance() -> void:
 	var economy: Dictionary = simulation.get_world_economy()
 	metrics["economy"].text = UI.decimal(economy.percent) + (" %" if TranslationServer.get_locale().begins_with("de") else "%")
@@ -554,6 +589,7 @@ func _refresh_finance() -> void:
 			economy_support.remove_child(child)
 			child.queue_free()
 		economy_support.add_child(UI.status_chip(tr("ECONOMY_" + str(economy.phase).to_upper()), {"boom": "go", "normal": "neutral", "downturn": "caution"}[economy.phase]))
+	_refresh_events()
 	milestones_panel.refresh()
 	var airline: Dictionary = simulation.get_airline_info()
 	var finance: Dictionary = simulation.get_financial_summary()
@@ -1280,6 +1316,12 @@ func _build_finance(content: VBoxContainer) -> void:
 	economy_support = HBoxContainer.new()
 	metrics["economy"] = UI.metric(metric_grid, tr("ECONOMY_TITLE"), economy_support)
 	finance_panel.add_theme_constant_override("separation", ThemeTokens.SPACE_4)
+	var events := UI.panel(finance_panel, tr("EVENTS_TITLE"))
+	events_title = events.get_meta("panel_shell").find_children("*", "Label", true, false)[0]
+	events_table = UI.table([tr("EVENTS_PLACE"), tr("EVENTS_KIND"), tr("EVENTS_DATES"), tr("EVENTS_EFFECT"), tr("EVENTS_STATUS")], [150, 70, 100, 170, 100], 132)
+	events.add_child(events_table)
+	events_empty = UI.label(tr("EVENTS_NONE"), ThemeTokens.BODY, UI.MUTED)
+	events.add_child(events_empty)
 	var grid := GridContainer.new()
 	grid.add_theme_constant_override("h_separation", ThemeTokens.SPACE_4)
 	grid.add_theme_constant_override("v_separation", ThemeTokens.SPACE_4)

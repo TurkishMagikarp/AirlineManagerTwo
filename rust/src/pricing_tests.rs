@@ -100,6 +100,7 @@ fn pricing_empty_routes_cleanup_migration_and_corruption() {
     std::fs::write(&path, serde_json::to_vec(&v).unwrap()).unwrap();
     let migrated = crate::save::load(&path).unwrap();
     g.pricing.clear();
+    g.adopt_events_from(&migrated);
     assert_eq!(state(&migrated), state(&g));
     g.set_pricing_autopilot(1, true).unwrap();
     g.pricing[0].route_id = 999;

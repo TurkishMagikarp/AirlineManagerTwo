@@ -143,6 +143,7 @@ fn codeshare_v37_migration_and_receipt_integrity() {
     old["state"].as_object_mut().unwrap().remove("codeshares");
     std::fs::write(&p, serde_json::to_vec(&old).unwrap()).unwrap();
     let mut loaded = save::load(&p).unwrap();
+    g.adopt_events_from(&loaded);
     assert_eq!(state(&g), state(&loaded));
     assert!(g.advance(DAY));
     assert!(loaded.advance(DAY));

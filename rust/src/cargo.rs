@@ -104,6 +104,7 @@ pub struct Market {
     base: f64,
     last: Option<(f64, i64)>,
     economy: Option<crate::world_economy::Context>,
+    endpoints: (String, String),
     target: Option<usize>,
     shares: Vec<Share>,
     models: Vec<&'static aircraft::Model>,
@@ -114,6 +115,7 @@ impl Market {
             base: 0.0,
             last: None,
             economy: supply.iter().find_map(|o| o.economy),
+            endpoints: (route.origin_icao.clone(), route.destination_icao.clone()),
             target: None,
             shares: Vec::new(),
             models: Vec::new(),
@@ -168,10 +170,21 @@ impl Market {
         };
         let base = self.base
             * self.economy.map_or(1.0, |c| {
-                crate::world_economy::factor(
+                let economy = crate::world_economy::factor(
                     c.index(time),
                     crate::world_economy::RULES.cargo_reaction,
-                )
+                );
+                match time.and_then(|t| {
+                    crate::world_events::route_factors(
+                        &c.cycle,
+                        t,
+                        &self.endpoints.0,
+                        &self.endpoints.1,
+                    )
+                }) {
+                    Some(e) => economy * e.cargo,
+                    None => economy,
+                }
             });
         // Payload limits depend only on these integer loads and this exact
         // economy-adjusted base. Reuse a result only when every input agrees.

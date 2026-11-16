@@ -202,6 +202,7 @@ fn ancillary_v40_migration_is_neutral_for_all_owners_and_frozen_results() {
     v["version"] = 40.into();
     std::fs::write(&p, serde_json::to_vec(&v).unwrap()).unwrap();
     let mut loaded = save::load(&p).unwrap();
+    g.adopt_events_from(&loaded);
     assert_eq!(state(&loaded), state(&g));
     assert!(
         loaded

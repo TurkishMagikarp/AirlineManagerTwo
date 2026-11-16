@@ -381,6 +381,12 @@ func refresh_operations() -> void:
 		var season: Dictionary = metrics.values()[0]
 		season_label.text = tr("DEMAND_SEASON_FACTORS") % [UI.decimal(season["season_business_factor"], 2), UI.decimal(season["season_leisure_factor"], 2)]
 		season_label.text += "\n" + tr("DEMAND_ECONOMY_FACTORS") % [UI.decimal(season["economy_business_factor"], 2), UI.decimal(season["economy_leisure_factor"], 2), UI.decimal(season["economy_cargo_factor"], 2)]
+		var focus: Dictionary = metrics.get(_route().get("id", 0), season)
+		var ev := [focus["event_business_factor"], focus["event_leisure_factor"], focus["event_cargo_factor"]]
+		if ev != [1.0, 1.0, 1.0]:
+			season_label.text += "\n" + tr("DEMAND_EVENT_FACTORS") % [UI.decimal(ev[0], 2), UI.decimal(ev[1], 2), UI.decimal(ev[2], 2)]
+			if not focus["event_places"].is_empty():
+				season_label.text += " · " + tr("DEMAND_EVENT_NAMES") % ", ".join(focus["event_places"])
 	var tree_root := route_tree.get_root()
 	if tree_root != null:
 		for row in tree_root.get_children():

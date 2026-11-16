@@ -257,11 +257,19 @@ fn world_economy_phase_changes_do_not_add_attention_or_stop_jumps() {
 
 impl Game {
     /// Older subsystem migration fixtures also acquire the v34 neutral timeline.
+    pub(crate) fn adopt_events_from(&mut self, loaded: &Game) {
+        self.world_economy.events_from = loaded.world_economy.events_from;
+        for c in &mut self.competitors {
+            c.game.world_economy.events_from = loaded.world_economy.events_from;
+        }
+    }
+
     pub(crate) fn migrate_world_economy_fixture(&mut self) {
         self.world_economy = Cycle {
             seed: self.fuel_market.seed ^ 0x45434f4e4f4d59,
             started_at: self.clock.elapsed().as_secs(),
             notified_period: 0,
+            events_from: self.clock.elapsed().as_secs(),
             ..Default::default()
         };
         for c in &mut self.competitors {

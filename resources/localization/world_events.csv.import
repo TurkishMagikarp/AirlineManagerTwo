@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://bj4v43wvtv81q"
+
+[deps]
+
+files=["res://resources/localization/world_events.de.translation", "res://resources/localization/world_events.en.translation"]
+
+source_file="res://resources/localization/world_events.csv"
+dest_files=["res://resources/localization/world_events.de.translation", "res://resources/localization/world_events.en.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

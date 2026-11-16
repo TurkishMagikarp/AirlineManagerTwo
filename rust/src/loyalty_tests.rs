@@ -233,6 +233,7 @@ fn loyalty_v41_migration_all_owners_airborne_and_history() {
     strip(&mut v);
     std::fs::write(&p, serde_json::to_vec(&v).unwrap()).unwrap();
     let loaded = save::load(&p).unwrap();
+    g.adopt_events_from(&loaded);
     assert_eq!(state(&loaded), state(&g));
     for owner in std::iter::once(&loaded).chain(loaded.competitors.iter().map(|c| &*c.game)) {
         assert_eq!(owner.loyalty, loyalty::Loyalty::default());

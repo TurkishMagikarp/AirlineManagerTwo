@@ -1,0 +1,30 @@
+{
+  "enabled": true,
+  "size_weight_power": 2,
+  "boom": {
+    "lanes": 6,
+    "slot_days": 21,
+    "chance_permille": 650,
+    "min_days": 5,
+    "max_days": 14,
+    "warning_days": 21,
+    "min_effect_bps": 1500,
+    "max_effect_bps": 3500,
+    "business_reaction": 0.5,
+    "leisure_reaction": 1.0,
+    "cargo_reaction": 0.3
+  },
+  "slump": {
+    "lanes": 3,
+    "slot_days": 84,
+    "chance_permille": 700,
+    "min_days": 21,
+    "max_days": 56,
+    "warning_days": 0,
+    "min_effect_bps": 1000,
+    "max_effect_bps": 2500,
+    "business_reaction": 0.8,
+    "leisure_reaction": 1.0,
+    "cargo_reaction": 0.6
+  }
+}

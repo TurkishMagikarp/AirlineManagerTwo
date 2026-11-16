@@ -149,6 +149,7 @@ fn difficulty_roundtrip_migration_and_corrupt_world_rejection() {
     std::fs::write(&p, serde_json::to_vec(&v).unwrap()).unwrap();
     let mut migrated = crate::save::load(&p).unwrap();
     assert_eq!(migrated.difficulty, Settings::default());
+    standard.adopt_events_from(&migrated);
     assert_eq!(state(&migrated), state(&standard));
     assert!(migrated.advance(30.0 * DAY));
     assert!(standard.advance(30.0 * DAY));

@@ -83,9 +83,11 @@ fn freighter_revenue_no_passenger_costs_frozen_quote_and_v36_identity() {
     );
     assert!(text.contains("\"version\":36"));
     std::fs::write(&p, text).unwrap();
+    let loaded = save::load(&p).unwrap();
+    old.adopt_events_from(&loaded);
     assert_eq!(
         serde_json::to_value(&old).unwrap(),
-        serde_json::to_value(save::load(&p).unwrap()).unwrap()
+        serde_json::to_value(loaded).unwrap()
     );
 }
 #[test]
