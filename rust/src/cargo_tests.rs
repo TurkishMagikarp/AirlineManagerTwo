@@ -373,3 +373,45 @@ fn cargo_reused_market_refreshes_payload_and_matches_fresh_seasonal_quotes() {
         }
     }
 }
+
+#[test]
+fn cargo_retained_market_matches_fresh_quotes_after_load_and_economy_changes() {
+    let g = game();
+    let mut supply = g.market_routes();
+    let mut rival = supply[0].clone();
+    rival.route.id = 2;
+    rival.route.aircraft_id = Some(2);
+    rival.cargo_model = Some("atr72_600".into());
+    rival.seats = 72;
+    rival.route.cargo_rate_cents /= 2;
+    supply.push(rival);
+    let mut freighter = supply[0].clone();
+    freighter.route.id = 3;
+    freighter.route.aircraft_id = Some(3);
+    freighter.cargo_model = Some("atr72_600f".into());
+    freighter.seats = 0;
+    supply.push(freighter);
+    for (target, model) in [(0, "a320_200"), (2, "atr72_600f")] {
+        let route = &supply[target].route;
+        let mut retained = cargo::Market::new(route, model, &supply).unwrap();
+        for period in [0, 1, 40, 2, 40, 0] {
+            let time = Some(period * crate::world_economy::RULES.cadence_seconds + 123);
+            for loads in [
+                [0, 0, 0],
+                [180, 72, 0],
+                [179, 71, 0],
+                [23, 42, 0],
+                [0, 0, 0],
+            ] {
+                let expected = cargo::Market::new(route, model, &supply)
+                    .unwrap()
+                    .estimate_at(&loads, time);
+                // Exercise both a miss and consecutive exact-input hits, including
+                // a clone of warmed scratch and travel back to an older period.
+                assert_eq!(retained.estimate_at(&loads, time), expected);
+                assert_eq!(retained.estimate_at(&loads, time), expected);
+                assert_eq!(retained.clone().estimate_at(&loads, time), expected);
+            }
+        }
+    }
+}

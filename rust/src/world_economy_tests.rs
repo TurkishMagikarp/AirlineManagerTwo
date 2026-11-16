@@ -321,3 +321,45 @@ fn world_economy_rejects_future_timelines_cursors_and_split_worlds() {
         assert!(crate::save::load(&path).is_err(), "kind={kind}");
     }
 }
+
+#[test]
+fn world_economy_recent_period_distinguishes_seeds_starts_and_crisis_levels() {
+    use crate::difficulty::Level;
+    let periods = [0, 1, 43, 500, 2];
+    let seeds = [0, 1, 6, 349, u64::MAX, Cycle::default().seed];
+    let expected: Vec<Vec<_>> = seeds
+        .iter()
+        .map(|&seed| {
+            let cycle = Cycle {
+                seed,
+                ..Default::default()
+            };
+            periods
+                .iter()
+                .map(|p| cycle.index_at(p * RULES.cadence_seconds))
+                .collect()
+        })
+        .collect();
+    for _ in 0..2 {
+        for (i, &seed) in seeds.iter().enumerate().rev() {
+            for (j, &period) in periods.iter().enumerate().rev() {
+                for crises in [Level::High, Level::Low, Level::Standard] {
+                    for started_at in [0, 12345] {
+                        let cycle = Cycle {
+                            seed,
+                            started_at,
+                            crises,
+                            ..Default::default()
+                        };
+                        let value = 10000 + crises.scale(expected[i][j] - 10000);
+                        for offset in [0, RULES.cadence_seconds - 1] {
+                            let now = started_at + period * RULES.cadence_seconds + offset;
+                            assert_eq!(cycle.index_at(now), value);
+                            assert_eq!(cycle.index_at(now), value);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

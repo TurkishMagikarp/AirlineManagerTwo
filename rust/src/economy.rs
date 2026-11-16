@@ -388,7 +388,15 @@ impl Totals {
             crate::codeshare::add_receipt(&mut self.codeshare, receipt, count)?;
         }
         let count = i64::try_from(count).ok()?;
-        macro_rules! add { ($($f:ident),*) => { $(self.$f = self.$f.checked_add(other.$f.checked_mul(count)?)?;)* }; }
+        // Settlement usually adds one flight. Multiplication by one cannot
+        // overflow, so retain just the checked addition on this common path.
+        macro_rules! add { ($($f:ident),*) => {
+            if count == 1 {
+                $(self.$f = self.$f.checked_add(other.$f)?;)*
+            } else {
+                $(self.$f = self.$f.checked_add(other.$f.checked_mul(count)?)?;)*
+            }
+        }; }
         add!(
             connecting_passengers,
             connecting_revenue,
@@ -845,6 +853,56 @@ impl Game {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn single_flight_totals_add_matches_general_count_and_keeps_overflow_checks() {
+        let unit = Totals {
+            flights: 1,
+            passengers: 10,
+            seats: 20,
+            revenue: 1000,
+            fuel: 10,
+            fuel_contract_effect: -2,
+            airport: 5,
+            crew: 3,
+            overhead: 3,
+            service: 3,
+            business_passengers: 3,
+            business_revenue: 200,
+            business_seats: 5,
+            cargo_kg: 10,
+            cargo_revenue: 20,
+            care: 2,
+            punctuality_flights: 1,
+            late_flights: 1,
+            delay_seconds: 2,
+            connecting_passengers: 2,
+            connecting_revenue: 100,
+            codeshare: vec![crate::codeshare::Receipt {
+                partner: "other".into(),
+                passengers: 2,
+                revenue: 100,
+            }],
+        };
+        let mut singles = unit.clone();
+        singles.add(&unit, 1).unwrap();
+        singles.add(&unit, 1).unwrap();
+        let mut general = unit.clone();
+        general.add(&unit, 2).unwrap();
+        assert_eq!(singles, general);
+        general.add(&unit, 0).unwrap();
+        assert_eq!(singles, general);
+        let mut overflow = Totals {
+            revenue: i64::MAX,
+            ..Default::default()
+        };
+        assert!(overflow.add(&unit, 1).is_none());
+        let mut costs = Totals {
+            fuel: i64::MAX,
+            ..Default::default()
+        };
+        assert!(costs.add(&unit, 1).is_none());
+    }
+
     #[test]
     fn fuel_checkpoints_match_original_replay_in_any_query_order() {
         let c = &*CONFIG;
