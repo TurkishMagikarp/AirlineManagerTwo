@@ -33,3 +33,45 @@ CODESHARE_END_QUESTION,Codeshare mit %s beenden?,End codeshare with %s?
 CODESHARE_END_HINT,Neue Abflüge erhalten keine Partner-Umsteiger. Laufende Flüge und bisherige Einnahmen bleiben erhalten.,New departures receive no partner connections. Airborne bookings and past revenue remain fixed.
 CODESHARE_CANCEL,Behalten,Keep agreement
 CODESHARE_VIA,Partner: %s,Partner: %s
+CODESHARE_RIVAL_ALLIANCE,Abgelehnt: Partner gehört einer rivalisierenden Allianz an.,Declined: partner belongs to a rival alliance.
+ALLIANCE_RESTRUCTURING,Finanznot oder Restrukturierung: Keine Aufnahme möglich.,Financial distress or restructuring: no admission possible.
+ALLIANCE_COOLDOWN,Wiederbewerbung erst ab %s möglich.,Reapplying is only possible from %s.
+ALLIANCE_ACTIVE,Mitgliedschaft oder Antrag bereits aktiv.,Membership or application already active.
+ALLIANCE_EMPTY,Diese Allianz hat noch keine Mitglieder; nur KI-Airlines gründen sie.,This alliance has no members yet; only AI airlines found one.
+ALLIANCE_FULL,Allianz voll (%s Mitglieder).,Alliance full (%s members).
+ALLIANCE_REPUTATION,Pünktlichkeitsruf %s liegt unter dem Mindestwert %s.,Punctuality reputation %s is below the minimum %s.
+ALLIANCE_SIZE,Nur %s aktive Strecken; mindestens %s nötig.,Only %s active routes; at least %s needed.
+ALLIANCE_CASH,Guthaben %s EUR liegt unter der geforderten Reserve von %s EUR.,Cash of %s EUR is below the required reserve of %s EUR.
+ALLIANCE_OVERLAP,Netzüberschneidung %s %% ist größer als erlaubte %s %%.,Network overlap of %s %% exceeds the allowed %s %%.
+ALLIANCE_MISSING,Unbekannte Allianz.,Unknown alliance.
+ALLIANCE_NONE,Keine Mitgliedschaft oder Bewerbung vorhanden.,No membership or application to leave.
+ALLIANCE_LEAVING,Austritt läuft bereits.,Leaving is already under way.
+ALLIANCE_TITLE,Allianzen,Alliances
+ALLIANCE_HINT,Mitglieder teilen Umsteiger über alle Partner (gleiche Erlösteilung) und erhalten einen kleinen Nachfragebonus. Dafür zahlen sie monatlich eine Gebühr; Codeshares mit Airlines rivalisierender Allianzen enden beim Beitritt.,Members share connecting passengers across all partners (same revenue split) and get a small demand bonus. In return they pay a monthly fee; codeshares with rival-alliance airlines end on joining.
+ALLIANCE_RULES,Entscheidung bei der Prüfung am %s · Gebühr %s pro Monat · Kündigungsfrist %s Tage · Sperre nach Austritt %s Tage.,Decision at the review on %s · fee %s per month · %s days notice · %s days lockout after leaving.
+ALLIANCE_CONDITIONS,Bedingungen: mindestens %s Strecken · Netzüberschneidung höchstens %s %% · Reserve von %s Monatsgebühren · Pünktlichkeitsruf mindestens %s · höchstens %s Mitglieder.,Conditions: at least %s routes · network overlap at most %s %% · cash reserve of %s monthly fees · punctuality reputation at least %s · at most %s members.
+ALLIANCE_BONUS,Nachfragebonus: %s Basispunkte je Partner am Markt (max. %s).,Demand bonus: %s basis points per partner at a market (max. %s).
+ALLIANCE_COL_NAME,Allianz,Alliance
+ALLIANCE_COL_MEMBERS,Mitglieder,Members
+ALLIANCE_COL_STATUS,Status,Status
+ALLIANCE_STATE_NONE,Offen,Open
+ALLIANCE_STATE_PENDING,Antrag läuft,Application pending
+ALLIANCE_STATE_MEMBER,Mitglied,Member
+ALLIANCE_STATE_LEAVING,Austritt bis %s,Leaving until %s
+ALLIANCE_QUALIFIES,Sie erfüllen alle Bedingungen für diese Allianz.,You meet all conditions for this alliance.
+ALLIANCE_MEMBER_LINE,Mitglieder: %s,Members: %s
+ALLIANCE_NO_MEMBERS,noch keine,none yet
+ALLIANCE_SELECT,Allianz wählen,Choose alliance
+ALLIANCE_APPLY,Aufnahme beantragen,Apply to join
+ALLIANCE_LEAVE,Austreten,Leave
+ALLIANCE_WITHDRAW,Antrag zurückziehen,Withdraw application
+ALLIANCE_CANCEL,Abbrechen,Cancel
+ALLIANCE_APPLY_QUESTION,Aufnahme in %s beantragen?,Apply to join %s?
+ALLIANCE_APPLY_HINT,Die Entscheidung fällt bei der nächsten Prüfung. Bei Aufnahme enden Codeshares mit Airlines rivalisierender Allianzen und die Monatsgebühr wird fällig.,The decision is made at the next review. On joining codeshares with rival-alliance airlines end and the monthly fee falls due.
+ALLIANCE_LEAVE_QUESTION,%s verlassen?,Leave %s?
+ALLIANCE_LEAVE_HINT,Der Austritt wird nach der Kündigungsfrist wirksam; bis dahin gelten Vorteile und Gebühr weiter. Danach gilt eine Sperre für neue Anträge.,Leaving takes effect after the notice period; benefits and fee continue until then. A lockout for new applications follows.
+ALLIANCE_WITHDRAW_QUESTION,Antrag auf Aufnahme zurückziehen?,Withdraw the application?
+ALLIANCE_APPLIED,Antrag gestellt; Entscheidung bei der nächsten Prüfung.,Application submitted; decision at the next review.
+ALLIANCE_LEFT,Austritt gemeldet; wirksam nach der Kündigungsfrist.,Exit announced; effective after the notice period.
+ALLIANCE_WITHDRAWN,Antrag zurückgezogen.,Application withdrawn.
+ALLIANCE_FEES_PAID,Bisher gezahlte Gebühren: %s,Fees paid so far: %s

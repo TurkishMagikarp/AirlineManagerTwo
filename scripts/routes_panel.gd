@@ -35,6 +35,7 @@ var ticket_input: SpinBox
 var ticket_button: Button
 var results_tree: Tree
 var codeshare_panel: VBoxContainer
+var alliance_panel: VBoxContainer
 var competition_label: Label
 var connections_label: Label
 var connections_empty: Control
@@ -252,6 +253,9 @@ func _ready() -> void:
 	codeshare_panel = preload("res://scripts/codeshare_panel.gd").new()
 	codeshare_panel.simulation = simulation
 	add_child(codeshare_panel)
+	alliance_panel = preload("res://scripts/alliance_panel.gd").new()
+	alliance_panel.simulation = simulation
+	add_child(alliance_panel)
 	competition_label = _label("Route auswählen, um den gemeinsamen Passagiermarkt zu sehen.")
 	var competition_panel := UI.panel(self, "05  /  WETTBEWERB · GEMEINSAMER STRECKENMARKT")
 	competition_panel.add_child(competition_label)
@@ -543,6 +547,7 @@ func _update_schedule_controls(route: Dictionary) -> void:
 
 func _refresh_competition() -> void:
 	if codeshare_panel != null: codeshare_panel.refresh()
+	if alliance_panel != null: alliance_panel.refresh()
 	if competition_label == null:
 		return
 	var route := _route()

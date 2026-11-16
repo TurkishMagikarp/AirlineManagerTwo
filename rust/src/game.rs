@@ -17,6 +17,8 @@ pub struct Game {
     pub next_order_id: u64,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub codeshares: Vec<crate::codeshare::Agreement>,
+    #[serde(default, skip_serializing_if = "crate::alliances::State::is_empty")]
+    pub alliances: crate::alliances::State,
     #[serde(
         default,
         skip_serializing_if = "crate::difficulty::Settings::is_standard"
@@ -112,6 +114,7 @@ impl Default for Game {
             orders: Vec::new(),
             next_order_id: 1,
             codeshares: Vec::new(),
+            alliances: Default::default(),
             difficulty: Default::default(),
             pricing: Vec::new(),
             milestones: None,

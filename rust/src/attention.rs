@@ -21,6 +21,7 @@ static RULES: LazyLock<Rules> = LazyLock::new(|| {
         "training",
         "event",
         "weather",
+        "alliance",
     ] {
         assert!(r.priorities.contains_key(key), "Priorität fehlt: {key}");
     }
@@ -307,6 +308,20 @@ impl Game {
                         )
                     ),
                     page: "fleet",
+                    route_id: 0,
+                    aircraft_id: 0,
+                    employee_id: 0,
+                });
+            }
+        }
+        for n in &self.alliances.notices {
+            if n.at + crate::alliances::RULES.notice_visible_days * 86400 >= now {
+                entries.push(Entry {
+                    order_id: n.id,
+                    kind: "alliance",
+                    priority: RULES.priorities["alliance"],
+                    text: n.text.clone(),
+                    page: "routes",
                     route_id: 0,
                     aircraft_id: 0,
                     employee_id: 0,

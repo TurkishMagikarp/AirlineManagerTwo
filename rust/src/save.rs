@@ -32,7 +32,8 @@ use std::time::Duration;
 // v42: airline-wide loyalty; old members, costs and enrolment start at zero.
 // v43: regional world events; older saves announce their first event after loading.
 // v44: airport weather; older saves apply their first weather after loading.
-pub(crate) const VERSION: u32 = 44;
+// v45: airline alliances; older saves have none and AI airlines form them at the next 30-day boundary.
+pub(crate) const VERSION: u32 = 45;
 // Largest save file the game writes. Saves above COMPRESS_THRESHOLD are
 // LZ4-frame compressed (the finance archive repeats keys and values heavily),
 // so this limit tracks real disk size instead of growing with every feature
@@ -87,6 +88,8 @@ struct GameState {
     next_order_id: u64,
     #[serde(default)]
     codeshares: Vec<crate::codeshare::Agreement>,
+    #[serde(default)]
+    alliances: crate::alliances::State,
     #[serde(default)]
     difficulty: Option<crate::difficulty::Settings>,
     #[serde(default)]
@@ -170,6 +173,7 @@ pub fn save(path: &Path, game: &Game) -> Result<(), String> {
     game.validate_history()?;
     game.validate_tax()?;
     game.validate_codeshares()?;
+    game.validate_alliances()?;
     game.validate_competitors()?;
     let clock = &game.clock;
     let data = SaveGame {
@@ -180,6 +184,7 @@ pub fn save(path: &Path, game: &Game) -> Result<(), String> {
             orders: game.orders.clone(),
             next_order_id: game.next_order_id,
             codeshares: game.codeshares.clone(),
+            alliances: game.alliances.clone(),
             difficulty: Some(game.difficulty),
             pricing: game.pricing.clone(),
             world_economy: Some(game.world_economy),
@@ -464,6 +469,11 @@ fn finish_load(data: SaveGame) -> Result<(Game, u32), String> {
         } else {
             data.state.pricing
         },
+        alliances: if data.version < 45 {
+crate::alliances::State::default()
+        } else {
+            data.state.alliances
+        },
         codeshares: if data.version < 38 {
             Vec::new()
         } else {
@@ -642,6 +652,7 @@ fn finish_load(data: SaveGame) -> Result<(Game, u32), String> {
         game.adopt_weather();
     }
     game.validate_codeshares()?;
+    game.validate_alliances()?;
     game.validate_competitors()?;
     if data.version < 9 && game.airline.is_some() {
         game.competitors = crate::competition::initial_competitors_at(game.clock.elapsed())?;
