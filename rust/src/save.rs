@@ -38,7 +38,8 @@ pub(crate) const VERSION: u32 = 44;
 // Version 17 retains per-class quotes, which also split more archive batches.
 // v26 adds disruption boundaries to centuries of AI/player history.
 // v43 world events change demand totals per period and split more batches (~+6 %).
-pub(crate) const MAX_BYTES: u64 = 320 * 1024 * 1024;
+// v44 weather delays split more archive batches (~+9 %).
+pub(crate) const MAX_BYTES: u64 = 360 * 1024 * 1024;
 
 #[derive(Serialize, Deserialize)]
 struct SaveGame {

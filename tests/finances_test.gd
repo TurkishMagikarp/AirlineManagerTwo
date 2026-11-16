@@ -63,10 +63,10 @@ func _run() -> void:
 	for plane in sim.get_fleet():
 		checks += plane["checks"] + (1 if plane["maintenance_state"] != "none" else 0)
 	var info: Dictionary = sim.get_finance_history_info()
-	# Checks, fuel, demand, competition and technical delays start blocks.
-	# Match the existing Rust mixed-route stress rule: compress at least 90%
-	# of settled flights without discarding any departure quote.
-	if not _check(checks > 2000 and info["batch_count"] >= checks and info["batch_count"] * 10 < count + routes[1]["flights"], "Archive grows only with real interruptions: %d checks, %d blocks" % [checks, info["batch_count"]]):
+	# Checks, fuel, demand, competition, technical delays and weather start blocks.
+	# Compress at least ~89% of settled flights (weather days split a few more
+	# blocks than the old 90%) without discarding any departure quote.
+	if not _check(checks > 2000 and info["batch_count"] >= checks and info["batch_count"] * 9 < count + routes[1]["flights"], "Archive grows only with real interruptions: %d checks, %d blocks" % [checks, info["batch_count"]]):
 		return
 	var series: Array = sim.get_finance_series(0)
 	if not _check(series.size() <= 64 and series[-1]["balance"] == sim.get_airline_info()["capital_eur"], "Bounded series reconciles to account"):

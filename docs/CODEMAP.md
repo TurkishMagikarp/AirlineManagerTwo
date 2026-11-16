@@ -1439,27 +1439,27 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 
 ## rust/src/save.rs
 35 pub(crate) const VERSION: u32 = 44;
-41 pub(crate) const MAX_BYTES: u64 = 320 * 1024 * 1024;
-44 struct SaveGame
-51 struct GameState
-104 struct SavedRoutes
-111 struct SavedFleet
-117 struct SavedClock
-124 pub fn save(path: &Path, game: &Game) -> Result<(), String>
-219 pub fn load(path: &Path) -> Result<Game, String>
-223 pub(crate) fn load_versioned(path: &Path) -> Result<(Game, u32), String>
-618 mod tests
-622 fn routes_roundtrip_migration_and_rejecting_corrupt_assignments()
-689 fn exact_roundtrip_and_overwrite_for_all_clock_states()
-714 fn rejects_missing_corrupt_truncated_invalid_and_future_saves()
-744 fn rejects_oversized_saves_and_write_errors()
-755 fn migrates_clock_only_v1_without_fabricating_a_company()
-769 fn rejects_invalid_company_data()
-789 fn fleet_and_balance_roundtrip_and_identifiers_continue_after_load()
-815 fn v2_company_migrates_without_buying_aircraft_or_changing_balance()
-833 fn rejects_corrupt_fleet_instead_of_silently_losing_aircraft()
-875 fn oversized_archive_cannot_overwrite_a_loadable_save()
-896 fn all_save_versions_preserve_catalogue_company_state()
+42 pub(crate) const MAX_BYTES: u64 = 360 * 1024 * 1024;
+45 struct SaveGame
+52 struct GameState
+105 struct SavedRoutes
+112 struct SavedFleet
+118 struct SavedClock
+125 pub fn save(path: &Path, game: &Game) -> Result<(), String>
+220 pub fn load(path: &Path) -> Result<Game, String>
+224 pub(crate) fn load_versioned(path: &Path) -> Result<(Game, u32), String>
+619 mod tests
+623 fn routes_roundtrip_migration_and_rejecting_corrupt_assignments()
+690 fn exact_roundtrip_and_overwrite_for_all_clock_states()
+715 fn rejects_missing_corrupt_truncated_invalid_and_future_saves()
+745 fn rejects_oversized_saves_and_write_errors()
+756 fn migrates_clock_only_v1_without_fabricating_a_company()
+770 fn rejects_invalid_company_data()
+790 fn fleet_and_balance_roundtrip_and_identifiers_continue_after_load()
+816 fn v2_company_migrates_without_buying_aircraft_or_changing_balance()
+834 fn rejects_corrupt_fleet_instead_of_silently_losing_aircraft()
+876 fn oversized_archive_cannot_overwrite_a_loadable_save()
+897 fn all_save_versions_preserve_catalogue_company_state()
 
 ## rust/src/save_slot_tests.rs
 3 fn game() -> Game

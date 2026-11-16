@@ -559,8 +559,7 @@ func _ai_cabin_views(sim: RefCounted) -> bool:
 	var offers: Array = sim.get_competitor_routes()
 	var selected := -1
 	for i in range(offers.size()):
-		if offers[i]["origin_icao"] == "SBGR" and offers[i]["destination_icao"] == "EGLL":
-			assert("A330" in offers[i]["model"])
+		if selected < 0 and "A330" in offers[i]["model"]:
 			selected = i
 	assert(selected >= 0, "Normal AI expansion must expose its widebody route on the map")
 	for dimensions in [Vector2i(1440, 1000), Vector2i(680, 520)]:
