@@ -203,6 +203,12 @@ func _run() -> void:
 					for frame in range(5): await process_frame
 				await RenderingServer.frame_post_draw
 				assert(root.get_texture().get_image().save_png(capture_dir.path_join("%s-content-%dx%d.png" % [["overview", "fleet", "routes", "map", "finances", "staff"][page], dimensions.x, dimensions.y])) == OK)
+			if page == 0 and not capture_dir.is_empty():
+				scroll.ensure_control_visible(main.events_table)
+				for frame in range(5): await process_frame
+				scroll.ensure_control_visible(main.events_table)
+				await RenderingServer.frame_post_draw
+				assert(root.get_texture().get_image().save_png(capture_dir.path_join("overview-events-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
 			if page == 2 and not capture_dir.is_empty():
 				scroll.ensure_control_visible(main.routes_panel.season_label)
 				for frame in range(5): await process_frame

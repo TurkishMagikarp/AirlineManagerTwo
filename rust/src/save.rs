@@ -36,7 +36,8 @@ pub(crate) const VERSION: u32 = 43;
 // and both AI airlines in the million-flight finance restart scenario.
 // Version 17 retains per-class quotes, which also split more archive batches.
 // v26 adds disruption boundaries to centuries of AI/player history.
-pub(crate) const MAX_BYTES: u64 = 256 * 1024 * 1024;
+// v43 world events change demand totals per period and split more batches (~+6 %).
+pub(crate) const MAX_BYTES: u64 = 320 * 1024 * 1024;
 
 #[derive(Serialize, Deserialize)]
 struct SaveGame {
