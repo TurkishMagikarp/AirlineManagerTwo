@@ -55,6 +55,13 @@ func _run() -> void:
 		print("PASS: ancillary Finances and Routes at both sizes")
 		quit(0)
 		return
+	if OS.get_environment("AIRLINE_UI_CAPTURE_WEATHER_ONLY") == "1":
+		await _weather_views(sim)
+		main.queue_free()
+		await process_frame
+		print("PASS: weather rows in the Events block, attention entry and map markers with tooltip and card at both sizes")
+		quit(0)
+		return
 	if OS.get_environment("AIRLINE_UI_CAPTURE_STAFF_ONLY") == "1":
 		await _staff_views(sim)
 		main.queue_free()
@@ -1136,6 +1143,90 @@ func _ancillary_views(sim: RefCounted) -> void:
 					assert(root.get_visible_rect().encloses(control.get_global_rect()))
 					await RenderingServer.frame_post_draw
 					assert(root.get_texture().get_image().save_png(capture_dir.path_join("ancillary-finances-%s-%dx%d.png" % [view[1], dimensions.x, dimensions.y])) == OK)
+
+func _weather_views(sim: RefCounted) -> void:
+	assert(sim.buy_aircraft("atr72_600").is_empty())
+	sim.hire_missing_staff()
+	assert(sim.create_route("EDDF", "EDDM", 1).is_empty())
+	assert(sim.schedule_route(1, 1, 120).is_empty())
+	sim.start()
+	var found := false
+	for day in range(400):
+		sim.advance(86400.0)
+		var weather := 0
+		var mine := false
+		var active := false
+		for event in sim.get_world_events():
+			if event["kind"] == "weather":
+				weather += 1
+				mine = mine or event["mine"]
+				active = active or event["status"] == "active"
+		if weather >= 1 and mine and active:
+			found = true
+			break
+	sim.pause()
+	assert(found)
+	main._sync_view()
+	TranslationServer.set_locale("de")
+	var attention := false
+	for entry in sim.get_attention_snapshot():
+		attention = attention or entry["kind"] == "weather"
+	assert(attention)
+	for dimensions in [Vector2i(1440, 1000), Vector2i(680, 520)]:
+		root.size = dimensions
+		main._show_page(0)
+		main._refresh_events()
+		var scroll: ScrollContainer = main.fleet_panel.get_parent().get_parent()
+		for frame in range(5): await process_frame
+		scroll.ensure_control_visible(main.events_table)
+		for frame in range(5): await process_frame
+		scroll.ensure_control_visible(main.events_table)
+		scroll.scroll_vertical += 260
+		for frame in range(5): await process_frame
+		if not capture_dir.is_empty():
+			await RenderingServer.frame_post_draw
+			assert(root.get_texture().get_image().save_png(capture_dir.path_join("weather-events-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
+		scroll.scroll_vertical = 0
+		for frame in range(5): await process_frame
+		if not capture_dir.is_empty():
+			await RenderingServer.frame_post_draw
+			assert(root.get_texture().get_image().save_png(capture_dir.path_join("weather-overview-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
+		main._show_page(3)
+		var map = main.map_panel
+		map.refresh()
+		map.canvas.reset_view()
+		map.selected_id = 0
+		map.canvas.selected_route = 0
+		map.canvas.selected_competitor = -1
+		map.refresh_flights()
+		scroll.ensure_control_visible(map.canvas)
+		for frame in range(5): await process_frame
+		map.canvas.center_base()
+		for frame in range(5): await process_frame
+		assert(not map.canvas.airport_events.is_empty())
+		var marked := -1
+		for i in range(map.canvas.airports.size()):
+			if map.canvas.airport_events.has(map.canvas.airports[i]["icao"]) and map.canvas.airport_events[map.canvas.airports[i]["icao"]].any(func(e): return e["kind"] == "weather"):
+				marked = i
+				break
+		assert(marked >= 0)
+		var tip: String = map.canvas._get_tooltip(map.canvas.project(map.canvas.airports[marked]["position"]))
+		assert(map.canvas.airports[marked]["icao"] in tip and not tip.is_empty())
+		print("TOOLTIP: ", tip.replace("\n", " | "))
+		if not capture_dir.is_empty():
+			await RenderingServer.frame_post_draw
+			assert(root.get_texture().get_image().save_png(capture_dir.path_join("weather-map-europe-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
+		map.selected_id = -marked - 1
+		map.refresh_flights()
+		for frame in range(5): await process_frame
+		scroll.ensure_control_visible(map.canvas)
+		for frame in range(5): await process_frame
+		assert(root.get_visible_rect().encloses(map.card.get_global_rect()))
+		if not capture_dir.is_empty():
+			await RenderingServer.frame_post_draw
+			assert(root.get_texture().get_image().save_png(capture_dir.path_join("weather-map-card-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
+		map.selected_id = 0
+		map.refresh_flights()
 
 func _loyalty_views(sim: RefCounted) -> void:
 	assert(sim.buy_aircraft("atr72_600").is_empty())

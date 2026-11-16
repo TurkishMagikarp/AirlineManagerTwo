@@ -46,6 +46,9 @@ pub struct Cycle {
     /// Events are only announced from this time on; older saves start it at load.
     #[serde(default)]
     pub events_from: u64,
+    /// Weather is only announced from this time on; older saves start it at load.
+    #[serde(default)]
+    pub weather_from: u64,
 }
 impl Default for Cycle {
     fn default() -> Self {
@@ -55,6 +58,7 @@ impl Default for Cycle {
             started_at: 0,
             notified_period: 0,
             events_from: 0,
+            weather_from: 0,
         }
     }
 }
@@ -122,7 +126,7 @@ impl Cycle {
         10000 + self.crises.scale(index - 10000)
     }
     pub fn validate(&self, now: u64) -> Result<(), String> {
-        if self.started_at > now || self.events_from > now || self.notified_period > self.period(now) {
+        if self.started_at > now || self.events_from > now || self.weather_from > now || self.notified_period > self.period(now) {
             return Err("Ungültige Weltwirtschaft.".into());
         }
         Ok(())

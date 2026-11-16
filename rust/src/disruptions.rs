@@ -73,6 +73,9 @@ pub struct Cursor {
     /// A dispatched quote retains its departure and arrival across migrations
     /// and changes to the holds for later departures.
     pub frozen: Option<Leg>,
+    /// World weather applied to departures; `None` (old saves) is neutral.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub weather: Option<crate::weather::Weather>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub staff_hold: Option<Box<crate::labour::Hold>>,
 }
@@ -134,7 +137,8 @@ impl Cursor {
                 flight,
             )
             .ok_or("Verschleißüberlauf.")?;
-        let delay = technical_delay(self.seed, &wear, model, scheduled, self.acquired_at)?;
+        let delay = technical_delay(self.seed, &wear, model, scheduled, self.acquired_at)?
+            + self.weather_delay(route, self.index, scheduled);
         let departure = scheduled
             .max(self.previous.as_ref().map_or(0, |l| l.ready))
             .checked_add(delay)
@@ -160,6 +164,12 @@ impl Cursor {
             landing,
             ready,
         })
+    }
+    pub(crate) fn weather_delay(&self, route: &Route, index: u64, scheduled: u64) -> u64 {
+        let Some(w) = &self.weather else { return 0 };
+        let reversed = route.plan.as_ref().is_some_and(|p| p.is_return(index));
+        let origin = if reversed { &route.destination_icao } else { &route.origin_icao };
+        crate::weather::delay_seconds(w, origin, scheduled)
     }
     pub fn landed(&mut self, leg: Leg) -> Result<(), String> {
         self.index = leg.index.checked_add(1).ok_or("Landungszähler-Überlauf.")?;
@@ -266,6 +276,14 @@ pub fn project(route: &Route, model: &str, now: u64) -> Result<Projection, Strin
         landing: displayed.landing,
         ready: displayed.ready,
         completed: cursor.index,
+        weather_seconds: if now < delay_leg.scheduled {
+            0
+        } else {
+            let delay = delay_leg.departure - delay_leg.scheduled;
+            cursor
+                .weather_delay(route, delay_leg.index, delay_leg.scheduled)
+                .min(delay)
+        },
         delay_seconds: if now < delay_leg.scheduled {
             0
         } else {
@@ -296,6 +314,7 @@ struct ForecastKey {
     index: u64,
     frozen: Option<Leg>,
     staff_hold: Option<Box<crate::labour::Hold>>,
+    weather: Option<crate::weather::Weather>,
 }
 type Forecasts = std::collections::HashMap<(u64, u64), (ForecastKey, u64)>;
 thread_local! {
@@ -332,6 +351,7 @@ pub fn landing_at(route: &Route, model: &str, index: u64) -> Result<u64, String>
             index,
             frozen: cursor.frozen.clone(),
             staff_hold: cursor.staff_hold.clone(),
+            weather: cursor.weather,
         };
         // Hash only the plan seed and requested index on this hot path. The
         // complete immutable key still guards hits across reschedules and saves.
@@ -413,6 +433,18 @@ pub fn apply(t: &mut Totals, leg: &Leg) -> Result<(), String> {
 }
 
 impl Game {
+    /// Old plans have no weather context; they get the world's, starting at `weather_from`.
+    pub(crate) fn adopt_weather(&mut self) {
+        let weather = crate::weather::Weather::of(&self.world_economy);
+        for r in &mut self.routes {
+            if let Some(c) = r.plan.as_mut().and_then(|p| p.disruption.as_mut()) {
+                c.weather.get_or_insert(weather);
+            }
+        }
+        for c in &mut self.competitors {
+            c.game.adopt_weather();
+        }
+    }
     pub(crate) fn initialize_disruptions(&mut self) -> Result<(), String> {
         for i in 0..self.routes.len() {
             let route = &self.routes[i];
@@ -448,6 +480,7 @@ impl Game {
             };
             let cursor = Cursor {
                 staff_hold: None,
+                weather: Some(crate::weather::Weather::of(&self.world_economy)),
                 seed: self.incident_seed(plane.id),
                 acquired_at: plane.acquired_at.unwrap_or(0),
                 wear: plane.wear.clone(),

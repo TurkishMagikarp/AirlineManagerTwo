@@ -31,7 +31,8 @@ use std::time::Duration;
 // v41: airline-wide ancillary fees; v40 income and airborne results remain unchanged.
 // v42: airline-wide loyalty; old members, costs and enrolment start at zero.
 // v43: regional world events; older saves announce their first event after loading.
-pub(crate) const VERSION: u32 = 43;
+// v44: airport weather; older saves apply their first weather after loading.
+pub(crate) const VERSION: u32 = 44;
 // Bounded input, including centuries of fuel/seasonal quotes for the player
 // and both AI airlines in the million-flight finance restart scenario.
 // Version 17 retains per-class quotes, which also split more archive batches.
@@ -377,6 +378,9 @@ pub(crate) fn load_versioned(path: &Path) -> Result<(Game, u32), String> {
     if data.version < 43 {
         world_economy.events_from = clock.elapsed().as_secs();
     }
+    if data.version < 44 {
+        world_economy.weather_from = clock.elapsed().as_secs();
+    }
     world_economy.validate(clock.elapsed().as_secs())?;
     let mut game = Game {
         ancillary_policy: data.state.ancillary_policy,
@@ -568,9 +572,15 @@ pub(crate) fn load_versioned(path: &Path) -> Result<(Game, u32), String> {
         if data.version < 43 {
             c.game.world_economy.events_from = game.world_economy.events_from;
         }
+        if data.version < 44 {
+            c.game.world_economy.weather_from = game.world_economy.weather_from;
+        }
         c.game
             .world_economy
             .validate(game.clock.elapsed().as_secs())?;
+    }
+    if data.version < 44 {
+        game.adopt_weather();
     }
     game.validate_codeshares()?;
     game.validate_competitors()?;

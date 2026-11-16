@@ -13,6 +13,8 @@ var show_flights := true
 var selected_route := 0
 var selection_position := Vector2.ZERO
 var airports: Array = []
+## ICAO -> announced or active events (boom, slump, weather) touching that airport.
+var airport_events: Dictionary = {}
 var routes: Array = []
 var flights: Array = []
 var selected_id: int = 0
@@ -102,6 +104,9 @@ func _draw() -> void:
 			else:
 				draw_circle(p, 5, ThemeTokens.MAP_LAND)
 				draw_circle(p, 5, ThemeTokens.INK, false, 2, true)
+			if airport_events.has(airport["icao"]):
+				var marker := event_marker(airport["icao"])
+				draw_arc(p, 10.0 if base else 9.0, 0, TAU, 32, marker[0] if marker[1] else Color(marker[0], 0.6), 2.0 if marker[1] else 1.5, true)
 			if (zoom >= 2 or base) and Rect2(Vector2.ZERO, size).has_point(p):
 				var label_position := p + (Vector2(-54, 25) if base else Vector2(12, -6))
 				label_position.x = clampf(label_position.x, 8, maxf(8, size.x - 50))
@@ -129,6 +134,41 @@ func _draw() -> void:
 			var icon := PackedVector2Array()
 			for vertex in [Vector2(11, 0), Vector2(-7, -8), Vector2(-3, 0), Vector2(-7, 8)]: icon.append(p + vertex.rotated(angle))
 			draw_colored_polygon(icon, ThemeTokens.INK)
+
+## [colour, active] of the strongest event at an airport: slump, then weather, then boom.
+func event_marker(icao: String) -> Array:
+	var best := 0
+	var active := false
+	for event in airport_events.get(icao, []):
+		var rank: int = {"slump": 3, "weather": 2, "boom": 1}.get(event["kind"], 1)
+		if rank > best: best = rank
+		active = active or event["status"] == "active"
+	return [[ThemeTokens.GO, ThemeTokens.SKY, ThemeTokens.CAUTION][best - 1], active]
+
+func event_kind_name(event: Dictionary) -> String:
+	if event["kind"] == "weather": return tr("EVENTS_WEATHER_" + str(event["weather_kind"]).to_upper())
+	return tr("EVENTS_" + str(event["kind"]).to_upper())
+
+func event_line(event: Dictionary) -> String:
+	var status: String = tr("MAP_EVENT_ACTIVE") if event["status"] == "active" else tr("MAP_EVENT_UPCOMING") % (event["starts_at"] / 86400 + 1)
+	var line: String = tr("MAP_EVENT_LINE") % [event_kind_name(event), status, event["ends_at"] / 86400]
+	if event["kind"] == "weather": line += " · " + tr("MAP_EVENT_DELAY") % ceili(event["delay_seconds"] / 60.0)
+	return line
+
+func _get_tooltip(at_position: Vector2) -> String:
+	var closest := 14.0
+	var found := -1
+	for i in range(airports.size() if show_airports else 0):
+		if not airport_events.has(airports[i]["icao"]): continue
+		for copy in range(-1, 2):
+			var distance := at_position.distance_to(project(airports[i]["position"] + Vector2(copy * 360, 0)))
+			if distance < closest:
+				closest = distance
+				found = i
+	if found < 0: return ""
+	var lines: Array[String] = ["%s · %s" % [airports[found]["icao"], airports[found]["name"]]]
+	for event in airport_events[airports[found]["icao"]]: lines.append(event_line(event))
+	return "\n".join(lines)
 
 func hit_test(point: Vector2) -> int:
 	var closest := 18.0

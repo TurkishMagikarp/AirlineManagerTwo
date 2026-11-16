@@ -103,6 +103,14 @@ func refresh() -> void:
 	canvas.airports = simulation.get_map_airports()
 	canvas.routes = simulation.get_map_routes()
 	canvas.base_icao = simulation.get_airline_info().get("airport_icao", "")
+	var by_airport := {}
+	for event in simulation.get_world_events():
+		for icao in event["airports"]:
+			if not by_airport.has(icao): by_airport[icao] = []
+			by_airport[icao].append(event)
+	if by_airport != canvas.airport_events:
+		canvas.airport_events = by_airport
+		canvas.queue_redraw()
 	last_selected_id = -2147483648
 	route_rows = simulation.get_routes()
 	route_table.clear()
@@ -143,6 +151,17 @@ func refresh_flights() -> void:
 		_card_header(airport["icao"], tr("MAP_BASE") if airport["icao"] == canvas.base_icao else "", "neutral")
 		_add_name(airport["name"], ThemeTokens.MAP_CARD_NAME)
 		_add_name(airport["slots"])
+		for event in canvas.airport_events.get(airport["icao"], []):
+			var line := HBoxContainer.new()
+			card_body.add_child(line)
+			var chip := UI.status_chip(canvas.event_kind_name(event), "caution" if event["kind"] == "slump" else "go" if event["kind"] == "boom" else "info")
+			chip.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+			line.add_child(chip)
+			var text := UI.label(canvas.event_line(event).split(" · ", true, 1)[1], ThemeTokens.SMALL, UI.MUTED)
+			text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			text.custom_minimum_size.x = 150
+			line.add_child(text)
 		for service in airport["airlines"]:
 			_add_name(tr("MAP_AIRPORT_SERVICE") % [service["airline"], service["departures_per_day"]])
 		_action(tr("MAP_CREATE_ROUTE"), 0, airport["icao"])
