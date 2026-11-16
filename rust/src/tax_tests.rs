@@ -155,6 +155,8 @@ fn tax_large_steps_pause_speeds_restart_and_old_migration() {
 }
 #[test]
 fn tax_ai_uses_shared_assessment_and_migrates_from_load_point() {
+    // Preserve the original pre-loyalty ledger/topology of this regression fixture.
+    let _legacy_loyalty = crate::loyalty::legacy_ai_scenario();
     let mut g = game();
     g.competitors = crate::competition::initial_competitors().unwrap();
     assert!(g.advance((YEAR / 2) as f64));

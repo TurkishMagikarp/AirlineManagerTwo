@@ -47,6 +47,11 @@ var insurance_result: Label
 var ferry_history: Tree
 var marketing_history: Tree
 var ancillary_buttons: Array[Button] = []
+var loyalty_buttons: Array[Button] = []
+var loyalty_metrics: Dictionary = {}
+var loyalty_status: Label
+var loyalty_result: Label
+var loyalty_history: Tree
 var ancillary_status: Label
 var ancillary_result: Label
 
@@ -63,6 +68,38 @@ func _ready() -> void:
 	note = UI.label("", ThemeTokens.SMALL, UI.MUTED)
 	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	add_child(note)
+	var loyalty := UI.panel(self, "LOYALTY_TITLE")
+	var loyalty_segments := UI.segment_tray(loyalty)
+	var loyalty_group := ButtonGroup.new()
+	for i in range(3):
+		var button := Button.new()
+		button.text = tr(["LOYALTY_NONE", "LOYALTY_BASIC", "LOYALTY_GENEROUS"][i])
+		button.theme_type_variation = "SegmentButton"
+		button.toggle_mode = true
+		button.button_group = loyalty_group
+		button.pressed.connect(func():
+			var error: String = simulation.set_loyalty_level(["none", "basic", "generous"][i])
+			loyalty_result.text = error if not error.is_empty() else tr("LOYALTY_CHANGED")
+			refresh(true))
+		loyalty_segments.add_child(button)
+		loyalty_buttons.append(button)
+	var loyalty_grid := GridContainer.new()
+	loyalty_grid.add_theme_constant_override("h_separation", ThemeTokens.SPACE_4)
+	loyalty_grid.add_theme_constant_override("v_separation", ThemeTokens.SPACE_4)
+	loyalty.add_child(loyalty_grid)
+	get_viewport().size_changed.connect(func(): loyalty_grid.columns = 4 if get_viewport_rect().size.x >= 1280 else 2)
+	loyalty_grid.columns = 4 if get_viewport_rect().size.x >= 1280 else 2
+	for item in [["members", "LOYALTY_MEMBERS"], ["trend", "LOYALTY_TREND"], ["bonus", "LOYALTY_BONUS"], ["cost", "LOYALTY_COST"]]:
+		loyalty_metrics[item[0]] = UI.metric(loyalty_grid, item[1])
+	loyalty_status = UI.label("")
+	loyalty_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	loyalty.add_child(loyalty_status)
+	loyalty_result = UI.label("")
+	loyalty_result.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	loyalty.add_child(loyalty_result)
+	loyalty_history = UI.table([tr("LOYALTY_PERIOD"), tr("LOYALTY_COST")], [180, 160], 140)
+	loyalty_history.set_column_title_alignment(1, HORIZONTAL_ALIGNMENT_RIGHT)
+	loyalty.add_child(loyalty_history)
 	var ancillary := UI.panel(self, tr("ANCILLARY_TITLE"))
 	var segments := UI.segment_tray(ancillary)
 	var group := ButtonGroup.new()
@@ -194,7 +231,7 @@ func _ready() -> void:
 	var company := UI.panel(self, "WIRTSCHAFTLICHE ENTWICKLUNG")
 	chart_select = OptionButton.new()
 	chart_select.fit_to_longest_item = false
-	for title in ["Kontostand · EUR", tr("ANCILLARY_OPERATING_REVENUE"), "Kosten inkl. Zinsen, Gebühren, Leasing und Steuern · EUR je Zeitabschnitt", "Ergebnis · EUR je Zeitabschnitt", "Ertragsteuer · EUR je Zeitabschnitt", tr("ANCILLARY_PERIOD")]:
+	for title in ["Kontostand · EUR", tr("ANCILLARY_OPERATING_REVENUE"), "Kosten inkl. Zinsen, Gebühren, Leasing und Steuern · EUR je Zeitabschnitt", "Ergebnis · EUR je Zeitabschnitt", "Ertragsteuer · EUR je Zeitabschnitt", tr("ANCILLARY_PERIOD"), tr("LOYALTY_COST_PERIOD")]:
 		chart_select.add_item(title)
 	chart_select.item_selected.connect(func(_i: int): _chart())
 	company.add_child(chart_select)
@@ -256,7 +293,7 @@ func refresh(force: bool = false) -> void:
 	var marketing: Dictionary = simulation.get_marketing()
 	var fuel: Dictionary = simulation.get_fuel_contract()
 	var insurance: Dictionary = simulation.get_insurance()
-	var key := "%s/%s/%s/%s/%s/%s/%s" % [summary, airline, financing, marketing, fuel, insurance, simulation.get_ancillary_policy()]
+	var key := "%s/%s/%s/%s/%s/%s/%s/%s/%s" % [summary, airline, financing, marketing, fuel, insurance, simulation.get_ancillary_policy(), simulation.get_loyalty(), TranslationServer.get_locale()]
 	if key == signature and not force:
 		return
 	signature = key
@@ -305,6 +342,7 @@ func refresh(force: bool = false) -> void:
 	metrics["revenue"].text = UI.money(summary["ticket_revenue_eur"])
 	metrics["ancillary"].text = UI.money(summary["ancillary_revenue_eur"])
 	_refresh_ancillaries()
+	_refresh_loyalty(summary)
 	metrics["cargo"].text = UI.money(summary["cargo_revenue_eur"])
 	metrics["profit"].add_theme_color_override("font_color", ThemeTokens.INK if summary["profit_eur"] >= 0 else UI.NEGATIVE)
 	var info: Dictionary = simulation.get_finance_history_info()
@@ -365,7 +403,7 @@ func refresh(force: bool = false) -> void:
 		_reset_flights()
 
 func _chart() -> void:
-	chart.set_series(company_series, ["balance", "revenue", "costs", "profit", "tax", "ancillary"][chart_select.selected])
+	chart.set_series(company_series, ["balance", "revenue", "costs", "profit", "tax", "ancillary", "loyalty_cost"][chart_select.selected])
 	chart.set_comparison("costs" if chart_select.selected == 1 else "revenue" if chart_select.selected == 2 else "")
 	chart_comparison.visible = chart_select.selected in [1, 2]
 	chart_comparison.text = chart_select.get_item_text(2 if chart_select.selected == 1 else 1)
@@ -401,6 +439,7 @@ func _select_route() -> void:
 	flight_count = r["flights"]
 	detail.text = "Route #%d · %s–%s · %d Landungen · %s\nFlugkosten ohne zentrale Gehälter und Wartungschecks; diese sind im Unternehmensergebnis enthalten. Historische Crewkosten bleiben erhalten. Kostenaufschlüsselung und Ticketpreis im Flug-Tooltip." % [route_id, r["origin"], r["destination"], flight_count, "Keine Flüge" if flight_count == 0 else "Gewinn" if r["profit_eur"] >= 0 else "Verlust"]
 	detail.text += "\n" + tr("ANCILLARY_ROUTE_REVENUE") % UI.money(r["ancillary_revenue_eur"])
+	detail.text += "\n" + tr("LOYALTY_ROUTE_COST") % UI.money(r["loyalty_cost_eur"])
 	detail.text += "\nBordservice (Kosten / Ersparnis gegenüber Standard): %s." % UI.money(r["service_eur"])
 	load_chart.set_series(simulation.get_finance_series(route_id), "load", true)
 	_flights()
@@ -421,7 +460,37 @@ func _flights() -> void:
 			UI.cell_text(row, i, values[i])
 			row.set_tooltip_text(i, "Ticket: %s\nTreibstoff: %s\nFlughäfen: %s\nPersonal: %s\nWartung / Verwaltung: %s\nBordservice (± Standard): %s" % [("—" if f["seats"] == 0 else UI.money(f["ticket_eur"])), UI.money(f["fuel_eur"]), UI.money(f["airport_eur"]), UI.money(f["crew_eur"]), UI.money(f["overhead_eur"]), UI.money(f["service_eur"])])
 			row.set_tooltip_text(i, row.get_tooltip_text(i) + "\nBetreuung / Entschädigung: %s" % UI.money(f["care_eur"]))
+		row.set_tooltip_text(6, row.get_tooltip_text(6) + "\n" + tr("LOYALTY_ROUTE_COST") % UI.money(f["loyalty_cost_eur"]))
 		UI.cell_result(row, 7, f["profit_eur"])
 	page_label.text = "%d–%d von %d · neueste zuerst" % [offset + 1 if not rows.is_empty() else 0, offset + rows.size(), flight_count]
 	previous_button.disabled = offset == 0
 	next_button.disabled = offset + 50 >= flight_count
+
+func _refresh_loyalty(summary: Dictionary) -> void:
+	var data: Dictionary = simulation.get_loyalty()
+	loyalty_metrics["members"].text = UI.money(data["members"]).trim_suffix(" EUR")
+	loyalty_metrics["trend"].text = ("+" if data["trend"] >= 0 else "") + UI.money(data["trend"]).trim_suffix(" EUR")
+	loyalty_metrics["bonus"].text = "+%s %%" % UI.decimal(data["bonus_percent"], 2)
+	loyalty_metrics["cost"].text = UI.money(summary["loyalty_cost_eur"])
+	var lines: PackedStringArray = []
+	for i in range(data["options"].size()):
+		var option: Dictionary = data["options"][i]
+		var title := tr(["LOYALTY_NONE", "LOYALTY_BASIC", "LOYALTY_GENEROUS"][i])
+		loyalty_buttons[i].text = title
+		loyalty_buttons[i].set_pressed_no_signal(option["level"] == data["level"])
+		loyalty_buttons[i].disabled = not data["can_change"]
+		var line := tr("LOYALTY_RATE") % [title, UI.money(option["economy_eur"]), UI.money(option["business_eur"]), option["enrolment_percent"]]
+		loyalty_buttons[i].tooltip_text = line
+		lines.append(line)
+	lines.append(tr("LOYALTY_EFFECT") % [UI.decimal(data["max_bonus_percent"]), UI.money(data["saturation_members"]).trim_suffix(" EUR"), UI.decimal(data["lapse_percent"], 2)])
+	lines.append(tr("LOYALTY_NOTE"))
+	loyalty_status.text = "\n".join(lines)
+	loyalty_history.set_column_title(0, tr("LOYALTY_PERIOD"))
+	loyalty_history.set_column_title(1, tr("LOYALTY_COST"))
+	chart_select.set_item_text(6, tr("LOYALTY_COST_PERIOD"))
+	loyalty_history.clear()
+	var root := loyalty_history.create_item()
+	for period in simulation.get_finance_series(0):
+		var row := loyalty_history.create_item(root)
+		UI.cell_text(row, 0, period["time"])
+		UI.cell_text(row, 1, UI.money(period["loyalty_cost"]))

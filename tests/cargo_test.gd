@@ -52,7 +52,7 @@ func _run() -> void:
 				return
 			if legacy:
 				var original := FileAccess.get_file_as_string(path)
-				var fixture := _strip(original).replace('"version":41', '"version":21')
+				var fixture := _strip(original).replace('"version":42', '"version":21')
 				if not _check(JSON.parse_string(fixture)["version"] == 21 and not '"cargo_' in fixture, "True v21 fixture omits every cargo field"):
 					return
 				_write(path, fixture)
@@ -69,7 +69,7 @@ func _run() -> void:
 			_store(path + ".expected", _snapshot())
 		elif not _check(_snapshot() == _read(path + ".expected"), "Long continuation equals uninterrupted player/AI world, history, charts and quotes"):
 			return
-		if not _check(sim.save_game(probe_path).is_empty() and JSON.parse_string(FileAccess.get_file_as_string(probe_path))["version"] == 41, "Writes current v41"):
+		if not _check(sim.save_game(probe_path).is_empty() and JSON.parse_string(FileAccess.get_file_as_string(probe_path))["version"] == 42, "Writes current v42"):
 			return
 	if not await _layouts():
 		return
@@ -189,7 +189,7 @@ func _views() -> bool:
 	await _reveal(panel.chart_select)
 	await _click(panel.chart_select)
 	var popup: PopupMenu = panel.chart_select.get_popup()
-	await _mouse(Vector2(popup.position) + Vector2(popup.size.x / 2.0, popup.size.y * 1.5 / 5.0))
+	await _mouse(Vector2(popup.position) + Vector2(popup.size.x / 2.0, popup.size.y * 1.5 / float(popup.item_count)))
 	var revenue := 0
 	for sample in panel.chart.samples:
 		revenue += sample["revenue"]

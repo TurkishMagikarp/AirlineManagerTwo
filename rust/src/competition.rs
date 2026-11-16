@@ -297,6 +297,13 @@ impl Game {
     ) -> Result<crate::demand::Offer, String> {
         let mut offer = self.economy_offer(route, plane)?;
         offer.awareness = self.marketing.awareness;
+        offer.loyalty_members = if self.loyalty.members == 0 {
+            0
+        } else {
+            self.loyalty
+                .members
+                .min(crate::loyalty::RULES.saturation_members)
+        };
         offer.reputation = self.reputation.score;
         offer.owner = self.market_owner_key();
         Ok(offer)
@@ -657,6 +664,7 @@ impl Game {
                 || staged.apply_payroll().is_err()
                 || staged.apply_labour_events().is_err()
                 || staged.apply_marketing().is_err()
+                || staged.apply_loyalty().is_err()
                 || staged.apply_financing().is_err()
                 || staged.apply_orders().is_err()
                 || staged.competitors.iter_mut().any(|c| {
@@ -669,6 +677,7 @@ impl Game {
                         || c.game.apply_payroll().is_err()
                         || c.game.apply_labour_events().is_err()
                         || c.game.apply_marketing().is_err()
+                        || c.game.apply_loyalty().is_err()
                         || c.game.apply_financing().is_err()
                         || c.game.apply_orders().is_err()
                 })
@@ -757,6 +766,7 @@ impl Competitor {
         {
             return false;
         }
+        self.game.review_loyalty();
         self.game.review_fuel_contract();
         if self.game.review_marketing().is_err() {
             return false;
@@ -1278,6 +1288,7 @@ impl Competitor {
             let r = Route {
                 cargo_rate_cents: crate::cargo::default_rate(),
                 ancillary_policy: g.ancillary_policy,
+                loyalty_level: g.loyalty.level,
                 service_level: Default::default(),
                 business_ticket_eur: crate::cabins::default_business_fare(),
                 id: g.next_route_id,

@@ -57,7 +57,7 @@ func _run() -> void:
 			return
 		if legacy:
 			# No JSON reserialization: preserve Rust u64/nanosecond values exactly.
-			var contents := FileAccess.get_file_as_string(path).replace('"version":41', '"version":18')
+			var contents := _v18_loyalty_fixture(FileAccess.get_file_as_string(path)).replace('"version":42', '"version":18')
 			contents = RegEx.create_from_string('"tax":\\{[^}]*\\},|,"tax":\\{[^}]*\\}').sub(contents, "", true)
 			contents = contents.replace('"taxes":[],', '').replace(',"taxes":[]', '')
 			if not _check(JSON.parse_string(contents)["version"] == 18 and not '"tax"' in contents and not '"taxes"' in contents, "True v18 fixture without tax state, including AI"):
@@ -92,7 +92,7 @@ func _run() -> void:
 		var expected: Dictionary = FileAccess.open(path + ".expected", FileAccess.READ).get_var()
 		if not _check(_snapshot() == expected, "Fresh-process continuation equals uninterrupted reference, including AI"):
 			return
-		if not _check(sim.save_game(path).is_empty() and JSON.parse_string(FileAccess.get_file_as_string(path))["version"] == 41, "Resave as v41"):
+		if not _check(sim.save_game(path).is_empty() and JSON.parse_string(FileAccess.get_file_as_string(path))["version"] == 42, "Resave as v42"):
 			return
 	elif not await _layouts("profit"):
 		return
@@ -203,3 +203,26 @@ func _check(condition: bool, message: String) -> bool:
 		push_error("FAIL: " + message)
 		quit(1)
 	return condition
+
+## This fixture stops before the first tax close. Undo the newer reward line in
+## the fixture only; edit integer substrings so u64 seeds/nanoseconds stay exact.
+func _v18_loyalty_fixture(contents: String) -> String:
+	var state: Dictionary = JSON.parse_string(contents)["state"]
+	var owners: Array = []
+	for competitor in state["competitors"]:
+		owners.append(competitor["game"])
+	owners.append(state) # Saved GameState writes competitors before player capital.
+	var capitals := RegEx.create_from_string('"capital_eur":(-?[0-9]+)').search_all(contents)
+	assert(capitals.size() == owners.size())
+	for i in range(capitals.size() - 1, -1, -1):
+		assert(owners[i]["history"]["taxes"].is_empty())
+		var cost := int(owners[i]["finance"]["totals"].get("loyalty_cost", 0))
+		assert(cost < 9007199254740992)
+		var match_value: RegExMatch = capitals[i]
+		var capital := match_value.get_string(1).to_int() + cost
+		contents = contents.left(match_value.get_start(1)) + str(capital) + contents.substr(match_value.get_end(1))
+	contents = RegEx.create_from_string('"loyalty":\\{[^{}]*\\},|,"loyalty":\\{[^{}]*\\}').sub(contents, "", true)
+	for key in ["loyalty_level", "loyalty_cost", "loyalty_enrolment"]:
+		var pattern := '"%s":(?:"[a-z]+"|[0-9]+),|,"%s":(?:"[a-z]+"|[0-9]+)' % [key, key]
+		contents = RegEx.create_from_string(pattern).sub(contents, "", true)
+	return contents

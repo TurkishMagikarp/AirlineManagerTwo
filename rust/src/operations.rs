@@ -321,6 +321,7 @@ impl Game {
             business_ticket_eur: 0,
             cargo_rate_cents: 0,
             ancillary_policy: Default::default(),
+            loyalty_level: Default::default(),
             service_level: crate::service::Level::default(),
             plan: None,
         };
@@ -859,6 +860,14 @@ impl Game {
             totals.punctuality_flights - self.finance.totals.punctuality_flights,
             totals.late_flights - self.finance.totals.late_flights,
         );
+        self.loyalty.pending = match self
+            .loyalty
+            .pending
+            .checked_add(totals.loyalty_enrolment - self.finance.totals.loyalty_enrolment)
+        {
+            Some(v) => v,
+            None => return false,
+        };
         self.finance.totals = totals;
         if let Some(h) = &mut self.history {
             for batch in archive {

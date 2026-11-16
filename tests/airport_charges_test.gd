@@ -86,9 +86,9 @@ func _run() -> void:
 						return
 					var changed := RegEx.create_from_string('"airport":\\d+').sub(part, '"airport":%d' % tariff)
 					original = original.left(matches[i].get_start()) + changed + original.substr(matches[i].get_end())
-				original = original.replace('"version":41', '"version":23')
+				original = original.replace('"version":42', '"version":23')
 			_write(path, original)
-			if not _check(sim.load_game(path).is_empty() and preload("res://tests/insurance_fixture.gd").without_economy(_snapshot()[0]) == preload("res://tests/insurance_fixture.gd").without_economy(original.replace('"version":23', '"version":41')), "v23/current identity load preserves every world byte and frozen tariff"):
+			if not _check(sim.load_game(path).is_empty() and preload("res://tests/insurance_fixture.gd").without_economy(_snapshot()[0]) == preload("res://tests/insurance_fixture.gd").without_economy(original.replace('"version":23', '"version":42')), "v23/current identity load preserves every world byte and frozen tariff"):
 				return
 			_store(path + ".initial", _snapshot())
 	if mode != "ui":

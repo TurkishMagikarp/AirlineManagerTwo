@@ -157,6 +157,8 @@ fn world_economy_steps_speeds_pause_jumps_restart_and_notifications() {
 }
 #[test]
 fn world_economy_v33_migration_is_neutral_for_first_day_and_shared() {
+    // Preserve the original pre-loyalty ledger/topology of this regression fixture.
+    let _legacy_loyalty = crate::loyalty::legacy_ai_scenario();
     let mut g = game();
     assert!(g.advance(123.0 * DAY as f64 + 4567.0));
     let dir = tempfile::tempdir().unwrap();
@@ -270,6 +272,8 @@ impl Game {
 
 #[test]
 fn world_economy_intraday_transfer_reservations_never_overbook() {
+    // Preserve the original pre-loyalty ledger/topology of this regression fixture.
+    let _legacy_loyalty = crate::loyalty::legacy_ai_scenario();
     let mut g = game();
     g.set_ticket_price(1, 71).unwrap();
     g.buy_aircraft("atr72_600").unwrap();

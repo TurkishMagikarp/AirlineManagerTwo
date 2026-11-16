@@ -11,6 +11,8 @@ pub struct Route {
     /// Updated together by Game; validation rejects inconsistent saved mirrors.
     #[serde(default)]
     pub ancillary_policy: crate::ancillaries::Policy,
+    #[serde(default)]
+    pub loyalty_level: crate::loyalty::Level,
     pub service_level: crate::service::Level,
     #[serde(default = "crate::cabins::default_business_fare")]
     pub business_ticket_eur: i64,
@@ -113,6 +115,7 @@ impl Game {
         self.routes.push(Route {
             cargo_rate_cents: crate::cargo::default_rate(),
             ancillary_policy: self.ancillary_policy,
+            loyalty_level: self.loyalty.level,
             service_level: Default::default(),
             business_ticket_eur: crate::cabins::default_business_fare(),
             id: self.next_route_id,
@@ -393,6 +396,9 @@ impl Game {
         }
         let mut ids = HashSet::new();
         for route in &self.routes {
+            if route.loyalty_level != self.loyalty.level {
+                return Err("Widersprüchliche Treuestufe.".into());
+            }
             if route.ancillary_policy != self.ancillary_policy {
                 return Err("Widersprüchliche Zusatzgebühren.".into());
             }

@@ -1,0 +1,9 @@
+{
+  "none": {"economy_eur": 0, "business_eur": 0, "enrolment_bps": 0},
+  "basic": {"economy_eur": 1, "business_eur": 3, "enrolment_bps": 1200},
+  "generous": {"economy_eur": 3, "business_eur": 8, "enrolment_bps": 3000},
+  "daily_lapse_bps": 10,
+  "saturation_members": 100000,
+  "max_bonus_bps": 600,
+  "ai_reserve_eur": 10000000
+}
