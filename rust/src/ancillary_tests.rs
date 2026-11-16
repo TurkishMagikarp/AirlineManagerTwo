@@ -90,6 +90,10 @@ fn ancillary_formula_rounding_market_share_and_fare_advisor() {
 fn ancillary_policy_midflight_settlement_steps_speeds_and_restart() {
     let mut initial = game();
     initial.set_ancillary_policy(Policy::Standard).unwrap();
+    initial.competitors = crate::competition::initial_competitors().unwrap();
+    for rival in &mut initial.competitors {
+        rival.game.set_ancillary_policy(Policy::Standard).unwrap();
+    }
     assert!(initial.advance(60.0));
     let frozen = initial.routes[0]
         .plan
@@ -110,6 +114,26 @@ fn ancillary_policy_midflight_settlement_steps_speeds_and_restart() {
     assert_eq!(expected.finance.totals.ancillary, frozen.totals.ancillary);
     let duration = 14 * 86400;
     assert!(expected.advance((duration - frozen.landing) as f64));
+    let later: Vec<_> = expected
+        .finance
+        .recent
+        .iter()
+        .filter(|f| f.landing > frozen.landing)
+        .collect();
+    assert!(!later.is_empty());
+    for flight in later {
+        let t = &flight.totals;
+        assert_eq!(
+            t.ancillary,
+            20 * (t.passengers - t.business_passengers) + 10 * t.business_passengers
+        );
+    }
+    assert!(
+        expected
+            .competitors
+            .iter()
+            .all(|c| c.game.finance.totals.ancillary > 0)
+    );
     for speed in [1, 4, 16] {
         let mut g = initial.clone();
         g.clock.set_speed(speed);

@@ -66,14 +66,14 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 20 fn restart(g: &Game) -> Game
 28 fn ancillary_formula_rounding_market_share_and_fare_advisor()
 90 fn ancillary_policy_midflight_settlement_steps_speeds_and_restart()
-152 fn ancillary_v40_migration_is_neutral_for_all_owners_and_frozen_results()
-160 fn strip(v: &mut serde_json::Value)
-199 fn ancillary_ai_rule_and_freighters()
-232 fn ancillary_codeshare_connections_charge_the_operating_airline()
-273 fn ancillary_normal_eddf_rivals_two_and_ten_year_comparison()
-274 struct Reset;
-275 impl Drop for Reset
-276 fn drop(&mut self)
+176 fn ancillary_v40_migration_is_neutral_for_all_owners_and_frozen_results()
+184 fn strip(v: &mut serde_json::Value)
+223 fn ancillary_ai_rule_and_freighters()
+256 fn ancillary_codeshare_connections_charge_the_operating_airline()
+297 fn ancillary_normal_eddf_rivals_two_and_ten_year_comparison()
+298 struct Reset;
+299 impl Drop for Reset
+300 fn drop(&mut self)
 
 ## rust/src/attention.rs
 7 struct Rules
