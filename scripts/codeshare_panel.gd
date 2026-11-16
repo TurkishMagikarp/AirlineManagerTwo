@@ -87,6 +87,8 @@ func _selection() -> void:
 	parent.add_child(chip)
 	parent.move_child(chip, index)
 	reason.text = tr(row.get("reason", ""))
+	# EmptyState already owns the panel's primary action.
+	propose.theme_type_variation = "" if empty.visible else "PrimaryButton"
 	propose.disabled = row.is_empty() or active
 	end.disabled = not active
 

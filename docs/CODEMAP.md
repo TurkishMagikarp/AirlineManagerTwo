@@ -1599,8 +1599,8 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 18 func _ready() -> void:
 53 func refresh() -> void:
 79 func _selection() -> void:
-93 func _command(ending: bool) -> void:
-100 func _confirm_end() -> void:
+95 func _command(ending: bool) -> void:
+102 func _confirm_end() -> void:
 
 ## scripts/finance_chart.gd
 1 extends Control
