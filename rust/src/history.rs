@@ -581,6 +581,9 @@ mod tests {
     }
     #[test]
     fn million_flight_finance_scenario_stays_within_budget() {
+        if std::env::var_os("AIRLINE_PERF_EVENTS").is_some() {
+            crate::world_events::DISABLED.with(|v| v.set(false));
+        }
         // Optional paired baseline: every owner remains on the neutral None path.
         let _loyalty_none = std::env::var_os("AIRLINE_PERF_LOYALTY_NONE")
             .is_some()
