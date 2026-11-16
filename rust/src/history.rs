@@ -549,6 +549,9 @@ mod tests {
     #[test]
     #[ignore = "short diagnostic finance profile; run explicitly with --ignored"]
     fn profile_twenty_thousand_flights() {
+        if std::env::var_os("AIRLINE_PERF_EVENTS").is_some() {
+            crate::world_events::DISABLED.with(|v| v.set(false));
+        }
         // Match finances_test.gd: two player fares, normal AI airlines, and an
         // endowment to keep the intentionally loss-making service flying.
         let mut g = game();

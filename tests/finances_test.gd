@@ -51,7 +51,8 @@ func _run() -> void:
 			return
 		sim.advance(60.0 + 7200.0 * 1_000_000)
 		sim.pause()
-		if not _check(sim.save_game(path).is_empty(), "Save million-flight archive"):
+		var save_error: String = sim.save_game(path)
+		if not _check(save_error.is_empty(), "Save million-flight archive: " + save_error):
 			return
 	var routes: Array = sim.get_route_finances()
 	# ~228 years of shuttles, including mandatory checks and technical delays.
