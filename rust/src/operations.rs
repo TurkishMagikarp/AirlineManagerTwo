@@ -429,6 +429,8 @@ impl Game {
 
 pub struct Movement {
     pub delay_seconds: u64,
+    /// Part of the shown leg's departure delay caused by weather at its origin.
+    pub weather_seconds: u64,
     pub status: AircraftStatus,
     pub location: String,
     pub origin: String,
@@ -530,6 +532,7 @@ pub fn movement(route: &Route, model: &str, now: u64) -> Result<Movement, String
     let landed = started && now >= landing;
     Ok(Movement {
         delay_seconds: 0,
+        weather_seconds: 0,
         status: if !started || now >= ready {
             AircraftStatus::Parked
         } else if landed {

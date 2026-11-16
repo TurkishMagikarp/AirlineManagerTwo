@@ -182,3 +182,7 @@ Continental Sky +9,34 % kumulierten Umsatz nach zehn Jahren. Beide KI-Airlines
 bleiben ohne Notlage; wöchentliche Wachstumsentscheidungen können auseinanderlaufen.
 Diese langfristige Umsatzdifferenz ist deshalb nicht mit der harten ±3-%-Grenze
 für ein einzelnes Angebotsgewicht gleichzusetzen.
+
+Wetter (siehe `docs/world-events.md`, „Flughafenwetter“) addiert zur technischen
+Verzögerung eine Abflugverzögerung des Abflughafens am Tag der planmäßigen
+Abflugzeit; Rückstand, Betreuung und Ruf laufen über denselben Pfad.

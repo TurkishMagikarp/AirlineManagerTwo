@@ -1,5 +1,5 @@
 keys,de,en
-EVENTS_TITLE,EREIGNISSE  /  REGIONALE NACHFRAGE,EVENTS  /  REGIONAL DEMAND
+EVENTS_TITLE,EREIGNISSE  /  NACHFRAGE UND WETTER,EVENTS  /  DEMAND AND WEATHER
 EVENTS_PLACE,Ort,Place
 EVENTS_KIND,Art,Kind
 EVENTS_DATES,Zeitraum,Dates
@@ -16,3 +16,13 @@ EVENTS_TOOLTIP,"%s: Nachfrage von und nach %s · Urlaub %s · Geschäft %s · Fr
 EVENTS_MINE,Betrifft dein Netz,Affects your network
 DEMAND_EVENT_FACTORS,Ereignis · Geschäft %s × · Urlaub %s × · Fracht %s ×,Event · Business %s × · Leisure %s × · Cargo %s ×
 DEMAND_EVENT_NAMES,Ereignis: %s,Event: %s
+EVENTS_WEATHER_SNOW,Schnee,Snow
+EVENTS_WEATHER_STORM,Sturm,Storm
+EVENTS_WEATHER_FOG,Nebel,Fog
+EVENTS_EFFECT_WEATHER,Abflug bis +%d min,Departures up to +%d min
+EVENTS_TOOLTIP_WEATHER,"Wetter: %s in %s · Abflüge dort verspäten sich um bis zu %d min, für alle Airlines gleich; spätere Umläufe, Pünktlichkeit und Ruf reagieren wie bei technischen Verspätungen. Keine Ausfälle.","Weather: %s at %s · departures there are delayed by up to %d min, identical for every airline; later rotations, punctuality and reputation react as for technical delays. No cancellations."
+DELAY_WEATHER, (Wetter), (weather)
+MAP_EVENT_LINE,%s · %s bis Tag %d,%s · %s until day %d
+MAP_EVENT_ACTIVE,aktiv,active
+MAP_EVENT_UPCOMING,ab Tag %d,from day %d
+MAP_EVENT_DELAY,Abflug bis +%d min,departures up to +%d min

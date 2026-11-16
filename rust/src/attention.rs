@@ -20,6 +20,7 @@ static RULES: LazyLock<Rules> = LazyLock::new(|| {
         "idle",
         "training",
         "event",
+        "weather",
     ] {
         assert!(r.priorities.contains_key(key), "Priorität fehlt: {key}");
     }
@@ -166,6 +167,20 @@ impl Game {
                 });
             }
         }
+        for e in crate::weather::visible_at(&crate::weather::Weather::of(&self.world_economy), now) {
+            if mine.contains(&e.icao) {
+                announced.push(Entry {
+                    order_id: e.id,
+                    kind: "weather",
+                    priority: RULES.priorities["weather"],
+                    text: e.attention_text(),
+                    page: "overview",
+                    route_id: 0,
+                    aircraft_id: 0,
+                    employee_id: 0,
+                });
+            }
+        }
         for p in &self.fleet {
             if let Ok(n) = staff::needs(&p.model_id)
                 && self.planned_route(p.id).is_some()
@@ -196,9 +211,10 @@ impl Game {
                 add(
                     "delay",
                     format!(
-                        "{} · {} Minuten Verspätung",
+                        "{} · {} Minuten Verspätung{}",
                         p.identifier(),
-                        state.delay_seconds.div_ceil(60)
+                        state.delay_seconds.div_ceil(60),
+                        if state.weather_seconds > 0 { " (Wetter)" } else { "" }
                     ),
                     "fleet",
                     self.routes[i].public_id(),

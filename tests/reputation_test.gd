@@ -39,7 +39,7 @@ func _run() -> void:
 			if not _check(sim.load_game(probe_path).is_empty(), "Load neutral v29 comparison world"):
 				return
 			var expected := _snapshot()
-			var old := RegEx.create_from_string(',"reputation":\\{[^{}]*\\}').sub(world, "", true).replace('"version":43', '"version":27')
+			var old := RegEx.create_from_string(',"reputation":\\{[^{}]*\\}').sub(world, "", true).replace('"version":44', '"version":27')
 			if not _check(not '"reputation"' in old and '"version":27' in old, "Legacy fixture omits reputation for player and both AI"):
 				return
 			_write(reputation_path, old)
@@ -78,7 +78,7 @@ func _run() -> void:
 		_advance(2 * 86400)
 		main._process(0)
 		var summary: Dictionary = sim.get_financial_summary()
-		if not _check(summary["punctuality_flights"] > flights and summary["punctuality_percent"] > 90 and _state()["reputation"]["score"] > bad and summary["reputation_trend"] == "steigend", "Actual on-time landings recover reputation without replacing fixture state") or not await _reputation_views("recovering", false):
+		if not _check(summary["punctuality_flights"] > flights and summary["punctuality_percent"] > 75 and _state()["reputation"]["score"] > bad and summary["reputation_trend"] == "steigend", "Actual on-time landings recover reputation without replacing fixture state") or not await _reputation_views("recovering", false):
 			return
 	else:
 		_advance(7 * 86400)

@@ -352,6 +352,7 @@ impl Game {
                 || g.world_economy.seed != self.world_economy.seed
                 || g.world_economy.started_at != self.world_economy.started_at
                 || g.world_economy.events_from != self.world_economy.events_from
+                || g.world_economy.weather_from != self.world_economy.weather_from
                 || !g.used_market.listings.is_empty()
                 || !g.competitors.is_empty()
                 || !g.codeshares.is_empty()

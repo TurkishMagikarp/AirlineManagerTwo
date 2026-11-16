@@ -561,12 +561,18 @@ func _refresh_events() -> void:
 	var root := events_table.create_item()
 	for event in events:
 		var row := events_table.create_item(root)
-		var kind_name := tr("EVENTS_" + str(event["kind"]).to_upper())
+		var weather: bool = event["kind"] == "weather"
+		var kind_name: String = tr("EVENTS_WEATHER_" + str(event["weather_kind"]).to_upper()) if weather else tr("EVENTS_" + str(event["kind"]).to_upper())
 		UI.cell_text(row, 0, event["place"])
 		UI.cell_text(row, 1, kind_name)
 		UI.cell_text(row, 2, tr("EVENTS_DAYS") % [event["starts_at"] / 86400 + 1, event["ends_at"] / 86400])
-		UI.cell_text(row, 3, tr("EVENTS_EFFECT_VALUE") % [_percent_change(event["leisure"]), _percent_change(event["business"])])
-		var tooltip: String = tr("EVENTS_TOOLTIP") % [kind_name, event["place"], _percent_change(event["leisure"]), _percent_change(event["business"]), _percent_change(event["cargo"])]
+		var tooltip: String
+		if weather:
+			UI.cell_text(row, 3, tr("EVENTS_EFFECT_WEATHER") % ceili(event["delay_seconds"] / 60.0))
+			tooltip = tr("EVENTS_TOOLTIP_WEATHER") % [kind_name, event["place"], ceili(event["delay_seconds"] / 60.0)]
+		else:
+			UI.cell_text(row, 3, tr("EVENTS_EFFECT_VALUE") % [_percent_change(event["leisure"]), _percent_change(event["business"])])
+			tooltip = tr("EVENTS_TOOLTIP") % [kind_name, event["place"], _percent_change(event["leisure"]), _percent_change(event["business"]), _percent_change(event["cargo"])]
 		if event["mine"]: tooltip += "\n" + tr("EVENTS_MINE")
 		for i in range(4): row.set_tooltip_text(i, tooltip)
 		var active: bool = event["status"] == "active"
@@ -909,7 +915,7 @@ func _refresh_fleet() -> void:
 		UI.cell_text(row, 2, plane["location_icao"])
 		var phase: String = plane["ferry_state"] if not plane["ferry_state"].is_empty() else {"parked": "Geparkt", "in_flight": "Unterwegs", "ground": "Gelandet · Bodenzeit", "maintenance": "In Wartung"}.get(plane["status"], "Unbekannt")
 		UI.cell_text(row, 3, "%s · Route #%d" % [phase, plane["route_id"]] if plane["route_id"] != 0 else phase)
-		UI.cell_text(row, 3, row.get_text(3) + " · %d min verspätet" % ceili(plane["delay_seconds"] / 60.0))
+		UI.cell_text(row, 3, row.get_text(3) + " · %d min verspätet" % ceili(plane["delay_seconds"] / 60.0) + (tr("DELAY_WEATHER") if plane["weather_seconds"] > 0 else ""))
 		UI.cell_status(row, 3, row.get_text(3), "info" if plane["status"] in ["in_flight", "maintenance"] else "neutral")
 		if plane["status"] == "in_flight":
 			UI.cell_text(row, 2, "Ab %s (in der Luft)" % plane["location_icao"])

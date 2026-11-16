@@ -103,6 +103,9 @@ mod widebody_tests;
 mod world_economy;
 #[cfg(test)]
 mod world_economy_tests;
+mod weather;
+#[cfg(test)]
+mod weather_tests;
 mod world_events;
 #[cfg(test)]
 mod world_events_tests;
@@ -605,7 +608,25 @@ impl SimulationClock {
             .chain(self.game.routes.iter().flat_map(|r| [r.origin_icao.as_str(), r.destination_icao.as_str()]))
             .collect();
         let airports = airports::catalog().map(|c| &c.airports[..]).unwrap_or(&[]);
-        world_events::visible_at(&self.game.world_economy, now)
+        let weather = weather::visible_at(&weather::Weather::of(&self.game.world_economy), now);
+        let mut forecast: Vec<(u64, u64, VarDictionary)> = weather
+            .iter()
+            .map(|e| {
+                (e.starts_at(), e.id, vdict! {
+                    "id" => e.id as i64, "kind" => "weather", "scope" => "airport", "place_code" => e.icao,
+                    "place" => e.place_name().as_str(),
+                    "weather_kind" => e.kind.key.as_str(), "weather_name" => e.kind.name.as_str(),
+                    "delay_seconds" => e.delay_seconds as i64,
+                    "status" => if e.is_active(now) { "active" } else { "upcoming" },
+                    "announced_at" => e.announced_at() as i64, "starts_at" => e.starts_at() as i64,
+                    "ends_at" => e.ends_at() as i64,
+                    "business" => 1.0, "leisure" => 1.0, "cargo" => 1.0,
+                    "mine" => mine.contains(&e.icao),
+                    "airports" => &PackedStringArray::from([GString::from(e.icao)])
+                })
+            })
+            .collect();
+        forecast.extend(world_events::visible_at(&self.game.world_economy, now)
             .iter()
             .map(|e| {
                 let f = e.factors();
@@ -618,7 +639,7 @@ impl SimulationClock {
                     world_events::Place::Airport(code) => ("airport", code),
                     world_events::Place::Country(code) => ("country", code),
                 };
-                vdict! {
+                let dict = vdict! {
                     "id" => e.id as i64, "kind" => e.kind.key(), "scope" => scope, "place_code" => code,
                     "place" => e.place_name().as_str(),
                     "status" => if e.is_active(now) { "active" } else { "upcoming" },
@@ -627,9 +648,11 @@ impl SimulationClock {
                     "business" => f.business, "leisure" => f.leisure, "cargo" => f.cargo,
                     "mine" => mine.iter().any(|icao| e.touches(icao)),
                     "airports" => &covered
-                }
-            })
-            .collect()
+                };
+                (e.starts_at(), e.id, dict)
+            }));
+        forecast.sort_by_key(|(start, id, _)| (*start, *id));
+        forecast.into_iter().map(|(_, _, d)| d).collect()
     }
 
     #[func]
@@ -884,11 +907,12 @@ impl SimulationClock {
                     })
                     .unwrap_or_default();
                 format!(
-                    "{} · {} Landungen{} · {} min Verspätung",
+                    "{} · {} Landungen{} · {} min Verspätung{}",
                     phase,
                     s.completed + prior,
                     hangar,
-                    s.delay_seconds.div_ceil(60)
+                    s.delay_seconds.div_ceil(60),
+                    if s.weather_seconds > 0 { " (Wetter)" } else { "" }
                 )
             } else if let Some(v) = plane
                 .maintenance
@@ -1668,10 +1692,12 @@ impl SimulationClock {
                     })
                     .map(|airport| airport.name.as_str())
                     .unwrap_or("");
+                let movement = self.game.planned_route(plane.id).and_then(|i| operations::movement(&self.game.routes[i], &plane.model_id, self.game.clock.elapsed().as_secs()).ok());
                 vdict! {
                     "ferry_state" => self.game.ferry(plane.id).map_or("", |f| if f.settled { "Bodenzeit" } else { "Überführung" }),
                     "ferry_error" => self.game.require_ferry_aircraft(plane.id).err().unwrap_or_default().as_str(),
-                    "delay_seconds" => self.game.planned_route(plane.id).and_then(|i| operations::movement(&self.game.routes[i], &plane.model_id, self.game.clock.elapsed().as_secs()).ok()).map_or(0, |s| s.delay_seconds) as i64,
+                    "delay_seconds" => movement.as_ref().map_or(0, |s| s.delay_seconds) as i64,
+                    "weather_seconds" => movement.as_ref().map_or(0, |s| s.weather_seconds) as i64,
                     "id" => plane.id, "identifier" => plane.identifier().as_str(),
                     "model_id" => plane.model_id.as_str(), "model_name" => name,
                     "freighter" => aircraft::model(&plane.model_id).is_ok_and(|m| m.main_deck_cargo_kg > 0),

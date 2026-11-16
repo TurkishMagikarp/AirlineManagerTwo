@@ -10,6 +10,7 @@
     "idle": 40,
     "training": 50,
     "event": 35,
+    "weather": 35,
     "reputation": 15,
     "delivery": 5,
     "strike_warning": 4,
