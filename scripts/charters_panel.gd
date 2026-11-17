@@ -18,8 +18,8 @@ var offers: Array = []
 var jobs: Array = []
 var options: Array = []
 var signature := ""
-var selected_offer := 0
-var selected_job := 0
+var selected_offer := -1
+var selected_job := -1
 
 func _ready() -> void:
 	add_theme_constant_override("separation", Tokens.SPACE_4)
@@ -29,7 +29,7 @@ func _ready() -> void:
 	body.add_child(hint)
 	offers_empty = UI.empty_state("Keine Charterangebote", "Die Welt macht neue Angebote, sobald sich Nachfrage und Kalender ändern.", "Aktualisieren", func(): refresh(true))
 	body.add_child(offers_empty)
-	offers_table = UI.table(["Auftrag", "Strecke", "Menge", "Vergütung", "Fenster", "Angebot bis"], [110, 150, 80, 110, 150, 130], 170)
+	offers_table = UI.table(["Auftrag", "Strecke", "Menge", "Vergütung", "Fenster", "Angebot bis"], [120, 130, 80, 110, 230, 130], 170)
 	offers_table.item_selected.connect(_offer_selected)
 	body.add_child(offers_table)
 	aircraft = OptionButton.new()
@@ -81,12 +81,13 @@ func refresh(force: bool = false) -> void:
 		UI.cell_text(row, 1, "%s → %s" % [entry["origin"], entry["destination"]])
 		UI.cell_text(row, 2, ("%d t" if entry["freight"] else "%d Pax") % entry["quantity"])
 		UI.cell_text(row, 3, UI.money(entry["fee_eur"]))
-		UI.cell_text(row, 4, "%s – %s" % [entry["window_start"], entry["window_end"]])
-		UI.cell_text(row, 5, entry["expires"])
+		UI.cell_text(row, 4, "%s – %s" % [_day(entry["window_start"]), _day(entry["window_end"])])
+		UI.cell_text(row, 5, _day(entry["expires"]))
 		row.set_metadata(0, entry["id"])
 		if entry["id"] == selected_offer: row.select(0)
 	if offers_table.get_selected() == null and root.get_first_child() != null:
 		root.get_first_child().select(0)
+		selected_offer = root.get_first_child().get_metadata(0)
 	offers_empty.visible = offers.is_empty()
 	offers_table.visible = not offers.is_empty()
 	jobs_table.clear()
@@ -111,12 +112,16 @@ func refresh(force: bool = false) -> void:
 	_offer_selected()
 	_job_selected()
 
+func _day(text: String) -> String:
+	return text.trim_suffix(" 00:00:00")
+
 func _offer_selected() -> void:
 	var item := offers_table.get_selected()
-	selected_offer = item.get_metadata(0) if item != null else 0
-	var previous: int = aircraft.get_selected_metadata() if aircraft.selected >= 0 else 0
+	if item != null: selected_offer = item.get_metadata(0)
+	elif offers.is_empty(): selected_offer = -1
+	var previous: int = aircraft.get_selected_metadata() if aircraft.selected >= 0 else -1
 	aircraft.clear()
-	options = simulation.get_charter_aircraft_options(selected_offer) if selected_offer != 0 else []
+	options = simulation.get_charter_aircraft_options(selected_offer) if selected_offer >= 0 else []
 	for option: Dictionary in options:
 		aircraft.add_item(option["label"] if option["ok"] else "%s – nicht geeignet" % option["label"])
 		aircraft.set_item_metadata(aircraft.item_count - 1, option["aircraft_id"])
@@ -127,8 +132,9 @@ func _offer_selected() -> void:
 func _aircraft_changed() -> void:
 	details.text = ""
 	accept.disabled = true
-	if selected_offer == 0 or aircraft.selected < 0 or aircraft.item_count == 0:
+	if selected_offer < 0 or aircraft.selected < 0 or aircraft.item_count == 0:
 		accept.tooltip_text = "Wähle ein Angebot und ein Flugzeug."
+		details.text = "Die Flotte hat kein Flugzeug für dieses Angebot." if selected_offer >= 0 else ""
 		return
 	var preview: Dictionary = simulation.preview_charter(selected_offer, aircraft.get_selected_metadata())
 	var error: String = preview["error"]
@@ -138,7 +144,7 @@ func _aircraft_changed() -> void:
 
 func _job_selected() -> void:
 	var item := jobs_table.get_selected()
-	selected_job = item.get_metadata(0) if item != null else 0
+	selected_job = item.get_metadata(0) if item != null else -1
 	var cancellable := false
 	for entry: Dictionary in jobs:
 		if entry["id"] == selected_job and entry["cancellable"]: cancellable = true

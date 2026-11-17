@@ -2111,11 +2111,12 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 5 const Tokens = preload("res://scripts/ui/operations_theme.gd")
 24 func _ready() -> void:
 67 func refresh(force: bool = false) -> void:
-114 func _offer_selected() -> void:
-127 func _aircraft_changed() -> void:
-139 func _job_selected() -> void:
-149 func _confirm_accept() -> void:
-174 func _confirm_cancel() -> void:
+115 func _day(text: String) -> String:
+118 func _offer_selected() -> void:
+132 func _aircraft_changed() -> void:
+145 func _job_selected() -> void:
+155 func _confirm_accept() -> void:
+180 func _confirm_cancel() -> void:
 
 ## scripts/codeshare_panel.gd
 1 extends VBoxContainer

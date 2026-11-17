@@ -35,7 +35,7 @@ func _run() -> void:
 	assert(sim.get_airline_info() == before)
 	var path := ProjectSettings.globalize_path("user://difficulty-test.json")
 	assert(sim.save_game(path).is_empty())
-	assert(JSON.parse_string(FileAccess.get_file_as_string(path))["version"] == 45)
+	assert(JSON.parse_string(FileAccess.get_file_as_string(path))["version"] == 46)
 	assert(sim.load_game(path).is_empty())
 	assert(sim.get_airline_info() == before)
 	main._sync_view()

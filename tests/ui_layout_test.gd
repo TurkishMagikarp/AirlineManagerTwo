@@ -76,6 +76,13 @@ func _run() -> void:
 		print("PASS: manufacturer order preview, open orders and confirmations at both sizes")
 		quit(0)
 		return
+	if OS.get_environment("AIRLINE_UI_CAPTURE_CHARTERS_ONLY") == "1":
+		await _charter_views(sim)
+		main.queue_free()
+		await process_frame
+		print("PASS: charter offers, aircraft choice, confirmation and accepted jobs at both sizes")
+		quit(0)
+		return
 	if OS.get_environment("AIRLINE_UI_CAPTURE_ALLIANCE_ONLY") == "1":
 		await _alliance_views(sim)
 		main.queue_free()
@@ -1332,3 +1339,50 @@ func _alliance_views(sim: RefCounted) -> void:
 			panel.dialog.safe_button.pressed.emit()
 			for frame in range(3): await process_frame
 	TranslationServer.set_locale("de")
+
+
+func _charter_views(sim: RefCounted) -> void:
+	assert(sim.lease_aircraft("a320_200").is_empty())
+	sim.hire_missing_staff()
+	main._sync_view()
+	main._show_page(1)
+	var panel = main.charters_panel
+	panel.refresh(true)
+	var row = panel.offers_table.get_root().get_first_child()
+	while row != null and panel.accept.disabled:
+		row.select(0)
+		panel._offer_selected()
+		row = row.get_next()
+	var scroll = panel.get_parent()
+	while scroll != null and not scroll is ScrollContainer: scroll = scroll.get_parent()
+	assert(scroll != null and not panel.offers.is_empty())
+	for dimensions in [Vector2i(1440, 1000), Vector2i(680, 520)]:
+		root.size = dimensions
+		for frame in range(5): await process_frame
+		for step in ["offers", "choice"]:
+			scroll.ensure_control_visible(panel.offers_table if step == "offers" else panel.accept)
+			for frame in range(5): await process_frame
+			if not capture_dir.is_empty():
+				await RenderingServer.frame_post_draw
+				assert(root.get_texture().get_image().save_png(capture_dir.path_join("charters-%s-%dx%d.png" % [step, dimensions.x, dimensions.y])) == OK)
+		if not panel.accept.disabled:
+			panel.accept.pressed.emit()
+			for frame in range(5): await process_frame
+			if not capture_dir.is_empty():
+				await RenderingServer.frame_post_draw
+				assert(root.get_texture().get_image().save_png(capture_dir.path_join("charters-dialog-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
+			panel.dialog.get_cancel_button().pressed.emit()
+			for frame in range(3): await process_frame
+	panel.accept.pressed.emit()
+	for frame in range(5): await process_frame
+	panel.dialog.get_ok_button().pressed.emit()
+	for frame in range(5): await process_frame
+	assert(not panel.jobs.is_empty())
+	for dimensions in [Vector2i(1440, 1000), Vector2i(680, 520)]:
+		root.size = dimensions
+		for frame in range(5): await process_frame
+		scroll.ensure_control_visible(panel.cancel)
+		for frame in range(5): await process_frame
+		if not capture_dir.is_empty():
+			await RenderingServer.frame_post_draw
+			assert(root.get_texture().get_image().save_png(capture_dir.path_join("charters-jobs-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
