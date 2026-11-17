@@ -405,3 +405,114 @@ fn charters_ai_spare_aircraft_audit() {
         }
     }
 }
+
+/// Hands competitor 0 a crewed, idle A320 and lets it review the open offers.
+fn with_crewed_spare(g: &Game) -> (Game, u32) {
+    let mut h = g.clone();
+    let ai = &mut h.competitors[0].game;
+    ai.lease_aircraft("a320_200").unwrap();
+    let id = ai.fleet.last().unwrap().id;
+    ai.equip_staff_for("a320_200").unwrap();
+    for e in &mut ai.staff.employees {
+        e.training = None;
+    }
+    let n = crate::staff::needs("a320_200").unwrap();
+    assert!(ai.rated_available(&n.rating) >= n.pilots, "spare must be crewed");
+    (h, id)
+}
+
+#[test]
+fn an_ai_with_a_crewed_idle_aircraft_earns_charter_income_over_two_years() {
+    AI_DISABLED.with(|d| d.set(true));
+    let mut g = Game::default();
+    g.found("Charter audit", "DE", "EDDF").unwrap();
+    g.clock.set_running(true);
+    let mut taken = 0;
+    let mut earned = None;
+    for _ in 0..104 {
+        assert!(g.advance(7.0 * DAY as f64));
+        if g.competitors[0].game.distressed() {
+            continue;
+        }
+        let (mut h, id) = with_crewed_spare(&g);
+        AI_DISABLED.with(|d| d.set(false));
+        h.ai_charters(0).unwrap();
+        AI_DISABLED.with(|d| d.set(true));
+        if h.competitors[0].game.charter_job(id).is_some() {
+            taken += 1;
+            if earned.is_none() {
+                // Fly it out (AI reviews stay off the charter path while the job runs).
+                for _ in 0..3 {
+                    assert!(h.advance(7.0 * DAY as f64));
+                }
+                let fees = h.competitors[0]
+                    .game
+                    .history
+                    .as_ref()
+                    .unwrap()
+                    .charter_through(u64::MAX, Kind::CharterFee);
+                earned = Some(fees);
+            }
+        }
+    }
+    eprintln!("weeks with a taken charter: {taken}/104, first charter fee income {earned:?}");
+    assert!(taken > 0, "a crewed idle aircraft never found a paying charter in two years");
+    assert!(earned.unwrap() > 0, "the taken charter paid no fee");
+}
+
+#[test]
+#[ignore = "explicit audit: why AI airlines rarely fly charters (funnel per weekly review)"]
+fn charters_ai_idle_funnel_audit() {
+    AI_DISABLED.with(|d| d.set(true));
+    let mut g = Game::default();
+    g.found("Charter audit", "DE", "EDDF").unwrap();
+    g.clock.set_running(true);
+    let (mut ticks, mut idle_ticks, mut quotes) = (0, 0, 0);
+    let mut why = std::collections::BTreeMap::<String, u32>::new();
+    for _ in 0..(10 * 52) {
+        assert!(g.advance(7.0 * DAY as f64));
+        let offers = g.open_charters();
+        for c in &g.competitors {
+            ticks += 1;
+            let ids = c.game.ai_charter_candidates();
+            if ids.is_empty() {
+                continue;
+            }
+            idle_ticks += 1;
+            // Quote as if crewed: the crew block alone is reported separately.
+            let mut crewed = c.game.clone();
+            for id in &ids {
+                let model = crewed.fleet.iter().find(|p| p.id == *id).unwrap().model_id.clone();
+                crewed.equip_staff_for(&model).unwrap();
+            }
+            for e in &mut crewed.staff.employees {
+                e.training = None;
+            }
+            for id in ids {
+                let blocked = c.game.quote_charter_offer(&offers[0], id).is_err_and(|e| e.starts_with("Berechtigte Piloten"));
+                *why.entry(format!("[aircraft without free crew: {blocked}]")).or_default() += 1;
+                for o in &offers {
+                    quotes += 1;
+                    let key = match crewed.quote_charter_offer(o, id) {
+                        Err(e) => e.split(':').next().unwrap().to_string(),
+                        Ok(q) => {
+                            let net = o.fee_eur - q.cost_eur();
+                            if net >= RULES.ai_min_net_eur && net * 100 >= q.cost_eur() * RULES.ai_min_margin_percent {
+                                "ACCEPTABLE".into()
+                            } else if net > 0 {
+                                "profit below the AI thresholds".into()
+                            } else {
+                                "fee below cost".into()
+                            }
+                        }
+                    };
+                    *why.entry(key).or_default() += 1;
+                }
+            }
+        }
+    }
+    eprintln!("ten years: {ticks} airline-weeks, {idle_ticks} with an idle aircraft, {quotes} aircraft/offer pairs");
+    for (k, n) in &why {
+        eprintln!("  {n:6} {k}");
+    }
+}
