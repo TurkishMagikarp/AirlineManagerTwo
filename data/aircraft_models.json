@@ -89,5 +89,60 @@
     "payload_kg": 102000,
     "class": "Widebody",
     "main_deck_cargo_kg": 102000
+  },
+  {
+    "id": "a320neo",
+    "name": "Airbus A320neo",
+    "seats": 186,
+    "range_km": 6500,
+    "cruise_kmh": 830,
+    "turnaround_minutes": 45,
+    "belly_cargo_kg": 1860,
+    "payload_kg": 18600,
+    "class": "Narrowbody"
+  },
+  {
+    "id": "b737_max8",
+    "name": "Boeing 737 MAX 8",
+    "seats": 189,
+    "range_km": 6000,
+    "cruise_kmh": 840,
+    "turnaround_minutes": 45,
+    "belly_cargo_kg": 1890,
+    "payload_kg": 18900,
+    "class": "Narrowbody"
+  },
+  {
+    "id": "atr72_evo",
+    "name": "ATR 72 Evo",
+    "seats": 72,
+    "range_km": 1500,
+    "cruise_kmh": 510,
+    "turnaround_minutes": 30,
+    "belly_cargo_kg": 720,
+    "payload_kg": 7200,
+    "class": "Turboprop"
+  },
+  {
+    "id": "a330_900",
+    "name": "Airbus A330-900",
+    "seats": 310,
+    "range_km": 12000,
+    "cruise_kmh": 871,
+    "turnaround_minutes": 90,
+    "belly_cargo_kg": 12500,
+    "payload_kg": 46000,
+    "class": "Widebody"
+  },
+  {
+    "id": "a350_900",
+    "name": "Airbus A350-900",
+    "seats": 325,
+    "range_km": 14500,
+    "cruise_kmh": 903,
+    "turnaround_minutes": 100,
+    "belly_cargo_kg": 14000,
+    "payload_kg": 52000,
+    "class": "Widebody"
   }
 ]

@@ -15,6 +15,16 @@ func _run() -> void:
 	main.fleet_tabs.current_tab = 1
 	var panel = main.orders_panel
 	assert(panel.empty.visible)
+	assert(panel.catalog.visible and panel.catalog.get_root().get_child_count() == 5)
+	var neo_index := -1
+	for i in range(panel.model.item_count):
+		if panel.model.get_item_metadata(i) == "a320neo": neo_index = i
+	assert(neo_index >= 0 and "Tag 731" in panel.model.get_item_text(neo_index))
+	panel.model.select(neo_index)
+	panel.model.item_selected.emit(neo_index)
+	assert(panel.place.disabled and "Tag 731" in panel.place.tooltip_text)
+	var card: Dictionary = main.aircraft_cards[neo_index]
+	assert(card["buy"].disabled and card["lease"].disabled and card["status"].get_child_count() == 1)
 	var before: int = sim.get_airline_info()["capital_eur"]
 	panel.model.select(0)
 	panel.model.item_selected.emit(0)

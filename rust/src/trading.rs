@@ -19,6 +19,8 @@ pub struct Rules {
     pub monthly_lease_bps: i64,
     pub lease_period_days: u64,
     pub return_damage_bps: i64,
+    /// Extra yearly value loss of a model once its successor is on sale.
+    pub obsolescence_annual_bps: i64,
 }
 pub static RULES: LazyLock<Rules> = LazyLock::new(|| {
     let r: Rules = serde_json::from_str(include_str!("../../config/aircraft_trading.json"))
@@ -34,6 +36,7 @@ pub static RULES: LazyLock<Rules> = LazyLock::new(|| {
     assert!((1..=10000).contains(&r.monthly_lease_bps));
     assert!((1..=365).contains(&r.lease_period_days));
     assert!((0..=10000).contains(&r.return_damage_bps));
+    assert!((0..=10000).contains(&r.obsolescence_annual_bps));
     r
 });
 
@@ -92,6 +95,7 @@ impl Game {
     pub fn lease_aircraft(&mut self, model_id: &str) -> Result<(), String> {
         self.require_solvent()?;
         let model = aircraft::model(model_id)?;
+        model.require_leasable(self.clock.elapsed().as_secs())?;
         let home = self
             .airline
             .as_ref()
@@ -410,16 +414,21 @@ impl Game {
 
 /// Same valuation for current quotes and AI residual value, with existing wear.
 pub fn hull_value_at(p: &Aircraft, now: u64) -> Result<i64, String> {
-    let price = i128::from(aircraft::model(&p.model_id)?.price_eur);
+    let model = aircraft::model(&p.model_id)?;
+    let price = i128::from(model.price_eur);
     let condition = i128::from(
         p.wear
             .condition_permille(crate::maintenance::rules(&p.model_id)?),
     );
+    let obsolete = model.obsolete_from_day.map_or(0, |day| {
+        i128::from(now.saturating_sub(day * 86400)) * i128::from(RULES.obsolescence_annual_bps)
+            / (365 * 86400)
+    });
     let age = now
         .checked_sub(p.acquired_at.ok_or("Erwerbsdatum fehlt.")?)
         .ok_or("Ungültiges Erwerbsdatum.")?;
     let depreciation = i128::from(age) * i128::from(RULES.annual_depreciation_bps) / (365 * 86400);
-    let age_bps = (i128::from(RULES.resale_initial_bps) - depreciation)
+    let age_bps = (i128::from(RULES.resale_initial_bps) - depreciation - obsolete)
         .max(i128::from(RULES.resale_floor_bps));
     let condition_bps = i128::from(RULES.condition_floor_bps)
         + (10000 - i128::from(RULES.condition_floor_bps)) * condition / 1000;

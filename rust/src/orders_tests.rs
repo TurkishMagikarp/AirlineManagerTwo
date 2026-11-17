@@ -62,6 +62,12 @@ fn orders_fractional_prices_round_down_once_and_balance_is_exact_remainder() {
 fn orders_tiers_prices_rounding_deposits_and_failures_are_exact() {
     let mut g = game();
     for m in aircraft::models().unwrap() {
+        g.clock = crate::clock::Clock::from_state(
+            std::time::Duration::from_secs(m.entry_day * 86400),
+            false,
+            1,
+        )
+        .unwrap();
         let mut previous = m.price_eur;
         for quantity in 1..=RULES.max_open_orders as u32 {
             let q = g.quote_order(&m.id, quantity).unwrap();
@@ -88,6 +94,7 @@ fn orders_tiers_prices_rounding_deposits_and_failures_are_exact() {
             );
         }
     }
+    g.clock = crate::clock::Clock::default();
     assert!(
         g.quote_order("atr72_600", 1).unwrap().delivery_dates[0]
             < g.quote_order("a330_300", 1).unwrap().delivery_dates[0]

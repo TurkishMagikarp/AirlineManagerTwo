@@ -260,6 +260,7 @@ impl Game {
             .as_mut()
             .ok_or_else(|| "Bitte zuerst eine Airline gründen.".to_string())?;
         let model = aircraft::model(model_id)?;
+        model.require_orderable(self.clock.elapsed().as_secs())?;
         if airline.capital_eur < model.price_eur {
             return Err(format!(
                 "Nicht genügend Guthaben: {} EUR benötigt, {} EUR verfügbar.",
@@ -375,6 +376,12 @@ mod tests {
             .sum();
         game.airline.as_mut().unwrap().capital_eur = total;
         for model in aircraft::models().unwrap() {
+            game.clock = crate::clock::Clock::from_state(
+                std::time::Duration::from_secs(model.entry_day * 86400),
+                false,
+                1,
+            )
+            .unwrap();
             game.buy_aircraft(&model.id).unwrap();
             let plane = game.fleet.last().unwrap();
             assert_eq!(plane.model_id, model.id);

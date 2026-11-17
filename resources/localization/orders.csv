@@ -33,3 +33,8 @@ ORDER_GRACE,Bei fehlender Restzahlung: täglicher Lieferversuch bis %s; danach v
 ORDER_SELECTION,Anzahlung für diese Lieferung: %s (bei Stornierung verloren).,Deposit for this delivery: %s (forfeited on cancellation).
 ORDER_DELIVERY_WINDOW,Lieferfenster: %s bis %s,Delivery window: %s to %s
 ORDER_SAVE_HINT,Bestellungen geändert · bitte Spielstand speichern.,Orders changed · please save the game.
+ORDER_AVAILABILITY,Modellverfügbarkeit,Model availability
+ORDER_FROM,Verfügbar ab %s,Available from %s
+ORDER_EOP,Produktion beendet,Out of production
+ORDER_UPCOMING_TIP,Noch nicht bestellbar. Bestellung und Kauf öffnen zum genannten Tag.,Cannot be ordered yet. Orders and purchases open on the stated day.
+ORDER_EOP_TIP,Nicht mehr neu bestellbar. Leasing und Gebrauchtmarkt bleiben verfügbar.,No longer orderable new. Leasing and the used market remain available.

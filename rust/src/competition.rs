@@ -1587,8 +1587,12 @@ impl Competitor {
                     ));
                 }
             }
+            let now = g.clock.elapsed().as_secs();
             for m in crate::aircraft::models()? {
-                if airline.capital_eur.saturating_sub(m.price_eur) >= RESERVE {
+                if !m.leasable(now) {
+                    continue;
+                }
+                if m.orderable(now) && airline.capital_eur.saturating_sub(m.price_eur) >= RESERVE {
                     options.push((
                         None,
                         0,

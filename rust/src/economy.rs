@@ -176,6 +176,10 @@ static CONFIG: LazyLock<Config> = LazyLock::new(|| {
     }
     c
 });
+#[cfg(test)]
+pub(crate) fn fuel_kg_per_hour(model: &str) -> i64 {
+    CONFIG.models[model].fuel_kg_per_hour
+}
 pub fn fuel_mean() -> i64 {
     CONFIG.fuel_cents_per_kg
 }
@@ -1265,7 +1269,16 @@ mod tests {
                     // production starting funds and AI budgets stay unchanged.
                     g.airline.as_mut().unwrap().capital_eur += model.price_eur;
                     g.history.as_mut().unwrap().opening_balance += model.price_eur;
+                    g.clock = crate::clock::Clock::from_state(
+                        std::time::Duration::from_secs(model.entry_day * 86400),
+                        false,
+                        1,
+                    )
+                    .unwrap();
                     g.buy_aircraft(&model.id).unwrap();
+                    g.clock = crate::clock::Clock::default();
+                    g.fleet[0].acquired_at = Some(0);
+                    g.history.as_mut().unwrap().purchases[0].time = 0;
                     g.staff_up();
                     g.create_route(origin, destination, 1).unwrap();
                     g.set_ticket_price(1, price).unwrap();

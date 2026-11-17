@@ -547,6 +547,8 @@ static func aircraft_card(parent: HFlowContainer, model: Dictionary) -> Dictiona
 	shell.add_child(body)
 	body.add_child(label(model["name"], EMPTY_TITLE))
 	body.add_child(label(model["class"], ThemeTokens.CODE, MUTED))
+	var status := VBoxContainer.new()
+	body.add_child(status)
 	aircraft_facts(body, model)
 	body.add_child(HSeparator.new())
 	var price := RichTextLabel.new()
@@ -569,7 +571,7 @@ static func aircraft_card(parent: HFlowContainer, model: Dictionary) -> Dictiona
 	var lease := Button.new()
 	lease.text = "Flugzeug leasen"
 	body.add_child(lease)
-	return {"buy": buy, "lease": lease, "reason": reason, "shell": shell}
+	return {"buy": buy, "lease": lease, "reason": reason, "shell": shell, "status": status}
 
 
 static func aircraft_facts(body: VBoxContainer, model: Dictionary) -> void:

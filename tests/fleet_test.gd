@@ -29,7 +29,7 @@ func _run() -> void:
 			a320_index = index
 		if not _check(main.UI.money(model["price_eur"]) in main.model_details.text and str(model["main_deck_cargo_kg"] if model["freighter"] else model["seats"]) in main.model_details.text and "%d km" % model["range_km"] in main.model_details.text, "Purchase shows Rust price, seat capacity and range"):
 			return
-	if not _check(atr_index >= 0 and a320_index >= 0 and main.model_select.item_count == 8, "Passenger and freighter models available"):
+	if not _check(atr_index >= 0 and a320_index >= 0 and main.model_select.item_count == 13, "Passenger and freighter models available"):
 		return
 	main.model_select.select(atr_index)
 	main.model_select.item_selected.emit(atr_index)

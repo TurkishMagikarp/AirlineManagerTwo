@@ -17,6 +17,8 @@
     "reputation": 15,
     "delivery": 5,
     "strike_warning": 4,
-    "strike": 3
+    "strike": 3,
+    "model_entry": 48,
+    "model_end": 49
   }
 }
