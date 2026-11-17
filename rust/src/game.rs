@@ -37,6 +37,8 @@ pub struct Game {
     /// reconstructs them from commercial state, never from airborne results.
     #[serde(skip)]
     pub(crate) departure_markets: crate::economy::DepartureMarkets,
+    #[serde(default, skip_serializing_if = "crate::charters::State::is_empty")]
+    pub charters: crate::charters::State,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub ferries: Vec<crate::operations::Ferry>,
     #[serde(default)]
@@ -121,6 +123,7 @@ impl Default for Game {
             departure_markets: Default::default(),
             commercial_revision: 0,
             reputation_revision: 0,
+            charters: Default::default(),
             ferries: Vec::new(),
             used_market: Default::default(),
             external_slots: Default::default(),

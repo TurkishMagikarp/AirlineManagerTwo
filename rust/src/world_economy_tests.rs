@@ -259,6 +259,7 @@ impl Game {
     /// Older subsystem migration fixtures also acquire the v34 neutral timeline.
     pub(crate) fn adopt_events_from(&mut self, loaded: &Game) {
         self.alliances.reviewed_at = loaded.alliances.reviewed_at;
+        self.charters.since = loaded.charters.since;
         self.world_economy.events_from = loaded.world_economy.events_from;
         self.world_economy.weather_from = loaded.world_economy.weather_from;
         for c in &mut self.competitors {
@@ -277,6 +278,7 @@ impl Game {
             weather_from: self.clock.elapsed().as_secs(),
             ..Default::default()
         };
+        self.charters.since = self.clock.elapsed().as_secs();
         for c in &mut self.competitors {
             c.game.world_economy = self.world_economy;
         }

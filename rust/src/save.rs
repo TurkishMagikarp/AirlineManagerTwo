@@ -33,7 +33,8 @@ use std::time::Duration;
 // v43: regional world events; older saves announce their first event after loading.
 // v44: airport weather; older saves apply their first weather after loading.
 // v45: airline alliances; older saves have none and AI airlines form them at the next 30-day boundary.
-pub(crate) const VERSION: u32 = 45;
+// v46: charter flights; older saves have none and offers start appearing from the load instant.
+pub(crate) const VERSION: u32 = 46;
 // Largest save file the game writes. Saves above COMPRESS_THRESHOLD are
 // LZ4-frame compressed (the finance archive repeats keys and values heavily),
 // so this limit tracks real disk size instead of growing with every feature
@@ -90,6 +91,8 @@ struct GameState {
     codeshares: Vec<crate::codeshare::Agreement>,
     #[serde(default)]
     alliances: crate::alliances::State,
+    #[serde(default)]
+    charters: crate::charters::State,
     #[serde(default)]
     difficulty: Option<crate::difficulty::Settings>,
     #[serde(default)]
@@ -174,6 +177,7 @@ pub fn save(path: &Path, game: &Game) -> Result<(), String> {
     game.validate_tax()?;
     game.validate_codeshares()?;
     game.validate_alliances()?;
+    game.validate_charters()?;
     game.validate_competitors()?;
     let clock = &game.clock;
     let data = SaveGame {
@@ -185,6 +189,7 @@ pub fn save(path: &Path, game: &Game) -> Result<(), String> {
             next_order_id: game.next_order_id,
             codeshares: game.codeshares.clone(),
             alliances: game.alliances.clone(),
+            charters: game.charters.clone(),
             difficulty: Some(game.difficulty),
             pricing: game.pricing.clone(),
             world_economy: Some(game.world_economy),
@@ -474,6 +479,14 @@ crate::alliances::State::default()
         } else {
             data.state.alliances
         },
+        charters: if data.version < 46 {
+            crate::charters::State {
+                since: clock.elapsed().as_secs(),
+                ..Default::default()
+            }
+        } else {
+            data.state.charters
+        },
         codeshares: if data.version < 38 {
             Vec::new()
         } else {
@@ -653,6 +666,7 @@ crate::alliances::State::default()
     }
     game.validate_codeshares()?;
     game.validate_alliances()?;
+    game.validate_charters()?;
     game.validate_competitors()?;
     if data.version < 9 && game.airline.is_some() {
         game.competitors = crate::competition::initial_competitors_at(game.clock.elapsed())?;

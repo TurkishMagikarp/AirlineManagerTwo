@@ -88,6 +88,9 @@ impl Game {
         if self.ferry(aircraft_id).is_some() {
             return Err("Überführung oder anschließende Bodenzeit läuft.".into());
         }
+        if self.charter_job(aircraft_id).is_some() {
+            return Err("Flugzeug ist für einen Charterauftrag reserviert.".into());
+        }
         let range = aircraft::model(&plane.model_id)?.range_km;
         if distance > f64::from(range) {
             return Err(format!(

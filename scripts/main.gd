@@ -72,6 +72,7 @@ var founding_status: Label
 var founding_capital: Label
 var new_game_button: Button
 var orders_panel: VBoxContainer
+var charters_panel: VBoxContainer
 var used_rows: VBoxContainer
 var used_signature := ""
 var fleet_panel: VBoxContainer
@@ -693,6 +694,10 @@ func _build_fleet(content: VBoxContainer) -> void:
 	fleet_tree.item_selected.connect(_refresh_maintenance)
 	owned.add_child(fleet_tree)
 	_build_ferry_card(owned)
+	charters_panel = preload("res://scripts/charters_panel.gd").new()
+	charters_panel.simulation = simulation
+	charters_panel.changed.connect(_orders_changed)
+	owned.add_child(charters_panel)
 	disposal_details = _label("", ThemeTokens.BODY)
 	disposal_details.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	owned.add_child(disposal_details)
@@ -893,6 +898,7 @@ func _refresh_fleet() -> void:
 	_refresh_offers()
 	_refresh_used_market()
 	orders_panel.refresh()
+	charters_panel.refresh()
 	_render_operations(fleet_operations)
 	var fleet: Array = simulation.get_fleet()
 	var airline: Dictionary = simulation.get_airline_info()
