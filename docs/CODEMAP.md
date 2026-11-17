@@ -245,28 +245,29 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 146 pub fn is_empty(&self) -> bool
 151 fn mix(seed: u64, a: u64, b: u64) -> u64
 161 fn hubs(n: usize) -> Result<Vec<(&'static str, f64)>, String>
-173 pub fn epoch_offers(cycle: &crate::world_economy::Cycle, epoch: u64) -> Vec<Offer>
-235 pub struct Quote
-240 impl Quote
-241 pub fn cost_eur(&self) -> i64
-246 impl Game
-248 pub fn open_charters(&self) -> Vec<Offer>
-265 pub fn charter_job(&self, aircraft_id: u32) -> Option<&Job>
-269 fn charter_refusal(&self, offer: &Offer, id: u32) -> Result<(), String>
-315 pub fn quote_charter_offer(&self, offer: &Offer, id: u32) -> Result<Quote, String>
-344 pub fn accept_charter_offer(&mut self, offer: &Offer, id: u32) -> Result<Quote, String>
-362 pub fn accept_charter(&mut self, offer_id: u64, id: u32) -> Result<(), String>
-376 pub fn cancel_charter(&mut self, offer_id: u64) -> Result<(), String>
-389 pub(crate) fn fail_charter_aircraft(&mut self, id: u32, why: &str) -> Result<(), String>
-403 fn record_outcome(&mut self, job: &Job, delivered: bool, cash: i64, reason: &str)
-417 fn bump_reputation(&mut self, delta: i64)
-423 fn fail_charter(&mut self, offer_id: u64, why: &str) -> Result<(), String>
-439 pub fn next_charter_event(&self) -> Option<u64>
-462 pub(crate) fn apply_charters(&mut self) -> Result<(), String>
-539 pub(crate) fn ai_charter_candidates_len(&self) -> usize
-544 fn ai_charter_candidates(&self) -> Vec<u32>
-561 pub(crate) fn ai_charters(&mut self, i: usize) -> Result<(), String>
-602 pub fn validate_charters(&self) -> Result<(), String>
+163 static CACHE: std::cell::RefCell<std::collections::HashMap<usize, Vec<(&'static str, f64)>>> =
+181 pub fn epoch_offers(cycle: &crate::world_economy::Cycle, epoch: u64) -> Vec<Offer>
+243 pub struct Quote
+248 impl Quote
+249 pub fn cost_eur(&self) -> i64
+254 impl Game
+256 pub fn open_charters(&self) -> Vec<Offer>
+273 pub fn charter_job(&self, aircraft_id: u32) -> Option<&Job>
+277 fn charter_refusal(&self, offer: &Offer, id: u32) -> Result<(), String>
+323 pub fn quote_charter_offer(&self, offer: &Offer, id: u32) -> Result<Quote, String>
+352 pub fn accept_charter_offer(&mut self, offer: &Offer, id: u32) -> Result<Quote, String>
+370 pub fn accept_charter(&mut self, offer_id: u64, id: u32) -> Result<(), String>
+384 pub fn cancel_charter(&mut self, offer_id: u64) -> Result<(), String>
+397 pub(crate) fn fail_charter_aircraft(&mut self, id: u32, why: &str) -> Result<(), String>
+411 fn record_outcome(&mut self, job: &Job, delivered: bool, cash: i64, reason: &str)
+425 fn bump_reputation(&mut self, delta: i64)
+431 fn fail_charter(&mut self, offer_id: u64, why: &str) -> Result<(), String>
+447 pub fn next_charter_event(&self) -> Option<u64>
+470 pub(crate) fn apply_charters(&mut self) -> Result<(), String>
+547 pub(crate) fn ai_charter_candidates_len(&self) -> usize
+552 fn ai_charter_candidates(&self) -> Vec<u32>
+569 pub(crate) fn ai_charters(&mut self, i: usize) -> Result<(), String>
+614 pub fn validate_charters(&self) -> Result<(), String>
 
 ## rust/src/charters_tests.rs
 8 const DAY: u64 = 86400;

@@ -159,6 +159,13 @@ fn mix(seed: u64, a: u64, b: u64) -> u64 {
 }
 
 fn hubs(n: usize) -> Result<Vec<(&'static str, f64)>, String> {
+    thread_local! {
+        static CACHE: std::cell::RefCell<std::collections::HashMap<usize, Vec<(&'static str, f64)>>> =
+            Default::default();
+    }
+    if let Some(v) = CACHE.with(|c| c.borrow().get(&n).cloned()) {
+        return Ok(v);
+    }
     let mut a: Vec<_> = crate::airports::catalog()?
         .airports
         .iter()
@@ -166,6 +173,7 @@ fn hubs(n: usize) -> Result<Vec<(&'static str, f64)>, String> {
         .collect();
     a.sort_by(|x, y| y.1.total_cmp(&x.1).then(x.0.cmp(y.0)));
     a.truncate(n);
+    CACHE.with(|c| c.borrow_mut().insert(n, a.clone()));
     Ok(a)
 }
 
@@ -563,15 +571,19 @@ impl Game {
         if AI_DISABLED.with(|v| v.get()) {
             return Ok(());
         }
+        if self.competitors[i].game.distressed() {
+            return Ok(());
+        }
+        let candidates = self.competitors[i].game.ai_charter_candidates();
+        if candidates.is_empty() {
+            return Ok(());
+        }
         let offers = self.open_charters();
         if offers.is_empty() {
             return Ok(());
         }
         let ai = &mut self.competitors[i].game;
-        if ai.distressed() {
-            return Ok(());
-        }
-        for id in ai.ai_charter_candidates() {
+        for id in candidates {
             let mut best: Option<(i64, usize)> = None;
             for (k, offer) in offers.iter().enumerate() {
                 if self.charters.taken.iter().any(|t| t.0 == offer.id) {
