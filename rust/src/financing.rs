@@ -270,15 +270,24 @@ impl Game {
     }
 
     pub fn next_financing_event(&self) -> Option<u64> {
+        self.next_financing_event_with(self.next_maintenance_event(), self.next_payroll_event())
+    }
+
+    /// Same as `next_financing_event` for callers that already hold the maintenance
+    /// and payroll events of this instant.
+    pub(crate) fn next_financing_event_with(
+        &self,
+        maintenance: Option<u64>,
+        payroll: Option<u64>,
+    ) -> Option<u64> {
         self.airline.as_ref()?;
         if self.insolvent() {
             return None;
         }
         let now = self.clock.elapsed().as_secs();
-        let mut next = self
-            .next_maintenance_event()
+        let mut next = maintenance
             .into_iter()
-            .chain(self.next_payroll_event())
+            .chain(payroll)
             .chain(self.next_lease_event())
             .min()
             .unwrap_or(u64::MAX);

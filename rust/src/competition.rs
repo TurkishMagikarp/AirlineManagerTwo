@@ -475,8 +475,9 @@ impl Game {
         }
         // Transactional across all companies: no partial time or cash updates.
         let mut staged = self.clone();
-        let mut cached_supply = Vec::new();
+        let mut cached_supply = Vec::<crate::demand::Offer>::new();
         let mut cached_revision = None;
+        let mut cached_structure = None;
         #[cfg(test)]
         let mut stalled = (0, staged.clock.elapsed());
         while staged.clock.elapsed() < target.elapsed() {
@@ -541,34 +542,40 @@ impl Game {
                 .min()
                 .unwrap_or(u64::MAX);
             // Maintenance starts, ends and forced groundings of every company.
+            let player_maintenance = staged.next_maintenance_event();
+            let player_payroll = staged.next_payroll_event();
             let maintenance = std::iter::once(staged.next_order_event())
                 .chain(std::iter::once(staged.next_pricing_event()))
                 .chain(std::iter::once(staged.next_ferry_event()))
                 .chain(std::iter::once(staged.next_charter_event()))
-                .chain(std::iter::once(staged.next_maintenance_event()))
+                .chain(std::iter::once(player_maintenance))
                 .chain(std::iter::once(staged.next_rotation_event()))
-                .chain(std::iter::once(staged.next_payroll_event()))
+                .chain(std::iter::once(player_payroll))
                 .chain(std::iter::once(staged.next_labour_event()))
                 .chain(std::iter::once(staged.next_training_event()))
-                .chain(std::iter::once(staged.next_financing_event()))
+                .chain(std::iter::once(
+                    staged.next_financing_event_with(player_maintenance, player_payroll),
+                ))
                 .chain(std::iter::once(staged.next_tax_event()))
                 .chain(std::iter::once(staged.next_marketing_event()))
                 .chain(std::iter::once(staged.next_insurance_event()))
                 .chain(std::iter::once(staged.next_alliance_event()))
                 .chain(staged.competitors.iter().flat_map(|c| {
+                    let g = &c.game;
+                    let (maintenance, payroll) = (g.next_maintenance_event(), g.next_payroll_event());
                     [
-                        c.game.next_order_event(),
-                        c.game.next_ferry_event(),
-                        c.game.next_charter_event(),
-                        c.game.next_maintenance_event(),
-                        c.game.next_rotation_event(),
-                        c.game.next_payroll_event(),
-                        c.game.next_labour_event(),
-                        c.game.next_training_event(),
-                        c.game.next_financing_event(),
-                        c.game.next_tax_event(),
-                        c.game.next_marketing_event(),
-                        c.game.next_insurance_event(),
+                        g.next_order_event(),
+                        g.next_ferry_event(),
+                        g.next_charter_event(),
+                        maintenance,
+                        g.next_rotation_event(),
+                        payroll,
+                        g.next_labour_event(),
+                        g.next_training_event(),
+                        g.next_financing_event_with(maintenance, payroll),
+                        g.next_tax_event(),
+                        g.next_marketing_event(),
+                        g.next_insurance_event(),
                     ]
                 }))
                 .flatten()
@@ -626,7 +633,19 @@ impl Game {
             let revision = staged.supply_revision();
             let structure_revision = staged.supply_structure_revision();
             if cached_revision != Some(revision) {
-                cached_supply = staged.market_routes();
+                if cached_structure == Some(structure_revision) {
+                    // Only reputation factors moved: the offers keep their shape, so
+                    // refresh the scores instead of rebuilding every offer.
+                    for g in std::iter::once(&staged).chain(staged.competitors.iter().map(|c| &*c.game)) {
+                        let owner = g.market_owner_key();
+                        for o in cached_supply.iter_mut().filter(|o| o.owner == owner) {
+                            o.reputation = g.reputation.score;
+                        }
+                    }
+                } else {
+                    cached_supply = staged.market_routes();
+                    cached_structure = Some(structure_revision);
+                }
                 cached_revision = Some(revision);
             }
             let supply = &cached_supply;

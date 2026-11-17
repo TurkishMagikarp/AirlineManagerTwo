@@ -85,8 +85,8 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 368 fn end_rival_codeshares(&mut self) -> bool
 388 pub(crate) fn prune_alliances(&mut self)
 412 pub fn apply_alliances(&mut self) -> Result<(), String>
-524 pub(crate) fn apply_alliance_offers(&self, offers: &mut [Offer])
-573 pub fn validate_alliances(&self) -> Result<(), String>
+527 pub(crate) fn apply_alliance_offers(&self, offers: &mut [Offer])
+576 pub fn validate_alliances(&self) -> Result<(), String>
 
 ## rust/src/alliances_tests.rs
 2 const DAY: f64 = 86400.0;
@@ -265,7 +265,7 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 447 pub fn next_charter_event(&self) -> Option<u64>
 470 pub(crate) fn apply_charters(&mut self) -> Result<(), String>
 547 pub(crate) fn ai_charter_candidates_len(&self) -> usize
-552 fn ai_charter_candidates(&self) -> Vec<u32>
+552 pub(crate) fn ai_charter_candidates(&self) -> Vec<u32>
 569 pub(crate) fn ai_charters(&mut self, i: usize) -> Result<(), String>
 614 pub fn validate_charters(&self) -> Result<(), String>
 
@@ -293,6 +293,9 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 354 fn ai_run(charters: bool, country: &str, home: &str, years: u32, spare: bool) -> Vec<String>
 387 fn charters_ai_finance_audit()
 399 fn charters_ai_spare_aircraft_audit()
+410 fn with_crewed_spare(g: &Game) -> (Game, u32)
+425 fn an_ai_with_a_crewed_idle_aircraft_earns_charter_income_over_two_years()
+465 fn charters_ai_idle_funnel_audit()
 
 ## rust/src/clock.rs
 5 pub struct Clock
@@ -374,56 +377,56 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 325 pub fn market_routes(&self) -> Vec<crate::demand::Offer>
 341 pub fn validate_competitors(&self) -> Result<(), String>
 405 pub fn advance(&mut self, seconds: f64) -> bool
-750 impl Competitor
-751 fn close_loss_route(
-774 fn review(&mut self, supply: &[crate::demand::Offer]) -> bool
-1067 fn review_rotations(&mut self, supply: &[crate::demand::Offer]) -> Result<Vec<u32>, String>
-1218 fn plan_maintenance(&mut self, next_review: u64)
-1233 fn expansion_quotes(
-1476 fn expand(&mut self, supply: &[crate::demand::Offer]) -> Result<(), String>
-1681 fn acquire_expansion(&mut self, choice: ExpansionChoice) -> Result<(), String>
-1766 fn retry(&mut self, i: usize, supply: &[crate::demand::Offer]) -> bool
-1878 mod tests
-1880 fn ai_planning_is_direct_only_while_actual_flights_keep_transfers()
-1922 fn widebody_ai_expansion_quote_audit()
-1961 fn cabin_expansion_behavior_audit()
-2045 fn widebody_expansion_installs_quoted_cabin_fare_and_books_fee()
-2138 fn configured_starters_cover_running_costs_even_at_maximum_fuel()
-2173 fn worldwide_starters_are_local_and_distant_and_old_companies_load_verbatim()
-2225 fn legacy_companies_remain_solvent_with_cabin_search()
-2246 fn used_market_ai_growth_uses_shared_purchase_and_wear()
-2291 fn frequency_ai() -> Competitor
-2303 fn manufacturer_ai_orders_selected_growth_once_and_waits_for_delivery()
-2347 fn manufacturer_restructuring_cancels_player_and_ai_orders_without_refund()
-2377 fn seasonal_ai_growth_uses_annual_view_and_weak_weeks_keep_viable_rotations()
-2434 fn frequency_growth_uses_shared_assignment_and_respects_cap()
-2470 fn frequency_growth_can_buy_or_lease_and_weak_loads_reduce_service()
-2543 fn frequency_review_keeps_a_service_during_maintenance()
-2563 fn frequency_growth_skips_maintenance_wrong_location_and_weak_market()
-2584 fn frequency_weak_airborne_service_retires_once_across_steps_speeds_and_restart()
-2655 fn trading_ai_leases_only_affordable_profitable_growth_and_sells_in_distress()
-2715 fn trading_ai_lease_economy_is_bounded_and_deterministic_over_two_years()
-2757 fn game() -> Game
-2769 fn state(g: &Game) -> serde_json::Value
-2774 fn airborne_loss_reviews_close_after_ground_time_even_across_restart()
-2830 fn previous_v9_saves_default_new_review_fields_and_reject_corruption()
-2851 fn expansion_reuses_parked_aircraft_and_competes_for_existing_market()
-2892 fn expansion_spends_real_cash_and_obeys_budget_range_and_fleet_limit()
-2936 fn ai_airlines_pay_for_regular_checks_before_reaching_the_limit()
-2993 fn route_reviews_charge_the_planned_maintenance_share_per_landing()
-3040 fn losses_are_measured_per_route_not_hidden_by_profitable_routes()
-3066 fn common_market_price_frequency_capacity_and_separate_ledgers()
-3120 fn mixed_fares_and_frequencies_never_duplicate_the_base_market()
-3154 fn speed_steps_reviews_and_restart_produce_identical_results()
-3183 fn losses_close_service_without_erasing_aircraft_or_finances()
-3218 fn unprofitable_markets_keep_rivals_idle_until_the_next_retry()
-3249 fn old_saves_keep_departure_snapshot_and_start_rivals_only_at_load_time()
-3280 fn price_reviews_preserve_airborne_quotes_for_both_owners()
-3307 fn invalid_ai_saves_and_overflow_cannot_partially_commit()
-3365 mod slot_admission_tests
-3367 fn slots_ai_full_hub_skips_purchase_and_full_destination_uses_other_markets()
-3399 mod manufacturer_audit
-3401 fn manufacturer_orders_eddf_rival_comparison_two_and_ten_years()
+769 impl Competitor
+770 fn close_loss_route(
+793 fn review(&mut self, supply: &[crate::demand::Offer]) -> bool
+1086 fn review_rotations(&mut self, supply: &[crate::demand::Offer]) -> Result<Vec<u32>, String>
+1237 fn plan_maintenance(&mut self, next_review: u64)
+1252 fn expansion_quotes(
+1495 fn expand(&mut self, supply: &[crate::demand::Offer]) -> Result<(), String>
+1700 fn acquire_expansion(&mut self, choice: ExpansionChoice) -> Result<(), String>
+1785 fn retry(&mut self, i: usize, supply: &[crate::demand::Offer]) -> bool
+1897 mod tests
+1899 fn ai_planning_is_direct_only_while_actual_flights_keep_transfers()
+1941 fn widebody_ai_expansion_quote_audit()
+1980 fn cabin_expansion_behavior_audit()
+2064 fn widebody_expansion_installs_quoted_cabin_fare_and_books_fee()
+2157 fn configured_starters_cover_running_costs_even_at_maximum_fuel()
+2192 fn worldwide_starters_are_local_and_distant_and_old_companies_load_verbatim()
+2244 fn legacy_companies_remain_solvent_with_cabin_search()
+2265 fn used_market_ai_growth_uses_shared_purchase_and_wear()
+2310 fn frequency_ai() -> Competitor
+2322 fn manufacturer_ai_orders_selected_growth_once_and_waits_for_delivery()
+2366 fn manufacturer_restructuring_cancels_player_and_ai_orders_without_refund()
+2396 fn seasonal_ai_growth_uses_annual_view_and_weak_weeks_keep_viable_rotations()
+2453 fn frequency_growth_uses_shared_assignment_and_respects_cap()
+2489 fn frequency_growth_can_buy_or_lease_and_weak_loads_reduce_service()
+2562 fn frequency_review_keeps_a_service_during_maintenance()
+2582 fn frequency_growth_skips_maintenance_wrong_location_and_weak_market()
+2603 fn frequency_weak_airborne_service_retires_once_across_steps_speeds_and_restart()
+2674 fn trading_ai_leases_only_affordable_profitable_growth_and_sells_in_distress()
+2734 fn trading_ai_lease_economy_is_bounded_and_deterministic_over_two_years()
+2776 fn game() -> Game
+2788 fn state(g: &Game) -> serde_json::Value
+2793 fn airborne_loss_reviews_close_after_ground_time_even_across_restart()
+2849 fn previous_v9_saves_default_new_review_fields_and_reject_corruption()
+2870 fn expansion_reuses_parked_aircraft_and_competes_for_existing_market()
+2911 fn expansion_spends_real_cash_and_obeys_budget_range_and_fleet_limit()
+2955 fn ai_airlines_pay_for_regular_checks_before_reaching_the_limit()
+3012 fn route_reviews_charge_the_planned_maintenance_share_per_landing()
+3059 fn losses_are_measured_per_route_not_hidden_by_profitable_routes()
+3085 fn common_market_price_frequency_capacity_and_separate_ledgers()
+3139 fn mixed_fares_and_frequencies_never_duplicate_the_base_market()
+3173 fn speed_steps_reviews_and_restart_produce_identical_results()
+3202 fn losses_close_service_without_erasing_aircraft_or_finances()
+3237 fn unprofitable_markets_keep_rivals_idle_until_the_next_retry()
+3268 fn old_saves_keep_departure_snapshot_and_start_rivals_only_at_load_time()
+3299 fn price_reviews_preserve_airborne_quotes_for_both_owners()
+3326 fn invalid_ai_saves_and_overflow_cannot_partially_commit()
+3384 mod slot_admission_tests
+3386 fn slots_ai_full_hub_skips_purchase_and_full_destination_uses_other_markets()
+3418 mod manufacturer_audit
+3420 fn manufacturer_orders_eddf_rival_comparison_two_and_ten_years()
 
 ## rust/src/demand.rs
 7 struct Config
@@ -729,8 +732,9 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 230 pub fn borrow(&mut self, amount: i64) -> Result<(), String>
 255 pub fn repay(&mut self, amount: i64) -> Result<(), String>
 272 pub fn next_financing_event(&self) -> Option<u64>
-361 pub fn apply_financing(&mut self) -> Result<(), String>
-429 pub fn validate_financing(&self) -> Result<(), String>
+278 pub(crate) fn next_financing_event_with(
+370 pub fn apply_financing(&mut self) -> Result<(), String>
+438 pub fn validate_financing(&self) -> Result<(), String>
 
 ## rust/src/financing_tests.rs
 8 const DAY: f64 = 86400.0;
@@ -873,12 +877,15 @@ Symbol -> line. Read files with offset/limit (or sed -n A,Bp) at these lines ins
 468 fn settled_cache_matches_scans_after_merges_groups_and_reload()
 515 fn million_flights_are_lossless_compact_and_random_access()
 564 fn profile_twenty_thousand_flights()
-597 fn save_size_profile()
-696 fn million_flight_finance_scenario_stays_within_budget()
-786 fn frame_partitioning_and_simultaneous_routes_match_archive()
-811 fn price_changes_preserve_old_load_costs_and_deleted_routes()
-832 fn legacy_migration_starts_at_known_balance_without_fabricating_flights()
-858 fn corrupt_archive_is_rejected_and_overflow_leaves_it_unchanged()
+609 fn save_size_profile()
+709 const PERF_BUDGET_CPU: std::time::Duration = std::time::Duration::from_secs(350);
+710 const PERF_BUDGET_WALL_FALLBACK: std::time::Duration = std::time::Duration::from_secs(300);
+713 fn process_cpu_time() -> Option<std::time::Duration>
+722 fn million_flight_finance_scenario_stays_within_budget()
+818 fn frame_partitioning_and_simultaneous_routes_match_archive()
+843 fn price_changes_preserve_old_load_costs_and_deleted_routes()
+864 fn legacy_migration_starts_at_known_balance_without_fabricating_flights()
+890 fn corrupt_archive_is_rejected_and_overflow_leaves_it_unchanged()
 
 ## rust/src/insurance.rs
 7 const DAY: u64 = 86400;

@@ -549,7 +549,7 @@ impl Game {
     }
 
     /// Idle aircraft an AI airline may use for a charter.
-    fn ai_charter_candidates(&self) -> Vec<u32> {
+    pub(crate) fn ai_charter_candidates(&self) -> Vec<u32> {
         self.fleet
             .iter()
             .filter(|p| {

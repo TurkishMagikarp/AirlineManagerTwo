@@ -177,3 +177,16 @@ transfer, cargo, codeshare, orders and UI integration scripts.
 No UI changed and no screenshots were requested or taken. Linux Godot checks
 use the available server renderer. Windows `START.bat`, the PowerShell restart
 drivers and a real GPU remain unverified here.
+
+## AIR-309 update: CPU-time budget, trimmed repeated work
+
+The server's load average is 11-15 permanently, so wall time is not a usable gate. The million-flight test now prints wall time and process CPU time (user+system from `/proc/self/stat`) and **the enforced budget (`AIRLINE_ENFORCE_PERF_BUDGET=1`) is process CPU time: 350 s**. Without `/proc` it falls back to wall time. The budget is re-based from back-to-back runs of main and the branch (both started together at load ~14):
+
+| Revision | Advance wall | Advance process CPU |
+| --- | ---: | ---: |
+| Main `01c5a97` | 396.7 s | 335.7 s |
+| AIR-309 | 376.6 s | 318.4 s |
+
+350 s leaves about 10% headroom over the branch; CPU time still varies a few percent with load (shared caches, SMT), so treat a result within the headroom as a pass and a result above it as a regression to investigate.
+
+Changes (caching/skipping only): the next-event scan computes each company's maintenance and payroll events once instead of again inside the financing event; the market supply is not rebuilt when only reputation moved (scores are refreshed in place); alliance review only invalidates commercial caches when membership or codeshares actually changed. A 200,000-flight run (`AIRLINE_PROFILE_FLIGHTS=200000`) ends in a byte-identical serialized game state on main and branch (`AIRLINE_PROFILE_DUMP`, `cmp`); CPU 64.06 s vs 60.22 s. The 300 s budget in wall terms is **not** met by either revision on this server; no further bit-identical savings were found in this round.

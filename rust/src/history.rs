@@ -577,10 +577,22 @@ mod tests {
         g.airline.as_mut().unwrap().capital_eur += 100_000_000_000;
         g.history.as_mut().unwrap().opening_balance += 100_000_000_000;
         crate::demand::TRANSFER_COUNTS.with(|c| c.set((0, 0, 0)));
+        let flights: f64 = std::env::var("AIRLINE_PROFILE_FLIGHTS")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(20_000.0);
         let started = std::time::Instant::now();
-        assert!(g.advance(60.0 + 7200.0 * 20_000.0));
+        let cpu_started = process_cpu_time();
+        assert!(g.advance(60.0 + 7200.0 * flights));
         let elapsed = started.elapsed();
-        eprintln!("Finance stress advance: {elapsed:?}");
+        eprintln!("Finance stress advance wall: {elapsed:?}");
+        if let Some(c) = cpu_started.zip(process_cpu_time()) {
+            eprintln!("Finance stress advance process CPU: {:?}", c.1.saturating_sub(c.0));
+        }
+        // Optional end-state dump for bit-identical before/after comparisons.
+        if let Some(path) = std::env::var_os("AIRLINE_PROFILE_DUMP") {
+            std::fs::write(path, serde_json::to_vec(&g).unwrap()).unwrap();
+        }
         eprintln!(
             "Settled flights including rivals: {}",
             g.finance.totals.flights
@@ -692,6 +704,20 @@ mod tests {
             sec("taxes", h.taxes.len());
         }
     }
+    /// Enforced budget: process CPU time of the advance (wall time depends on
+    /// the load of a shared machine). Re-based from repeated runs, see docs/simulation-performance.md.
+    const PERF_BUDGET_CPU: std::time::Duration = std::time::Duration::from_secs(350);
+    const PERF_BUDGET_WALL_FALLBACK: std::time::Duration = std::time::Duration::from_secs(300);
+
+    /// User+system CPU time of this process (Linux); `None` elsewhere.
+    fn process_cpu_time() -> Option<std::time::Duration> {
+        let stat = std::fs::read_to_string("/proc/self/stat").ok()?;
+        let rest = stat.rsplit_once(')')?.1;
+        let f: Vec<&str> = rest.split_whitespace().collect();
+        let ticks = f.get(11)?.parse::<u64>().ok()? + f.get(12)?.parse::<u64>().ok()?;
+        Some(std::time::Duration::from_millis(ticks * 10))
+    }
+
     #[test]
     fn million_flight_finance_scenario_stays_within_budget() {
         if std::env::var_os("AIRLINE_PERF_EVENTS").is_some() {
@@ -715,9 +741,15 @@ mod tests {
         g.history.as_mut().unwrap().opening_balance += 100_000_000_000;
         crate::demand::TRANSFER_COUNTS.with(|c| c.set((0, 0, 0)));
         let started = std::time::Instant::now();
+        let cpu_started = process_cpu_time();
         assert!(g.advance(60.0 + 7200.0 * 1_000_000.0));
         let elapsed = started.elapsed();
-        eprintln!("Finance stress advance: {elapsed:?}");
+        let cpu = cpu_started.zip(process_cpu_time()).map(|(a, b)| b.saturating_sub(a));
+        eprintln!("Finance stress advance wall: {elapsed:?}");
+        match cpu {
+            Some(c) => eprintln!("Finance stress advance process CPU: {c:?} (enforced budget: CPU {PERF_BUDGET_CPU:?})"),
+            None => eprintln!("Finance stress advance process CPU: unavailable on this platform; enforcing wall {PERF_BUDGET_WALL_FALLBACK:?}"),
+        }
         eprintln!(
             "Settled flights including rivals: {}",
             g.finance.totals.flights
@@ -734,13 +766,13 @@ mod tests {
             )
         });
         if std::env::var("AIRLINE_ENFORCE_PERF_BUDGET").as_deref() == Ok("1") {
-            assert!(
-                elapsed < std::time::Duration::from_secs(300),
-                "finance stress advance took {elapsed:?}"
-            );
+            match cpu {
+                Some(c) => assert!(c < PERF_BUDGET_CPU, "finance stress advance used {c:?} CPU (wall {elapsed:?})"),
+                None => assert!(elapsed < PERF_BUDGET_WALL_FALLBACK, "finance stress advance took {elapsed:?}"),
+            }
         } else {
             eprintln!(
-                "Finance stress 300-second budget measured but not enforced; set AIRLINE_ENFORCE_PERF_BUDGET=1 to enforce it."
+                "Finance stress budget measured but not enforced; set AIRLINE_ENFORCE_PERF_BUDGET=1 to enforce it."
             );
         }
         let h = g.history.as_ref().unwrap();

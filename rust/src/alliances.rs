@@ -417,6 +417,7 @@ impl Game {
         if !now.is_multiple_of(cycle()) || now <= self.alliances.reviewed_at {
             return Ok(());
         }
+        let before = (self.alliances.members.clone(), self.codeshares.len());
         self.prune_alliances();
         // Distressed members are dropped; AI members also leave when their network shrinks.
         let owners: Vec<String> = self.alliances.members.iter().map(|m| m.owner.clone()).collect();
@@ -516,7 +517,9 @@ impl Game {
             .sort_by(|a, b| (&a.alliance, &a.owner).cmp(&(&b.alliance, &b.owner)));
         self.end_rival_codeshares();
         self.alliances.reviewed_at = now;
-        self.commercial_changed();
+        if before != (self.alliances.members.clone(), self.codeshares.len()) {
+            self.commercial_changed();
+        }
         Ok(())
     }
     /// Shares connecting passengers between all members of an alliance and adds the
