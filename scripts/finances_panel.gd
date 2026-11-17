@@ -350,6 +350,7 @@ func refresh(force: bool = false) -> void:
 	note.text += "\nPassagierbetreuung / Entschädigung (in Kosten und Steuerbasis enthalten): %s." % UI.money(summary["care_eur"])
 	note.text += "\n" + tr("FREIGHT_FINANCE") % [summary["cargo_kg"], UI.money(summary["cargo_revenue_eur"])]
 	note.text += "\nTreibstoff weltweit: %.2f EUR/kg · %s%d Cent/kg gegenüber vor 30 Tagen (wöchentlich)." % [summary["fuel_cents_per_kg"] / 100.0, "↑ +" if summary["fuel_month_delta_cents"] > 0 else ("↓ " if summary["fuel_month_delta_cents"] < 0 else "→ "), summary["fuel_month_delta_cents"]]
+	note.text += "\nCO2-Abgabe (eigene Kostenzeile, in Gesamtkosten enthalten): %s · Preis jetzt %d EUR/t, nächste Stufe %d EUR/t." % [UI.money(summary["carbon_eur"]), summary["carbon_eur_per_tonne"], summary["carbon_next_eur_per_tonne"]]
 	note.text += "\nÜberführungen (in Gesamtkosten enthalten): %s." % UI.money(summary["ferry_eur"])
 	note.text += "\nLeasingraten (in Kosten enthalten): %s · Flugzeugjournal netto inkl. Verkäufen, Kautionen, Raten und Rückgaben: %s." % [UI.money(summary["rent_eur"]), UI.money(summary["aircraft_cash_eur"])]
 	note.text += "\nBordservice (Kosten / Ersparnis gegenüber Standard, in Gesamtkosten enthalten): %s." % UI.money(summary["service_eur"])
@@ -441,6 +442,7 @@ func _select_route() -> void:
 	detail.text += "\n" + tr("ANCILLARY_ROUTE_REVENUE") % UI.money(r["ancillary_revenue_eur"])
 	detail.text += "\n" + tr("LOYALTY_ROUTE_COST") % UI.money(r["loyalty_cost_eur"])
 	detail.text += "\nBordservice (Kosten / Ersparnis gegenüber Standard): %s." % UI.money(r["service_eur"])
+	detail.text += "\nCO2-Abgabe (in Flugkosten enthalten): %s." % UI.money(r["carbon_eur"])
 	load_chart.set_series(simulation.get_finance_series(route_id), "load", true)
 	_flights()
 
@@ -458,7 +460,7 @@ func _flights() -> void:
 		var values := [f["landing"], "%s → %s" % [f["origin"], f["destination"]], ("—" if f["seats"] == 0 else UI.money(f["ticket_eur"])), "%d / %d" % [f["passengers"], f["seats"]], "%.1f %%" % f["load_percent"], UI.money(f["ticket_revenue_eur"]), UI.money(f["costs_eur"]), UI.money(f["profit_eur"]), "%d kg / %s" % [f["cargo_kg"], UI.money(f["cargo_revenue_eur"])]]
 		for i in range(values.size()):
 			UI.cell_text(row, i, values[i])
-			row.set_tooltip_text(i, "Ticket: %s\nTreibstoff: %s\nFlughäfen: %s\nPersonal: %s\nWartung / Verwaltung: %s\nBordservice (± Standard): %s" % [("—" if f["seats"] == 0 else UI.money(f["ticket_eur"])), UI.money(f["fuel_eur"]), UI.money(f["airport_eur"]), UI.money(f["crew_eur"]), UI.money(f["overhead_eur"]), UI.money(f["service_eur"])])
+			row.set_tooltip_text(i, "Ticket: %s\nTreibstoff: %s\nCO2-Abgabe: %s\nFlughäfen: %s\nPersonal: %s\nWartung / Verwaltung: %s\nBordservice (± Standard): %s" % [("—" if f["seats"] == 0 else UI.money(f["ticket_eur"])), UI.money(f["fuel_eur"]), UI.money(f["carbon_eur"]), UI.money(f["airport_eur"]), UI.money(f["crew_eur"]), UI.money(f["overhead_eur"]), UI.money(f["service_eur"])])
 			row.set_tooltip_text(i, row.get_tooltip_text(i) + "\nBetreuung / Entschädigung: %s" % UI.money(f["care_eur"]))
 		row.set_tooltip_text(6, row.get_tooltip_text(6) + "\n" + tr("LOYALTY_ROUTE_COST") % UI.money(f["loyalty_cost_eur"]))
 		UI.cell_result(row, 7, f["profit_eur"])

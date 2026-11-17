@@ -26,6 +26,7 @@ static RULES: LazyLock<Rules> = LazyLock::new(|| {
         "charter_failed",
         "model_entry",
         "model_end",
+        "carbon_step",
     ] {
         assert!(r.priorities.contains_key(key), "Priorität fehlt: {key}");
     }
@@ -153,9 +154,11 @@ impl Game {
         }
         let now = self.clock.elapsed().as_secs();
         let mine: Vec<&str> = std::iter::once(airline.home_airport_icao.as_str())
-            .chain(self.routes.iter().flat_map(|r| {
-                [r.origin_icao.as_str(), r.destination_icao.as_str()]
-            }))
+            .chain(
+                self.routes
+                    .iter()
+                    .flat_map(|r| [r.origin_icao.as_str(), r.destination_icao.as_str()]),
+            )
             .collect();
         let mut announced = Vec::new();
         for e in crate::world_events::visible_at(&self.world_economy, now) {
@@ -172,7 +175,8 @@ impl Game {
                 });
             }
         }
-        for e in crate::weather::visible_at(&crate::weather::Weather::of(&self.world_economy), now) {
+        for e in crate::weather::visible_at(&crate::weather::Weather::of(&self.world_economy), now)
+        {
             if mine.contains(&e.icao) {
                 announced.push(Entry {
                     order_id: e.id,
@@ -219,7 +223,11 @@ impl Game {
                         "{} · {} Minuten Verspätung{}",
                         p.identifier(),
                         state.delay_seconds.div_ceil(60),
-                        if state.weather_seconds > 0 { " (Wetter)" } else { "" }
+                        if state.weather_seconds > 0 {
+                            " (Wetter)"
+                        } else {
+                            ""
+                        }
                     ),
                     "fleet",
                     self.routes[i].public_id(),
@@ -338,12 +346,21 @@ impl Game {
         let idle: Vec<u32> = self
             .fleet
             .iter()
-            .filter(|p| p.status == AircraftStatus::Parked && self.require_ferry_aircraft(p.id).is_ok())
+            .filter(|p| {
+                p.status == AircraftStatus::Parked && self.require_ferry_aircraft(p.id).is_ok()
+            })
             .map(|p| p.id)
             .collect();
         if !idle.is_empty() {
-            for o in self.open_charters().iter().filter(|o| o.expires - now <= warning) {
-                if let Some(&id) = idle.iter().find(|&&id| self.quote_charter_offer(o, id).is_ok()) {
+            for o in self
+                .open_charters()
+                .iter()
+                .filter(|o| o.expires - now <= warning)
+            {
+                if let Some(&id) = idle
+                    .iter()
+                    .find(|&&id| self.quote_charter_offer(o, id).is_ok())
+                {
                     entries.push(Entry {
                         order_id: o.id,
                         kind: "charter_expiring",
@@ -370,9 +387,7 @@ impl Game {
                 priority: RULES.priorities["charter_failed"],
                 text: format!(
                     "Charter {} gescheitert: {} · Vertragsstrafe {} EUR",
-                    o.label,
-                    o.reason,
-                    -o.cash_eur
+                    o.label, o.reason, -o.cash_eur
                 ),
                 page: "fleet",
                 route_id: 0,
@@ -382,7 +397,11 @@ impl Game {
         }
         let notes = &crate::aircraft::LIFECYCLE;
         let day = now / 86400;
-        for (index, m) in crate::aircraft::models().unwrap_or_default().iter().enumerate() {
+        for (index, m) in crate::aircraft::models()
+            .unwrap_or_default()
+            .iter()
+            .enumerate()
+        {
             let mut note = |kind, date: u64, text: String| {
                 if day + notes.announce_days >= date && day < date + notes.notice_visible_days {
                     entries.push(Entry {
@@ -399,7 +418,11 @@ impl Game {
             };
             if m.entry_day > 0 {
                 let text = if day < m.entry_day {
-                    format!("{} · Bestellungen ab Tag {} möglich", m.name, m.entry_day + 1)
+                    format!(
+                        "{} · Bestellungen ab Tag {} möglich",
+                        m.name,
+                        m.entry_day + 1
+                    )
                 } else {
                     format!("{} · jetzt beim Hersteller bestellbar", m.name)
                 };
@@ -409,10 +432,49 @@ impl Game {
                 let text = if day < end {
                     format!("{} · Produktion endet an Tag {}", m.name, end + 1)
                 } else {
-                    format!("{} · nicht mehr neu bestellbar, Gebrauchtmarkt und Leasing bleiben", m.name)
+                    format!(
+                        "{} · nicht mehr neu bestellbar, Gebrauchtmarkt und Leasing bleiben",
+                        m.name
+                    )
                 };
                 note("model_end", end, text);
             }
+        }
+        // Same announce window as the model notes: ahead of and after each step.
+        let year = crate::emissions::year_seconds();
+        let next_step = (now / year + 1) * year;
+        let (current, next) = (
+            crate::emissions::price_at(now),
+            crate::emissions::price_at(next_step),
+        );
+        let recent_step = crate::emissions::stepped_at(now)
+            && day < (now / year * year) / 86400 + notes.notice_visible_days;
+        let upcoming = next > current && day + notes.announce_days >= next_step / 86400;
+        if recent_step || upcoming {
+            let text = if recent_step {
+                format!(
+                    "CO2-Preis jetzt {} EUR/t (zuvor {}): höhere Abgaben pro Flug, neue Typen sparen",
+                    current,
+                    crate::emissions::price_at(now - year)
+                )
+            } else {
+                format!(
+                    "CO2-Preis steigt an Tag {} auf {} EUR/t (jetzt {})",
+                    next_step / 86400 + 1,
+                    next,
+                    current
+                )
+            };
+            entries.push(Entry {
+                order_id: next_step / year,
+                kind: "carbon_step",
+                priority: RULES.priorities["carbon_step"],
+                text,
+                page: "finances",
+                route_id: 0,
+                aircraft_id: 0,
+                employee_id: 0,
+            });
         }
         entries.extend(announced);
         entries.sort_by_key(|e| {

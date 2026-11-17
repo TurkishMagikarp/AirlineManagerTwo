@@ -39,7 +39,7 @@ fn service_per_class_costs_share_shift_and_price_capacity_limits() {
         assert_eq!(q.service, expected);
         assert_eq!(
             q.costs(),
-            q.fuel + q.airport + q.crew + q.overhead + expected
+            q.fuel + q.carbon + q.airport + q.crew + q.overhead + expected
         );
         assert_eq!(level.cost(0, 0), 0);
         assert_eq!(level.cost(2, 2), level.rate().business_eur * 2);

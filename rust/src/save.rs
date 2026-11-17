@@ -34,7 +34,9 @@ use std::time::Duration;
 // v44: airport weather; older saves apply their first weather after loading.
 // v45: airline alliances; older saves have none and AI airlines form them at the next 30-day boundary.
 // v46: charter flights; older saves have none and offers start appearing from the load instant.
-pub(crate) const VERSION: u32 = 46;
+// v47: carbon charge; the price is a function of the departure date, so old saves follow the same
+// schedule from their current date. Stored and airborne results carry no carbon: no back-charges.
+pub(crate) const VERSION: u32 = 47;
 // Largest save file the game writes. Saves above COMPRESS_THRESHOLD are
 // LZ4-frame compressed (the finance archive repeats keys and values heavily),
 // so this limit tracks real disk size instead of growing with every feature
@@ -475,7 +477,7 @@ fn finish_load(data: SaveGame) -> Result<(Game, u32), String> {
             data.state.pricing
         },
         alliances: if data.version < 45 {
-crate::alliances::State::default()
+            crate::alliances::State::default()
         } else {
             data.state.alliances
         },
@@ -835,7 +837,11 @@ mod tests {
         huge.resize(MAX_BYTES as usize + 1, 0);
         fs::write(&path, huge).unwrap();
         assert!(load(&path).err().unwrap().contains("zu groß"));
-        fs::write(&path, compress(&vec![b' '; MAX_JSON_BYTES as usize + 1]).unwrap()).unwrap();
+        fs::write(
+            &path,
+            compress(&vec![b' '; MAX_JSON_BYTES as usize + 1]).unwrap(),
+        )
+        .unwrap();
         assert!(fs::metadata(&path).unwrap().len() < MAX_BYTES);
         assert!(load(&path).err().unwrap().contains("zu groß"));
         // A directory cannot be overwritten as a save file.

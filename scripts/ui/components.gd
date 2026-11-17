@@ -580,7 +580,7 @@ static func aircraft_facts(body: VBoxContainer, model: Dictionary) -> void:
 		chip.tooltip_text = TranslationServer.translate("FREIGHTER_TOOLTIP")
 		body.add_child(chip)
 	var capacity: Array = [TranslationServer.translate("FREIGHT_CAPACITY"), "%d kg" % model["main_deck_cargo_kg"]] if model.get("freighter", false) else ["Sitze", str(model["seats"])]
-	for fact in [capacity, ["Reichweite", "%d km" % model["range_km"]], ["Reisegeschwindigkeit", "%d km/h" % model["cruise_kmh"]], ["Besatzung", "%d Piloten · %d Kabine" % [model["pilots"], model["cabin_crew"]]]]:
+	for fact in [capacity, ["Reichweite", "%d km" % model["range_km"]], ["Reisegeschwindigkeit", "%d km/h" % model["cruise_kmh"]], ["Besatzung", "%d Piloten · %d Kabine" % [model["pilots"], model["cabin_crew"]]], ["CO2", ("%.0f g je t-km Nutzlast" if model.get("freighter", false) else "%.0f g je Sitz-km") % (model["co2_g_per_km"])]]:
 		body.add_child(label(fact[0], ThemeTokens.LABEL, MUTED))
 		body.add_child(label(fact[1], ThemeTokens.DATA))
 

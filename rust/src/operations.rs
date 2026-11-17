@@ -149,7 +149,8 @@ fn departure_quote_prepared(
             model,
             routes,
             fuel_cents,
-            Some(landing - flight),
+            crate::emissions::price_at(departure),
+            Some(departure),
             market,
         )?,
     })
@@ -178,12 +179,14 @@ impl Game {
             let t = &f.quote.totals;
             let expected = crate::economy::Totals {
                 fuel: t.fuel,
+                carbon: t.carbon,
                 airport: t.airport,
                 overhead: t.overhead,
                 ..Default::default()
             };
             if *t != expected
                 || t.fuel < 0
+                || t.carbon < 0
                 || t.airport < 0
                 || t.overhead < 0
                 || f.quote.route_id != 0
@@ -195,7 +198,8 @@ impl Game {
                 || f.aircraft_id >= self.next_aircraft_id
                 || crate::routes::distance_km(&f.quote.origin, &f.quote.destination).is_err()
                 || t.fuel
-                    .checked_add(t.airport)
+                    .checked_add(t.carbon)
+                    .and_then(|v| v.checked_add(t.airport))
                     .and_then(|v| v.checked_add(t.overhead))
                     .is_none()
             {
@@ -361,6 +365,7 @@ impl Game {
             &route,
             &plane.model_id,
             self.fuel_market.price_at(departure),
+            crate::emissions::price_at(departure),
         )?;
         if passengers > 0 {
             totals.airport = crate::economy::airport_bill(&route, &plane.model_id, passengers)?;
@@ -985,7 +990,7 @@ impl Game {
                                 t.passengers,
                             )
                         || !t.valid_cabins(f.ticket_eur)
-                        || [t.fuel, t.airport, t.crew, t.overhead]
+                        || [t.fuel, t.carbon, t.airport, t.crew, t.overhead]
                             .iter()
                             .any(|v| *v < 0)
                         || checked.add(t, 1).is_none()

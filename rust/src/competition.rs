@@ -283,10 +283,19 @@ fn planning_quote(
     route: &crate::routes::Route,
     model: &str,
     supply: &[crate::demand::Offer],
-    fuel: i64,
+    game: &Game,
 ) -> Result<crate::economy::Totals, String> {
     let mut prepared = crate::economy::QuoteMarket::direct(route, model, supply)?;
-    crate::economy::quote_prepared(route, model, supply, fuel, None, &mut prepared)
+    let now = game.clock.elapsed().as_secs();
+    crate::economy::quote_prepared(
+        route,
+        model,
+        supply,
+        game.fuel_market.price_at(now),
+        crate::emissions::price_at(now),
+        None,
+        &mut prepared,
+    )
 }
 
 impl Game {
@@ -562,7 +571,8 @@ impl Game {
                 .chain(std::iter::once(staged.next_alliance_event()))
                 .chain(staged.competitors.iter().flat_map(|c| {
                     let g = &c.game;
-                    let (maintenance, payroll) = (g.next_maintenance_event(), g.next_payroll_event());
+                    let (maintenance, payroll) =
+                        (g.next_maintenance_event(), g.next_payroll_event());
                     [
                         g.next_order_event(),
                         g.next_ferry_event(),
@@ -636,7 +646,9 @@ impl Game {
                 if cached_structure == Some(structure_revision) {
                     // Only reputation factors moved: the offers keep their shape, so
                     // refresh the scores instead of rebuilding every offer.
-                    for g in std::iter::once(&staged).chain(staged.competitors.iter().map(|c| &*c.game)) {
+                    for g in
+                        std::iter::once(&staged).chain(staged.competitors.iter().map(|c| &*c.game))
+                    {
                         let owner = g.market_owner_key();
                         for o in cached_supply.iter_mut().filter(|o| o.owner == owner) {
                             o.reputation = g.reputation.score;
@@ -987,10 +999,9 @@ impl Competitor {
             });
             // A seasonal trough alone must not retire an annually viable route.
             // Real losses still count when annual demand cannot cover the service.
-            let fuel = self
-                .game
-                .fuel_market
-                .price_at(self.game.clock.elapsed().as_secs());
+            let now = self.game.clock.elapsed().as_secs();
+            let fuel = self.game.fuel_market.price_at(now);
+            let carbon = crate::emissions::price_at(now);
             let Ok(mut fare_market) =
                 crate::economy::QuoteMarket::direct(r, &plane.model_id, supply)
             else {
@@ -1001,6 +1012,7 @@ impl Competitor {
                 &plane.model_id,
                 supply,
                 fuel,
+                carbon,
                 None,
                 &mut fare_market,
             ) else {
@@ -1062,7 +1074,8 @@ impl Competitor {
         self.growth_reviews = (self.growth_reviews + 1).min(RETRY_AFTER);
         if closed.is_empty() && self.growth_reviews >= RETRY_AFTER {
             self.growth_reviews = 0;
-            if let Err(e) = self.expand(&other_supply) { eprintln!("EXP {e}");
+            if let Err(e) = self.expand(&other_supply) {
+                eprintln!("EXP {e}");
                 return false;
             }
         }
@@ -1166,14 +1179,7 @@ impl Competitor {
                         * i128::from(crate::pricing::RULES.fare_review_seconds)
                         / i128::from(l.period);
                 }
-                let quote = planning_quote(
-                    r,
-                    &plane.model_id,
-                    supply,
-                    self.game
-                        .fuel_market
-                        .price_at(self.game.clock.elapsed().as_secs()),
-                )?;
+                let quote = planning_quote(r, &plane.model_id, supply, &self.game)?;
                 annual_week +=
                     i128::from(quote.profit() - maintenance_per_flight(r, &plane.model_id)?)
                         * i128::from(crate::pricing::RULES.fare_review_seconds)
@@ -1260,6 +1266,7 @@ impl Competitor {
         let m = crate::aircraft::model(model)?;
         let staffing = staffing_per_week(g, model)?;
         let fuel = g.fuel_market.price_at(g.clock.elapsed().as_secs());
+        let carbon = crate::emissions::price_at(g.clock.elapsed().as_secs());
         let mut quotes = Vec::new();
         let mut candidates = Vec::new();
         for root in g.routes.iter().filter(|r| r.parent_route_id.is_none()) {
@@ -1284,14 +1291,7 @@ impl Competitor {
                     .iter()
                     .find(|p| Some(p.id) == r.aircraft_id)
                     .ok_or("KI-Flugzeug fehlt")?;
-                let q = planning_quote(
-                    r,
-                    &p.model_id,
-                    offers,
-                    self.game
-                        .fuel_market
-                        .price_at(self.game.clock.elapsed().as_secs()),
-                )?;
+                let q = planning_quote(r, &p.model_id, offers, &self.game)?;
                 let rent = p.lease.as_ref().map_or(0, |l| {
                     (l.monthly * crate::pricing::RULES.fare_review_seconds as i64 + l.period as i64
                         - 1)
@@ -1426,6 +1426,7 @@ impl Competitor {
                         model,
                         &market,
                         fuel,
+                        carbon,
                         None,
                         single_quote.as_mut().unwrap(),
                     )?;
@@ -1443,22 +1444,8 @@ impl Competitor {
                                 .iter()
                                 .find(|p| Some(p.id) == old.aircraft_id)
                                 .ok_or("KI-Flugzeug fehlt")?;
-                            let before = planning_quote(
-                                old,
-                                &p.model_id,
-                                offers,
-                                self.game
-                                    .fuel_market
-                                    .price_at(self.game.clock.elapsed().as_secs()),
-                            )?;
-                            let after = planning_quote(
-                                old,
-                                &p.model_id,
-                                &market,
-                                self.game
-                                    .fuel_market
-                                    .price_at(self.game.clock.elapsed().as_secs()),
-                            )?;
+                            let before = planning_quote(old, &p.model_id, offers, &self.game)?;
+                            let after = planning_quote(old, &p.model_id, &market, &self.game)?;
                             dilution += (before.profit() - after.profit())
                                 * (crate::pricing::RULES.fare_review_seconds
                                     / old.plan.as_ref().unwrap().interval_seconds)
@@ -1517,14 +1504,7 @@ impl Competitor {
                 .iter()
                 .find(|p| Some(p.id) == route.aircraft_id)
                 .ok_or("KI-Flugzeug fehlt")?;
-            let t = planning_quote(
-                route,
-                &plane.model_id,
-                &offers,
-                self.game
-                    .fuel_market
-                    .price_at(self.game.clock.elapsed().as_secs()),
-            )?;
+            let t = planning_quote(route, &plane.model_id, &offers, &self.game)?;
             committed_weekly_costs += (t.costs() + maintenance_per_flight(route, &plane.model_id)?)
                 * (crate::pricing::RULES.fare_review_seconds
                     / route.plan.as_ref().unwrap().interval_seconds) as i64;
@@ -1840,6 +1820,7 @@ impl Competitor {
             return false;
         };
         let fuel = self.game.fuel_market.price_at(now);
+        let carbon = crate::emissions::price_at(now);
         let mut best: Option<(i64, i64)> = None;
         for step in 3..=15 {
             let price = ((reference * f64::from(step) / 10.0).round() as i64).clamp(0, 100_000);
@@ -1853,6 +1834,7 @@ impl Competitor {
                 &model,
                 &offers,
                 fuel,
+                carbon,
                 None,
                 &mut fare_market,
             ) else {
@@ -1915,11 +1897,17 @@ mod tests {
         }
         let supply = g.market_routes();
         crate::demand::TRANSFER_COUNTS.with(|c| c.set((0, 0, 0)));
-        let planned = super::planning_quote(&g.routes[0], "a320_200", &supply, 100).unwrap();
+        let planned = super::planning_quote(&g.routes[0], "a320_200", &supply, &g).unwrap();
         let direct = super::candidate_supply(&g.routes[0], &supply);
         assert_eq!(
             planned,
-            crate::economy::quote_at_price(&g.routes[0], "a320_200", &direct, 100).unwrap()
+            crate::economy::quote_at_price(
+                &g.routes[0],
+                "a320_200",
+                &direct,
+                g.fuel_market.price_at(0)
+            )
+            .unwrap()
         );
         assert_eq!(planned.connecting_passengers, 0);
         crate::demand::TRANSFER_COUNTS.with(|c| assert_eq!(c.get(), (0, 0, 0)));

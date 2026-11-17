@@ -2,15 +2,12 @@ mod aircraft;
 #[cfg(test)]
 mod airport_charge_tests;
 mod airports;
+mod alliances;
+#[cfg(test)]
+mod alliances_tests;
 mod ancillaries;
 #[cfg(test)]
 mod ancillary_tests;
-mod alliances;
-mod charters;
-#[cfg(test)]
-mod charters_tests;
-#[cfg(test)]
-mod alliances_tests;
 mod attention;
 #[cfg(test)]
 mod attention_tests;
@@ -20,6 +17,9 @@ mod cabins;
 mod cargo;
 #[cfg(test)]
 mod cargo_tests;
+mod charters;
+#[cfg(test)]
+mod charters_tests;
 mod clock;
 mod codeshare;
 #[cfg(test)]
@@ -33,6 +33,9 @@ mod difficulty_tests;
 mod disruption_tests;
 mod disruptions;
 mod economy;
+mod emissions;
+#[cfg(test)]
+mod emissions_tests;
 #[cfg(test)]
 mod ferry_tests;
 mod financing;
@@ -54,6 +57,8 @@ mod jumps;
 mod labour;
 #[cfg(test)]
 mod labour_tests;
+#[cfg(test)]
+mod lifecycle_tests;
 mod loyalty;
 #[cfg(test)]
 mod loyalty_tests;
@@ -69,8 +74,6 @@ mod operations;
 mod orders;
 #[cfg(test)]
 mod orders_tests;
-#[cfg(test)]
-mod lifecycle_tests;
 mod pricing;
 #[cfg(test)]
 mod pricing_tests;
@@ -106,14 +109,14 @@ mod trading;
 mod trading_tests;
 #[cfg(test)]
 mod transfer_tests;
+mod weather;
+#[cfg(test)]
+mod weather_tests;
 #[cfg(test)]
 mod widebody_tests;
 mod world_economy;
 #[cfg(test)]
 mod world_economy_tests;
-mod weather;
-#[cfg(test)]
-mod weather_tests;
 mod world_events;
 #[cfg(test)]
 mod world_events_tests;
@@ -280,7 +283,7 @@ impl SimulationClock {
                     "connecting_revenue_eur" => t.connecting_revenue,
                     "business_revenue_eur" => t.business_revenue, "economy_revenue_eur" => t.revenue - t.business_revenue - t.cargo_revenue - t.ancillary,
                     "business_passengers" => t.business_passengers, "economy_passengers" => t.passengers - t.business_passengers,
-                    "care_eur" => t.care, "punctuality_percent" => disruptions::percent(&t), "punctuality_flights" => t.punctuality_flights, "service_eur" => t.service, "ancillary_revenue_eur" => t.ancillary, "loyalty_cost_eur" => t.loyalty_cost, "flights" => t.flights, "cargo_kg" => t.cargo_kg, "cargo_revenue_eur" => t.cargo_revenue, "ticket_revenue_eur" => t.revenue - t.cargo_revenue - t.ancillary,
+                    "care_eur" => t.care, "carbon_eur" => t.carbon, "punctuality_percent" => disruptions::percent(&t), "punctuality_flights" => t.punctuality_flights, "service_eur" => t.service, "ancillary_revenue_eur" => t.ancillary, "loyalty_cost_eur" => t.loyalty_cost, "flights" => t.flights, "cargo_kg" => t.cargo_kg, "cargo_revenue_eur" => t.cargo_revenue, "ticket_revenue_eur" => t.revenue - t.cargo_revenue - t.ancillary,
                     "revenue_eur" => t.revenue, "costs_eur" => t.costs(),
                     "profit_eur" => t.profit(), "load_percent" => t.load_percent()
                 }
@@ -613,7 +616,12 @@ impl SimulationClock {
             .airline
             .iter()
             .map(|a| a.home_airport_icao.as_str())
-            .chain(self.game.routes.iter().flat_map(|r| [r.origin_icao.as_str(), r.destination_icao.as_str()]))
+            .chain(
+                self.game
+                    .routes
+                    .iter()
+                    .flat_map(|r| [r.origin_icao.as_str(), r.destination_icao.as_str()]),
+            )
             .collect();
         let airports = airports::catalog().map(|c| &c.airports[..]).unwrap_or(&[]);
         let weather = weather::visible_at(&weather::Weather::of(&self.game.world_economy), now);
@@ -748,18 +756,17 @@ impl SimulationClock {
             + i128::from(payroll)
             + interest
             + rent;
-        let charter_fees = self
-            .game
-            .history
-            .as_ref()
-            .map_or(0, |h| h.charter_through(u64::MAX, trading::Kind::CharterFee));
-        let charter_penalties = -self
-            .game
-            .history
-            .as_ref()
-            .map_or(0, |h| h.charter_through(u64::MAX, trading::Kind::CharterPenalty));
+        let charter_fees = self.game.history.as_ref().map_or(0, |h| {
+            h.charter_through(u64::MAX, trading::Kind::CharterFee)
+        });
+        let charter_penalties = -self.game.history.as_ref().map_or(0, |h| {
+            h.charter_through(u64::MAX, trading::Kind::CharterPenalty)
+        });
         let profit = i128::from(t.revenue) + charter_fees - charter_penalties - costs;
-        vdict! { "fuel_cents_per_kg" => self.game.fuel_market.price_at(self.game.clock.elapsed().as_secs()),
+        let now = self.game.clock.elapsed().as_secs();
+        vdict! { "carbon_eur_per_tonne" => emissions::price_at(now),
+        "carbon_next_eur_per_tonne" => emissions::price_at(now.saturating_add(emissions::year_seconds())),
+        "fuel_cents_per_kg" => self.game.fuel_market.price_at(self.game.clock.elapsed().as_secs()),
         "fuel_month_delta_cents" => self.game.fuel_market.price_at(self.game.clock.elapsed().as_secs()) - self.game.fuel_market.price_at(self.game.clock.elapsed().as_secs().saturating_sub(30 * 86400)),
         "connecting_passengers" => t.connecting_passengers, "connecting_revenue_eur" => t.connecting_revenue,
         "local_passengers" => t.passengers - t.connecting_passengers,
@@ -779,7 +786,7 @@ impl SimulationClock {
         "maintenance_eur" => maintenance, "payroll_eur" => payroll,
         "rent_eur" => rent.min(i128::from(i64::MAX)) as i64,
         "aircraft_cash_eur" => aircraft_cash.clamp(i128::from(i64::MIN), i128::from(i64::MAX)) as i64,
-        "fuel_eur" => t.fuel, "airport_eur" => t.airport, "crew_eur" => t.crew, "overhead_eur" => t.overhead, "care_eur" => t.care, "punctuality_percent" => disruptions::percent(t), "punctuality_flights" => t.punctuality_flights, "service_eur" => t.service, "ancillary_revenue_eur" => t.ancillary, "loyalty_cost_eur" => t.loyalty_cost,
+        "fuel_eur" => t.fuel, "carbon_eur" => t.carbon, "airport_eur" => t.airport, "crew_eur" => t.crew, "overhead_eur" => t.overhead, "care_eur" => t.care, "punctuality_percent" => disruptions::percent(t), "punctuality_flights" => t.punctuality_flights, "service_eur" => t.service, "ancillary_revenue_eur" => t.ancillary, "loyalty_cost_eur" => t.loyalty_cost,
         "costs_eur" => costs.min(i128::from(i64::MAX)) as i64,
         "profit_eur" => profit.clamp(i128::from(i64::MIN), i128::from(i64::MAX)) as i64, "purchases_eur" => purchases,
         "load_percent" => t.load_percent() }
@@ -939,7 +946,11 @@ impl SimulationClock {
                     s.completed + prior,
                     hangar,
                     s.delay_seconds.div_ceil(60),
-                    if s.weather_seconds > 0 { " (Wetter)" } else { "" }
+                    if s.weather_seconds > 0 {
+                        " (Wetter)"
+                    } else {
+                        ""
+                    }
                 )
             } else if let Some(v) = plane
                 .maintenance
@@ -1189,7 +1200,10 @@ impl SimulationClock {
     fn get_alliance_rules(&self) -> VarDictionary {
         let r = &*alliances::RULES;
         let g = &self.game;
-        let paid = g.history.as_ref().map_or(0, |h| h.alliance_fee_through(u64::MAX));
+        let paid = g
+            .history
+            .as_ref()
+            .map_or(0, |h| h.alliance_fee_through(u64::MAX));
         vdict! { "review_days" => r.review_days as i64, "notice_days" => r.leave_notice_days as i64,
         "cooldown_days" => r.reapply_cooldown_days as i64, "min_routes" => r.min_routes as i64,
         "min_reputation" => r.min_reputation_points, "max_overlap" => i64::from(r.max_overlap_percent),
@@ -1476,6 +1490,7 @@ impl SimulationClock {
             "freighter" => model.main_deck_cargo_kg > 0, "main_deck_cargo_kg" => model.main_deck_cargo_kg,
             "belly_cargo_kg" => model.belly_cargo_kg, "payload_kg" => model.payload_kg,
             "seats" => model.seats, "range_km" => model.range_km, "price_eur" => model.price_eur,
+            "co2_g_per_km" => economy::co2_grams_per_km(model),
             "lease_deposit_eur" => trading::lease_terms(&model.id).map(|t| t.0).unwrap_or(0),
             "lease_monthly_eur" => trading::lease_terms(&model.id).map(|t| t.1).unwrap_or(0),
             "lease_period_days" => trading::RULES.lease_period_days as i64,
@@ -1759,7 +1774,7 @@ impl SimulationClock {
     fn preview_ferry(&self, aircraft_id: u32, destination: GString) -> VarDictionary {
         match self.game.quote_ferry(aircraft_id, &destination.to_string()) {
             Ok(f) => {
-                vdict! { "error" => "", "distance_km" => routes::distance_km(&f.quote.origin, &f.quote.destination).unwrap_or(0.0), "flight_seconds" => (f.quote.landing - f.departure) as i64, "cost_eur" => f.quote.totals.costs(), "fuel_eur" => f.quote.totals.fuel, "airport_eur" => f.quote.totals.airport, "overhead_eur" => f.quote.totals.overhead }
+                vdict! { "error" => "", "distance_km" => routes::distance_km(&f.quote.origin, &f.quote.destination).unwrap_or(0.0), "flight_seconds" => (f.quote.landing - f.departure) as i64, "cost_eur" => f.quote.totals.costs(), "fuel_eur" => f.quote.totals.fuel, "carbon_eur" => f.quote.totals.carbon, "airport_eur" => f.quote.totals.airport, "overhead_eur" => f.quote.totals.overhead }
             }
             Err(error) => vdict! { "error" => error.as_str() },
         }
@@ -1900,17 +1915,16 @@ impl SimulationClock {
         };
         match self.game.quote_charter_offer(&offer, aircraft_id) {
             Ok(q) => {
-                let (pos_cost, pos_fuel, pos_airport, pos_overhead, pos_km) = q
-                    .positioning
-                    .as_ref()
-                    .map_or((0, 0, 0, 0, 0.0), |p| {
+                let (pos_cost, pos_fuel, pos_airport, pos_overhead, pos_km) =
+                    q.positioning.as_ref().map_or((0, 0, 0, 0, 0.0), |p| {
                         let t = &p.quote.totals;
                         (
                             t.costs(),
                             t.fuel,
                             t.airport,
                             t.overhead,
-                            routes::distance_km(&p.quote.origin, &p.quote.destination).unwrap_or(0.0),
+                            routes::distance_km(&p.quote.origin, &p.quote.destination)
+                                .unwrap_or(0.0),
                         )
                     });
                 let t = &q.leg.quote.totals;
@@ -2801,7 +2815,7 @@ fn flight_dictionary(f: &economy::FlightResult) -> VarDictionary {
     "business_revenue_eur" => t.business_revenue, "economy_revenue_eur" => t.revenue - t.business_revenue - t.cargo_revenue - t.ancillary,
     "business_seats" => t.business_seats, "economy_seats" => t.seats - t.business_seats,
     "cargo_kg" => t.cargo_kg, "cargo_revenue_eur" => t.cargo_revenue, "ticket_revenue_eur" => t.revenue - t.cargo_revenue - t.ancillary,
-                    "revenue_eur" => t.revenue, "fuel_eur" => t.fuel, "airport_eur" => t.airport,
+                    "revenue_eur" => t.revenue, "fuel_eur" => t.fuel, "carbon_eur" => t.carbon, "airport_eur" => t.airport,
     "crew_eur" => t.crew, "overhead_eur" => t.overhead, "care_eur" => t.care, "punctuality_percent" => disruptions::percent(t), "punctuality_flights" => t.punctuality_flights, "service_eur" => t.service, "ancillary_revenue_eur" => t.ancillary, "loyalty_cost_eur" => t.loyalty_cost, "costs_eur" => t.costs(), "profit_eur" => t.profit() }
 }
 
