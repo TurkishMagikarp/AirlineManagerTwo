@@ -78,7 +78,9 @@ impl Game {
                 RULES.max_open_orders
             ));
         }
-        let price = aircraft::model(model)?.price_eur;
+        let model_data = aircraft::model(model)?;
+        model_data.require_orderable(self.clock.elapsed().as_secs())?;
+        let price = model_data.price_eur;
         let discount = RULES
             .discount_tiers
             .iter()

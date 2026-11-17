@@ -769,16 +769,29 @@ func _fleet_tab_changed(index: int) -> void:
 
 func _refresh_offers() -> void:
 	var cash: int = simulation.get_airline_info().get("capital_eur", 0)
+	var current: Array = simulation.get_aircraft_models()
 	for i in range(aircraft_cards.size()):
 		var model: Dictionary = model_select.get_item_metadata(i)
+		var live: Dictionary = current[i]
 		var card: Dictionary = aircraft_cards[i]
-		var blocked: bool = cash < model["price_eur"]
+		for child in card["status"].get_children():
+			card["status"].remove_child(child)
+			child.queue_free()
+		var reason := ""
+		if live["availability"] == "upcoming":
+			card["status"].add_child(UI.status_chip(tr("ORDER_FROM") % live["available_from"], "info"))
+			reason = tr("ORDER_UPCOMING_TIP")
+		elif live["availability"] == "out_of_production":
+			card["status"].add_child(UI.status_chip(tr("ORDER_EOP"), "caution"))
+			reason = tr("ORDER_EOP_TIP")
+		var broke: bool = cash < model["price_eur"]
+		var blocked: bool = broke or not live["orderable"]
 		card["buy"].disabled = blocked
-		card["buy"].tooltip_text = "Nicht genügend Guthaben für dieses Flugzeug." if blocked else "Kauft das gewählte Modell sofort zum angezeigten Preis."
+		card["buy"].tooltip_text = reason if not live["orderable"] else "Nicht genügend Guthaben für dieses Flugzeug." if broke else "Kauft das gewählte Modell sofort zum angezeigten Preis."
 		card["reason"].text = card["buy"].tooltip_text if blocked else ""
 		card["reason"].visible = blocked
-		card["lease"].disabled = cash < model["lease_deposit_eur"]
-		card["lease"].tooltip_text = "Nicht genügend Guthaben für die Leasingkaution." if card["lease"].disabled else ""
+		card["lease"].disabled = cash < model["lease_deposit_eur"] or not live["leasable"]
+		card["lease"].tooltip_text = reason if not live["leasable"] else "Nicht genügend Guthaben für die Leasingkaution." if card["lease"].disabled else ""
 
 
 func _confirm_disposal() -> void:

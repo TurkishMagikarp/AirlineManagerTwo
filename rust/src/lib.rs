@@ -69,6 +69,8 @@ mod operations;
 mod orders;
 #[cfg(test)]
 mod orders_tests;
+#[cfg(test)]
+mod lifecycle_tests;
 mod pricing;
 #[cfg(test)]
 mod pricing_tests;
@@ -1464,6 +1466,7 @@ impl SimulationClock {
         let Ok(models) = aircraft::models() else {
             return Array::new();
         };
+        let now = self.game.clock.elapsed().as_secs();
         models.iter().filter_map(|model| {
             let needs = staff::needs(&model.id).ok()?;
             Some(vdict! {
@@ -1475,7 +1478,16 @@ impl SimulationClock {
             "seats" => model.seats, "range_km" => model.range_km, "price_eur" => model.price_eur,
             "lease_deposit_eur" => trading::lease_terms(&model.id).map(|t| t.0).unwrap_or(0),
             "lease_monthly_eur" => trading::lease_terms(&model.id).map(|t| t.1).unwrap_or(0),
-            "lease_period_days" => trading::RULES.lease_period_days as i64
+            "lease_period_days" => trading::RULES.lease_period_days as i64,
+            "availability" => match model.availability(now) {
+                aircraft::Availability::Upcoming { .. } => "upcoming",
+                aircraft::Availability::OnSale => "on_sale",
+                aircraft::Availability::OutOfProduction { .. } => "out_of_production",
+            },
+            "available_from" => format!("Tag {}", model.entry_day + 1).as_str(),
+            "orderable" => model.orderable(now), "leasable" => model.leasable(now),
+            "out_of_production_from" => model.end_of_production_day
+                .map_or(String::new(), |d| format!("Tag {}", d + 1)).as_str()
         }) }).collect()
     }
 

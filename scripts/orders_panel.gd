@@ -10,6 +10,9 @@ var preview: Label
 var place: Button
 var cancel: Button
 var table: Tree
+var catalog_title: Label
+var catalog: Tree
+var catalog_signature := ""
 var empty: Control
 var result: Label
 var selection_details: Label
@@ -30,9 +33,6 @@ func _ready() -> void:
 	model.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	model.fit_to_longest_item = false
 	model.clip_text = true
-	for entry: Dictionary in simulation.get_aircraft_models():
-		model.add_item(entry["name"])
-		model.set_item_metadata(model.item_count - 1, entry["id"])
 	model.item_selected.connect(func(_index: int): _preview())
 	body.add_child(model)
 	body.add_child(UI.label(tr("ORDER_QUANTITY"), Tokens.LABEL, UI.MUTED))
@@ -56,6 +56,10 @@ func _ready() -> void:
 	result = UI.label("")
 	result.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	body.add_child(result)
+	catalog_title = UI.label(tr("ORDER_AVAILABILITY"), Tokens.LABEL, UI.MUTED)
+	body.add_child(catalog_title)
+	catalog = UI.table([tr("ORDER_MODEL"), tr("ORDER_STATUS")], [150, 190], 120)
+	body.add_child(catalog)
 	var open := UI.panel(self, tr("ORDER_OPEN"))
 	empty = UI.empty_state(tr("ORDER_EMPTY"), tr("ORDER_EMPTY_HINT"), tr("ORDER_SELECT"), func(): model.grab_focus())
 	open.add_child(empty)
@@ -75,8 +79,42 @@ func _ready() -> void:
 	_resize_table()
 	refresh()
 
+func _refresh_catalog() -> void:
+	var models: Array = simulation.get_aircraft_models()
+	var next := str(models.map(func(m: Dictionary): return [m["id"], m["availability"]]))
+	if next == catalog_signature: return
+	catalog_signature = next
+	var selected_id = model.get_selected_metadata() if model.selected >= 0 else null
+	model.clear()
+	catalog.clear()
+	var root := catalog.create_item()
+	for entry: Dictionary in models:
+		var text: String = entry["name"]
+		if entry["availability"] == "upcoming":
+			text += " · " + tr("ORDER_FROM") % entry["available_from"]
+			var row := catalog.create_item(root)
+			UI.cell_text(row, 0, entry["name"])
+			UI.cell_status(row, 1, tr("ORDER_FROM") % entry["available_from"], "info")
+			row.set_tooltip_text(1, tr("ORDER_UPCOMING_TIP"))
+		elif entry["availability"] == "out_of_production":
+			text += " · " + tr("ORDER_EOP")
+			var row := catalog.create_item(root)
+			UI.cell_text(row, 0, entry["name"])
+			UI.cell_status(row, 1, tr("ORDER_EOP"), "caution")
+			row.set_tooltip_text(1, tr("ORDER_EOP_TIP"))
+		model.add_item(text)
+		model.set_item_metadata(model.item_count - 1, entry["id"])
+		if entry["id"] == selected_id: model.select(model.item_count - 1)
+	if model.selected < 0 and model.item_count > 0: model.select(0)
+	var any := root.get_first_child() != null
+	catalog.custom_minimum_size.y = 36 + 40 * mini(root.get_child_count(), 6)
+	catalog_title.visible = any
+	catalog.visible = any
+	_preview()
+
 func refresh() -> void:
 	if table == null: return
+	_refresh_catalog()
 	var data: Array = simulation.get_orders()
 	var next := str([data, simulation.get_airline_info().get("capital_eur", 0)])
 	if signature == next: return

@@ -1,0 +1,15 @@
+{
+  "announce_days": 90,
+  "notice_visible_days": 30,
+  "models": {
+    "a320_200": { "end_of_production_day": 1460, "successor": "a320neo" },
+    "b737_800": { "end_of_production_day": 1610, "successor": "b737_max8" },
+    "atr72_600": { "end_of_production_day": 2190, "successor": "atr72_evo" },
+    "a330_300": { "end_of_production_day": 1825, "successor": "a330_900" },
+    "a320neo": { "entry_day": 730 },
+    "b737_max8": { "entry_day": 880 },
+    "atr72_evo": { "entry_day": 1460 },
+    "a330_900": { "entry_day": 1095 },
+    "a350_900": { "entry_day": 1825 }
+  }
+}

@@ -18,7 +18,97 @@ pub struct Model {
     pub turnaround_minutes: u32,
     #[serde(skip)]
     pub price_eur: i64,
+    /// Elapsed game day (0 = start) from which the model can be ordered, bought or leased.
+    #[serde(skip)]
+    pub entry_day: u64,
+    /// First elapsed game day on which new units can no longer be ordered or bought.
+    #[serde(skip)]
+    pub end_of_production_day: Option<u64>,
+    /// Day on which the successor enters the market; used aircraft lose value faster from then on.
+    #[serde(skip)]
+    pub obsolete_from_day: Option<u64>,
 }
+
+const DAY: u64 = 86_400;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Availability {
+    Upcoming { from_day: u64 },
+    OnSale,
+    OutOfProduction { since_day: u64 },
+}
+
+impl Model {
+    pub fn availability(&self, now: u64) -> Availability {
+        let day = now / DAY;
+        if day < self.entry_day {
+            Availability::Upcoming {
+                from_day: self.entry_day,
+            }
+        } else if let Some(end) = self.end_of_production_day.filter(|&end| day >= end) {
+            Availability::OutOfProduction { since_day: end }
+        } else {
+            Availability::OnSale
+        }
+    }
+
+    /// New units can be ordered or bought from the manufacturer.
+    pub fn orderable(&self, now: u64) -> bool {
+        self.availability(now) == Availability::OnSale
+    }
+
+    /// Leasing stays possible after production ends, but not before the entry date.
+    pub fn leasable(&self, now: u64) -> bool {
+        !matches!(self.availability(now), Availability::Upcoming { .. })
+    }
+
+    pub fn require_orderable(&self, now: u64) -> Result<(), String> {
+        match self.availability(now) {
+            Availability::OnSale => Ok(()),
+            Availability::Upcoming { from_day } => Err(format!(
+                "{} ist erst ab Tag {} verfügbar.",
+                self.name,
+                from_day + 1
+            )),
+            Availability::OutOfProduction { .. } => {
+                Err(format!("{} wird nicht mehr produziert.", self.name))
+            }
+        }
+    }
+
+    pub fn require_leasable(&self, now: u64) -> Result<(), String> {
+        match self.availability(now) {
+            Availability::Upcoming { from_day } => Err(format!(
+                "{} ist erst ab Tag {} verfügbar.",
+                self.name,
+                from_day + 1
+            )),
+            _ => Ok(()),
+        }
+    }
+}
+
+#[derive(Deserialize)]
+pub struct Lifecycle {
+    #[serde(default)]
+    pub entry_day: u64,
+    pub end_of_production_day: Option<u64>,
+    pub successor: Option<String>,
+}
+
+#[derive(Deserialize)]
+pub struct LifecycleRules {
+    /// Days before an entry or end-of-production date on which the attention note appears.
+    pub announce_days: u64,
+    /// Days the note stays after the event.
+    pub notice_visible_days: u64,
+    pub models: HashMap<String, Lifecycle>,
+}
+
+pub static LIFECYCLE: LazyLock<LifecycleRules> = LazyLock::new(|| {
+    serde_json::from_str(include_str!("../../config/aircraft_lifecycle.json"))
+        .expect("aircraft lifecycle config")
+});
 
 fn display_class<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<String, D::Error> {
     let class = String::deserialize(deserializer)?;
@@ -35,8 +125,52 @@ static MODELS: LazyLock<Result<Vec<Model>, String>> = LazyLock::new(|| {
     let prices: HashMap<String, i64> =
         serde_json::from_str(include_str!("../../config/aircraft_prices.json"))
             .map_err(|_| "Flugzeugpreise sind ungültig.".to_string())?;
+    let lifecycle = &*LIFECYCLE;
+    if lifecycle.announce_days == 0 || lifecycle.notice_visible_days == 0 {
+        return Err("Flugzeug-Lebenszyklus ist ungültig.".into());
+    }
+    let entry_days: HashMap<&str, u64> = models
+        .iter()
+        .map(|m| {
+            (
+                m.id.as_str(),
+                lifecycle.models.get(&m.id).map_or(0, |l| l.entry_day),
+            )
+        })
+        .collect();
+    if lifecycle
+        .models
+        .keys()
+        .any(|id| !entry_days.contains_key(id.as_str()))
+    {
+        return Err("Flugzeug-Lebenszyklus nennt ein unbekanntes Modell.".into());
+    }
+    let mut obsolete = HashMap::new();
+    for (id, l) in &lifecycle.models {
+        let successor_entry = match &l.successor {
+            Some(s) => Some(
+                *entry_days
+                    .get(s.as_str())
+                    .ok_or("Nachfolgemodell unbekannt.")?,
+            ),
+            None => None,
+        };
+        if l.end_of_production_day
+            .is_some_and(|end| end <= l.entry_day)
+            || successor_entry.is_some_and(|e| e <= l.entry_day)
+            || l.successor.as_deref() == Some(id.as_str())
+        {
+            return Err("Flugzeug-Lebenszyklus enthält ungültige Termine.".into());
+        }
+        obsolete.insert(id.clone(), successor_entry);
+    }
     let mut ids = HashSet::new();
     for model in &mut models {
+        if let Some(l) = lifecycle.models.get(&model.id) {
+            model.entry_day = l.entry_day;
+            model.end_of_production_day = l.end_of_production_day;
+            model.obsolete_from_day = obsolete[&model.id];
+        }
         model.price_eur = *prices
             .get(&model.id)
             .filter(|&&price| price > 0)
@@ -138,7 +272,7 @@ mod tests {
 
     #[test]
     fn real_model_catalog_and_configured_prices_are_valid() {
-        assert_eq!(models().unwrap().len(), 8);
+        assert_eq!(models().unwrap().len(), 13);
         assert_eq!(model("a320_200").unwrap().seats, 180);
         assert_eq!(model("b737_800").unwrap().seats, 189);
         assert_eq!(model("atr72_600").unwrap().range_km, 1370);

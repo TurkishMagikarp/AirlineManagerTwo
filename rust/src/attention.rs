@@ -24,6 +24,8 @@ static RULES: LazyLock<Rules> = LazyLock::new(|| {
         "alliance",
         "charter_expiring",
         "charter_failed",
+        "model_entry",
+        "model_end",
     ] {
         assert!(r.priorities.contains_key(key), "Priorität fehlt: {key}");
     }
@@ -377,6 +379,40 @@ impl Game {
                 aircraft_id: 0,
                 employee_id: 0,
             });
+        }
+        let notes = &crate::aircraft::LIFECYCLE;
+        let day = now / 86400;
+        for (index, m) in crate::aircraft::models().unwrap_or_default().iter().enumerate() {
+            let mut note = |kind, date: u64, text: String| {
+                if day + notes.announce_days >= date && day < date + notes.notice_visible_days {
+                    entries.push(Entry {
+                        order_id: index as u64 + 1,
+                        kind,
+                        priority: RULES.priorities[kind],
+                        text,
+                        page: "fleet",
+                        route_id: 0,
+                        aircraft_id: 0,
+                        employee_id: 0,
+                    });
+                }
+            };
+            if m.entry_day > 0 {
+                let text = if day < m.entry_day {
+                    format!("{} · Bestellungen ab Tag {} möglich", m.name, m.entry_day + 1)
+                } else {
+                    format!("{} · jetzt beim Hersteller bestellbar", m.name)
+                };
+                note("model_entry", m.entry_day, text);
+            }
+            if let Some(end) = m.end_of_production_day {
+                let text = if day < end {
+                    format!("{} · Produktion endet an Tag {}", m.name, end + 1)
+                } else {
+                    format!("{} · nicht mehr neu bestellbar, Gebrauchtmarkt und Leasing bleiben", m.name)
+                };
+                note("model_end", end, text);
+            }
         }
         entries.extend(announced);
         entries.sort_by_key(|e| {
