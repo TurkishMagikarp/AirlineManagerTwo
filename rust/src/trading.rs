@@ -53,6 +53,8 @@ pub enum Kind {
     Deposit,
     Rent,
     Return,
+    CharterFee,
+    CharterPenalty,
 }
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Entry {
@@ -196,6 +198,7 @@ impl Game {
         }
         let index = self.fleet.iter().position(|p| p.id == id).unwrap();
         self.ferries.retain(|f| f.aircraft_id != id);
+        self.fail_charter_aircraft(id, "Flugzeug verkauft oder zurückgegeben")?;
         let mut plane = self.fleet.remove(index);
         let seller = if plane.lease.take().is_some() {
             "Leasinggesellschaft".to_string()
@@ -269,8 +272,12 @@ impl Game {
                 if e.time < previous
                     || e.time > now
                     || match e.kind {
-                        Kind::Sale | Kind::Return => e.cash < 0,
-                        Kind::Deposit | Kind::Rent | Kind::Cabin | Kind::Ferry => e.cash >= 0,
+                        Kind::Sale | Kind::Return | Kind::CharterFee => e.cash < 0,
+                        Kind::Deposit
+                        | Kind::Rent
+                        | Kind::Cabin
+                        | Kind::Ferry
+                        | Kind::CharterPenalty => e.cash >= 0,
                     }
                 {
                     return Err("Ungültiges Flugzeugjournal.".into());

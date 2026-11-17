@@ -22,6 +22,8 @@ static RULES: LazyLock<Rules> = LazyLock::new(|| {
         "event",
         "weather",
         "alliance",
+        "charter_expiring",
+        "charter_failed",
     ] {
         assert!(r.priorities.contains_key(key), "Priorität fehlt: {key}");
     }
@@ -264,14 +266,16 @@ impl Game {
                         );
                     }
                 }
-                add(
-                    "idle",
-                    format!("{} · Geparkt · kein Flugplan", p.identifier()),
-                    "fleet",
-                    0,
-                    p.id,
-                    0,
-                );
+                if self.charter_job(p.id).is_none() {
+                    add(
+                        "idle",
+                        format!("{} · Geparkt · kein Flugplan", p.identifier()),
+                        "fleet",
+                        0,
+                        p.id,
+                        0,
+                    );
+                }
             }
         }
         for e in &self.staff.employees {
@@ -327,6 +331,52 @@ impl Game {
                     employee_id: 0,
                 });
             }
+        }
+        let warning = crate::charters::RULES.expiry_warning_hours * 3600;
+        let idle: Vec<u32> = self
+            .fleet
+            .iter()
+            .filter(|p| p.status == AircraftStatus::Parked && self.require_ferry_aircraft(p.id).is_ok())
+            .map(|p| p.id)
+            .collect();
+        if !idle.is_empty() {
+            for o in self.open_charters().iter().filter(|o| o.expires - now <= warning) {
+                if let Some(&id) = idle.iter().find(|&&id| self.quote_charter_offer(o, id).is_ok()) {
+                    entries.push(Entry {
+                        order_id: o.id,
+                        kind: "charter_expiring",
+                        priority: RULES.priorities["charter_expiring"],
+                        text: format!(
+                            "Charterangebot {} · {} EUR · läuft ab {} · passt zu AM-{:06}",
+                            o.label(),
+                            o.fee_eur,
+                            operations::display_time(o.expires),
+                            id
+                        ),
+                        page: "fleet",
+                        route_id: 0,
+                        aircraft_id: 0,
+                        employee_id: 0,
+                    });
+                }
+            }
+        }
+        for o in self.charters.recent.iter().filter(|o| !o.delivered) {
+            entries.push(Entry {
+                order_id: o.offer_id,
+                kind: "charter_failed",
+                priority: RULES.priorities["charter_failed"],
+                text: format!(
+                    "Charter {} gescheitert: {} · Vertragsstrafe {} EUR",
+                    o.label,
+                    o.reason,
+                    -o.cash_eur
+                ),
+                page: "fleet",
+                route_id: 0,
+                aircraft_id: 0,
+                employee_id: 0,
+            });
         }
         entries.extend(announced);
         entries.sort_by_key(|e| {

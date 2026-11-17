@@ -254,6 +254,14 @@ impl History {
             .map(|e| -i128::from(e.cash))
             .sum()
     }
+    /// Sum of the charter ledger lines of one kind (fees positive, penalties negative).
+    pub fn charter_through(&self, time: u64, kind: crate::trading::Kind) -> i128 {
+        self.aircraft_cash
+            .iter()
+            .filter(|e| e.time <= time && e.kind == kind)
+            .map(|e| i128::from(e.cash))
+            .sum()
+    }
     pub fn rent_through(&self, time: u64) -> i128 {
         self.aircraft_cash
             .iter()
@@ -689,6 +697,7 @@ mod tests {
         if std::env::var_os("AIRLINE_PERF_EVENTS").is_some() {
             crate::world_events::DISABLED.with(|v| v.set(false));
         }
+        crate::charters::AI_DISABLED.with(|v| v.set(false));
         // Optional paired baseline: every owner remains on the neutral None path.
         let _loyalty_none = std::env::var_os("AIRLINE_PERF_LOYALTY_NONE")
             .is_some()

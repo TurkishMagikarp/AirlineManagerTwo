@@ -383,6 +383,7 @@ impl Game {
             g.validate_financing()?;
             g.validate_tax()?;
             g.validate_fuel_contract()?;
+            g.validate_charters()?;
             g.validate_finance()?;
             g.validate_history()?;
             let mut reviewed = std::collections::HashSet::new();
@@ -429,6 +430,7 @@ impl Game {
                 .next_order_event()
                 .is_none_or(|t| t > target.elapsed().as_secs())
             && self.ferries.is_empty()
+            && self.charters.is_empty()
             && crate::reputation::next_day(self.clock.elapsed().as_secs())
                 > target.elapsed().as_secs()
             && self.competitors.is_empty()
@@ -542,6 +544,7 @@ impl Game {
             let maintenance = std::iter::once(staged.next_order_event())
                 .chain(std::iter::once(staged.next_pricing_event()))
                 .chain(std::iter::once(staged.next_ferry_event()))
+                .chain(std::iter::once(staged.next_charter_event()))
                 .chain(std::iter::once(staged.next_maintenance_event()))
                 .chain(std::iter::once(staged.next_rotation_event()))
                 .chain(std::iter::once(staged.next_payroll_event()))
@@ -556,6 +559,7 @@ impl Game {
                     [
                         c.game.next_order_event(),
                         c.game.next_ferry_event(),
+                        c.game.next_charter_event(),
                         c.game.next_maintenance_event(),
                         c.game.next_rotation_event(),
                         c.game.next_payroll_event(),
@@ -665,6 +669,7 @@ impl Game {
                 || staged
                     .apply_ferries()
                     .and_then(|()| staged.apply_maintenance())
+                    .and_then(|()| staged.apply_charters())
                     .is_err()
                 || staged.apply_payroll().is_err()
                 || staged.apply_labour_events().is_err()
@@ -679,6 +684,7 @@ impl Game {
                         || c.game
                             .apply_ferries()
                             .and_then(|()| c.game.apply_maintenance())
+                            .and_then(|()| c.game.apply_charters())
                             .is_err()
                         || c.game.apply_payroll().is_err()
                         || c.game.apply_labour_events().is_err()
@@ -716,6 +722,9 @@ impl Game {
                         return false;
                     }
                     std::mem::swap(&mut staged.used_market, &mut c.game.used_market);
+                }
+                if staged.ai_charters(i).is_err() {
+                    return false;
                 }
             }
             if staged.apply_pricing().is_err() {

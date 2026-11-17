@@ -6,6 +6,9 @@ mod ancillaries;
 #[cfg(test)]
 mod ancillary_tests;
 mod alliances;
+mod charters;
+#[cfg(test)]
+mod charters_tests;
 #[cfg(test)]
 mod alliances_tests;
 mod attention;
@@ -743,7 +746,17 @@ impl SimulationClock {
             + i128::from(payroll)
             + interest
             + rent;
-        let profit = i128::from(t.revenue) - costs;
+        let charter_fees = self
+            .game
+            .history
+            .as_ref()
+            .map_or(0, |h| h.charter_through(u64::MAX, trading::Kind::CharterFee));
+        let charter_penalties = -self
+            .game
+            .history
+            .as_ref()
+            .map_or(0, |h| h.charter_through(u64::MAX, trading::Kind::CharterPenalty));
+        let profit = i128::from(t.revenue) + charter_fees - charter_penalties - costs;
         vdict! { "fuel_cents_per_kg" => self.game.fuel_market.price_at(self.game.clock.elapsed().as_secs()),
         "fuel_month_delta_cents" => self.game.fuel_market.price_at(self.game.clock.elapsed().as_secs()) - self.game.fuel_market.price_at(self.game.clock.elapsed().as_secs().saturating_sub(30 * 86400)),
         "connecting_passengers" => t.connecting_passengers, "connecting_revenue_eur" => t.connecting_revenue,
@@ -758,6 +771,8 @@ impl SimulationClock {
         "tax_year_eur" => last_tax.map_or(0, |a| a.amount),
         "tax_year" => last_tax.map_or(0, |a| a.time / demand::YEAR_SECONDS) as i64,
         "tax_loss_eur" => self.game.tax_loss(), "tax_rate_bps" => self.game.tax_rate(),
+        "charter_revenue_eur" => charter_fees.min(i128::from(i64::MAX)) as i64,
+        "charter_penalty_eur" => charter_penalties.min(i128::from(i64::MAX)) as i64,
         "ferry_eur" => ferry_cost.min(i128::from(i64::MAX)) as i64,
         "maintenance_eur" => maintenance, "payroll_eur" => payroll,
         "rent_eur" => rent.min(i128::from(i64::MAX)) as i64,
@@ -1622,7 +1637,9 @@ impl SimulationClock {
                         trading::Kind::Sale => "Verkauf",
                         trading::Kind::Deposit => "Leasingkaution",
                         trading::Kind::Rent => "Leasingrate",
-                        trading::Kind::Return => "Rückgabe (Kaution abzüglich Zustandsgebühr)"
+                        trading::Kind::Return => "Rückgabe (Kaution abzüglich Zustandsgebühr)",
+                        trading::Kind::CharterFee => "Charter-Erlös",
+                        trading::Kind::CharterPenalty => "Charter-Vertragsstrafe"
                     }
                 }
             })
@@ -1740,6 +1757,193 @@ impl SimulationClock {
     fn send_ferry(&mut self, aircraft_id: u32, destination: GString) -> GString {
         self.game
             .send_ferry(aircraft_id, &destination.to_string())
+            .err()
+            .unwrap_or_default()
+            .as_str()
+            .into()
+    }
+
+    #[func]
+    fn get_charter_offers(&self) -> Array<VarDictionary> {
+        let idle: Vec<u32> = self
+            .game
+            .fleet
+            .iter()
+            .filter(|p| {
+                p.status == aircraft::AircraftStatus::Parked
+                    && self.game.require_ferry_aircraft(p.id).is_ok()
+            })
+            .map(|p| p.id)
+            .collect();
+        self.game
+            .open_charters()
+            .iter()
+            .map(|o| {
+                let fits = idle
+                    .iter()
+                    .any(|&id| self.game.quote_charter_offer(o, id).is_ok());
+                vdict! {
+                    "id" => o.id as i64,
+                    "kind" => o.kind.as_str(),
+                    "kind_name" => o.kind_name(),
+                    "freight" => o.freight(),
+                    "origin" => o.origin.as_str(),
+                    "destination" => o.destination.as_str(),
+                    "distance_km" => routes::distance_km(&o.origin, &o.destination).unwrap_or(0.0),
+                    "quantity" => i64::from(o.quantity),
+                    "fee_eur" => o.fee_eur,
+                    "penalty_eur" => o.penalty_eur(),
+                    "window_start" => operations::display_time(o.window_start).as_str(),
+                    "window_end" => operations::display_time(o.window_end).as_str(),
+                    "expires" => operations::display_time(o.expires).as_str(),
+                    "fits_idle_aircraft" => fits,
+                }
+            })
+            .collect()
+    }
+
+    #[func]
+    fn get_charter_jobs(&self) -> Array<VarDictionary> {
+        let now = self.game.clock.elapsed().as_secs();
+        let mut rows: Array<VarDictionary> = Array::new();
+        for j in &self.game.charters.jobs {
+            let (state, text) = if j.departure.is_some() {
+                ("airborne", "Im Flug")
+            } else if self.game.ferry(j.aircraft_id).is_some_and(|f| !f.settled) {
+                ("positioning", "Überführung")
+            } else {
+                ("scheduled", "Geplant")
+            };
+            rows.push(&vdict! {
+                "id" => j.offer.id as i64,
+                "state" => state,
+                "state_text" => text,
+                "kind_name" => j.offer.kind_name(),
+                "route" => j.offer.label().as_str(),
+                "aircraft_id" => j.aircraft_id,
+                "aircraft" => format!("AM-{:06}", j.aircraft_id).as_str(),
+                "fee_eur" => j.offer.fee_eur,
+                "penalty_eur" => j.offer.penalty_eur(),
+                "departure" => operations::display_time(j.dispatch_at.max(j.departure.unwrap_or(0))).as_str(),
+                "deadline" => operations::display_time(j.offer.window_end).as_str(),
+                "cancellable" => j.departure.is_none(),
+                "overdue" => j.dispatch_at < now && j.departure.is_none(),
+            });
+        }
+        for o in self.game.charters.recent.iter().rev() {
+            rows.push(&vdict! {
+                "id" => o.offer_id as i64,
+                "state" => if o.delivered { "delivered" } else { "failed" },
+                "state_text" => if o.delivered { "Geliefert" } else { "Gescheitert" },
+                "kind_name" => "",
+                "route" => o.label.as_str(),
+                "aircraft_id" => o.aircraft_id,
+                "aircraft" => format!("AM-{:06}", o.aircraft_id).as_str(),
+                "fee_eur" => o.cash_eur,
+                "penalty_eur" => 0,
+                "departure" => operations::display_time(o.at).as_str(),
+                "deadline" => o.reason.as_str(),
+                "cancellable" => false,
+                "overdue" => false,
+            });
+        }
+        rows
+    }
+
+    #[func]
+    fn get_charter_aircraft_options(&self, offer_id: i64) -> Array<VarDictionary> {
+        let offer = self
+            .game
+            .open_charters()
+            .into_iter()
+            .find(|o| o.id as i64 == offer_id);
+        self.game
+            .fleet
+            .iter()
+            .map(|p| {
+                let name = aircraft::model(&p.model_id).map_or("", |m| m.name.as_str());
+                let verdict = match &offer {
+                    Some(o) => self.game.quote_charter_offer(o, p.id).map(|_| ()),
+                    None => Err("Das Angebot ist nicht mehr verfügbar.".to_string()),
+                };
+                vdict! {
+                    "aircraft_id" => p.id,
+                    "label" => format!("{} · {} · {}", p.identifier(), name, p.location_icao).as_str(),
+                    "ok" => verdict.is_ok(),
+                    "reason" => verdict.err().unwrap_or_default().as_str(),
+                }
+            })
+            .collect()
+    }
+
+    #[func]
+    fn preview_charter(&self, offer_id: i64, aircraft_id: u32) -> VarDictionary {
+        let Some(offer) = self
+            .game
+            .open_charters()
+            .into_iter()
+            .find(|o| o.id as i64 == offer_id)
+        else {
+            return vdict! { "error" => "Das Angebot ist nicht mehr verfügbar." };
+        };
+        match self.game.quote_charter_offer(&offer, aircraft_id) {
+            Ok(q) => {
+                let (pos_cost, pos_fuel, pos_airport, pos_overhead, pos_km) = q
+                    .positioning
+                    .as_ref()
+                    .map_or((0, 0, 0, 0, 0.0), |p| {
+                        let t = &p.quote.totals;
+                        (
+                            t.costs(),
+                            t.fuel,
+                            t.airport,
+                            t.overhead,
+                            routes::distance_km(&p.quote.origin, &p.quote.destination).unwrap_or(0.0),
+                        )
+                    });
+                let t = &q.leg.quote.totals;
+                vdict! {
+                    "error" => "",
+                    "has_positioning" => q.positioning.is_some(),
+                    "positioning_from" => self.game.fleet.iter().find(|p| p.id == aircraft_id).map_or("", |p| p.location_icao.as_str()),
+                    "positioning_km" => pos_km,
+                    "positioning_eur" => pos_cost,
+                    "positioning_fuel_eur" => pos_fuel,
+                    "positioning_airport_eur" => pos_airport,
+                    "positioning_overhead_eur" => pos_overhead,
+                    "leg_km" => routes::distance_km(&offer.origin, &offer.destination).unwrap_or(0.0),
+                    "leg_eur" => t.costs(),
+                    "leg_fuel_eur" => t.fuel,
+                    "leg_airport_eur" => t.airport,
+                    "leg_overhead_eur" => t.overhead,
+                    "cost_eur" => q.cost_eur(),
+                    "fee_eur" => offer.fee_eur,
+                    "net_eur" => offer.fee_eur - q.cost_eur(),
+                    "penalty_eur" => offer.penalty_eur(),
+                    "departure" => operations::display_time(q.dispatch_at).as_str(),
+                    "landing" => operations::display_time(q.leg.quote.landing).as_str(),
+                    "deadline" => operations::display_time(offer.window_end).as_str(),
+                    "route" => offer.label().as_str(),
+                }
+            }
+            Err(error) => vdict! { "error" => error.as_str() },
+        }
+    }
+
+    #[func]
+    fn accept_charter(&mut self, offer_id: i64, aircraft_id: u32) -> GString {
+        self.game
+            .accept_charter(offer_id as u64, aircraft_id)
+            .err()
+            .unwrap_or_default()
+            .as_str()
+            .into()
+    }
+
+    #[func]
+    fn cancel_charter(&mut self, offer_id: i64) -> GString {
+        self.game
+            .cancel_charter(offer_id as u64)
             .err()
             .unwrap_or_default()
             .as_str()

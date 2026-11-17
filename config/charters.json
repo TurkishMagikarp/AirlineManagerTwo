@@ -1,0 +1,28 @@
+{
+  "epoch_days": 7,
+  "offer_lifetime_days": 6,
+  "lead_days_min": 2,
+  "lead_days_max": 9,
+  "window_days": 3,
+  "base_offers_per_epoch": 4.0,
+  "min_offers_per_epoch": 1,
+  "max_offers_per_epoch": 10,
+  "origin_pool": 24,
+  "destination_pool": 40,
+  "min_distance_km": 300,
+  "max_distance_km": 6500,
+  "base_fee_eur": 1500,
+  "penalty_percent": 30,
+  "reputation_gain_micro": 4000,
+  "reputation_loss_micro": 15000,
+  "expiry_warning_hours": 36,
+  "notice_days": 5,
+  "recent_limit": 8,
+  "ai_min_net_eur": 1500,
+  "ai_min_margin_percent": 15,
+  "kinds": [
+    { "id": "tour_operator", "name": "Reiseveranstalter", "weight": 5, "freight": false, "min": 60, "max": 250, "rate_milli_eur": 55 },
+    { "id": "sports_team", "name": "Sportmannschaft", "weight": 3, "freight": false, "min": 15, "max": 70, "rate_milli_eur": 95 },
+    { "id": "freight", "name": "Einzelfracht", "weight": 3, "freight": true, "min": 3, "max": 40, "rate_milli_eur": 450 }
+  ]
+}

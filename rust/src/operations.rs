@@ -273,6 +273,13 @@ impl Game {
     }
 
     pub fn require_ferry_aircraft(&self, id: u32) -> Result<(), String> {
+        if self.charter_job(id).is_some() {
+            return Err("Flugzeug hat einen Charterauftrag.".into());
+        }
+        self.require_free_aircraft(id)
+    }
+
+    pub(crate) fn require_free_aircraft(&self, id: u32) -> Result<(), String> {
         self.require_solvent()?;
         let plane = self
             .fleet
@@ -304,15 +311,38 @@ impl Game {
     pub fn quote_ferry(&self, id: u32, destination: &str) -> Result<Ferry, String> {
         self.require_ferry_aircraft(id)?;
         let plane = self.fleet.iter().find(|p| p.id == id).unwrap();
-        let distance = crate::routes::distance_km(&plane.location_icao, destination)?;
+        self.quote_leg(
+            id,
+            &plane.location_icao,
+            destination,
+            self.clock.elapsed().as_secs(),
+            0,
+        )
+    }
+
+    /// One empty-cabin dispatch quote from `from` to `to`, leaving at `departure`.
+    /// `passengers` only changes the airport charges (charter flights).
+    pub(crate) fn quote_leg(
+        &self,
+        id: u32,
+        from: &str,
+        to: &str,
+        departure: u64,
+        passengers: i64,
+    ) -> Result<Ferry, String> {
+        let plane = self
+            .fleet
+            .iter()
+            .find(|p| p.id == id)
+            .ok_or("Unbekanntes Flugzeug.")?;
+        let distance = crate::routes::distance_km(from, to)?;
         if distance > f64::from(aircraft::model(&plane.model_id)?.range_km) {
             return Err("Ziel liegt außerhalb der Reichweite.".into());
         }
-        let departure = self.clock.elapsed().as_secs();
         let route = Route {
             id: 0,
-            origin_icao: plane.location_icao.clone(),
-            destination_icao: destination.into(),
+            origin_icao: from.into(),
+            destination_icao: to.into(),
             aircraft_id: Some(id),
             parent_route_id: None,
             remove_at: None,
@@ -327,11 +357,14 @@ impl Game {
         };
         let (seconds, ground) = timings(&route, &plane.model_id)?;
         let landing = departure.checked_add(seconds).ok_or("Zeitüberlauf.")?;
-        let totals = crate::economy::empty_flight_quote(
+        let mut totals = crate::economy::empty_flight_quote(
             &route,
             &plane.model_id,
             self.fuel_market.price_at(departure),
         )?;
+        if passengers > 0 {
+            totals.airport = crate::economy::airport_bill(&route, &plane.model_id, passengers)?;
+        }
         Ok(Ferry {
             aircraft_id: id,
             departure,
@@ -339,8 +372,8 @@ impl Game {
             quote: crate::economy::FlightResult {
                 route_id: 0,
                 landing,
-                origin: plane.location_icao.clone(),
-                destination: destination.into(),
+                origin: from.into(),
+                destination: to.into(),
                 ticket_eur: 0,
                 totals,
             },
@@ -348,11 +381,16 @@ impl Game {
         })
     }
 
-    pub fn send_ferry(&mut self, id: u32, destination: &str) -> Result<(), String> {
-        let ferry = self.quote_ferry(id, destination)?;
+    pub(crate) fn start_ferry(&mut self, ferry: Ferry) {
+        let id = ferry.aircraft_id;
         self.fleet.iter_mut().find(|p| p.id == id).unwrap().status = AircraftStatus::InFlight;
         self.ferries.push(ferry);
         self.ferries.sort_by_key(|f| f.aircraft_id);
+    }
+
+    pub fn send_ferry(&mut self, id: u32, destination: &str) -> Result<(), String> {
+        let ferry = self.quote_ferry(id, destination)?;
+        self.start_ferry(ferry);
         Ok(())
     }
 
