@@ -22,6 +22,7 @@
   },
   "conversion_cost_eur": 25000,
   "conversion_days": 14,
+  "external_conversion": { "cost_eur": 60000, "days": 6 },
   "payroll_period_days": 30,
   "salary_reserve_periods": 1,
   "max_employees": 600,
