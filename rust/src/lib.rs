@@ -1561,6 +1561,27 @@ impl SimulationClock {
     }
 
     #[func]
+    fn get_upcoming_commitments(&self) -> Array<VarDictionary> {
+        self.game
+            .upcoming_commitments()
+            .iter()
+            .map(|c| {
+                let date = operations::display_time(c.at);
+                match &c.kind {
+                    orders::CommitmentKind::Delivery { order_id, model } => vdict! {
+                        "kind" => "delivery", "date" => date.as_str(), "at" => c.at as i64,
+                        "title" => model.as_str(), "detail" => "", "id" => *order_id as i64
+                    },
+                    orders::CommitmentKind::Training { employee_id, name, rating } => vdict! {
+                        "kind" => "training", "date" => date.as_str(), "at" => c.at as i64,
+                        "title" => name.as_str(), "detail" => rating.as_str(), "id" => i64::from(*employee_id)
+                    },
+                }
+            })
+            .collect()
+    }
+
+    #[func]
     fn get_used_market(&self) -> Array<VarDictionary> {
         let mut rows = Array::new();
         for listing in &self.game.used_market.listings {
