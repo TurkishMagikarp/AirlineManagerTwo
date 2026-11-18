@@ -14,6 +14,9 @@ var staff_tree: Tree
 var rating_select: OptionButton
 var ratings_tree: Tree
 var train_button: Button
+var course_select: OptionButton
+var course_terms: Label
+var courses: Array = []
 var role_select: OptionButton
 var count_spin: SpinBox
 var hire_button: Button
@@ -147,6 +150,14 @@ func _ready() -> void:
 	dismiss_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	people.add_child(dismiss_status)
 	people.add_child(dismiss_button)
+	course_select = OptionButton.new()
+	course_select.fit_to_longest_item = false
+	course_select.clip_text = true
+	course_select.item_selected.connect(func(_i: int) -> void: _course_text())
+	UI.field(people, "Umschulungskurs", course_select, "Intern: günstiger, dafür länger. Extern: schneller, aber teurer. Der Pilot bleibt bis zum Abschluss nicht verfügbar.")
+	course_terms = UI.label("", ThemeTokens.SMALL, UI.MUTED)
+	course_terms.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	people.add_child(course_terms)
 	train_button = Button.new()
 	train_button.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	train_button.pressed.connect(_train)
@@ -170,7 +181,7 @@ func refresh(force: bool = false) -> void:
 	var overview: Dictionary = simulation.get_staff_overview()
 	var staff: Array = simulation.get_staff()
 	var airline: Dictionary = simulation.get_airline_info()
-	_training(staff, overview["conversion_days"])
+	_training(staff)
 	var key := "%s/%s/%s" % [overview, staff, airline.get("capital_eur", 0)]
 	if key == signature and not force:
 		return
@@ -191,7 +202,7 @@ func refresh(force: bool = false) -> void:
 		for i in range(values.size()):
 			UI.cell_text(row, i, values[i])
 		UI.cell_status(row, 0, rating["rating"], "neutral")
-	train_button.text = "Umschulung auf gewähltes Muster · %s · %d Tage" % [UI.money(overview["conversion_cost_eur"]), overview["conversion_days"]]
+	_courses(overview["conversion_courses"])
 	_pay_groups(overview)
 	_roles(overview)
 	_aircraft(overview)
@@ -200,6 +211,28 @@ func refresh(force: bool = false) -> void:
 	hire_missing_button.disabled = overview["missing_total"] == 0 or not simulation.has_airline()
 	hire_button.disabled = not simulation.has_airline()
 	count_spin.max_value = overview["max_batch"]
+
+func _courses(rows: Array) -> void:
+	var labels: Array = []
+	for row in rows:
+		labels.append("%s · %s · %d Tage" % [row["label"], UI.money(row["cost_eur"]), row["days"]])
+	if course_select.item_count != labels.size() or courses.size() != rows.size() or courses.map(func(c): return c["course"]) != rows.map(func(c): return c["course"]):
+		var keep := maxi(course_select.selected, 0)
+		course_select.clear()
+		for label in labels: course_select.add_item(label)
+		course_select.select(mini(keep, labels.size() - 1))
+	else:
+		for i in range(labels.size()): course_select.set_item_text(i, labels[i])
+	courses = rows
+	_course_text()
+
+func _course_text() -> void:
+	if courses.is_empty() or course_select.selected < 0: return
+	var row: Dictionary = courses[course_select.selected]
+	course_terms.text = "%s: %s, fertig voraussichtlich %s." % [row["label"], UI.money(row["cost_eur"]), row["ends_text"]]
+	if not row["affordable"]: course_terms.text += " Nicht genügend Guthaben."
+	course_terms.add_theme_color_override("font_color", UI.MUTED if row["affordable"] else UI.NEGATIVE)
+	train_button.text = "Umschulen · %s · %s · %d Tage" % [row["label"], UI.money(row["cost_eur"]), row["days"]]
 
 func _roles(overview: Dictionary) -> void:
 	var first := role_keys.is_empty()
@@ -329,7 +362,7 @@ func _dismiss() -> void:
 	_report(simulation.dismiss_staff(selected_id), "Mitarbeiter entlassen · anteiliges Gehalt gezahlt.")
 
 func _train() -> void:
-	_report(simulation.train_pilot(selected_id, rating_select.get_item_text(rating_select.selected)), "Umschulung begonnen. Bitte Spielstand speichern.")
+	_report(simulation.train_pilot_course(selected_id, rating_select.get_item_text(rating_select.selected), courses[course_select.selected]["course"]), "Umschulung begonnen. Bitte Spielstand speichern.")
 
 
 func focus_employee(id: int) -> void:
@@ -346,22 +379,16 @@ func focus_employee(id: int) -> void:
 ## The existing API exposes the Rust deadline in status_text, not as a number.
 ## Decode that display value only; now and duration both come from Rust.
 ## No accumulated UI time, disk save access or simulation mutation is involved.
-func _training(staff: Array, duration_days: int) -> void:
+func _training(staff: Array) -> void:
 	for child in training_rows.get_children():
 		training_rows.remove_child(child)
 		child.queue_free()
-	var deadline := RegEx.new()
-	deadline.compile("bis Tag ([0-9]+) ([0-9]+):([0-9]+):([0-9]+)$")
 	for employee in staff:
 		if employee["status"] != "training": continue
-		var match_time := deadline.search(employee["status_text"])
-		if match_time == null or duration_days <= 0: continue
-		var ends := (int(match_time.get_string(1)) - 1) * 86400 + int(match_time.get_string(2)) * 3600 + int(match_time.get_string(3)) * 60 + int(match_time.get_string(4))
-		var percent := clampf(100.0 * (1.0 - (ends - simulation.get_elapsed_seconds()) / (duration_days * 86400.0)), 0, 100)
 		var sentence := UI.label(employee["name"] + " · " + employee["status_text"], ThemeTokens.SMALL, UI.MUTED)
 		sentence.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		training_rows.add_child(sentence)
-		training_rows.add_child(UI.progress(percent, "info"))
+		training_rows.add_child(UI.progress(employee["training_progress"], "info"))
 
 func _pay_groups(overview: Dictionary) -> void:
 	for group: Dictionary in overview["roles"]:

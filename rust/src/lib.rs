@@ -2105,8 +2105,9 @@ impl SimulationClock {
                     "role" => e.role.key(), "role_name" => e.role.label(),
                     "salary_eur" => e.salary_eur,
                     "status" => match a { staff::Activity::Available => "available", staff::Activity::Flying => "flying", staff::Activity::Hangar => "hangar", staff::Activity::Training => "training" },
-                    "status_text" => e.training.as_ref().map(|t| format!("Umschulung → {} bis {}", t.rating, operations::display_time(t.ends_at))).unwrap_or_else(|| a.label().into()).as_str(),
+                    "status_text" => e.training.as_ref().map(|t| format!("Umschulung ({}) → {} bis {}", if t.external { staff::Course::External } else { staff::Course::InHouse }.label(), t.rating, operations::display_time(t.ends_at))).unwrap_or_else(|| a.label().into()).as_str(),
                     "rating" => e.rating.as_deref().unwrap_or("—"),
+                    "training_progress" => e.training.as_ref().map_or(0.0, |t| t.progress_percent(now)),
                     "can_dismiss" => a == staff::Activity::Available,
                     "hired" => operations::display_time(e.hired_at).as_str(),
                     "days_employed" => (now.saturating_sub(e.hired_at) / 86_400) as i64
@@ -2220,6 +2221,18 @@ impl SimulationClock {
         let (cost, days) = staff::conversion_terms();
         overview.set("conversion_cost_eur", cost);
         overview.set("conversion_days", days as i64);
+        let capital = g.airline.as_ref().map_or(0, |a| a.capital_eur);
+        let mut courses = Array::<VarDictionary>::new();
+        for course in [staff::Course::InHouse, staff::Course::External] {
+            let (cost, days) = course.terms();
+            courses.push(&vdict! {
+                "course" => course.key(), "label" => course.label(),
+                "cost_eur" => cost, "days" => days as i64,
+                "ends_text" => operations::display_time(g.conversion_ends_at(course)).as_str(),
+                "affordable" => capital >= cost
+            });
+        }
+        overview.set("conversion_courses", &courses);
         overview.set("roles", &roles);
         overview.set("aircraft", &aircraft_rows);
         overview
@@ -2229,6 +2242,16 @@ impl SimulationClock {
     fn hire_pilots(&mut self, rating: GString, count: u32) -> GString {
         self.game
             .hire_pilots(&rating.to_string(), count)
+            .err()
+            .unwrap_or_default()
+            .as_str()
+            .into()
+    }
+
+    #[func]
+    fn train_pilot_course(&mut self, id: u32, rating: GString, course: GString) -> GString {
+        staff::Course::parse(&course.to_string())
+            .and_then(|c| self.game.train_pilot_course(id, &rating.to_string(), c))
             .err()
             .unwrap_or_default()
             .as_str()

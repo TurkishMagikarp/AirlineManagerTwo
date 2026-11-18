@@ -80,9 +80,16 @@ pub struct Needs {
 }
 
 #[derive(Deserialize)]
+struct ExternalConversion {
+    cost_eur: i64,
+    days: u64,
+}
+
+#[derive(Deserialize)]
 pub(crate) struct Config {
     conversion_cost_eur: i64,
     conversion_days: u64,
+    external_conversion: ExternalConversion,
     payroll_period_days: u64,
     salary_reserve_periods: u32,
     max_employees: usize,
@@ -102,6 +109,8 @@ static CONFIG: LazyLock<Result<Config, String>> = LazyLock::new(|| {
     let s = &c.salary_eur_per_period;
     if c.conversion_cost_eur <= 0
         || !(1..=365).contains(&c.conversion_days)
+        || c.external_conversion.cost_eur <= c.conversion_cost_eur
+        || !(1..c.conversion_days).contains(&c.external_conversion.days)
         || !(1..=365).contains(&c.payroll_period_days)
         || c.salary_reserve_periods > 12
         || !(1..=100_000).contains(&c.max_employees)
@@ -185,6 +194,67 @@ pub struct Employee {
 pub struct Training {
     pub rating: String,
     pub ends_at: u64,
+    /// Absent in old saves: the in-house course length is assumed.
+    #[serde(default)]
+    pub started_at: Option<u64>,
+    #[serde(default)]
+    pub external: bool,
+}
+
+impl Training {
+    pub fn start(&self) -> u64 {
+        self.started_at.unwrap_or_else(|| {
+            self.ends_at
+                .saturating_sub(conversion_terms().1 * 86_400)
+        })
+    }
+
+    /// Progress in whole-second precision, 0.0..=100.0.
+    pub fn progress_percent(&self, now: u64) -> f64 {
+        let total = self.ends_at.saturating_sub(self.start());
+        if total == 0 {
+            return 100.0;
+        }
+        (100.0 * now.saturating_sub(self.start()) as f64 / total as f64).clamp(0.0, 100.0)
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Course {
+    InHouse,
+    External,
+}
+
+impl Course {
+    pub fn parse(key: &str) -> Result<Self, String> {
+        match key {
+            "in_house" => Ok(Self::InHouse),
+            "external" => Ok(Self::External),
+            _ => Err("Unbekannter Kurs.".into()),
+        }
+    }
+
+    pub fn key(self) -> &'static str {
+        match self {
+            Self::InHouse => "in_house",
+            Self::External => "external",
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::InHouse => "Interner Kurs",
+            Self::External => "Externer Kurs",
+        }
+    }
+
+    pub fn terms(self) -> (i64, u64) {
+        let c = config().unwrap();
+        match self {
+            Self::InHouse => (c.conversion_cost_eur, c.conversion_days),
+            Self::External => (c.external_conversion.cost_eur, c.external_conversion.days),
+        }
+    }
 }
 
 pub fn ratings() -> Vec<String> {
@@ -343,6 +413,22 @@ impl Game {
     }
 
     pub fn train_pilot(&mut self, id: u32, rating: &str) -> Result<(), String> {
+        self.train_pilot_course(id, rating, Course::InHouse)
+    }
+
+    pub fn conversion_ends_at(&self, course: Course) -> u64 {
+        self.clock
+            .elapsed()
+            .as_secs()
+            .saturating_add(course.terms().1 * 86_400)
+    }
+
+    pub fn train_pilot_course(
+        &mut self,
+        id: u32,
+        rating: &str,
+        course: Course,
+    ) -> Result<(), String> {
         self.require_solvent()?;
         let i = self
             .staff
@@ -361,13 +447,9 @@ impl Game {
                     .into(),
             );
         }
-        let (cost, days) = conversion_terms();
-        let ends_at = self
-            .clock
-            .elapsed()
-            .as_secs()
-            .checked_add(days * 86400)
-            .ok_or("Zeitüberlauf.")?;
+        let (cost, days) = course.terms();
+        let started_at = self.clock.elapsed().as_secs();
+        let ends_at = started_at.checked_add(days * 86400).ok_or("Zeitüberlauf.")?;
         let airline = self.airline.as_mut().ok_or("Airline fehlt.")?;
         if airline.capital_eur < cost {
             return Err("Nicht genügend Guthaben für Umschulung.".into());
@@ -376,6 +458,8 @@ impl Game {
         self.staff.employees[i].training = Some(Training {
             rating: rating.into(),
             ends_at,
+            started_at: Some(started_at),
+            external: course == Course::External,
         });
         self.record_payroll(self.clock.elapsed().as_secs(), cost);
         Ok(())
@@ -955,6 +1039,7 @@ impl Game {
                 || (e.role != Role::Pilot && (e.rating.is_some() || e.training.is_some()))
                 || e.training.as_ref().is_some_and(|t| {
                     t.ends_at <= now
+                        || t.started_at.is_some_and(|s| s >= t.ends_at || s > now)
                         || !ratings().contains(&t.rating)
                         || Some(&t.rating) == e.rating.as_ref()
                 })
