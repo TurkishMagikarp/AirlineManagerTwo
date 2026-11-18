@@ -366,3 +366,20 @@ fn ten_year_ai_comparison_with_weather_on_and_off() {
         }
     }
 }
+
+#[test]
+fn board_row_reports_weather_delay_once_the_departure_is_late() {
+    enable();
+    let (seed, _) = seed_with_weather_at_start();
+    let g = with_seed(game(), seed);
+    let r = &g.routes[0];
+    let first = r.plan.as_ref().unwrap().first_departure;
+    let day_delay = weather::delay_seconds(&w(seed), "EDDF", first);
+    if day_delay > 0 {
+        let state = crate::disruptions::project(r, "a320_200", first + 1).unwrap().state;
+        let row = crate::operations::board_row(r, &g.fleet[0], Some(&state));
+        assert_eq!(row.state_kind, "weather_delay");
+        assert!(row.weather_delay && row.delay_seconds >= day_delay);
+        assert!(row.next_departure.unwrap() >= first + day_delay);
+    }
+}

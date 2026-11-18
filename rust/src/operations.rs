@@ -479,6 +479,65 @@ pub struct Movement {
     pub completed: u64,
 }
 
+/// One row of the Routes operations table; Godot only renders it.
+pub struct BoardRow {
+    pub state_kind: &'static str,
+    pub release_pending: bool,
+    pub origin: String,
+    pub destination: String,
+    pub next_departure: Option<u64>,
+    pub expected_landing: Option<u64>,
+    pub delay_seconds: u64,
+    pub weather_delay: bool,
+}
+
+pub fn board_row(
+    route: &Route,
+    plane: &crate::aircraft::Aircraft,
+    state: Option<&Movement>,
+) -> BoardRow {
+    let release_pending = route.remove_at.is_some();
+    let airborne = state.filter(|s| s.status == AircraftStatus::InFlight);
+    let weather_delay = state.is_some_and(|s| s.delay_seconds > 0 && s.weather_seconds > 0);
+    let state_kind = if plane.status == AircraftStatus::Maintenance {
+        "maintenance"
+    } else if release_pending {
+        "release"
+    } else if let Some(s) = state {
+        match s.status {
+            AircraftStatus::InFlight => "airborne",
+            _ if weather_delay => "weather_delay",
+            AircraftStatus::Ground => "ground",
+            AircraftStatus::Parked | AircraftStatus::Maintenance => "scheduled",
+        }
+    } else {
+        "no_plan"
+    };
+    // Parked aircraft show the leg they fly next, all others the leg they are on.
+    let (origin, destination) = match state {
+        Some(s) if s.status == AircraftStatus::Parked => {
+            let other = if s.location == route.origin_icao {
+                &route.destination_icao
+            } else {
+                &route.origin_icao
+            };
+            (s.location.clone(), other.clone())
+        }
+        Some(s) => (s.origin.clone(), s.destination.clone()),
+        None => (route.origin_icao.clone(), route.destination_icao.clone()),
+    };
+    BoardRow {
+        state_kind,
+        release_pending,
+        origin,
+        destination,
+        next_departure: state.filter(|_| !release_pending).map(|s| s.next_departure),
+        expected_landing: airborne.map(|s| s.landing),
+        delay_seconds: state.map_or(0, |s| s.delay_seconds),
+        weather_delay,
+    }
+}
+
 pub fn display_time(seconds: u64) -> String {
     format!(
         "Tag {} {:02}:{:02}:{:02}",

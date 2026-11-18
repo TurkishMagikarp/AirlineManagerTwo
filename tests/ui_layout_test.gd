@@ -237,6 +237,11 @@ func _run() -> void:
 				await RenderingServer.frame_post_draw
 				assert(root.get_texture().get_image().save_png(capture_dir.path_join("overview-commitments-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
 			if page == 2 and not capture_dir.is_empty():
+				scroll.ensure_control_visible(main.routes_panel.operations_tree)
+				for frame in range(5): await process_frame
+				scroll.ensure_control_visible(main.routes_panel.operations_tree)
+				await RenderingServer.frame_post_draw
+				assert(root.get_texture().get_image().save_png(capture_dir.path_join("route-operations-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
 				scroll.ensure_control_visible(main.routes_panel.season_label)
 				for frame in range(5): await process_frame
 				scroll.ensure_control_visible(main.routes_panel.season_label)
