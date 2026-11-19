@@ -55,7 +55,7 @@ func _run() -> void:
 	var revenue := 0
 	var costs := 0
 	for result in results:
-		if not _check(result["overhead_eur"] > 0 and result["costs_eur"] == result["fuel_eur"] + result["airport_eur"] + result["crew_eur"] + result["overhead_eur"], "All cost components including operating allowance reconcile"):
+		if not _check(result["overhead_eur"] > 0 and result["costs_eur"] == result["fuel_eur"] + result.get("carbon_eur", 0) + result["airport_eur"] + result["crew_eur"] + result["overhead_eur"], "All cost components including operating allowance reconcile"):
 			return
 		revenue += result["revenue_eur"]
 		costs += result["costs_eur"]
