@@ -66,6 +66,14 @@ class DeliveryTest(unittest.TestCase):
         candidate["createdByAgentId"] = "planner"
         self.assertEqual(delivery.choose([], [candidate], "developer", "planner", {}), (candidate, None))
 
+    def test_notes_cycle_advances_once_for_completed_or_parked_work(self):
+        candidate = ISSUE | {"status": "in_review", "createdAt": "2026-11-19",
+                             "createdByAgentId": "planner", "description": f"Delivery source: {HEAD}"}
+        self.assertEqual(delivery.notes_cycle(HEAD, [candidate], "developer", "planner"), f"{HEAD}:initial")
+        for status in ("done", "blocked"):
+            self.assertEqual(delivery.notes_cycle(HEAD, [candidate | {"status": status}], "developer", "planner"),
+                             f"{HEAD}:AIR-398")
+
     def test_restores_only_the_matching_board_recovery(self):
         controller = object.__new__(delivery.Controller)
         controller.cfg = {"developer": "developer"}

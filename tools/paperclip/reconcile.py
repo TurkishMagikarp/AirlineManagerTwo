@@ -98,6 +98,15 @@ def choose(queue, issues, developer, planner, history):
     return (min(planned, key=lambda i: i["createdAt"]), None) if planned else (None, None)
 
 
+def notes_cycle(sha, issues, developer, planner):
+    source = f"Delivery source: {sha}"
+    attempted = [i for i in issues if i.get("createdByAgentId") == planner
+                 and i.get("assigneeAgentId") == developer and i["status"] in TERMINAL | {"blocked"}
+                 and source in (i.get("description") or "").splitlines()]
+    previous = max(attempted, key=lambda i: (i["createdAt"], i["identifier"]))["identifier"] if attempted else "initial"
+    return f"{sha}:{previous}"
+
+
 class API:
     def __init__(self, base, token, github=False):
         self.base = base
@@ -179,11 +188,12 @@ class Controller:
         sha = latest["sha"]
         if sha == self.cfg.get("initial_notes_revision"):
             return
-        marker = f"Notes revision: {sha}"
+        cycle = notes_cycle(sha, issues, self.cfg["developer"], self.cfg["planner"])
+        marker = f"Notes cycle: {cycle}"
         if any(marker in (i.get("description") or "").splitlines() for i in issues):
             return
-        self.create("notes-" + sha, "Reconcile approved repository notes",
-                    f"{marker}\nRead approved notes at this revision and create at most one approved Developer issue.",
+        self.create("notes-" + cycle, "Reconcile approved repository notes",
+                    f"Notes revision: {sha}\n{marker}\nRead the approved notes and create at most one outstanding Developer issue.",
                     self.cfg["planner"])
 
     def verified_pr(self, issue):

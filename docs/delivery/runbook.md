@@ -5,7 +5,7 @@
 ## Aufträge
 
 - `backlog.json` ist nach Priorität sortiert. Neue Einträge bekommen einen eindeutigen `key`, einen freigegebenen `decision`-Verweis (`GDD-NNN`), `title` und überprüfbare `acceptance`. `issue` verweist auf ein bestehendes Paperclip-Ticket; `resume: true` ermöglicht einmalig die Wiederaufnahme eines bekannten Blocks.
-- Für eine freigegebene, noch nicht geschnittene Anforderung kann der Owner eine Notiz in `docs/delivery/requests/` ablegen. Die Notiz nennt die beschlossene GDD-Regel und das gewünschte Verhalten. Nach einem neuen Notiz-Commit erhält Planner einmalig einen Abgleichauftrag, sobald die priorisierte Liste frei ist.
+- Für eine freigegebene, noch nicht geschnittene Anforderung kann der Owner eine Notiz in `docs/delivery/requests/` ablegen. Die Notiz nennt die beschlossene GDD-Regel und das gewünschte Verhalten. Sobald die priorisierte Liste frei ist, gleicht Planner beschlossene Notizen und aktuellen Code ab. Nach einem erledigten oder geparkten Umsetzungsauftrag sucht Planner den nächsten unabhängigen Auftrag. Findet Planner keinen, wartet der Controller auf eine neue Notizrevision, statt dieselbe Planung erneut zu starten.
 - Der Controller startet jeweils nur ein Developer-Ticket. Developer nutzt beim Wiederanlauf denselben Worktree, Branch und PR; volle Prüfungen laufen in GitHub Actions. Ungeklärte Produktentscheidungen werden geparkt, nicht für andere Aufträge vererbt.
 
 ## Betrieb
