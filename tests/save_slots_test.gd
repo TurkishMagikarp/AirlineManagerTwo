@@ -85,9 +85,14 @@ func _run() -> void:
 	assert(not main.autosave.enabled and not main.autosave.tick(1.0e6, true))
 	main._autosave_tick(1.0e6)
 	assert(not sim.get_save_slots(directory)["autosave"]["occupied"])
-	main.autosave_toggle.button_pressed = true
-	main.autosave_interval.select(1)
-	main.autosave_interval.item_selected.emit(1)
+	main._load_game()
+	await process_frame
+	var choice: OptionButton = main.save_slots_dialog.autosave_choice
+	assert(choice.selected == 0)
+	choice.select(choice.get_item_index(5))
+	choice.item_selected.emit(choice.selected)
+	main.save_slots_dialog.close_dialog()
+	await process_frame
 	var reloaded = Autosave.new(prefs)
 	assert(reloaded.enabled and reloaded.interval_minutes == 5)
 	main._autosave_tick(299.0)

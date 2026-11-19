@@ -17,6 +17,8 @@ var decision: Control
 var failed_slots: Dictionary = {}
 const AUTOSAVE_ID := 1000
 var autosave: Dictionary = {}
+var autosave_settings: RefCounted
+var autosave_choice: OptionButton
 var focus_before: Control
 
 func open(sim: RefCounted, directory: String, save_mode: bool) -> void:
@@ -40,6 +42,17 @@ func open(sim: RefCounted, directory: String, save_mode: bool) -> void:
 	content.add_theme_constant_override("separation", Tokens.SPACE_3)
 	card.add_child(content)
 	content.add_child(UI.label(tr("Spielstand speichern") if saving else tr("Spielstand laden"), UI.DIALOG_TITLE))
+	if autosave_settings != null:
+		autosave_choice = OptionButton.new()
+		autosave_choice.tooltip_text = tr("Autosave in festen Echtzeit-Abständen in einen eigenen Eintrag. Standardmäßig aus.")
+		autosave_choice.add_item(tr("Autosave aus"), 0)
+		for minutes in autosave_settings.INTERVALS:
+			autosave_choice.add_item(tr("Autosave alle %d Min.") % minutes, minutes)
+		autosave_choice.select(autosave_choice.get_item_index(autosave_settings.interval_minutes if autosave_settings.enabled else 0))
+		autosave_choice.item_selected.connect(func(_index: int):
+			var minutes: int = autosave_choice.get_selected_id()
+			autosave_settings.configure(minutes > 0, minutes if minutes > 0 else autosave_settings.interval_minutes))
+		content.add_child(autosave_choice)
 	var scroll := ScrollContainer.new()
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	scroll.add_theme_stylebox_override("panel", Tokens.box(Tokens.TRANSPARENT, Tokens.TRANSPARENT, Tokens.RADIUS_MD, Tokens.SPACE_1, Tokens.SPACE_1))

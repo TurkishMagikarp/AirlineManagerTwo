@@ -55,8 +55,6 @@ var jump_status: Label
 var jump_in_progress := false
 var save_slots_dialog: Control
 var autosave
-var autosave_toggle: CheckButton
-var autosave_interval: OptionButton
 var save_user_dir := ProjectSettings.globalize_path("user://")
 var save_button: Button
 var load_button: Button
@@ -361,31 +359,11 @@ func _add_time_controls(column: VBoxContainer) -> void:
 	load_button.pressed.connect(_load_game)
 	controls.add_child(load_button)
 	autosave = preload("res://scripts/autosave.gd").new(save_user_dir.path_join("preferences.cfg"))
-	var autosave_row := HFlowContainer.new()
-	autosave_row.add_theme_constant_override("h_separation", ThemeTokens.SPACE_2)
-	panel.add_child(autosave_row)
-	autosave_toggle = CheckButton.new()
-	autosave_toggle.text = tr("Autosave")
-	autosave_toggle.tooltip_text = tr("Speichert in festen Abständen automatisch in einen eigenen Autosave-Eintrag. Standardmäßig aus.")
-	autosave_toggle.button_pressed = autosave.enabled
-	autosave_toggle.toggled.connect(func(_on: bool): _autosave_changed())
-	autosave_row.add_child(autosave_toggle)
-	autosave_interval = OptionButton.new()
-	autosave_interval.tooltip_text = tr("Autosave-Intervall in Minuten (Echtzeit)")
-	for minutes in autosave.INTERVALS:
-		autosave_interval.add_item(tr("alle %d Min.") % minutes, minutes)
-	autosave_interval.select(autosave.INTERVALS.find(autosave.interval_minutes))
-	autosave_interval.item_selected.connect(func(_index: int): _autosave_changed())
-	autosave_row.add_child(autosave_interval)
 	save_status = _label(tr("Speicherplätze · manuell speichern und laden"), ThemeTokens.SMALL, ThemeTokens.INK_MUTED)
 	save_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	save_status.tooltip_text = save_user_dir.path_join("saves")
 	panel.add_child(save_status)
 	_refresh_time()
-
-
-func _autosave_changed() -> void:
-	autosave.configure(autosave_toggle.button_pressed, autosave_interval.get_selected_id())
 
 
 func _autosave_tick(delta: float) -> void:
@@ -459,6 +437,7 @@ func _open_save_slots(saving: bool) -> void:
 			_sync_view()
 			_refresh_time()
 	)
+	save_slots_dialog.autosave_settings = autosave
 	save_slots_dialog.open(simulation, save_user_dir, saving)
 
 
