@@ -42,7 +42,7 @@ run_test() {
   log="$(mktemp)"
   "$TIMEOUT" "${GODOT_TEST_TIMEOUT:-600}" "$GODOT" --headless --audio-driver Dummy --path . --script "res://tests/${name}_test.gd" >"$log" 2>&1 || status=$?
   if [ "$status" -eq 0 ] && grep -qE "$PASS_MARKER" "$log" && ! grep -qE '^(SCRIPT ERROR:|ERROR: FAIL|FAIL)' "$log"; then
-    echo "ok   ${name}: $(grep -m1E "$PASS_MARKER" "$log")"
+    echo "ok   ${name}: $(grep -m 1 -E "$PASS_MARKER" "$log")"
   else
     echo "FAIL ${name} (exit ${status})"
     grep -E 'FAIL|ERROR|SCRIPT ERROR|Assertion|panicked' "$log" | head -15 || true
@@ -101,7 +101,7 @@ case "${1:-}" in
       tail -30 "$log" >&2
       exit 1
     fi
-    grep -m1E "$PASS_MARKER" "$log"
+    grep -m 1 -E "$PASS_MARKER" "$log"
     count="$(find "$out" -maxdepth 1 -name '*.png' | wc -l)"
     echo "screenshots: ${count} in ${out}"
     [ "$count" -gt 0 ]
