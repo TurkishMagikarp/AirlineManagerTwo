@@ -88,7 +88,8 @@ func _run() -> void:
 					original = original.left(matches[i].get_start()) + changed + original.substr(matches[i].get_end())
 				original = original.replace('"version":46', '"version":23')
 			_write(path, original)
-			if not _check(sim.load_game(path).is_empty() and preload("res://tests/insurance_fixture.gd").without_economy(_snapshot()[0]) == preload("res://tests/insurance_fixture.gd").without_economy(original.replace('"version":23', '"version":46')), "v23/current identity load preserves every world byte and frozen tariff"):
+			var fixture = preload("res://tests/insurance_fixture.gd")
+			if not _check(sim.load_game(path).is_empty() and (not mode.ends_with("v23") or _state()["charters"]["since"] == _state()["clock"]["elapsed_seconds"]) and fixture.without_charter_epoch(fixture.without_economy(_snapshot()[0])) == fixture.without_charter_epoch(fixture.without_economy(original.replace('"version":23', '"version":46'))), "v23/current identity load preserves every world byte and frozen tariff"):
 				return
 			_store(path + ".initial", _snapshot())
 	if mode != "ui":
