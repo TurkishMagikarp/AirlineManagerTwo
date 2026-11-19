@@ -77,6 +77,53 @@ func _run() -> void:
 		focus = root.gui_get_focus_owner()
 		assert(focus != null and dialog.is_ancestor_of(focus))
 	dialog.close_dialog()
+	await process_frame
+	# Autosave: off by default, persisted preference, deferred during jumps, explicit reload only.
+	var prefs := directory.path_join("preferences.cfg")
+	var Autosave := load("res://scripts/autosave.gd")
+	main.autosave = Autosave.new(prefs)
+	assert(not main.autosave.enabled and not main.autosave.tick(1.0e6, true))
+	main._autosave_tick(1.0e6)
+	assert(not sim.get_save_slots(directory)["autosave"]["occupied"])
+	main.autosave_toggle.button_pressed = true
+	main.autosave_interval.select(1)
+	main.autosave_interval.item_selected.emit(1)
+	var reloaded = Autosave.new(prefs)
+	assert(reloaded.enabled and reloaded.interval_minutes == 5)
+	main._autosave_tick(299.0)
+	assert(not sim.get_save_slots(directory)["autosave"]["occupied"])
+	main.jump_in_progress = true
+	main._autosave_tick(2.0)
+	assert(not sim.get_save_slots(directory)["autosave"]["occupied"])
+	main.jump_in_progress = false
+	var settled: Dictionary = sim.get_financial_summary().duplicate(true)
+	main._autosave_tick(0.0)
+	var entry: Dictionary = sim.get_save_slots(directory)["autosave"]
+	assert(entry["occupied"] and entry["error"].is_empty() and entry["header"]["name"] == "Autosave")
+	assert(not sim.get_save_slots(directory)["slots"][2]["occupied"])
+	assert(sim.buy_aircraft("atr72_600").is_empty())
+	assert(sim.get_financial_summary() != settled)
+	main._load_game()
+	await process_frame
+	dialog = main.save_slots_dialog
+	assert(not dialog.autosave.is_empty())
+	assert(dialog.list_box.get_children().any(func(card): return card.get_meta("slot_id", -1) == dialog.AUTOSAVE_ID))
+	dialog.load_slot(dialog.AUTOSAVE_ID, false)
+	await process_frame
+	assert(sim.get_financial_summary() == settled)
+	assert(sim.begin_jump(86400))
+	assert(not sim.autosave(directory).is_empty())
+	assert(not sim.load_autosave(directory, false).is_empty())
+	while sim.poll_jump().is_empty(): await process_frame
+	DirAccess.remove_absolute(prefs)
+	main.autosave.configure(false, 10)
+	DirAccess.remove_absolute(prefs)
+	var autosave_dir := directory.path_join("saves/autosave")
+	for generation in DirAccess.get_directories_at(autosave_dir):
+		for file in DirAccess.get_files_at(autosave_dir.path_join(generation)): DirAccess.remove_absolute(autosave_dir.path_join(generation).path_join(file))
+		DirAccess.remove_absolute(autosave_dir.path_join(generation))
+	for file in DirAccess.get_files_at(autosave_dir): DirAccess.remove_absolute(autosave_dir.path_join(file))
+	DirAccess.remove_absolute(autosave_dir)
 	for id in range(sim.get_save_slots(directory)["slots"].size()):
 		if sim.get_save_slots(directory)["slots"][id]["occupied"]: assert(sim.delete_save_slot(directory, id).is_empty())
 	DirAccess.remove_absolute(directory.path_join("saves/legacy-imported"))

@@ -15,6 +15,8 @@ var save_action: Button
 var content: VBoxContainer
 var decision: Control
 var failed_slots: Dictionary = {}
+const AUTOSAVE_ID := 1000
+var autosave: Dictionary = {}
 var focus_before: Control
 
 func open(sim: RefCounted, directory: String, save_mode: bool) -> void:
@@ -86,6 +88,7 @@ func refresh() -> void:
 		if saving: save_action.disabled = true
 		return
 	rows = result["slots"]
+	autosave = result["autosave"] if not saving and result["autosave"]["occupied"] else {}
 	if status.text.is_empty(): status.text = tr("%d Speicherplätze · Namen bis %d Zeichen.") % [rows.size(), result["name_length"]]
 	if saving: name_field.max_length = result["name_length"]
 	for child in list_box.get_children():
@@ -93,6 +96,9 @@ func refresh() -> void:
 		child.queue_free()
 	var occupied := 0
 	var free_id := -1
+	if not autosave.is_empty():
+		occupied += 1
+		_render_autosave()
 	for row in rows:
 		if row["occupied"]:
 			occupied += 1
@@ -164,6 +170,43 @@ func _render_slot(row: Dictionary) -> void:
 			column.add_child(backup_facts)
 			column.add_child(_button(tr("Sicherung laden"), func(): load_slot(id, true), "PrimaryButton" if damaged and not saving else ""))
 
+func _render_autosave() -> void:
+	var header: Dictionary = autosave["header"]
+	var damaged: bool = header.is_empty() or not autosave["error"].is_empty() or failed_slots.has(AUTOSAVE_ID)
+	var title := tr("Autosave") + " · " + tr("automatisch gespeichert")
+	var card := PanelContainer.new()
+	card.set_meta("slot_id", AUTOSAVE_ID)
+	card.add_theme_stylebox_override("panel", Tokens.save_slot_box(AUTOSAVE_ID == selected))
+	list_box.add_child(card)
+	var column := VBoxContainer.new()
+	column.add_theme_constant_override("separation", Tokens.SPACE_1)
+	card.add_child(column)
+	var choose := _button(title, func(): select_slot(AUTOSAVE_ID, ""), "GhostButton")
+	choose.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	choose.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	choose.tooltip_text = title
+	choose.add_theme_color_override("font_color", Tokens.INK)
+	choose.add_theme_font_override("font", Tokens.font_for(Tokens.BODY_STRONG))
+	column.add_child(choose)
+	if not header.is_empty():
+		var facts := UI.label(_facts(header), Tokens.CODE, Tokens.INK_MUTED)
+		facts.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		column.add_child(facts)
+	if damaged:
+		var warning := UI.label(tr("Beschädigt · Hauptdatei kann nicht geladen werden."), Tokens.SMALL, Tokens.STOP)
+		warning.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		column.add_child(warning)
+	if AUTOSAVE_ID == selected:
+		var actions := HFlowContainer.new()
+		column.add_child(actions)
+		if not damaged: actions.add_child(_button(tr("Laden"), func(): load_slot(AUTOSAVE_ID, false), "PrimaryButton"))
+		if not autosave["backup"].is_empty():
+			var backup: Dictionary = autosave["backup"]
+			var backup_facts := UI.label(tr("Vorheriger Autosave") + "\n" + _facts(backup), Tokens.CODE, Tokens.INK_MUTED)
+			backup_facts.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			column.add_child(backup_facts)
+			column.add_child(_button(tr("Sicherung laden"), func(): load_slot(AUTOSAVE_ID, true), "PrimaryButton" if damaged else ""))
+
 func _facts(header: Dictionary) -> String:
 	# Wall clock is display only; simulation time is already formatted by Rust.
 	var written := Time.get_datetime_string_from_unix_time(header["written_at"]).replace("T", " ")
@@ -195,7 +238,7 @@ func _store(id: int, title: String, overwrite: bool) -> void:
 	refresh()
 
 func load_slot(id: int, backup: bool) -> void:
-	var error: String = simulation.load_slot(user_dir, id, backup)
+	var error: String = simulation.load_autosave(user_dir, backup) if id == AUTOSAVE_ID else simulation.load_slot(user_dir, id, backup)
 	if error.is_empty():
 		finished.emit(tr("Sicherung geladen.") if backup else tr("Spielstand geladen."), true)
 		close_dialog()
