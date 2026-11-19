@@ -1,0 +1,30 @@
+name: Windows legacy save compatibility
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '30 3 * * 1'
+permissions:
+  contents: read
+jobs:
+  legacy-saves:
+    runs-on: windows-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+      - run: python tools/ci_godot.py
+      - run: |
+          & .\START.bat --headless --quit-after 1
+          if ($LASTEXITCODE -ne 0) { throw "Startup failed: $LASTEXITCODE" }
+      - name: Run legacy migration scenarios and report all failures
+        run: |
+          $failed = @()
+          foreach ($test in Get-ChildItem tests/run_*_restart_test.ps1) {
+            Write-Host "::group::$($test.Name)"
+            & pwsh -NoProfile -File $test.FullName -Godot $env:AIRLINE_GODOT
+            if ($LASTEXITCODE -ne 0) { $failed += $test.Name }
+            Write-Host "::endgroup::"
+          }
+          if ($failed) { throw "Windows restart regressions: $($failed -join ', ')" }
