@@ -49,8 +49,15 @@ jobs:
       - run: python tools/ci_godot.py
       - name: Startup
         run: |
-          & .\START.bat --headless --quit-after 10 2>&1 | Tee-Object -Variable startup
-          if ($LASTEXITCODE -ne 0 -or $startup -match 'SCRIPT ERROR:|Parse Error:') { throw "Startup failed" }
+          for ($attempt = 1; $attempt -le 3; $attempt++) {
+            & .\START.bat --headless --quit-after 10 2>&1 | Tee-Object -Variable startup
+            if ($LASTEXITCODE -eq 0 -and -not ($startup -match 'SCRIPT ERROR:|Parse Error:')) { return }
+            # On a cold Windows runner Godot may exit zero while reimporting
+            # assets. Retry only the resulting missing-import startup error.
+            if (-not ($startup -match 'Could not preload resource file')) { throw "Startup failed" }
+            Write-Warning "Godot asset import did not complete on attempt $attempt; retrying."
+          }
+          throw "Startup failed after Godot asset import retries"
       - name: Multi-process save/restart
         run: |
           & pwsh -NoProfile -File tests/run_save_restart_test.ps1 -Godot $env:AIRLINE_GODOT
