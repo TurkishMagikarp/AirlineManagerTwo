@@ -10,12 +10,21 @@ func _run() -> void:
 	main.set_process(false)
 	var sim: RefCounted = main.simulation
 	assert(sim.found_airline("Kit Regression", "DE", "EDDF").is_empty())
+	var expected := {
+		"a320_200": ["Narrowbody", 830, 4, 6], "a320neo": ["Narrowbody", 830, 4, 6],
+		"b737_800": ["Narrowbody", 840, 4, 7], "b737_max8": ["Narrowbody", 840, 4, 7],
+		"atr72_600": ["Turboprop", 510, 4, 3], "atr72_evo": ["Turboprop", 510, 4, 3],
+		"a330_300": ["Widebody", 871, 6, 12], "a330_900": ["Widebody", 871, 6, 12],
+		"a350_900": ["Widebody", 903, 6, 13], "b777_300er": ["Widebody", 905, 8, 16],
+		"atr72_600f": ["Turboprop", 510, 4, 0], "b737_800bcf": ["Narrowbody", 840, 4, 0],
+		"b777f": ["Widebody", 905, 8, 0],
+	}
 	for model in sim.get_aircraft_models():
-		var sibling: String = {"atr72_600f": "atr72_600", "b737_800bcf": "b737_800", "b777f": "b777_300er"}.get(model["id"], model["id"])
-		assert(model["class"] == ({"atr72_600": "Turboprop", "a330_300": "Widebody", "b777_300er": "Widebody"}.get(sibling, "Narrowbody")))
-		assert(model["cruise_kmh"] == {"a320_200": 830, "b737_800": 840, "atr72_600": 510, "a330_300": 871, "b777_300er": 905}[sibling])
-		assert(model["pilots"] == {"a330_300": 6, "b777_300er": 8}.get(sibling, 4))
-		assert(model["cabin_crew"] == (0 if model["freighter"] else {"a320_200": 6, "b737_800": 7, "atr72_600": 3, "a330_300": 12, "b777_300er": 16}[sibling]))
+		var actual := [model["class"], model["cruise_kmh"], model["pilots"], model["cabin_crew"]]
+		if actual != expected.get(model["id"], []):
+			push_error("Unexpected catalog fields for %s: %s" % [model["id"], actual])
+			quit(1)
+			return
 	assert(sim.buy_aircraft("atr72_600").is_empty())
 	main._sync_view()
 	main._show_page(1)

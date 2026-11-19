@@ -1,0 +1,23 @@
+[
+  {
+    "issue": "AIR-398",
+    "decision": "GDD-047",
+    "resume": true,
+    "title": "Show public rival schedules without revealing private competitor facts",
+    "acceptance": "Show the selected airport pair in both directions, distinguish market estimates from public schedules, and never display exact internal balances, purchasing history, or AI decisions."
+  },
+  {
+    "issue": "AIR-368",
+    "decision": "GDD-061",
+    "resume": true,
+    "title": "Show upcoming aircraft deliveries and training in Overview",
+    "acceptance": "Order real scheduled commitments chronologically; check empty state, same-time deadlines, time advance, and save/reload."
+  },
+  {
+    "issue": "AIR-383",
+    "decision": "GDD-032 / GDD-065",
+    "resume": true,
+    "title": "Turn the Routes next-departure view into a compact operations table",
+    "acceptance": "Show direction, state, next departure and expected landing; cover delayed, airborne, maintenance and release-pending assignments."
+  }
+]
