@@ -52,6 +52,16 @@ pub struct Order {
     pub delivery_at: u64,
     pub held_since: Option<u64>,
 }
+#[derive(Clone, Debug, PartialEq)]
+pub enum CommitmentKind {
+    Delivery { order_id: u64, model: String },
+    Training { employee_id: u32, name: String, rating: String },
+}
+#[derive(Clone, Debug, PartialEq)]
+pub struct Commitment {
+    pub at: u64,
+    pub kind: CommitmentKind,
+}
 pub struct Quote {
     pub unit_price: i64,
     pub deposit_per_aircraft: i64,
@@ -65,6 +75,32 @@ pub(crate) fn price_terms(price: i64, discount_bps: i64, deposit_bps: i64) -> (i
     (unit, deposit, unit - deposit)
 }
 impl Game {
+    /// Scheduled deliveries (held orders excluded) and running type-rating courses,
+    /// earliest first; ties list deliveries before training, then by id.
+    pub fn upcoming_commitments(&self) -> Vec<Commitment> {
+        let mut rows: Vec<(u64, u8, u64, Commitment)> = Vec::new();
+        for o in self.orders.iter().filter(|o| o.held_since.is_none()) {
+            let model = aircraft::model(&o.model_id).map_or("?".to_string(), |m| m.name.clone());
+            rows.push((o.delivery_at, 0, o.id, Commitment {
+                at: o.delivery_at,
+                kind: CommitmentKind::Delivery { order_id: o.id, model },
+            }));
+        }
+        for e in &self.staff.employees {
+            if let Some(t) = &e.training {
+                rows.push((t.ends_at, 1, u64::from(e.id), Commitment {
+                    at: t.ends_at,
+                    kind: CommitmentKind::Training {
+                        employee_id: e.id,
+                        name: e.name.clone(),
+                        rating: t.rating.clone(),
+                    },
+                }));
+            }
+        }
+        rows.sort_by_key(|r| (r.0, r.1, r.2));
+        rows.into_iter().map(|r| r.3).collect()
+    }
     pub fn quote_order(&self, model: &str, quantity: u32) -> Result<Quote, String> {
         self.require_solvent()?;
         if self.airline.is_none() {
