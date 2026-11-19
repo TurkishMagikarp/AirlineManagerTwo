@@ -392,6 +392,19 @@ func _run() -> void:
 									await RenderingServer.frame_post_draw
 									assert(root.get_texture().get_image().save_png(capture_dir.path_join("finance-detail-right-%d-%dx%d.png" % [i, dimensions.x, dimensions.y])) == OK)
 									bar.value = 0
+				var csv_path := OS.get_temp_dir().path_join("airline-layout-routes.csv")
+				var routes_before: Array = sim.get_route_finances()
+				assert(finance.export_route_csv(csv_path).is_empty() and sim.get_route_finances() == routes_before)
+				DirAccess.remove_absolute(csv_path)
+				scroll.ensure_control_visible(finance.export_button)
+				for frame in range(5): await process_frame
+				assert(root.get_visible_rect().encloses(finance.export_button.get_global_rect()))
+				finance.export_button.grab_focus()
+				for frame in range(3): await process_frame
+				assert(finance.export_button.has_focus())
+				if not capture_dir.is_empty():
+					await RenderingServer.frame_post_draw
+					assert(root.get_texture().get_image().save_png(capture_dir.path_join("finance-export-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
 			if page == 5:
 				for target in [main.staff_panel.hire_button, main.staff_panel.staff_tree, main.staff_panel.training_rows, main.staff_panel.train_button]:
 					scroll.ensure_control_visible(target)
