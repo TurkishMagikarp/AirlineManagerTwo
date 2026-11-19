@@ -236,3 +236,34 @@ fn save_slots_unreadable_main_is_reported_without_reading_the_archive() {
     assert!(slots::delete(&root, 1).is_err());
     assert_eq!(files(&root), before);
 }
+#[test]
+fn autosave_roundtrip_failed_write_and_isolation() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().join("saves");
+    let legacy = temp.path().join("savegame.json");
+    let mut g = game();
+    save::save(&legacy, &g).unwrap();
+    let legacy_bytes = fs::read(&legacy).unwrap();
+    assert!(!slots::autosave_entry(&root).occupied);
+    slots::store(&root, 1, "Manuell", &g, false).unwrap();
+    let manual = files(&root.join("slot-01"));
+    let first = state(&g);
+    slots::store_autosave(&root, &g).unwrap();
+    let entry = slots::autosave_entry(&root);
+    assert!(entry.occupied && entry.error.is_empty());
+    assert_eq!(entry.header.unwrap().name, slots::AUTOSAVE_NAME);
+    assert_eq!(state(&slots::load_autosave(&root, false).unwrap()), first);
+    g.jump(86400.0).unwrap();
+    slots::FAIL_COMMIT.with(|f| f.set(true));
+    assert!(slots::store_autosave(&root, &g).is_err());
+    assert_eq!(state(&slots::load_autosave(&root, false).unwrap()), first);
+    assert!(slots::autosave_entry(&root).error.is_empty());
+    slots::store_autosave(&root, &g).unwrap();
+    assert_eq!(state(&slots::load_autosave(&root, false).unwrap()), state(&g));
+    assert_eq!(state(&slots::load_autosave(&root, true).unwrap()), first);
+    let listed = slots::list(&root, &legacy).unwrap();
+    assert_eq!(listed.iter().filter(|s| s.occupied).count(), 2);
+    assert_eq!(files(&root.join("slot-01")), manual);
+    assert_eq!(fs::read(&legacy).unwrap(), legacy_bytes);
+    assert_eq!(state(&slots::load(&root, 1, false).unwrap()), first);
+}

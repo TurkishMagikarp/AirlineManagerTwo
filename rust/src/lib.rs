@@ -363,7 +363,7 @@ impl SimulationClock {
                                 (frequency > 0.0).then(|| vdict! { "airline" => airline.name.as_str(), "departures_per_day" => frequency })
                             }).collect();
                         vdict! {
-                            "icao" => a.icao.as_str(), "name" => a.name.as_str(),
+                            "icao" => a.icao.as_str(), "iata" => a.iata.as_deref().unwrap_or(""), "name" => a.name.as_str(),
                             "slots" => self.game.slot_text(&a.icao).as_str(), "airlines" => &airlines,
                             "position" => Vector2::new(a.longitude as f32, a.latitude as f32)
                         }
@@ -975,14 +975,22 @@ impl SimulationClock {
             } else {
                 text
             };
-            rows.push((state.as_ref().map(|s| s.next_departure).unwrap_or(u64::MAX), vdict! {
+            let board = operations::board_row(route, plane, state.as_ref());
+            let next_departure = board.next_departure;
+            rows.push((next_departure.unwrap_or(u64::MAX), vdict! {
+                "state_kind" => board.state_kind, "release_pending" => board.release_pending,
+                "origin" => board.origin.as_str(), "destination" => board.destination.as_str(),
+                "delay_seconds" => board.delay_seconds as i64,
+                "weather_delay" => board.weather_delay,
+                "expected_landing_seconds" => board.expected_landing.map(|t| t as i64).unwrap_or(-1),
+                "expected_landing" => board.expected_landing.map(operations::display_time).unwrap_or_else(|| "—".into()).as_str(),
                 "route_id" => route.public_id(), "aircraft_id" => plane.id,
                 "identifier" => plane.identifier().as_str(), "status_text" => text.as_str(),
                 "has_plan" => route.plan.is_some(),
                 "flight_seconds" => flight as i64, "ground_seconds" => ground as i64,
                 "completed_flights" => state.as_ref().map(|s| s.completed as i64).unwrap_or(0),
-                "next_departure_seconds" => state.as_ref().map(|s| s.next_departure as i64).unwrap_or(-1),
-                "next_departure" => state.as_ref().map(|s| operations::display_time(s.next_departure)).unwrap_or_else(|| "—".into()).as_str(),
+                "next_departure_seconds" => next_departure.map(|t| t as i64).unwrap_or(-1),
+                "next_departure" => next_departure.map(operations::display_time).unwrap_or_else(|| "—".into()).as_str(),
                 "landing_seconds" => state.as_ref().map(|s| s.landing as i64).unwrap_or(-1),
                 "ready_seconds" => state.as_ref().map(|s| s.ready as i64).unwrap_or(-1),
             }));
@@ -1576,6 +1584,27 @@ impl SimulationClock {
     }
 
     #[func]
+    fn get_upcoming_commitments(&self) -> Array<VarDictionary> {
+        self.game
+            .upcoming_commitments()
+            .iter()
+            .map(|c| {
+                let date = operations::display_time(c.at);
+                match &c.kind {
+                    orders::CommitmentKind::Delivery { order_id, model } => vdict! {
+                        "kind" => "delivery", "date" => date.as_str(), "at" => c.at as i64,
+                        "title" => model.as_str(), "detail" => "", "id" => *order_id as i64
+                    },
+                    orders::CommitmentKind::Training { employee_id, name, rating } => vdict! {
+                        "kind" => "training", "date" => date.as_str(), "at" => c.at as i64,
+                        "title" => name.as_str(), "detail" => rating.as_str(), "id" => i64::from(*employee_id)
+                    },
+                }
+            })
+            .collect()
+    }
+
+    #[func]
     fn get_used_market(&self) -> Array<VarDictionary> {
         let mut rows = Array::new();
         for listing in &self.game.used_market.listings {
@@ -2119,8 +2148,9 @@ impl SimulationClock {
                     "role" => e.role.key(), "role_name" => e.role.label(),
                     "salary_eur" => e.salary_eur,
                     "status" => match a { staff::Activity::Available => "available", staff::Activity::Flying => "flying", staff::Activity::Hangar => "hangar", staff::Activity::Training => "training" },
-                    "status_text" => e.training.as_ref().map(|t| format!("Umschulung → {} bis {}", t.rating, operations::display_time(t.ends_at))).unwrap_or_else(|| a.label().into()).as_str(),
+                    "status_text" => e.training.as_ref().map(|t| format!("Umschulung ({}) → {} bis {}", if t.external { staff::Course::External } else { staff::Course::InHouse }.label(), t.rating, operations::display_time(t.ends_at))).unwrap_or_else(|| a.label().into()).as_str(),
                     "rating" => e.rating.as_deref().unwrap_or("—"),
+                    "training_progress" => e.training.as_ref().map_or(0.0, |t| t.progress_percent(now)),
                     "can_dismiss" => a == staff::Activity::Available,
                     "hired" => operations::display_time(e.hired_at).as_str(),
                     "days_employed" => (now.saturating_sub(e.hired_at) / 86_400) as i64
@@ -2234,6 +2264,18 @@ impl SimulationClock {
         let (cost, days) = staff::conversion_terms();
         overview.set("conversion_cost_eur", cost);
         overview.set("conversion_days", days as i64);
+        let capital = g.airline.as_ref().map_or(0, |a| a.capital_eur);
+        let mut courses = Array::<VarDictionary>::new();
+        for course in [staff::Course::InHouse, staff::Course::External] {
+            let (cost, days) = course.terms();
+            courses.push(&vdict! {
+                "course" => course.key(), "label" => course.label(),
+                "cost_eur" => cost, "days" => days as i64,
+                "ends_text" => operations::display_time(g.conversion_ends_at(course)).as_str(),
+                "affordable" => capital >= cost
+            });
+        }
+        overview.set("conversion_courses", &courses);
         overview.set("roles", &roles);
         overview.set("aircraft", &aircraft_rows);
         overview
@@ -2243,6 +2285,16 @@ impl SimulationClock {
     fn hire_pilots(&mut self, rating: GString, count: u32) -> GString {
         self.game
             .hire_pilots(&rating.to_string(), count)
+            .err()
+            .unwrap_or_default()
+            .as_str()
+            .into()
+    }
+
+    #[func]
+    fn train_pilot_course(&mut self, id: u32, rating: GString, course: GString) -> GString {
+        staff::Course::parse(&course.to_string())
+            .and_then(|c| self.game.train_pilot_course(id, &rating.to_string(), c))
             .err()
             .unwrap_or_default()
             .as_str()
@@ -2476,18 +2528,50 @@ impl SimulationClock {
         let user = std::path::PathBuf::from(user_dir.to_string());
         match save_slots::list(&user.join("saves"), &user.join("savegame.json")) {
             Ok(slots) => {
+                let header = |h: Option<save_slots::Header>| -> VarDictionary {
+                    h.map(|h| vdict! {"name" => h.name.as_str(), "game_time" => h.game_time.as_str(),
+                        "cash" => h.cash, "fleet" => h.fleet as i64, "written_at" => h.written_at as i64,
+                        "format_version" => h.format_version as i64, "save_version" => h.save_version as i64}).unwrap_or_default()
+                };
                 let rows: Array<VarDictionary> = slots.into_iter().map(|s| {
-                    let header = |h: Option<save_slots::Header>| -> VarDictionary {
-                        h.map(|h| vdict! {"name" => h.name.as_str(), "game_time" => h.game_time.as_str(),
-                            "cash" => h.cash, "fleet" => h.fleet as i64, "written_at" => h.written_at as i64,
-                            "format_version" => h.format_version as i64, "save_version" => h.save_version as i64}).unwrap_or_default()
-                    };
                     vdict! {"id" => s.id as i64, "occupied" => s.occupied, "header" => &header(s.header),
                         "backup" => &header(s.backup), "error" => s.error.as_str()}
                 }).collect();
-                vdict! {"slots" => &rows, "name_length" => save_slots::RULES.name_length as i64, "error" => ""}
+                let autosave = save_slots::autosave_entry(&user.join("saves"));
+                let autosave = vdict! {"occupied" => autosave.occupied, "header" => &header(autosave.header),
+                    "backup" => &header(autosave.backup), "error" => autosave.error.as_str()};
+                vdict! {"slots" => &rows, "autosave" => &autosave, "name_length" => save_slots::RULES.name_length as i64, "error" => ""}
             }
             Err(e) => vdict! {"error" => e.as_str()},
+        }
+    }
+
+    /// Periodic autosave into its dedicated entry; the previous autosave survives failures.
+    #[func]
+    fn autosave(&self, user_dir: GString) -> GString {
+        if self.jump_worker.is_some() {
+            return "Zeitsprung läuft.".into();
+        }
+        let root = std::path::PathBuf::from(user_dir.to_string()).join("saves");
+        save_slots::store_autosave(&root, &self.game)
+            .err()
+            .unwrap_or_default()
+            .as_str()
+            .into()
+    }
+
+    #[func]
+    fn load_autosave(&mut self, user_dir: GString, backup: bool) -> GString {
+        if self.jump_worker.is_some() {
+            return "Zeitsprung läuft.".into();
+        }
+        let root = std::path::PathBuf::from(user_dir.to_string()).join("saves");
+        match save_slots::load_autosave(&root, backup) {
+            Ok(game) => {
+                self.game = game;
+                GString::new()
+            }
+            Err(e) => e.as_str().into(),
         }
     }
 

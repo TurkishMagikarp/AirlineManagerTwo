@@ -642,3 +642,97 @@ fn rated_shortage_hiring_is_atomic_and_ignores_other_ratings() {
     assert!(g.hire_missing_rated_staff(50, 1).is_err());
     assert_eq!(state(&g), before);
 }
+
+#[test]
+fn external_conversion_is_faster_dearer_atomic_and_awards_the_same_rating() {
+    use crate::staff::Course;
+    let (in_cost, in_days) = Course::InHouse.terms();
+    let (ex_cost, ex_days) = Course::External.terms();
+    assert!(ex_cost > in_cost && ex_days < in_days);
+    let mut base = fresh();
+    base.hire_pilots("737", 1).unwrap();
+    let id = base.staff.employees[0].id;
+    let t0 = base.clock.elapsed().as_secs();
+    let payroll_before = base.history.as_ref().unwrap().payroll_through(u64::MAX);
+    let money = capital(&base);
+    assert_eq!(base.conversion_ends_at(Course::External), t0 + ex_days * 86_400);
+    base.train_pilot_course(id, "ATR 72", Course::External).unwrap();
+    assert_eq!(money - capital(&base), ex_cost);
+    assert_eq!(
+        base.history.as_ref().unwrap().payroll_through(u64::MAX) - payroll_before,
+        i128::from(ex_cost)
+    );
+    let t = base.staff.employees[0].training.clone().unwrap();
+    assert_eq!((t.start(), t.ends_at, t.external), (t0, t0 + ex_days * 86_400, true));
+    assert_eq!(base.rated_available("737"), 0);
+    assert_eq!(base.rated_available("ATR 72"), 0);
+    assert!(base.dismiss_staff(id).is_err());
+    let duration = ex_days as f64 * DAY;
+    let mut exact = base.clone();
+    exact.clock.set_running(true);
+    assert!(exact.advance(duration / 2.0));
+    let half = exact.staff.employees[0].training.as_ref().unwrap();
+    assert!((half.progress_percent(exact.clock.elapsed().as_secs()) - 50.0).abs() < 0.01);
+    assert!(exact.advance(duration / 2.0 - 1.0));
+    assert!(exact.staff.employees[0].training.is_some());
+    assert!(exact.advance(1.0));
+    assert!(exact.staff.employees[0].training.is_none());
+    assert_eq!(exact.rated_available("ATR 72"), 1);
+    exact.validate_staff().unwrap();
+    for speed in [1, 4, 16] {
+        for steps in [1, 15, 120] {
+            let mut g = base.clone();
+            g.clock.set_running(true);
+            g.clock.set_speed(speed);
+            for _ in 0..steps {
+                assert!(g.advance(duration / f64::from(speed) / f64::from(steps)));
+            }
+            g.clock.set_speed(1);
+            assert_eq!(state(&g), state(&exact));
+        }
+    }
+    // Mid-course save/load keeps the course and progress.
+    let mut mid = base.clone();
+    mid.clock.set_running(true);
+    assert!(mid.advance(duration / 4.0));
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("external.json");
+    crate::save::save(&path, &mid).unwrap();
+    let loaded = crate::save::load(&path).unwrap();
+    assert_eq!(loaded.staff.employees[0].training, mid.staff.employees[0].training);
+}
+
+#[test]
+fn external_conversion_needs_cash_and_an_available_pilot() {
+    use crate::staff::Course;
+    let mut g = fresh();
+    g.hire_pilots("737", 1).unwrap();
+    let id = g.staff.employees[0].id;
+    let (in_cost, _) = Course::InHouse.terms();
+    g.airline.as_mut().unwrap().capital_eur = Course::External.terms().0 - 1;
+    assert!(Course::External.terms().0 - 1 >= in_cost);
+    let before = state(&g);
+    assert!(g.train_pilot_course(id, "ATR 72", Course::External).unwrap_err().contains("Guthaben"));
+    assert_eq!(state(&g), before);
+    g.train_pilot_course(id, "ATR 72", Course::InHouse).unwrap();
+    assert!(g.train_pilot_course(id, "A320 family", Course::External).is_err());
+    assert!(Course::parse("night_school").is_err());
+}
+
+#[test]
+fn old_save_training_keeps_its_deadline_and_in_house_progress() {
+    let mut g = fresh();
+    g.hire_pilots("737", 1).unwrap();
+    let id = g.staff.employees[0].id;
+    g.train_pilot(id, "ATR 72").unwrap();
+    let ends = g.staff.employees[0].training.as_ref().unwrap().ends_at;
+    let mut value = serde_json::to_value(&g.staff.employees[0]).unwrap();
+    let training = value["training"].as_object_mut().unwrap();
+    training.remove("started_at");
+    training.remove("external");
+    let old: crate::staff::Employee = serde_json::from_value(value).unwrap();
+    let t = old.training.unwrap();
+    assert_eq!((t.ends_at, t.external), (ends, false));
+    assert_eq!(t.start(), ends - crate::staff::conversion_terms().1 * 86_400);
+    assert!((t.progress_percent(t.start() + (ends - t.start()) / 2) - 50.0).abs() < 0.01);
+}

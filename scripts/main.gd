@@ -54,8 +54,11 @@ var jump_buttons: Array[Button] = []
 var jump_status: Label
 var jump_in_progress := false
 var save_slots_dialog: Control
+var autosave
 var save_user_dir := ProjectSettings.globalize_path("user://")
 var save_button: Button
+var search_button: Button
+var search_dialog: Control
 var load_button: Button
 var save_status: Label
 # Platform path only; file format, validation and all state remain in Rust.
@@ -121,6 +124,8 @@ var fleet_tabs: TabBar
 var fleet_sections: Array[Control] = []
 var aircraft_cards: Array[Dictionary] = []
 var overview_register: Tree
+var commitments_table: Tree
+var commitments_empty: Control
 var overview_operations: VBoxContainer
 var fleet_operations: VBoxContainer
 var last_clock_view := ""
@@ -242,6 +247,12 @@ func _ready() -> void:
 	var spacer := Control.new()
 	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	nav.add_child(spacer)
+	search_button = Button.new()
+	search_button.text = tr("Suche")
+	search_button.tooltip_text = tr("Flughäfen und eigene Routen suchen (Strg+F)")
+	search_button.theme_type_variation = "GhostButton"
+	search_button.pressed.connect(_open_search)
+	nav.add_child(search_button)
 	new_game_button = Button.new()
 	new_game_button.text = "Neues Spiel"
 	new_game_button.tooltip_text = new_game_button.text
@@ -355,11 +366,19 @@ func _add_time_controls(column: VBoxContainer) -> void:
 	load_button.theme_type_variation = "GhostButton"
 	load_button.pressed.connect(_load_game)
 	controls.add_child(load_button)
+	autosave = preload("res://scripts/autosave.gd").new(save_user_dir.path_join("preferences.cfg"))
 	save_status = _label(tr("Speicherplätze · manuell speichern und laden"), ThemeTokens.SMALL, ThemeTokens.INK_MUTED)
 	save_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	save_status.tooltip_text = save_user_dir.path_join("saves")
 	panel.add_child(save_status)
 	_refresh_time()
+
+
+func _autosave_tick(delta: float) -> void:
+	var ready: bool = simulation.has_airline() and not founding.visible and not jump_in_progress and not is_instance_valid(save_slots_dialog)
+	if not autosave.tick(delta, ready): return
+	var error: String = simulation.autosave(save_user_dir)
+	save_status.text = tr("Autosave gespeichert.") if error.is_empty() else tr("Autosave fehlgeschlagen: %s") % error
 
 
 func _jump(seconds: int) -> void:
@@ -426,7 +445,37 @@ func _open_save_slots(saving: bool) -> void:
 			_sync_view()
 			_refresh_time()
 	)
+	save_slots_dialog.autosave_settings = autosave
 	save_slots_dialog.open(simulation, save_user_dir, saving)
+
+
+func _unhandled_key_input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_F and (event.ctrl_pressed or event.meta_pressed) and not event.alt_pressed:
+		_open_search()
+		get_viewport().set_input_as_handled()
+
+
+func _open_search() -> void:
+	if jump_in_progress or not overview.visible: return
+	if is_instance_valid(search_dialog) or is_instance_valid(save_slots_dialog) or is_instance_valid(decision_dialog) or is_instance_valid(ferry_dialog): return
+	var layer := CanvasLayer.new()
+	layer.layer = 90
+	add_child(layer)
+	search_dialog = preload("res://scripts/search_dialog.gd").new()
+	layer.add_child(search_dialog)
+	search_dialog.tree_exited.connect(layer.queue_free)
+	search_dialog.activated.connect(_open_search_result)
+	search_dialog.open(simulation)
+
+
+func _open_search_result(result: Dictionary) -> void:
+	if result["kind"] == "airport":
+		_show_page(3)
+		map_panel.select_airport(result["icao"])
+		navigation[3].grab_focus()
+	else:
+		_show_page(2)
+		routes_panel.focus_route(result["id"])
 
 
 # Single-file compatibility entry points for the Windows restart fixtures.
@@ -457,6 +506,7 @@ func _set_speed(speed: int) -> void:
 
 
 func _process(delta: float) -> void:
+	_autosave_tick(delta)
 	if jump_in_progress: return
 	if founding.visible:
 		return
@@ -614,6 +664,7 @@ func _refresh_finance() -> void:
 	operation_summary.text = "%d Flugzeuge  ·  %d Routen  ·  %d aktive Flugpläne" % [simulation.get_fleet().size(), simulation.get_routes().size(), operations.size()]
 	operation_summary.text += "\n\n%s\nRestschuld: %s · Zinsen bisher: %s · Details und Kreditaktionen unter Finanzen." % [financing["status"], UI.money(financing["debt_eur"]), UI.money(financing["interest_eur"])]
 	_refresh_overview_register()
+	_refresh_commitments()
 	_render_operations(overview_operations)
 
 
@@ -1357,6 +1408,13 @@ func _build_finance(content: VBoxContainer) -> void:
 	overview_register = UI.table(["Kennung", "Typ", "Standort", "Status"], [115, 150, 90, 130], 220)
 	register.add_child(overview_register)
 	overview_operations = UI.panel(grid, "LIVE-BETRIEB  /  FLOTTE & NETZWERK")
+	var commitments := UI.panel(finance_panel, "ANSTEHENDE TERMINE  /  LIEFERUNGEN & UMSCHULUNGEN")
+	commitments_table = UI.table(["Datum", "Art", "Flugzeug / Pilot", "Zielrating"], [140, 100, 130, 90], 232)
+	commitments.add_child(commitments_table)
+	commitments_empty = UI.empty_state("Keine anstehenden Termine", "Geplante Auslieferungen und Pilotenumschulungen erscheinen hier.", "Zu den Bestellungen", func():
+		_show_page(1)
+		fleet_tabs.current_tab = 1)
+	commitments.add_child(commitments_empty)
 	var finance := UI.panel(finance_panel, "FINANZÜBERSICHT  /  KUMULIERT")
 	finance_breakdown = UI.label("")
 	finance.add_child(finance_breakdown)
@@ -1431,6 +1489,7 @@ func _resize_frame() -> void:
 		navigation[index].text = "" if compact else PAGES[index]["title"]
 		navigation[index].alignment = HORIZONTAL_ALIGNMENT_CENTER if compact else HORIZONTAL_ALIGNMENT_LEFT
 	new_game_button.text = "+" if compact else "Neues Spiel"
+	search_button.text = "?" if compact else tr("Suche")
 
 
 func _open_attention(entry: Dictionary) -> void:
@@ -1467,6 +1526,21 @@ func _refresh_overview_register() -> void:
 		UI.cell_text(row, 2, plane["location_icao"])
 		var phase: String = plane["ferry_state"] if not plane["ferry_state"].is_empty() else {"parked": "Geparkt", "in_flight": "Unterwegs", "ground": "Gelandet · Bodenzeit", "maintenance": "In Wartung"}.get(plane["status"], "Unbekannt")
 		UI.cell_status(row, 3, phase, "info" if plane["status"] in ["in_flight", "maintenance"] else "neutral")
+
+
+func _refresh_commitments() -> void:
+	var entries: Array = simulation.get_upcoming_commitments()
+	commitments_table.clear()
+	commitments_table.visible = not entries.is_empty()
+	commitments_empty.visible = entries.is_empty()
+	var root_item := commitments_table.create_item()
+	for entry in entries:
+		var row := commitments_table.create_item(root_item)
+		var delivery: bool = entry["kind"] == "delivery"
+		UI.cell_text(row, 0, entry["date"])
+		UI.cell_status(row, 1, "Lieferung" if delivery else "Umschulung", "info" if delivery else "neutral")
+		UI.cell_text(row, 2, entry["title"])
+		UI.cell_text(row, 3, "—" if delivery else entry["detail"])
 
 
 func _render_operations(parent: VBoxContainer) -> void:

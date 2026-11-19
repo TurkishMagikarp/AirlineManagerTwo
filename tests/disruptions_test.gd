@@ -146,7 +146,8 @@ func _delay_views(delay: int) -> bool:
 	await _click(main.navigation[2])
 	main.routes_panel.refresh_operations()
 	var operation: Dictionary = main.simulation.get_operations()[0]
-	return _check(("%d min Verspätung" % ceili(delay / 60.0)) in operation["status_text"] and operation["status_text"] in main.routes_panel.operations_label.text, "Operations renders exact current Rust delay")
+	var item: TreeItem = main.routes_panel.operations_tree.get_root().get_first_child()
+	return _check(("%d min Verspätung" % ceili(delay / 60.0)) in operation["status_text"] and main.routes_panel.operations_tree.get_root().get_first_child().get_text(5) == ("%d min" % ceili(delay / 60.0) if delay > 0 else "—") and operation["status_text"] in main.routes_panel.operations_tree.get_root().get_first_child().get_tooltip_text(5), "Operations renders exact current Rust delay")
 
 func _punctuality_view(expected: String, count: int) -> bool:
 	await _click(main.navigation[1])

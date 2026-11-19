@@ -236,7 +236,10 @@ func center_base() -> void:
 	for airport in airports:
 		if airport["icao"] == base_icao:
 			zoom = 6.0
-			offset = -Vector2(airport["position"].x, -airport["position"].y) * scale_factor()
-			_constrain()
-			_camera_changed()
+			center_on(airport["position"])
 			return
+
+func center_on(point: Vector2) -> void:
+	offset = -Vector2(point.x, -point.y) * scale_factor()
+	_constrain()
+	_camera_changed()

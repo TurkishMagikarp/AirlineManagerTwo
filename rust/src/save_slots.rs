@@ -245,44 +245,71 @@ fn import_legacy(root: &Path, legacy: &Path) -> Result<(), String> {
     fs::rename(staging.path(), slot_path(root, 0)?).map_err(error)?;
     atomic_json(&root.join("legacy-imported"), &true)
 }
+fn inspect(path: Result<PathBuf, String>, id: u32) -> Slot {
+    let mut s = Slot {
+        id,
+        occupied: false,
+        header: None,
+        backup: None,
+        error: String::new(),
+    };
+    let result = (|| {
+        let path = path?;
+        s.occupied = path.exists();
+        if !s.occupied {
+            return Ok(());
+        }
+        let manifest: Manifest = read_small(&path.join("manifest.json"))?;
+        s.backup = manifest
+            .backup
+            .as_ref()
+            .and_then(|b| read_header(&path, b).ok());
+        s.header = Some(read_header_metadata(&path, &manifest.main)?);
+        read_header(&path, &manifest.main)?;
+        Ok(())
+    })();
+    if let Err(e) = result {
+        s.occupied = true;
+        s.error = e;
+    }
+    s
+}
 pub fn list(root: &Path, legacy: &Path) -> Result<Vec<Slot>, String> {
     reject_link(root)?;
     import_legacy(root, legacy)?;
     Ok((0..RULES.slot_count)
-        .map(|id| {
-            let mut s = Slot {
-                id,
-                occupied: false,
-                header: None,
-                backup: None,
-                error: String::new(),
-            };
-            let result = (|| {
-                let path = slot_path(root, id)?;
-                s.occupied = path.exists();
-                if !s.occupied {
-                    return Ok(());
-                }
-                let manifest: Manifest = read_small(&path.join("manifest.json"))?;
-                s.backup = manifest
-                    .backup
-                    .as_ref()
-                    .and_then(|b| read_header(&path, b).ok());
-                s.header = Some(read_header_metadata(&path, &manifest.main)?);
-                read_header(&path, &manifest.main)?;
-                Ok(())
-            })();
-            if let Err(e) = result {
-                s.occupied = true;
-                s.error = e;
-            }
-            s
-        })
+        .map(|id| inspect(slot_path(root, id), id))
         .collect())
 }
+/// The autosave lives beside, never inside, the manual slot allocation.
+pub const AUTOSAVE_NAME: &str = "Autosave";
+fn autosave_path(root: &Path) -> Result<PathBuf, String> {
+    reject_link(root)?;
+    let path = root.join("autosave");
+    reject_link(&path)?;
+    Ok(path)
+}
+pub fn autosave_entry(root: &Path) -> Slot {
+    inspect(autosave_path(root), 0)
+}
+pub fn store_autosave(root: &Path, game: &Game) -> Result<(), String> {
+    store_at(root, &autosave_path(root)?, AUTOSAVE_NAME, game, true)
+}
+pub fn load_autosave(root: &Path, backup: bool) -> Result<Game, String> {
+    load_at(&autosave_path(root)?, backup)
+}
 pub fn store(root: &Path, id: u32, name: &str, game: &Game, overwrite: bool) -> Result<(), String> {
+    store_at(root, &slot_path(root, id)?, name, game, overwrite)
+}
+fn store_at(
+    root: &Path,
+    path: &Path,
+    name: &str,
+    game: &Game,
+    overwrite: bool,
+) -> Result<(), String> {
     validate_name(name)?;
-    let path = slot_path(root, id)?;
+    let path = path.to_path_buf();
     fs::create_dir_all(root).map_err(error)?;
     if !path.exists() {
         let staging = tempfile::tempdir_in(root).map_err(error)?;
@@ -330,7 +357,9 @@ pub fn store(root: &Path, id: u32, name: &str, game: &Game, overwrite: bool) -> 
     Ok(())
 }
 pub fn load(root: &Path, id: u32, backup: bool) -> Result<Game, String> {
-    let path = slot_path(root, id)?;
+    load_at(&slot_path(root, id)?, backup)
+}
+fn load_at(path: &Path, backup: bool) -> Result<Game, String> {
     let manifest: Manifest = read_small(&path.join("manifest.json"))?;
     let gen_id = if backup {
         manifest
@@ -340,8 +369,8 @@ pub fn load(root: &Path, id: u32, backup: bool) -> Result<Game, String> {
     } else {
         &manifest.main
     };
-    read_header(&path, gen_id)?;
-    save::load(&generation(&path, gen_id)?.join("save.json"))
+    read_header(path, gen_id)?;
+    save::load(&generation(path, gen_id)?.join("save.json"))
 }
 pub fn delete(root: &Path, id: u32) -> Result<(), String> {
     let path = slot_path(root, id)?;

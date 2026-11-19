@@ -48,3 +48,21 @@ FREIGHT_ROUTE_MARKET,%d kg/Tag · %s Frachtumsatz,%d kg/day · %s freight revenu
 FREIGHT_LOAD_TOOLTIP,Prognose je Abflug bei aktuellem Frachtpreis und aktueller Nachfrage.,Forecast per departure at the current freight rate and demand.
 FREIGHT_RATE_VALUE,%s EUR/kg,%s EUR/kg
 ROUTE_PRICE,Preis,Price
+OPS_PANEL_TITLE,01B  /  FLUGBETRIEB · NÄCHSTE ABFLÜGE,01B  /  FLIGHT OPERATIONS · NEXT DEPARTURES
+OPS_COL_AIRCRAFT,Flugzeug,Aircraft
+OPS_COL_DIRECTION,Richtung,Direction
+OPS_COL_STATE,Status,State
+OPS_COL_NEXT,Nächster Abflug,Next departure
+OPS_COL_LANDING,Landung erwartet,Expected landing
+OPS_COL_DELAY,Verspätung,Delay
+OPS_STATE_AIRBORNE,Unterwegs,Airborne
+OPS_STATE_GROUND,Bodenzeit,Turnaround
+OPS_STATE_SCHEDULED,Geplant,Scheduled
+OPS_STATE_WEATHER,Wetterverzug,Weather delay
+OPS_STATE_MAINTENANCE,Wartung,Maintenance
+OPS_STATE_RELEASE,Freigabe vorgemerkt,Release pending
+OPS_STATE_NO_PLAN,Kein Flugplan,No schedule
+OPS_EMPTY_TITLE,Noch kein Flugbetrieb,No operations yet
+OPS_EMPTY_TEXT,Sobald ein Flugzeug einer Route zugewiesen ist, erscheinen hier Status und nächster Abflug.,Once an aircraft is assigned to a route its state and next departure appear here.
+OPS_EMPTY_ACTION,Route planen,Plan a route
+OPS_ROUTE_TIP,Route #%d · Pünktlichkeit: %s · %d erfasste Flüge,Route #%d · punctuality: %s · %d recorded flights

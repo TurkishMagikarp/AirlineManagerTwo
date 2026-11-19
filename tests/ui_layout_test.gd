@@ -132,6 +132,13 @@ func _run() -> void:
 		print("PASS: local/connecting route counts, feeding paths and empty state at 1440x1000 and 680x520")
 		quit(0)
 		return
+	if OS.get_environment("AIRLINE_UI_CAPTURE_SEARCH_ONLY") == "1":
+		await _search_views(sim)
+		main.queue_free()
+		await process_frame
+		print("PASS: global search start, results and empty state in German and English at 1440x1000 and 680x520")
+		quit(0)
+		return
 	if OS.get_environment("AIRLINE_UI_CAPTURE_SAVES_ONLY") == "1":
 		await _save_slot_views(sim)
 		main.queue_free()
@@ -230,7 +237,18 @@ func _run() -> void:
 				scroll.ensure_control_visible(main.events_table)
 				await RenderingServer.frame_post_draw
 				assert(root.get_texture().get_image().save_png(capture_dir.path_join("overview-events-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
+			if page == 0 and not capture_dir.is_empty():
+				scroll.ensure_control_visible(main.commitments_table)
+				for frame in range(5): await process_frame
+				scroll.ensure_control_visible(main.commitments_table)
+				await RenderingServer.frame_post_draw
+				assert(root.get_texture().get_image().save_png(capture_dir.path_join("overview-commitments-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
 			if page == 2 and not capture_dir.is_empty():
+				scroll.ensure_control_visible(main.routes_panel.operations_tree)
+				for frame in range(5): await process_frame
+				scroll.ensure_control_visible(main.routes_panel.operations_tree)
+				await RenderingServer.frame_post_draw
+				assert(root.get_texture().get_image().save_png(capture_dir.path_join("route-operations-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
 				scroll.ensure_control_visible(main.routes_panel.season_label)
 				for frame in range(5): await process_frame
 				scroll.ensure_control_visible(main.routes_panel.season_label)
@@ -243,6 +261,10 @@ func _run() -> void:
 				for frame in range(5): await process_frame
 				await RenderingServer.frame_post_draw
 				assert(root.get_texture().get_image().save_png(capture_dir.path_join("alliances-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
+				scroll.scroll_vertical += int(main.routes_panel.competition_label.get_global_rect().position.y - scroll.get_global_rect().position.y) - 8
+				for frame in range(5): await process_frame
+				await RenderingServer.frame_post_draw
+				assert(root.get_texture().get_image().save_png(capture_dir.path_join("route-competition-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
 				scroll.ensure_control_visible(main.routes_panel.destination)
 				for frame in range(5): await process_frame
 				await _capture_picker(main.routes_panel.destination, "route-airport", dimensions)
@@ -377,6 +399,19 @@ func _run() -> void:
 									await RenderingServer.frame_post_draw
 									assert(root.get_texture().get_image().save_png(capture_dir.path_join("finance-detail-right-%d-%dx%d.png" % [i, dimensions.x, dimensions.y])) == OK)
 									bar.value = 0
+				var csv_path := OS.get_temp_dir().path_join("airline-layout-routes.csv")
+				var routes_before: Array = sim.get_route_finances()
+				assert(finance.export_route_csv(csv_path).is_empty() and sim.get_route_finances() == routes_before)
+				DirAccess.remove_absolute(csv_path)
+				scroll.ensure_control_visible(finance.export_button)
+				for frame in range(5): await process_frame
+				assert(root.get_visible_rect().encloses(finance.export_button.get_global_rect()))
+				finance.export_button.grab_focus()
+				for frame in range(3): await process_frame
+				assert(finance.export_button.has_focus())
+				if not capture_dir.is_empty():
+					await RenderingServer.frame_post_draw
+					assert(root.get_texture().get_image().save_png(capture_dir.path_join("finance-export-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
 			if page == 5:
 				for target in [main.staff_panel.hire_button, main.staff_panel.staff_tree, main.staff_panel.training_rows, main.staff_panel.train_button]:
 					scroll.ensure_control_visible(target)
@@ -704,6 +739,28 @@ func _jump_views() -> void:
 		await process_frame
 
 
+func _search_views(sim: RefCounted) -> void:
+	assert(sim.buy_aircraft("atr72_600").is_empty() and sim.buy_aircraft("atr72_600").is_empty())
+	assert(sim.create_route("EDDF", "EDDM", 1).is_empty())
+	assert(sim.create_route("EDDF", "EDLP", 2).is_empty())
+	for locale in ["de", "en"]:
+		TranslationServer.set_locale(locale)
+		for dimensions in [Vector2i(1440, 1000), Vector2i(680, 520)]:
+			root.size = dimensions
+			main._sync_view()
+			main._show_page(2)
+			for scenario in [["start", ""], ["results", "m"], ["empty", "qqq"]]:
+				main._open_search()
+				var dialog: Control = main.search_dialog
+				dialog.query.text = scenario[1]
+				dialog.query.text_changed.emit(scenario[1])
+				for frame in range(5): await process_frame
+				assert(root.get_visible_rect().encloses(dialog.get_child(1).get_child(0).get_global_rect()))
+				await RenderingServer.frame_post_draw
+				assert(root.get_texture().get_image().save_png(capture_dir.path_join("search-%s-%s-%dx%d.png" % [scenario[0], locale, dimensions.x, dimensions.y])) == OK)
+				dialog.dismiss()
+				await process_frame
+
 func _save_slot_views(sim: RefCounted) -> void:
 	var directory := OS.get_cache_dir().path_join("air-save-slot-shots-%d" % OS.get_process_id())
 	DirAccess.make_dir_recursive_absolute(directory)
@@ -715,6 +772,7 @@ func _save_slot_views(sim: RefCounted) -> void:
 			assert(sim.buy_aircraft("atr72_600").is_empty())
 			assert(sim.save_slot(directory, 0, "Nach dem Flugzeugkauf", true).is_empty())
 			assert(sim.save_slot(directory, 1, "Zweiter Speicherplatz", false).is_empty())
+			assert(sim.autosave(directory).is_empty())
 		if scenario == "damaged":
 			var slot := directory.path_join("saves/slot-00")
 			var manifest: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(slot.path_join("manifest.json")))

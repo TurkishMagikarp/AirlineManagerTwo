@@ -1,0 +1,15 @@
+[Unit]
+Description=Refresh AirlineManager GitHub App installation token
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecCondition=/usr/bin/test -s /etc/airline-delivery/app.json
+ExecStart=/usr/bin/python3 -B /opt/airline-delivery/github_token.py --config /etc/airline-delivery/app.json
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+# Keep the two root-managed sibling directories on the same mount for atomic rename.
+ReadWritePaths=/opt/airline-delivery
+UMask=0077

@@ -350,3 +350,66 @@ fn rotation_archive_pages_and_totals_stay_grouped_after_deletion() {
     save::save(&path, &g).unwrap();
     assert_eq!(state(&save::load(&path).unwrap()), state(&g));
 }
+
+fn board(g: &Game) -> Vec<operations::BoardRow> {
+    let now = g.clock.elapsed().as_secs();
+    g.routes
+        .iter()
+        .filter_map(|r| {
+            let plane = g.fleet.iter().find(|p| Some(p.id) == r.aircraft_id)?;
+            let state = operations::movement(r, &plane.model_id, now).ok();
+            Some(operations::board_row(r, plane, state.as_ref()))
+        })
+        .collect()
+}
+
+#[test]
+fn board_rows_show_both_directions_airborne_landing_and_pending_release() {
+    let mut g = game(2);
+    g.schedule(1, 1, 240).unwrap();
+    g.add_route_aircraft(1, 2).unwrap();
+    let rows = board(&g);
+    assert_eq!(rows.len(), 2);
+    assert!(rows.iter().all(|r| r.state_kind == "scheduled" && r.expected_landing.is_none()));
+    assert_eq!((rows[0].origin.as_str(), rows[0].destination.as_str()), ("EDDF", "EDDM"));
+    assert_eq!(rows[0].next_departure, Some(60));
+    assert_eq!(rows[1].next_departure, Some(7260));
+    g.clock.set_running(true);
+    assert!(g.advance(100.0));
+    let rows = board(&g);
+    assert_eq!(rows[0].state_kind, "airborne");
+    assert!(rows[0].expected_landing.unwrap() > 100);
+    assert_eq!(rows[0].next_departure, Some(60 + 14400));
+    assert_eq!(rows[1].state_kind, "scheduled");
+    g.remove_route_aircraft(1, 1).unwrap();
+    let rows = board(&g);
+    assert_eq!(rows[0].state_kind, "release");
+    assert!(rows[0].release_pending);
+    assert_eq!(rows[0].next_departure, None);
+    assert!(rows[0].expected_landing.is_some());
+    let ready = g.routes[0].remove_at.unwrap();
+    assert!(g.advance((ready - 100) as f64));
+    let rows = board(&g);
+    assert_eq!(rows.len(), 1);
+    // After landing, the second aircraft flies the return leg from EDDM.
+    assert!(g.advance(14400.0));
+    let rows = board(&g);
+    assert_eq!(rows[0].state_kind, "scheduled");
+    assert_eq!((rows[0].origin.as_str(), rows[0].destination.as_str()), ("EDDM", "EDDF"));
+    assert_eq!(rows[0].next_departure, Some(7260 + 14400));
+}
+
+#[test]
+fn board_rows_flag_maintenance_and_weather_delay() {
+    let mut g = game(1);
+    g.schedule(1, 1, 240).unwrap();
+    g.clock.set_running(true);
+    assert!(g.advance(100.0));
+    g.request_maintenance(1).unwrap();
+    let end = g.fleet[0].maintenance.as_ref().unwrap().end;
+    assert_eq!(board(&g)[0].state_kind, "airborne");
+    assert!(g.advance((end - 100 - 1) as f64));
+    let rows = board(&g);
+    assert_eq!(g.fleet[0].status, AircraftStatus::Maintenance);
+    assert_eq!(rows[0].state_kind, "maintenance");
+}

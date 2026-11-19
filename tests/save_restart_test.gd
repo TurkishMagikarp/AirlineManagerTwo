@@ -43,7 +43,7 @@ func _run() -> void:
 		if not running:
 			await _click(main.pause_button)
 		await _click(main.navigation[1])
-		_select_atr(main)
+		_select_model(main, "atr72_600")
 		await _click(main.buy_button)
 		await _click(main.buy_button)
 		await _click(main.navigation[2])
@@ -83,7 +83,8 @@ func _run() -> void:
 	if mode.begins_with("read-"):
 		if not _check(main.time_label.text == "Tag 2 · 00:00:00" and main.start_button.disabled == running, "Loaded UI matches Rust"):
 			return
-		if not _check(main.speed_buttons[2 if running else 1].button_pressed, "Loaded speed is selected"):
+		var correct_control: bool = main.speed_buttons[2].button_pressed if running else main.pause_button.button_pressed
+		if not _check(correct_control and main.state_label.text.ends_with("%d×" % speed), "Loaded running or pause control and retained speed are displayed"):
 			return
 		clock.advance(1.0)
 		var expected: float = 86400.125 + (speed if running else 0)
@@ -92,14 +93,17 @@ func _run() -> void:
 		await _click(main.navigation[1])
 		if not _check(main.fleet_tree.get_root().get_child_count() == 2, "Loaded aircraft appear in fleet table"):
 			return
-		_select_atr(main)
+		_select_model(main, "atr72_600")
 		await _click(main.buy_button)
 		fleet = clock.get_fleet()
 		airline = clock.get_airline_info()
 		if not _check(fleet.size() == 3 and fleet[2]["identifier"] == "AM-000003" and airline["capital_eur"] == start_capital - 3 * atr_price, "Buying after restart continues IDs and debits saved balance"):
 			return
+		# The fourth ATR is now affordable under the current balancing. Select
+		# an available widebody with a price above the restored balance instead.
+		_select_model(main, "b777_300er")
 		await _click(main.buy_button)
-		if not _check("Nicht genügend Guthaben" in main.fleet_status.text and clock.get_fleet() == fleet and clock.get_airline_info() == airline, "Insufficient funds after restart does not alter state"):
+		if not _check(main.buy_button.disabled and "Nicht genügend Guthaben" in main.fleet_status.text and clock.get_fleet() == fleet and clock.get_airline_info() == airline, "Insufficient funds after restart does not alter state"):
 			return
 		await _click(main.navigation[0])
 		# Refresh time-dependent demand fields after the deliberate clock advance.
@@ -179,9 +183,9 @@ func _click(button: Button) -> void:
 		await process_frame
 
 
-func _select_atr(main) -> void:
+func _select_model(main, model_id: String) -> void:
 	for index in range(main.model_select.item_count):
-		if main.model_select.get_item_metadata(index)["id"] == "atr72_600":
+		if main.model_select.get_item_metadata(index)["id"] == model_id:
 			main.model_select.select(index)
 			main.model_select.item_selected.emit(index)
 			return

@@ -379,3 +379,67 @@ fn orders_corrupt_positions_are_rejected_without_losing_the_save() {
         assert_eq!(state(&save::load(&path).unwrap()), state(&g));
     }
 }
+
+fn kinds(g: &Game) -> Vec<(u64, String)> {
+    use crate::orders::CommitmentKind::*;
+    g.upcoming_commitments()
+        .iter()
+        .map(|c| {
+            (
+                c.at,
+                match &c.kind {
+                    Delivery { order_id, .. } => format!("d{order_id}"),
+                    Training { employee_id, rating, .. } => format!("t{employee_id}{rating}"),
+                },
+            )
+        })
+        .collect()
+}
+#[test]
+fn commitments_empty_without_orders_or_training() {
+    assert!(game().upcoming_commitments().is_empty());
+}
+#[test]
+fn commitments_merge_sorted_with_ties_skip_held_and_follow_time_and_reload() {
+    let mut g = game();
+    g.place_order("atr72_600", 2).unwrap();
+    g.hire_pilots("737", 2).unwrap();
+    let (a, b) = (g.staff.employees[0].id, g.staff.employees[1].id);
+    g.train_pilot(b, "ATR 72").unwrap();
+    g.train_pilot(a, "ATR 72").unwrap();
+    let first = g.orders[0].delivery_at;
+    let second = g.orders[1].delivery_at;
+    let end = g.staff.employees[0].training.as_ref().unwrap().ends_at;
+    assert!(end < first);
+    let all = kinds(&g);
+    assert_eq!(
+        all.iter().map(|x| x.0).collect::<Vec<_>>(),
+        vec![end, end, first, second]
+    );
+    assert_eq!(all[0].1, format!("t{a}ATR 72"));
+    assert_eq!(all[1].1, format!("t{b}ATR 72"));
+    // Tie between a delivery and a training: delivery first.
+    g.staff.employees[0].training.as_mut().unwrap().ends_at = first;
+    g.staff.employees[1].training.as_mut().unwrap().ends_at = first;
+    let tie = kinds(&g);
+    assert_eq!(tie[0].1, format!("d{}", g.orders[0].id));
+    assert_eq!(tie[1].1, format!("t{a}ATR 72"));
+    assert_eq!(tie[2].1, format!("t{b}ATR 72"));
+    g.staff.employees[0].training.as_mut().unwrap().ends_at = end;
+    g.staff.employees[1].training.as_mut().unwrap().ends_at = end;
+    // Held orders are not listed.
+    let mut held = g.clone();
+    held.orders[0].held_since = Some(first);
+    assert_eq!(kinds(&held).len(), 3);
+    // Reload keeps the list; time advance clears finished entries.
+    assert_eq!(kinds(&restart(&g)), kinds(&g));
+    g.clock.set_running(true);
+    advance(&mut g, end, false);
+    let after = kinds(&g);
+    assert_eq!(after.len(), 2);
+    assert!(after.iter().all(|x| x.1.starts_with('d')));
+    assert_eq!(kinds(&restart(&g)), after);
+    advance(&mut g, first - end, false);
+    assert_eq!(kinds(&g).len(), 1);
+    assert_eq!(kinds(&restart(&g)), kinds(&g));
+}

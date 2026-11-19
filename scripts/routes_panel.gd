@@ -24,6 +24,9 @@ var schedule_button: Button
 var stop_button: Button
 var maintenance_label: Label
 var operations_label: Label
+var operations_tree: Tree
+var operations_empty: PanelContainer
+var _operations_signature := ""
 var service_select: OptionButton
 var service_cost: Label
 var business_input: SpinBox
@@ -37,6 +40,8 @@ var results_tree: Tree
 var codeshare_panel: VBoxContainer
 var alliance_panel: VBoxContainer
 var competition_label: Label
+var competition_tree: Tree
+var competition_empty: Control
 var connections_label: Label
 var connections_empty: Control
 var connections_chip: Control
@@ -256,10 +261,53 @@ func _ready() -> void:
 	alliance_panel = preload("res://scripts/alliance_panel.gd").new()
 	alliance_panel.simulation = simulation
 	add_child(alliance_panel)
-	competition_label = _label("Route auswählen, um den gemeinsamen Passagiermarkt zu sehen.")
-	var competition_panel := UI.panel(self, "05  /  WETTBEWERB · GEMEINSAMER STRECKENMARKT")
+	competition_label = _label("")
+	competition_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	competition_tree = UI.table(["Airline", "Flugzeug", "Economy", "Business", "Abflüge/Tag je Richtung"], [150, 150, 100, 100, 180], 140)
+	competition_tree.set_column_expand(0, true)
+	competition_tree.set_column_expand(1, true)
+	competition_empty = UI.empty_state("Keine Route ausgewählt", "Wähle eine Route im Register, um die öffentlichen Flugpläne der Konkurrenz auf dieser Strecke zu vergleichen.", "Route auswählen", func(): route_tree.grab_focus())
+	var competition_panel := UI.panel(self, "05  /  WETTBEWERB · ÖFFENTLICHE FLUGPLÄNE")
 	competition_panel.add_child(competition_label)
+	competition_panel.add_child(competition_tree)
+	competition_panel.add_child(competition_empty)
 	refresh()
+
+
+const OPS_KINDS := {
+	"airborne": ["OPS_STATE_AIRBORNE", "info"], "ground": ["OPS_STATE_GROUND", "neutral"],
+	"scheduled": ["OPS_STATE_SCHEDULED", "neutral"], "weather_delay": ["OPS_STATE_WEATHER", "caution"],
+	"maintenance": ["OPS_STATE_MAINTENANCE", "caution"], "release": ["OPS_STATE_RELEASE", "caution"],
+	"no_plan": ["OPS_STATE_NO_PLAN", "neutral"],
+}
+
+
+func _refresh_operations_table(metrics: Dictionary) -> void:
+	var rows: Array = simulation.get_operations()
+	operations_tree.visible = not rows.is_empty()
+	operations_empty.visible = rows.is_empty()
+	var signature := str([rows, metrics.values().map(func(r): return [r["id"], r["punctuality_percent"], r["punctuality_flights"]]), TranslationServer.get_locale()])
+	if signature == _operations_signature:
+		return
+	_operations_signature = signature
+	operations_tree.clear()
+	var root := operations_tree.create_item()
+	for operation: Dictionary in rows:
+		var row := operations_tree.create_item(root)
+		var route: Dictionary = metrics.get(operation["route_id"], {})
+		UI.cell_text(row, 0, operation["identifier"])
+		UI.cell_text(row, 1, "%s → %s" % [operation["origin"], operation["destination"]])
+		var kind: Array = OPS_KINDS[operation["state_kind"]]
+		UI.cell_status(row, 2, tr(kind[0]), kind[1])
+		UI.cell_text(row, 3, operation["next_departure"])
+		UI.cell_text(row, 4, operation["expected_landing"])
+		var delay_minutes := ceili(operation["delay_seconds"] / 60.0)
+		UI.cell_text(row, 5, ("%d min" % delay_minutes) if delay_minutes > 0 else "—")
+		var punctuality := "—" if route.get("punctuality_percent", -1.0) < 0 else "%.1f %%" % route["punctuality_percent"]
+		var tip := "%s\n%s" % [operation["status_text"], tr("OPS_ROUTE_TIP") % [operation["route_id"], punctuality, route.get("punctuality_flights", 0)]]
+		for column in range(6):
+			row.set_tooltip_text(column, tip)
+		row.set_metadata(0, operation["route_id"])
 
 
 func _arrange_workspace() -> void:
@@ -268,6 +316,7 @@ func _arrange_workspace() -> void:
 	grid.add_theme_constant_override("separation", ThemeTokens.SPACE_4)
 	add_child(grid)
 	var network := UI.panel(grid, "01  /  ROUTENREGISTER & LIVE-BETRIEB")
+	var ops_panel := UI.panel(grid, tr("OPS_PANEL_TITLE"))
 	var planner := UI.panel(grid, "02  /  VERBINDUNG PLANEN")
 	var editor := UI.panel(self, "03  /  AUSGEWÄHLTE ROUTE · ZUWEISUNG & FLUGPLAN")
 	var editor_grid := GridContainer.new()
@@ -296,8 +345,15 @@ func _arrange_workspace() -> void:
 		if node == schedule_title:
 			target = editor_columns[2]
 		if node == operations_label:
-			target = network
+			target = ops_panel
 		node.reparent(target)
+	operations_tree = UI.table([tr("OPS_COL_AIRCRAFT"), tr("OPS_COL_DIRECTION"), tr("OPS_COL_STATE"), tr("OPS_COL_NEXT"), tr("OPS_COL_LANDING"), tr("OPS_COL_DELAY")], [110, 120, 130, 150, 150, 90], 160)
+	ops_panel.add_child(operations_tree)
+	operations_empty = UI.empty_state(tr("OPS_EMPTY_TITLE"), tr("OPS_EMPTY_TEXT"), tr("OPS_EMPTY_ACTION"), func():
+		get_parent().get_parent().ensure_control_visible(origin)
+		origin.grab_focus()
+	)
+	ops_panel.add_child(operations_empty)
 	results_tree = UI.table(["Landung / Route", "Strecke", "Pax / Auslastung", "Tickets", "Kosten", "Ergebnis", "Fracht kg / EUR"], [170, 145, 135, 110, 110, 110, 260], 240)
 	result_panel.add_child(results_tree)
 	results_empty = UI.empty_state("Noch keine Landungen", "Flugplan: Pendelverkehr mit abwechselndem Hin- und Rückflug. Keine automatische Überführung.", schedule_button.text, func():
@@ -423,12 +479,12 @@ func refresh_operations() -> void:
 	_update_connections(metrics.get(_route().get("id", 0), {}))
 	_update_schedule_controls(metrics.get(_route().get("id", 0), {}))
 	_update_service_cost(metrics.get(_route().get("id", 0), {}))
-	var lines: PackedStringArray = ["Flugbetrieb · nächste Abflüge (sortiert)"]
+	var lines: PackedStringArray = []
 	for route in metrics.values():
 		lines.append("Route #%d · Pünktlichkeit: %s · %d erfasste Flüge" % [route["id"], "—" if route["punctuality_percent"] < 0 else "%.1f %%" % route["punctuality_percent"], route["punctuality_flights"]])
-	for operation in simulation.get_operations():
-		lines.append("%s · Route #%d · Flug %d min · Boden %d min\n%s\nNächster Abflug: %s" % [operation["identifier"], operation["route_id"], ceili(operation["flight_seconds"] / 60.0), operation["ground_seconds"] / 60, operation["status_text"], operation["next_departure"]])
-	operations_label.text = "\n\n".join(lines)
+	operations_label.text = "\n".join(lines)
+	operations_label.visible = not lines.is_empty()
+	_refresh_operations_table(metrics)
 	_refresh_competition()
 	results_tree.clear()
 	var root_item := results_tree.create_item()
@@ -545,28 +601,59 @@ func _update_schedule_controls(route: Dictionary) -> void:
 	maintenance_label.visible = not notice.is_empty()
 
 
+static func rival_services(routes: Array, a: String, b: String) -> Array:
+	var result: Array = []
+	for service in routes:
+		var o: String = service["origin_icao"]
+		var d: String = service["destination_icao"]
+		if (o == a and d == b) or (o == b and d == a):
+			result.append(service)
+	result.sort_custom(func(x, y): return [x["airline"], x["model"]] < [y["airline"], y["model"]])
+	return result
+
+
+func _set_competition_empty(title: String, text: String) -> void:
+	competition_tree.visible = false
+	competition_empty.visible = true
+	var labels := competition_empty.find_children("*", "Label", true, false)
+	labels[0].text = title
+	labels[1].text = text
+
+
 func _refresh_competition() -> void:
 	if codeshare_panel != null: codeshare_panel.refresh()
 	if alliance_panel != null: alliance_panel.refresh()
 	if competition_label == null:
 		return
 	var route := _route()
-	var companies: PackedStringArray = ["KONKURRENZÜBERSICHT · alle Strecken und Flotten"]
-	for company in simulation.get_competitors():
-		companies.append("%s · Guthaben %d EUR · %d Flugzeuge\n%s\nFlotte:\n%s\nKäufe: %s\nEntscheidung: %s" % [company["airline"], company["balance"], company["fleet_size"], company["routes"], company["fleet"], company["purchases"], company["last_action"]])
+	competition_tree.clear()
 	if route.is_empty():
-		competition_label.text = "\n\n".join(companies)
+		competition_label.visible = false
+		_set_competition_empty("Keine Route ausgewählt", "Wähle eine Route im Register, um die öffentlichen Flugpläne der Konkurrenz auf dieser Strecke zu vergleichen.")
 		return
 	var live_route: Dictionary = route
 	for current in simulation.get_routes():
 		if current["id"] == route["id"]:
 			live_route = current
-	var lines: PackedStringArray = ["%s ↔ %s · Schätzung pro Tag und Richtung\nGemeinsamer Basismarkt: ca. %d Pax/Tag vor Preisreaktion" % [route["origin_icao"], route["destination_icao"], live_route["base_daily_market"]]]
-	for offer in simulation.get_route_competition(route["id"]):
-		lines.append("%s · %s · %d Sitze · %d EUR\n%.1f Abflüge/Tag je Richtung → ca. %.0f Pax/Tag · %.1f %% der lokalen Pax%s\n%s" % [offer["airline"], offer["model"], offer["seats"], offer["ticket_eur"], offer["departures_per_day_per_direction"], offer["passengers_per_day"], offer["share_percent"], "" if offer["active"] else " · inaktiv", offer["last_action"]])
-		lines.append(tr("TRANSFER_COMPETITION") % [offer["local_per_day"], offer["connecting_per_day"]])
-	lines.append("Ein Markt für alle Airlines. Preis und Frequenz verteilen Nachfrage; Sitze begrenzen Buchungen. Nicht bediente Nachfrage verfällt. Schätzung, keine garantierten Buchungen. KI prüft wöchentlich Preise und Verluste.")
-	competition_label.text = "\n\n".join(companies) + "\n\n" + "\n\n".join(lines)
+	competition_label.visible = true
+	competition_label.text = "%s ↔ %s · Schätzung pro Tag und Richtung: gemeinsamer Basismarkt ca. %d Pax vor Preisreaktion. Keine garantierten Buchungen." % [route["origin_icao"], route["destination_icao"], live_route["base_daily_market"]]
+	var services := rival_services(simulation.get_competitor_routes(), route["origin_icao"], route["destination_icao"])
+	if services.is_empty():
+		_set_competition_empty("Kein Wettbewerber auf dieser Strecke", "Keine andere Airline veröffentlicht einen Flugplan zwischen %s und %s (in beide Richtungen geprüft)." % [route["origin_icao"], route["destination_icao"]])
+		return
+	competition_empty.visible = false
+	competition_tree.visible = true
+	var root := competition_tree.create_item()
+	for service in services:
+		var row := competition_tree.create_item(root)
+		var reverse: bool = service["origin_icao"] != route["origin_icao"]
+		UI.cell_text(row, 0, service["airline"])
+		UI.cell_text(row, 1, service["model"])
+		UI.cell_text(row, 2, "%d EUR" % service["ticket_eur"])
+		UI.cell_text(row, 3, "%d EUR" % service["business_ticket_eur"] if service["business_ticket_eur"] > 0 else "—")
+		UI.cell_text(row, 4, "%.1f ×" % service["departures_per_day_per_direction"])
+		if reverse:
+			row.set_tooltip_text(0, "Veröffentlicht als %s → %s" % [service["origin_icao"], service["destination_icao"]])
 
 
 func _assignment_preview() -> void:
