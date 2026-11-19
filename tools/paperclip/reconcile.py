@@ -137,8 +137,9 @@ def validate_queue(queue):
 
 
 class Controller:
-    def __init__(self, config, state, mode):
+    def __init__(self, config, state, mode, preview_ref=None):
         self.cfg, self.state, self.mode = config, state, mode
+        self.backlog_ref = preview_ref or "main"
         self.pc = API(config["paperclip_api"], Path(config["paperclip_token"]).read_text().strip())
         self.gh = API("https://api.github.com", Path(config["github_token"]).read_text().strip(), True)
         self.repo = f"/repos/{config['repo']}"
@@ -234,7 +235,7 @@ class Controller:
     def tick(self):
         if self.pc.call(self.company + "/live-runs"):
             return
-        blob = self.gh.call(self.repo + "/contents/docs/delivery/backlog.json?ref=main")
+        blob = self.gh.call(self.repo + "/contents/docs/delivery/backlog.json?" + urlencode({"ref": self.backlog_ref}))
         queue = validate_queue(json.loads(base64.b64decode(blob["content"])))
         issues = self.pc.call(self.company + "/issues")
         active_planning = [i for i in issues if i.get("assigneeAgentId") == self.cfg["planner"]
@@ -321,9 +322,12 @@ def main():
     parser.add_argument("--config", type=Path, required=True)
     parser.add_argument("--state", type=Path, required=True)
     parser.add_argument("--mode", choices=("observe", "work", "merge"), default="observe")
+    parser.add_argument("--preview-ref", help="Read a proposed backlog in observe mode only")
     args = parser.parse_args()
+    if args.preview_ref and args.mode != "observe":
+        parser.error("--preview-ref requires --mode observe")
     state = json.loads(args.state.read_text()) if args.state.exists() else {}
-    Controller(json.loads(args.config.read_text()), state, args.mode).tick()
+    Controller(json.loads(args.config.read_text()), state, args.mode, args.preview_ref).tick()
     if args.mode != "observe":
         # The systemd oneshot serializes ticks; rename prevents partial JSON on interruption.
         temp = args.state.with_suffix(".tmp")
