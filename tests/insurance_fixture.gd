@@ -12,3 +12,7 @@ static func without_economy_snapshot(snapshot: Array) -> Array:
 	var result := snapshot.duplicate(true)
 	result[0] = without_economy(result[0])
 	return result
+
+## v46 charters start offers at the migrated clock (Rust regression: old_saves_load_without_charters_and_offers_start_later).
+static func without_charter_epoch(contents: String) -> String:
+	return RegEx.create_from_string('("charters":\\{.*?"since":)\\d+').sub(contents, "${1}0", true)
