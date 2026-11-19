@@ -1,0 +1,14 @@
+[Unit]
+Description=Refresh AirlineManager GitHub App installation token
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecCondition=/usr/bin/test -s /etc/airline-delivery/app.json
+ExecStart=/usr/bin/python3 -B /opt/airline-delivery/github_token.py --config /etc/airline-delivery/app.json
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/opt/airline-delivery/token /opt/airline-delivery/token-staging
+UMask=0077

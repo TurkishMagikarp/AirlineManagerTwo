@@ -1,0 +1,9 @@
+[Unit]
+Description=Refresh the repo-scoped GitHub token before expiration
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=25min
+
+[Install]
+WantedBy=timers.target

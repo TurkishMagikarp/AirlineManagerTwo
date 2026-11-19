@@ -15,27 +15,39 @@ GODOT="${AIRLINE_GODOT:-/paperclip/airline/godot/godot}"
 [ -x "$GODOT" ] || { echo "Godot binary not found at $GODOT (set AIRLINE_GODOT)"; exit 2; }
 GODOT_LIB="$(dirname "$(readlink -f "$GODOT")")/lib"
 [ -d "$GODOT_LIB" ] && export LD_LIBRARY_PATH="$GODOT_LIB${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+TIMEOUT=timeout
+if ! command -v "$TIMEOUT" >/dev/null; then
+  TIMEOUT=gtimeout
+fi
+command -v "$TIMEOUT" >/dev/null || { echo "GNU timeout is required (macOS: brew install coreutils)"; exit 2; }
+PASS_MARKER='(^|: )PASS([ :]|$)'
 
 prepare() {
   cargo build --locked --manifest-path rust/Cargo.toml 2>&1 | tail -3
-  # Import whenever the cache is missing; a stale cache only matters for new resources, so re-import then too.
-  if [ ! -d .godot ] || [ -n "$(find resources scenes -newer .godot -print -quit 2>/dev/null)" ]; then
-    "$GODOT" --headless --path . --import >/dev/null 2>&1 || true
-    touch .godot
+  local log status=0
+  log="$(mktemp)"
+  "$TIMEOUT" "${GODOT_TEST_TIMEOUT:-600}" "$GODOT" --headless --editor --path . --import >"$log" 2>&1 || status=$?
+  if [ "$status" -ne 0 ] || grep -q '^SCRIPT ERROR:' "$log"; then
+    echo "FAIL Godot import (exit ${status})" >&2
+    tail -30 "$log" >&2
+    rm -f "$log"
+    return 1
   fi
+  rm -f "$log"
 }
 
 run_test() {
   local name="$1" log status=0
   [ -f "tests/${name}_test.gd" ] || { echo "MISSING tests/${name}_test.gd"; return 2; }
   log="$(mktemp)"
-  timeout "${GODOT_TEST_TIMEOUT:-600}" "$GODOT" --headless --audio-driver Dummy --path . --script "res://tests/${name}_test.gd" >"$log" 2>&1 || status=$?
-  if [ "$status" -eq 0 ]; then
-    echo "ok   ${name}: $(grep -m1 -E '^PASS' "$log" || echo 'exit 0')"
+  "$TIMEOUT" "${GODOT_TEST_TIMEOUT:-600}" "$GODOT" --headless --audio-driver Dummy --path . --script "res://tests/${name}_test.gd" >"$log" 2>&1 || status=$?
+  if [ "$status" -eq 0 ] && grep -qE "$PASS_MARKER" "$log" && ! grep -qE '^(SCRIPT ERROR:|ERROR: FAIL|FAIL)' "$log"; then
+    echo "ok   ${name}: $(grep -m 1 -E "$PASS_MARKER" "$log")"
   else
     echo "FAIL ${name} (exit ${status})"
     grep -E 'FAIL|ERROR|SCRIPT ERROR|Assertion|panicked' "$log" | head -15 || true
     tail -5 "$log"
+    status=1
   fi
   rm -f "$log"
   return "$status"
@@ -64,9 +76,13 @@ case "${1:-}" in
     out="${2:-}"
     [ -n "$out" ] || { echo "usage: $0 shots <out-dir>"; exit 2; }
     command -v Xvfb >/dev/null || { echo "Xvfb is not installed"; exit 2; }
-    prepare
     mkdir -p "$out"
     out="$(cd "$out" && pwd)"
+    if compgen -G "$out/*.png" >/dev/null; then
+      echo "Screenshot directory must not contain existing PNGs: $out" >&2
+      exit 2
+    fi
+    prepare
     display=""
     for n in 90 91 92 93 94 95 96 97 98 99; do
       [ -e "/tmp/.X11-unix/X${n}" ] || { display=":${n}"; break; }
@@ -74,11 +90,18 @@ case "${1:-}" in
     [ -n "$display" ] || { echo "no free X display between :90 and :99"; exit 2; }
     Xvfb "$display" -screen 0 1600x1100x24 -nolisten tcp >/dev/null 2>&1 &
     xvfb_pid=$!
-    trap 'kill "$xvfb_pid" 2>/dev/null || true' EXIT
+    log="$(mktemp)"
+    trap 'kill "$xvfb_pid" 2>/dev/null || true; rm -f "$log"' EXIT
     sleep 2
     status=0
-    DISPLAY="$display" timeout "${GODOT_TEST_TIMEOUT:-600}" "$GODOT" --audio-driver Dummy --rendering-driver opengl3 --path . \
-      --script res://tests/ui_layout_test.gd -- "--capture-dir=${out}" 2>&1 | grep -E '^(PASS|FAIL)|SCRIPT ERROR|ERROR:' | head -20 || status=$?
+    DISPLAY="$display" "$TIMEOUT" "${GODOT_TEST_TIMEOUT:-600}" "$GODOT" --audio-driver Dummy --rendering-driver opengl3 --path . \
+      --script res://tests/ui_layout_test.gd -- "--capture-dir=${out}" >"$log" 2>&1 || status=$?
+    if [ "$status" -ne 0 ] || ! grep -qE "$PASS_MARKER" "$log" || grep -qE '^(SCRIPT ERROR:|ERROR: FAIL|FAIL)' "$log"; then
+      echo "FAIL screenshot capture (exit ${status})" >&2
+      tail -30 "$log" >&2
+      exit 1
+    fi
+    grep -m 1 -E "$PASS_MARKER" "$log"
     count="$(find "$out" -maxdepth 1 -name '*.png' | wc -l)"
     echo "screenshots: ${count} in ${out}"
     [ "$count" -gt 0 ]
