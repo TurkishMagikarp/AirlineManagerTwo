@@ -2514,18 +2514,50 @@ impl SimulationClock {
         let user = std::path::PathBuf::from(user_dir.to_string());
         match save_slots::list(&user.join("saves"), &user.join("savegame.json")) {
             Ok(slots) => {
+                let header = |h: Option<save_slots::Header>| -> VarDictionary {
+                    h.map(|h| vdict! {"name" => h.name.as_str(), "game_time" => h.game_time.as_str(),
+                        "cash" => h.cash, "fleet" => h.fleet as i64, "written_at" => h.written_at as i64,
+                        "format_version" => h.format_version as i64, "save_version" => h.save_version as i64}).unwrap_or_default()
+                };
                 let rows: Array<VarDictionary> = slots.into_iter().map(|s| {
-                    let header = |h: Option<save_slots::Header>| -> VarDictionary {
-                        h.map(|h| vdict! {"name" => h.name.as_str(), "game_time" => h.game_time.as_str(),
-                            "cash" => h.cash, "fleet" => h.fleet as i64, "written_at" => h.written_at as i64,
-                            "format_version" => h.format_version as i64, "save_version" => h.save_version as i64}).unwrap_or_default()
-                    };
                     vdict! {"id" => s.id as i64, "occupied" => s.occupied, "header" => &header(s.header),
                         "backup" => &header(s.backup), "error" => s.error.as_str()}
                 }).collect();
-                vdict! {"slots" => &rows, "name_length" => save_slots::RULES.name_length as i64, "error" => ""}
+                let autosave = save_slots::autosave_entry(&user.join("saves"));
+                let autosave = vdict! {"occupied" => autosave.occupied, "header" => &header(autosave.header),
+                    "backup" => &header(autosave.backup), "error" => autosave.error.as_str()};
+                vdict! {"slots" => &rows, "autosave" => &autosave, "name_length" => save_slots::RULES.name_length as i64, "error" => ""}
             }
             Err(e) => vdict! {"error" => e.as_str()},
+        }
+    }
+
+    /// Periodic autosave into its dedicated entry; the previous autosave survives failures.
+    #[func]
+    fn autosave(&self, user_dir: GString) -> GString {
+        if self.jump_worker.is_some() {
+            return "Zeitsprung läuft.".into();
+        }
+        let root = std::path::PathBuf::from(user_dir.to_string()).join("saves");
+        save_slots::store_autosave(&root, &self.game)
+            .err()
+            .unwrap_or_default()
+            .as_str()
+            .into()
+    }
+
+    #[func]
+    fn load_autosave(&mut self, user_dir: GString, backup: bool) -> GString {
+        if self.jump_worker.is_some() {
+            return "Zeitsprung läuft.".into();
+        }
+        let root = std::path::PathBuf::from(user_dir.to_string()).join("saves");
+        match save_slots::load_autosave(&root, backup) {
+            Ok(game) => {
+                self.game = game;
+                GString::new()
+            }
+            Err(e) => e.as_str().into(),
         }
     }
 

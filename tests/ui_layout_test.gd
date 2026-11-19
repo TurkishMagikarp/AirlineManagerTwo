@@ -743,6 +743,7 @@ func _save_slot_views(sim: RefCounted) -> void:
 			assert(sim.buy_aircraft("atr72_600").is_empty())
 			assert(sim.save_slot(directory, 0, "Nach dem Flugzeugkauf", true).is_empty())
 			assert(sim.save_slot(directory, 1, "Zweiter Speicherplatz", false).is_empty())
+			assert(sim.autosave(directory).is_empty())
 		if scenario == "damaged":
 			var slot := directory.path_join("saves/slot-00")
 			var manifest: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(slot.path_join("manifest.json")))

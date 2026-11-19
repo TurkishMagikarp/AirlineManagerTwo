@@ -54,6 +54,7 @@ var jump_buttons: Array[Button] = []
 var jump_status: Label
 var jump_in_progress := false
 var save_slots_dialog: Control
+var autosave
 var save_user_dir := ProjectSettings.globalize_path("user://")
 var save_button: Button
 var load_button: Button
@@ -357,11 +358,19 @@ func _add_time_controls(column: VBoxContainer) -> void:
 	load_button.theme_type_variation = "GhostButton"
 	load_button.pressed.connect(_load_game)
 	controls.add_child(load_button)
+	autosave = preload("res://scripts/autosave.gd").new(save_user_dir.path_join("preferences.cfg"))
 	save_status = _label(tr("Speicherplätze · manuell speichern und laden"), ThemeTokens.SMALL, ThemeTokens.INK_MUTED)
 	save_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	save_status.tooltip_text = save_user_dir.path_join("saves")
 	panel.add_child(save_status)
 	_refresh_time()
+
+
+func _autosave_tick(delta: float) -> void:
+	var ready: bool = simulation.has_airline() and not founding.visible and not jump_in_progress and not is_instance_valid(save_slots_dialog)
+	if not autosave.tick(delta, ready): return
+	var error: String = simulation.autosave(save_user_dir)
+	save_status.text = tr("Autosave gespeichert.") if error.is_empty() else tr("Autosave fehlgeschlagen: %s") % error
 
 
 func _jump(seconds: int) -> void:
@@ -428,6 +437,7 @@ func _open_save_slots(saving: bool) -> void:
 			_sync_view()
 			_refresh_time()
 	)
+	save_slots_dialog.autosave_settings = autosave
 	save_slots_dialog.open(simulation, save_user_dir, saving)
 
 
@@ -459,6 +469,7 @@ func _set_speed(speed: int) -> void:
 
 
 func _process(delta: float) -> void:
+	_autosave_tick(delta)
 	if jump_in_progress: return
 	if founding.visible:
 		return
