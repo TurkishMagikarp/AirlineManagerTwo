@@ -247,6 +247,12 @@ func _ready() -> void:
 	var spacer := Control.new()
 	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	nav.add_child(spacer)
+	search_button = Button.new()
+	search_button.text = tr("Suche")
+	search_button.tooltip_text = tr("Flughäfen und eigene Routen suchen (Strg+F)")
+	search_button.theme_type_variation = "GhostButton"
+	search_button.pressed.connect(_open_search)
+	nav.add_child(search_button)
 	new_game_button = Button.new()
 	new_game_button.text = "Neues Spiel"
 	new_game_button.tooltip_text = new_game_button.text
@@ -360,12 +366,6 @@ func _add_time_controls(column: VBoxContainer) -> void:
 	load_button.theme_type_variation = "GhostButton"
 	load_button.pressed.connect(_load_game)
 	controls.add_child(load_button)
-	search_button = Button.new()
-	search_button.text = tr("Suche")
-	search_button.tooltip_text = tr("Flughäfen und eigene Routen suchen (Strg+F)")
-	search_button.theme_type_variation = "GhostButton"
-	search_button.pressed.connect(_open_search)
-	controls.add_child(search_button)
 	autosave = preload("res://scripts/autosave.gd").new(save_user_dir.path_join("preferences.cfg"))
 	save_status = _label(tr("Speicherplätze · manuell speichern und laden"), ThemeTokens.SMALL, ThemeTokens.INK_MUTED)
 	save_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -1489,6 +1489,7 @@ func _resize_frame() -> void:
 		navigation[index].text = "" if compact else PAGES[index]["title"]
 		navigation[index].alignment = HORIZONTAL_ALIGNMENT_CENTER if compact else HORIZONTAL_ALIGNMENT_LEFT
 	new_game_button.text = "+" if compact else "Neues Spiel"
+	search_button.text = "?" if compact else tr("Suche")
 
 
 func _open_attention(entry: Dictionary) -> void:
