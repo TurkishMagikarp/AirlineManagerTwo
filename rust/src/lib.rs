@@ -964,14 +964,22 @@ impl SimulationClock {
             } else {
                 text
             };
-            rows.push((state.as_ref().map(|s| s.next_departure).unwrap_or(u64::MAX), vdict! {
+            let board = operations::board_row(route, plane, state.as_ref());
+            let next_departure = board.next_departure;
+            rows.push((next_departure.unwrap_or(u64::MAX), vdict! {
+                "state_kind" => board.state_kind, "release_pending" => board.release_pending,
+                "origin" => board.origin.as_str(), "destination" => board.destination.as_str(),
+                "delay_seconds" => board.delay_seconds as i64,
+                "weather_delay" => board.weather_delay,
+                "expected_landing_seconds" => board.expected_landing.map(|t| t as i64).unwrap_or(-1),
+                "expected_landing" => board.expected_landing.map(operations::display_time).unwrap_or_else(|| "—".into()).as_str(),
                 "route_id" => route.public_id(), "aircraft_id" => plane.id,
                 "identifier" => plane.identifier().as_str(), "status_text" => text.as_str(),
                 "has_plan" => route.plan.is_some(),
                 "flight_seconds" => flight as i64, "ground_seconds" => ground as i64,
                 "completed_flights" => state.as_ref().map(|s| s.completed as i64).unwrap_or(0),
-                "next_departure_seconds" => state.as_ref().map(|s| s.next_departure as i64).unwrap_or(-1),
-                "next_departure" => state.as_ref().map(|s| operations::display_time(s.next_departure)).unwrap_or_else(|| "—".into()).as_str(),
+                "next_departure_seconds" => next_departure.map(|t| t as i64).unwrap_or(-1),
+                "next_departure" => next_departure.map(operations::display_time).unwrap_or_else(|| "—".into()).as_str(),
                 "landing_seconds" => state.as_ref().map(|s| s.landing as i64).unwrap_or(-1),
                 "ready_seconds" => state.as_ref().map(|s| s.ready as i64).unwrap_or(-1),
             }));

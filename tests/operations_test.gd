@@ -71,7 +71,8 @@ func _run() -> void:
 	var operation: Dictionary = main.simulation.get_operations()[0]
 	main._show_page(2)
 	main._process(0.0)
-	if not _check("Unterwegs" in main.routes_panel.operations_label.text and "Nächster Abflug" in main.routes_panel.operations_label.text, "Current flight and next departure displayed"):
+	main.routes_panel.refresh_operations()
+	if not _check(_ops_row_matches(main.routes_panel, operation, main.tr("OPS_STATE_AIRBORNE")), "Current flight, expected landing and next departure displayed in the operations table"):
 		return
 	await _click(main.pause_button)
 	main.simulation.advance(10000.0)
@@ -140,3 +141,8 @@ func _check(condition: bool, message: String) -> bool:
 		push_error("FAIL: " + message)
 		quit(1)
 	return condition
+
+
+func _ops_row_matches(panel, operation: Dictionary, chip: String) -> bool:
+	var row: TreeItem = panel.operations_tree.get_root().get_first_child()
+	return row != null and row.get_text(0) == operation["identifier"] and row.get_text(2) == chip and row.get_text(3) == operation["next_departure"] and row.get_text(4) == operation["expected_landing"] and row.get_text(4) != "—"
