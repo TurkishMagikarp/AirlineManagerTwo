@@ -3,6 +3,7 @@ const ThemeTokens = preload("res://scripts/ui/operations_theme.gd")
 ## All balances, route aggregates, period values and flight pages come from Rust.
 const UI = preload("res://scripts/ui/components.gd")
 const Chart = preload("res://scripts/finance_chart.gd")
+const RouteCsv = preload("res://scripts/route_finance_csv.gd")
 var simulation: RefCounted
 var metrics: Dictionary = {}
 var note: Label
@@ -11,6 +12,9 @@ var load_chart: Control
 var chart_comparison: Label
 var chart_select: OptionButton
 var route_tree: Tree
+var export_button: Button
+var export_dialog: FileDialog
+var export_status: Label
 var flights_tree: Tree
 var detail: Label
 var page_label: Label
@@ -246,10 +250,27 @@ func _ready() -> void:
 	var ferries := UI.panel(self, "ÜBERFÜHRUNGEN  /  FLUGARCHIV · LETZTE 100")
 	ferry_history = UI.table(["Landung", "Flugzeug", "Strecke", "Kosten"], [160, 105, 130, 120], 150)
 	ferries.add_child(ferry_history)
-	var routes := UI.panel(self, "ROUTENCONTROLLING  /  ROUTE ANKLICKEN", null, true)
+	export_button = Button.new()
+	export_button.text = "Als CSV exportieren…"
+	export_button.tooltip_text = "Routenergebnisse als CSV-Datei speichern (Route, Flüge, Umsatz, Kosten, Ergebnis in EUR)."
+	export_button.pressed.connect(_open_export)
+	var routes := UI.panel(self, "ROUTENCONTROLLING  /  ROUTE ANKLICKEN", export_button, true)
+	export_status = UI.label("", ThemeTokens.SMALL, UI.MUTED)
+	export_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	export_status.visible = false
+	export_dialog = FileDialog.new()
+	export_dialog.file_mode = FileDialog.FILE_MODE_SAVE_FILE
+	export_dialog.access = FileDialog.ACCESS_FILESYSTEM
+	export_dialog.use_native_dialog = true
+	export_dialog.title = "Routenergebnisse exportieren"
+	export_dialog.filters = PackedStringArray(["*.csv ; CSV-Datei"])
+	export_dialog.current_file = "routenergebnisse.csv"
+	export_dialog.file_selected.connect(export_route_csv)
+	add_child(export_dialog)
 	route_tree = UI.table(["Route / Strecke", "Flüge", "Tickets", "Kosten", "Ergebnis", "Auslastung", "Fracht kg / EUR"], [190, 65, 115, 115, 115, 95, 260], 210)
 	route_tree.item_selected.connect(_select_route)
 	routes.add_child(route_tree)
+	routes.add_child(export_status)
 	var history := UI.panel(self, "ROUTENDETAILS  /  FLUGARCHIV")
 	detail = UI.label("Wähle eine Route. Noch keine Landungen werden ausdrücklich als solche angezeigt.")
 	detail.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -401,6 +422,19 @@ func refresh(force: bool = false) -> void:
 		route_id = 0
 		offset = 0
 		_reset_flights()
+
+func _open_export() -> void:
+	export_dialog.popup_centered_ratio(0.6)
+
+## Writes the current Rust route report; the simulation is only read.
+func export_route_csv(path: String) -> String:
+	if path.get_extension().to_lower() != "csv":
+		path += ".csv"
+	var error := RouteCsv.write(path, simulation.get_route_finances())
+	export_status.visible = true
+	export_status.text = ("Export gespeichert: %s" % path) if error.is_empty() else "Export fehlgeschlagen: %s" % error
+	export_status.add_theme_color_override("font_color", UI.MUTED if error.is_empty() else UI.NEGATIVE)
+	return error
 
 func _chart() -> void:
 	chart.set_series(company_series, ["balance", "revenue", "costs", "profit", "tax", "ancillary", "loyalty_cost"][chart_select.selected])
