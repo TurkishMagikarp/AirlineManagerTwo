@@ -24,6 +24,9 @@ var schedule_button: Button
 var stop_button: Button
 var maintenance_label: Label
 var operations_label: Label
+var operations_tree: Tree
+var operations_empty: PanelContainer
+var _operations_signature := ""
 var service_select: OptionButton
 var service_cost: Label
 var business_input: SpinBox
@@ -271,12 +274,49 @@ func _ready() -> void:
 	refresh()
 
 
+const OPS_KINDS := {
+	"airborne": ["OPS_STATE_AIRBORNE", "info"], "ground": ["OPS_STATE_GROUND", "neutral"],
+	"scheduled": ["OPS_STATE_SCHEDULED", "neutral"], "weather_delay": ["OPS_STATE_WEATHER", "caution"],
+	"maintenance": ["OPS_STATE_MAINTENANCE", "caution"], "release": ["OPS_STATE_RELEASE", "caution"],
+	"no_plan": ["OPS_STATE_NO_PLAN", "neutral"],
+}
+
+
+func _refresh_operations_table(metrics: Dictionary) -> void:
+	var rows: Array = simulation.get_operations()
+	operations_tree.visible = not rows.is_empty()
+	operations_empty.visible = rows.is_empty()
+	var signature := str([rows, metrics.values().map(func(r): return [r["id"], r["punctuality_percent"], r["punctuality_flights"]]), TranslationServer.get_locale()])
+	if signature == _operations_signature:
+		return
+	_operations_signature = signature
+	operations_tree.clear()
+	var root := operations_tree.create_item()
+	for operation: Dictionary in rows:
+		var row := operations_tree.create_item(root)
+		var route: Dictionary = metrics.get(operation["route_id"], {})
+		UI.cell_text(row, 0, operation["identifier"])
+		UI.cell_text(row, 1, "%s → %s" % [operation["origin"], operation["destination"]])
+		var kind: Array = OPS_KINDS[operation["state_kind"]]
+		UI.cell_status(row, 2, tr(kind[0]), kind[1])
+		UI.cell_text(row, 3, operation["next_departure"])
+		UI.cell_text(row, 4, operation["expected_landing"])
+		var delay_minutes := ceili(operation["delay_seconds"] / 60.0)
+		UI.cell_text(row, 5, ("%d min" % delay_minutes) if delay_minutes > 0 else "—")
+		var punctuality := "—" if route.get("punctuality_percent", -1.0) < 0 else "%.1f %%" % route["punctuality_percent"]
+		var tip := "%s\n%s" % [operation["status_text"], tr("OPS_ROUTE_TIP") % [operation["route_id"], punctuality, route.get("punctuality_flights", 0)]]
+		for column in range(6):
+			row.set_tooltip_text(column, tip)
+		row.set_metadata(0, operation["route_id"])
+
+
 func _arrange_workspace() -> void:
 	var original := get_children()
 	var grid := VBoxContainer.new()
 	grid.add_theme_constant_override("separation", ThemeTokens.SPACE_4)
 	add_child(grid)
 	var network := UI.panel(grid, "01  /  ROUTENREGISTER & LIVE-BETRIEB")
+	var ops_panel := UI.panel(grid, tr("OPS_PANEL_TITLE"))
 	var planner := UI.panel(grid, "02  /  VERBINDUNG PLANEN")
 	var editor := UI.panel(self, "03  /  AUSGEWÄHLTE ROUTE · ZUWEISUNG & FLUGPLAN")
 	var editor_grid := GridContainer.new()
@@ -305,8 +345,15 @@ func _arrange_workspace() -> void:
 		if node == schedule_title:
 			target = editor_columns[2]
 		if node == operations_label:
-			target = network
+			target = ops_panel
 		node.reparent(target)
+	operations_tree = UI.table([tr("OPS_COL_AIRCRAFT"), tr("OPS_COL_DIRECTION"), tr("OPS_COL_STATE"), tr("OPS_COL_NEXT"), tr("OPS_COL_LANDING"), tr("OPS_COL_DELAY")], [110, 120, 130, 150, 150, 90], 160)
+	ops_panel.add_child(operations_tree)
+	operations_empty = UI.empty_state(tr("OPS_EMPTY_TITLE"), tr("OPS_EMPTY_TEXT"), tr("OPS_EMPTY_ACTION"), func():
+		get_parent().get_parent().ensure_control_visible(origin)
+		origin.grab_focus()
+	)
+	ops_panel.add_child(operations_empty)
 	results_tree = UI.table(["Landung / Route", "Strecke", "Pax / Auslastung", "Tickets", "Kosten", "Ergebnis", "Fracht kg / EUR"], [170, 145, 135, 110, 110, 110, 260], 240)
 	result_panel.add_child(results_tree)
 	results_empty = UI.empty_state("Noch keine Landungen", "Flugplan: Pendelverkehr mit abwechselndem Hin- und Rückflug. Keine automatische Überführung.", schedule_button.text, func():
@@ -432,12 +479,12 @@ func refresh_operations() -> void:
 	_update_connections(metrics.get(_route().get("id", 0), {}))
 	_update_schedule_controls(metrics.get(_route().get("id", 0), {}))
 	_update_service_cost(metrics.get(_route().get("id", 0), {}))
-	var lines: PackedStringArray = ["Flugbetrieb · nächste Abflüge (sortiert)"]
+	var lines: PackedStringArray = []
 	for route in metrics.values():
 		lines.append("Route #%d · Pünktlichkeit: %s · %d erfasste Flüge" % [route["id"], "—" if route["punctuality_percent"] < 0 else "%.1f %%" % route["punctuality_percent"], route["punctuality_flights"]])
-	for operation in simulation.get_operations():
-		lines.append("%s · Route #%d · Flug %d min · Boden %d min\n%s\nNächster Abflug: %s" % [operation["identifier"], operation["route_id"], ceili(operation["flight_seconds"] / 60.0), operation["ground_seconds"] / 60, operation["status_text"], operation["next_departure"]])
-	operations_label.text = "\n\n".join(lines)
+	operations_label.text = "\n".join(lines)
+	operations_label.visible = not lines.is_empty()
+	_refresh_operations_table(metrics)
 	_refresh_competition()
 	results_tree.clear()
 	var root_item := results_tree.create_item()

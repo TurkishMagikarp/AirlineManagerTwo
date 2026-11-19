@@ -121,6 +121,8 @@ var fleet_tabs: TabBar
 var fleet_sections: Array[Control] = []
 var aircraft_cards: Array[Dictionary] = []
 var overview_register: Tree
+var commitments_table: Tree
+var commitments_empty: Control
 var overview_operations: VBoxContainer
 var fleet_operations: VBoxContainer
 var last_clock_view := ""
@@ -614,6 +616,7 @@ func _refresh_finance() -> void:
 	operation_summary.text = "%d Flugzeuge  ·  %d Routen  ·  %d aktive Flugpläne" % [simulation.get_fleet().size(), simulation.get_routes().size(), operations.size()]
 	operation_summary.text += "\n\n%s\nRestschuld: %s · Zinsen bisher: %s · Details und Kreditaktionen unter Finanzen." % [financing["status"], UI.money(financing["debt_eur"]), UI.money(financing["interest_eur"])]
 	_refresh_overview_register()
+	_refresh_commitments()
 	_render_operations(overview_operations)
 
 
@@ -1357,6 +1360,13 @@ func _build_finance(content: VBoxContainer) -> void:
 	overview_register = UI.table(["Kennung", "Typ", "Standort", "Status"], [115, 150, 90, 130], 220)
 	register.add_child(overview_register)
 	overview_operations = UI.panel(grid, "LIVE-BETRIEB  /  FLOTTE & NETZWERK")
+	var commitments := UI.panel(finance_panel, "ANSTEHENDE TERMINE  /  LIEFERUNGEN & UMSCHULUNGEN")
+	commitments_table = UI.table(["Datum", "Art", "Flugzeug / Pilot", "Zielrating"], [140, 100, 130, 90], 232)
+	commitments.add_child(commitments_table)
+	commitments_empty = UI.empty_state("Keine anstehenden Termine", "Geplante Auslieferungen und Pilotenumschulungen erscheinen hier.", "Zu den Bestellungen", func():
+		_show_page(1)
+		fleet_tabs.current_tab = 1)
+	commitments.add_child(commitments_empty)
 	var finance := UI.panel(finance_panel, "FINANZÜBERSICHT  /  KUMULIERT")
 	finance_breakdown = UI.label("")
 	finance.add_child(finance_breakdown)
@@ -1467,6 +1477,21 @@ func _refresh_overview_register() -> void:
 		UI.cell_text(row, 2, plane["location_icao"])
 		var phase: String = plane["ferry_state"] if not plane["ferry_state"].is_empty() else {"parked": "Geparkt", "in_flight": "Unterwegs", "ground": "Gelandet · Bodenzeit", "maintenance": "In Wartung"}.get(plane["status"], "Unbekannt")
 		UI.cell_status(row, 3, phase, "info" if plane["status"] in ["in_flight", "maintenance"] else "neutral")
+
+
+func _refresh_commitments() -> void:
+	var entries: Array = simulation.get_upcoming_commitments()
+	commitments_table.clear()
+	commitments_table.visible = not entries.is_empty()
+	commitments_empty.visible = entries.is_empty()
+	var root_item := commitments_table.create_item()
+	for entry in entries:
+		var row := commitments_table.create_item(root_item)
+		var delivery: bool = entry["kind"] == "delivery"
+		UI.cell_text(row, 0, entry["date"])
+		UI.cell_status(row, 1, "Lieferung" if delivery else "Umschulung", "info" if delivery else "neutral")
+		UI.cell_text(row, 2, entry["title"])
+		UI.cell_text(row, 3, "—" if delivery else entry["detail"])
 
 
 func _render_operations(parent: VBoxContainer) -> void:
