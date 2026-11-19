@@ -28,7 +28,7 @@ Linux without a display (agent server): `tools/godot_check.sh test <name>` runs 
 
 Before merging a change that touches GDScript, scenes, resources or a Rust API Godot calls, run `tools/godot_check.sh tests`. For a change to how the UI looks, also capture screenshots, open the PNGs (at least 1440x1000 and 680x520 of each screen you touched), fix clipped or overlapping text, values leaving their cards, wrong colours or fonts, and say in the PR which screenshots you checked. The capture covers overview, fleet and routes; extend the list in `tests/ui_layout_test.gd` when you change another screen. Rendering there is software OpenGL and can differ slightly from Windows.
 
-CI (`.github/workflows/ci.yml`) verifies Rust (Clippy and tests), the Linux headless Godot suite and screenshot capture, Windows startup/restart tests, and macOS native startup. Run focused checks while developing and open a PR before waiting for full verification. For Paperclip, follow [the delivery runbook](docs/delivery/runbook.md); agents do not merge their own PRs.
+CI (`.github/workflows/ci.yml`) verifies Rust (Clippy and tests), the Linux headless Godot suite and screenshot capture, Windows startup and current-save restart, and macOS native startup. The historical Windows migration scenarios run separately in `windows-compatibility.yml`. Run focused checks while developing and open a PR before waiting for full verification. For Paperclip, follow [the delivery runbook](docs/delivery/runbook.md); agents do not merge their own PRs.
 
 Close Godot before rebuilding Rust (Windows locks the DLL). Godot path: `AIRLINE_GODOT` env var or `%USERPROFILE%\Documents\Godot\Godot_v4.7.2-stable_win64.exe`.
 

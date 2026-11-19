@@ -20,6 +20,7 @@ if ! command -v "$TIMEOUT" >/dev/null; then
   TIMEOUT=gtimeout
 fi
 command -v "$TIMEOUT" >/dev/null || { echo "GNU timeout is required (macOS: brew install coreutils)"; exit 2; }
+PASS_MARKER='(^|: )PASS([ :]|$)'
 
 prepare() {
   cargo build --locked --manifest-path rust/Cargo.toml 2>&1 | tail -3
@@ -40,8 +41,8 @@ run_test() {
   [ -f "tests/${name}_test.gd" ] || { echo "MISSING tests/${name}_test.gd"; return 2; }
   log="$(mktemp)"
   "$TIMEOUT" "${GODOT_TEST_TIMEOUT:-600}" "$GODOT" --headless --audio-driver Dummy --path . --script "res://tests/${name}_test.gd" >"$log" 2>&1 || status=$?
-  if [ "$status" -eq 0 ] && grep -q '^PASS' "$log" && ! grep -qE '^(SCRIPT ERROR:|FAIL)' "$log"; then
-    echo "ok   ${name}: $(grep -m1 '^PASS' "$log")"
+  if [ "$status" -eq 0 ] && grep -qE "$PASS_MARKER" "$log" && ! grep -qE '^(SCRIPT ERROR:|ERROR: FAIL|FAIL)' "$log"; then
+    echo "ok   ${name}: $(grep -m1E "$PASS_MARKER" "$log")"
   else
     echo "FAIL ${name} (exit ${status})"
     grep -E 'FAIL|ERROR|SCRIPT ERROR|Assertion|panicked' "$log" | head -15 || true
@@ -95,12 +96,12 @@ case "${1:-}" in
     status=0
     DISPLAY="$display" "$TIMEOUT" "${GODOT_TEST_TIMEOUT:-600}" "$GODOT" --audio-driver Dummy --rendering-driver opengl3 --path . \
       --script res://tests/ui_layout_test.gd -- "--capture-dir=${out}" >"$log" 2>&1 || status=$?
-    if [ "$status" -ne 0 ] || ! grep -q '^PASS' "$log" || grep -qE '^(SCRIPT ERROR:|FAIL)' "$log"; then
+    if [ "$status" -ne 0 ] || ! grep -qE "$PASS_MARKER" "$log" || grep -qE '^(SCRIPT ERROR:|ERROR: FAIL|FAIL)' "$log"; then
       echo "FAIL screenshot capture (exit ${status})" >&2
       tail -30 "$log" >&2
       exit 1
     fi
-    grep -m1 '^PASS' "$log"
+    grep -m1E "$PASS_MARKER" "$log"
     count="$(find "$out" -maxdepth 1 -name '*.png' | wc -l)"
     echo "screenshots: ${count} in ${out}"
     [ "$count" -gt 0 ]

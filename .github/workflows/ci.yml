@@ -49,16 +49,12 @@ jobs:
       - run: python tools/ci_godot.py
       - name: Startup
         run: |
-          & .\START.bat --headless --quit-after 10
-          if ($LASTEXITCODE -ne 0) { throw "Startup failed: $LASTEXITCODE" }
+          & .\START.bat --headless --quit-after 10 2>&1 | Tee-Object -Variable startup
+          if ($LASTEXITCODE -ne 0 -or $startup -match 'SCRIPT ERROR:|Parse Error:') { throw "Startup failed" }
       - name: Multi-process save/restart
         run: |
-          foreach ($test in Get-ChildItem tests/run_*_restart_test.ps1) {
-            Write-Host "::group::$($test.Name)"
-            & pwsh -NoProfile -File $test.FullName -Godot $env:AIRLINE_GODOT
-            if ($LASTEXITCODE -ne 0) { throw "$($test.Name) failed: $LASTEXITCODE" }
-            Write-Host "::endgroup::"
-          }
+          & pwsh -NoProfile -File tests/run_save_restart_test.ps1 -Godot $env:AIRLINE_GODOT
+          if ($LASTEXITCODE -ne 0) { throw "Save/restart failed: $LASTEXITCODE" }
   macos:
     runs-on: macos-latest
     timeout-minutes: 30

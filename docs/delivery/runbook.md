@@ -10,6 +10,8 @@
 
 ## Betrieb
 
+Der erforderliche Windows-Job prüft Start und Neustart mit aktuellen Spielständen. Historische Windows-Migrationsszenarien laufen separat (`windows-compatibility.yml`), weil bereits `main` beim v23/Flughafengebühren-Vergleich scheitert. Der separate Lauf meldet die Fehler sichtbar und ist kein Ersatz für die Pflichtprüfungen.
+
 `tools/paperclip/reconcile.py` führt einen Abgleich als One-shot aus. Konfiguration und Status liegen außerhalb des Git-Checkouts. `--mode observe` liest nur. `--mode work` verwaltet Tickets ohne Merge. `--mode merge` verlangt die konfigurierte Bot-Identität, vier erfolgreiche Jobs auf dem aktuellen PR-Commit, ein CI-Screenshot-Artefakt, ggf. UI-Nachweis und einen aktiven GitHub-Regelsatz. Änderungen an Design und Automatisierung benötigen zusätzlich ein Owner-Review des aktuellen Commits. Ein Merge wird erst im folgenden Abgleich als abgeschlossen erfasst.
 
 Der Prozess benötigt die IDs für `company`, `project`, `developer` und `planner`, `repo` (`owner/repo`), `owner`, `paperclip_api`, Dateipfade `paperclip_token`, `github_token` sowie `github_bot_login`. Der optionale `initial_notes_revision` verhindert einen rückwirkenden Planungsauftrag für den bestehenden Dokumentstand. Die private GitHub App wird nur für dieses Repo installiert: Contents und Pull requests Read/Write, Actions Read; kein Adminrecht und keine Regelsatz-Ausnahme. In GitHub `main` durch einen strikten Regelsatz mit `rust`, `godot`, `windows` und `macos` aus GitHub Actions schützen.
