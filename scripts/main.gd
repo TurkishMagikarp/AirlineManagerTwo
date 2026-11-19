@@ -57,6 +57,8 @@ var save_slots_dialog: Control
 var autosave
 var save_user_dir := ProjectSettings.globalize_path("user://")
 var save_button: Button
+var search_button: Button
+var search_dialog: Control
 var load_button: Button
 var save_status: Label
 # Platform path only; file format, validation and all state remain in Rust.
@@ -358,6 +360,12 @@ func _add_time_controls(column: VBoxContainer) -> void:
 	load_button.theme_type_variation = "GhostButton"
 	load_button.pressed.connect(_load_game)
 	controls.add_child(load_button)
+	search_button = Button.new()
+	search_button.text = tr("Suche")
+	search_button.tooltip_text = tr("Flughäfen und eigene Routen suchen (Strg+F)")
+	search_button.theme_type_variation = "GhostButton"
+	search_button.pressed.connect(_open_search)
+	controls.add_child(search_button)
 	autosave = preload("res://scripts/autosave.gd").new(save_user_dir.path_join("preferences.cfg"))
 	save_status = _label(tr("Speicherplätze · manuell speichern und laden"), ThemeTokens.SMALL, ThemeTokens.INK_MUTED)
 	save_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -439,6 +447,35 @@ func _open_save_slots(saving: bool) -> void:
 	)
 	save_slots_dialog.autosave_settings = autosave
 	save_slots_dialog.open(simulation, save_user_dir, saving)
+
+
+func _unhandled_key_input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_F and (event.ctrl_pressed or event.meta_pressed) and not event.alt_pressed:
+		_open_search()
+		get_viewport().set_input_as_handled()
+
+
+func _open_search() -> void:
+	if jump_in_progress or not overview.visible: return
+	if is_instance_valid(search_dialog) or is_instance_valid(save_slots_dialog) or is_instance_valid(decision_dialog) or is_instance_valid(ferry_dialog): return
+	var layer := CanvasLayer.new()
+	layer.layer = 90
+	add_child(layer)
+	search_dialog = preload("res://scripts/search_dialog.gd").new()
+	layer.add_child(search_dialog)
+	search_dialog.tree_exited.connect(layer.queue_free)
+	search_dialog.activated.connect(_open_search_result)
+	search_dialog.open(simulation)
+
+
+func _open_search_result(result: Dictionary) -> void:
+	if result["kind"] == "airport":
+		_show_page(3)
+		map_panel.select_airport(result["icao"])
+		navigation[3].grab_focus()
+	else:
+		_show_page(2)
+		routes_panel.focus_route(result["id"])
 
 
 # Single-file compatibility entry points for the Windows restart fixtures.

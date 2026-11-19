@@ -94,3 +94,11 @@ Spielstand gelöscht.,Spielstand gelöscht.,Saved game deleted.
 Abbrechen,Abbrechen,Cancel
 Speicherplätze · manuell speichern und laden,Speicherplätze · manuell speichern und laden,Save slots · save and load manually
 %d Speicherplätze · Namen bis %d Zeichen.,%d Speicherplätze · Namen bis %d Zeichen.,%d save slots · names up to %d characters.
+Suche,Suche,Search
+Flughafen,Flughafen,Airport
+Route,Route,Route
+"Flughafen, Ort, Code oder Route","Flughafen, Ort, Code oder Route","Airport, place, code or route"
+"Mit Pfeiltasten wählen, mit Enter öffnen, mit Esc schließen.","Mit Pfeiltasten wählen, mit Enter öffnen, mit Esc schließen.","Choose with the arrow keys, open with Enter, close with Esc."
+Keine Treffer für „%s“.,Keine Treffer für „%s“.,No results for “%s”.
+%d Treffer,%d Treffer,%d results
+Flughäfen und eigene Routen suchen (Strg+F),Flughäfen und eigene Routen suchen (Strg+F),Search airports and your routes (Ctrl+F)

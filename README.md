@@ -26,6 +26,10 @@ Kennzahlen-Karten, Statusfarben und Ergebnistabellen. Neue untergeordnete Contro
 erben das Theme automatisch. Bausteine, Layoutregeln und reproduzierbare echte
 Godot-Screenshots: [UI-Design](docs/ui-design.md).
 
+### Globale Suche (GDD-066)
+
+**Suche** in der Zeitleiste oder **Strg+F** (macOS: Cmd+F) öffnet die Suche auf jedem Verwaltungsbildschirm und setzt den Fokus ins Textfeld. Sie findet Flughäfen nach Name, ICAO- und IATA-Code sowie die Endpunkte der eigenen Routen (auch `EDDF-EDDM` oder `#3`), ohne Groß-/Kleinschreibung und Umlaute zu beachten. Exakte Codes stehen oben, Flughäfen vor Routen. Es gibt kein eigenes Ortsfeld in den Flughafendaten; der Ort steckt im Flughafennamen. ↑/↓ wählen, Enter oder Mausklick öffnet (Flughafen: Karte; Route: Routen-Detail), Esc, „Schließen“ oder ein Klick daneben schließt und gibt den Fokus zurück. Die Suche liest nur vorhandene Snapshots, arbeitet offline und ändert weder Simulation noch Spielstand.
+
 ## Kleiner Simulationskern
 
 Rust (`rust/src/game.rs`, `rust/src/clock.rs`) besitzt Airline und Spielzeit,

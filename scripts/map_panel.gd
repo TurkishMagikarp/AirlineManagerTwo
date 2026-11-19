@@ -294,6 +294,24 @@ func _action(caption: String, route_id: int, airport_icao: String = "") -> void:
 			item = item.get_next())
 	card_body.add_child(button)
 
+func select_airport(icao: String) -> void:
+	for index in range(canvas.airports.size()):
+		if canvas.airports[index]["icao"] != icao: continue
+		selected_id = -index - 1
+		canvas.selected_route = 0
+		canvas.selected_competitor = -1
+		canvas.zoom = maxf(canvas.zoom, 3.0)
+		_anchor_airport.call_deferred(index)
+		_anchor_airport(index)
+		refresh_flights()
+		return
+
+func _anchor_airport(index: int) -> void:
+	if selected_id != -index - 1 or index >= canvas.airports.size(): return
+	canvas.center_on(canvas.airports[index]["position"])
+	canvas.selection_position = canvas.project(canvas.airports[index]["position"])
+	_position_overlays()
+
 func _select_row() -> void:
 	var row := route_table.get_selected()
 	if row == null: return

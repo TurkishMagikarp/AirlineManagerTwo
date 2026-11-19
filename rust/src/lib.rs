@@ -360,7 +360,7 @@ impl SimulationClock {
                                 (frequency > 0.0).then(|| vdict! { "airline" => airline.name.as_str(), "departures_per_day" => frequency })
                             }).collect();
                         vdict! {
-                            "icao" => a.icao.as_str(), "name" => a.name.as_str(),
+                            "icao" => a.icao.as_str(), "iata" => a.iata.as_deref().unwrap_or(""), "name" => a.name.as_str(),
                             "slots" => self.game.slot_text(&a.icao).as_str(), "airlines" => &airlines,
                             "position" => Vector2::new(a.longitude as f32, a.latitude as f32)
                         }

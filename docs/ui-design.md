@@ -277,3 +277,7 @@ und die Karte teilen die Auswahl; „Flugplan bearbeiten“ öffnet die vorhande
 Routenverwaltung. Fakten stammen ausschließlich aus den Rust-Snapshots.
 Konkurrenzgeometrie steht über die bestehende Karten-API nicht zur Verfügung;
 deshalb gibt es nur Ebenen für eigene Routen, Flughäfen und Flugzeuge.
+
+## Globale Suche (AIR-439, GDD-066)
+
+`scripts/search_dialog.gd` ist ein modaler Dialog über `get_map_airports()` (inkl. IATA) und `get_routes()`; Ranking und Beschriftung stehen in der statischen Funktion `build_results`. Auslöser: Button „Suche“ und Strg/Cmd+F in `main.gd`. Treffer öffnen Karte (`map_panel.select_airport`) oder Routen (`routes_panel.focus_route`). Test: `tests/search_test.gd`; Screenshots mit `AIRLINE_UI_CAPTURE_SEARCH_ONLY=1 tools/godot_check.sh shots <dir>` (DE/EN, 1440×1000 und 680×520).
