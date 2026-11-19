@@ -132,6 +132,13 @@ func _run() -> void:
 		print("PASS: local/connecting route counts, feeding paths and empty state at 1440x1000 and 680x520")
 		quit(0)
 		return
+	if OS.get_environment("AIRLINE_UI_CAPTURE_SEARCH_ONLY") == "1":
+		await _search_views(sim)
+		main.queue_free()
+		await process_frame
+		print("PASS: global search start, results and empty state in German and English at 1440x1000 and 680x520")
+		quit(0)
+		return
 	if OS.get_environment("AIRLINE_UI_CAPTURE_SAVES_ONLY") == "1":
 		await _save_slot_views(sim)
 		main.queue_free()
@@ -731,6 +738,28 @@ func _jump_views() -> void:
 		progress.queue_free()
 		await process_frame
 
+
+func _search_views(sim: RefCounted) -> void:
+	assert(sim.buy_aircraft("atr72_600").is_empty() and sim.buy_aircraft("atr72_600").is_empty())
+	assert(sim.create_route("EDDF", "EDDM", 1).is_empty())
+	assert(sim.create_route("EDDF", "EDLP", 2).is_empty())
+	for locale in ["de", "en"]:
+		TranslationServer.set_locale(locale)
+		for dimensions in [Vector2i(1440, 1000), Vector2i(680, 520)]:
+			root.size = dimensions
+			main._sync_view()
+			main._show_page(2)
+			for scenario in [["start", ""], ["results", "m"], ["empty", "qqq"]]:
+				main._open_search()
+				var dialog: Control = main.search_dialog
+				dialog.query.text = scenario[1]
+				dialog.query.text_changed.emit(scenario[1])
+				for frame in range(5): await process_frame
+				assert(root.get_visible_rect().encloses(dialog.get_child(1).get_child(0).get_global_rect()))
+				await RenderingServer.frame_post_draw
+				assert(root.get_texture().get_image().save_png(capture_dir.path_join("search-%s-%s-%dx%d.png" % [scenario[0], locale, dimensions.x, dimensions.y])) == OK)
+				dialog.dismiss()
+				await process_frame
 
 func _save_slot_views(sim: RefCounted) -> void:
 	var directory := OS.get_cache_dir().path_join("air-save-slot-shots-%d" % OS.get_process_id())

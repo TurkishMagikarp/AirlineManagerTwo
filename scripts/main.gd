@@ -57,6 +57,8 @@ var save_slots_dialog: Control
 var autosave
 var save_user_dir := ProjectSettings.globalize_path("user://")
 var save_button: Button
+var search_button: Button
+var search_dialog: Control
 var load_button: Button
 var save_status: Label
 # Platform path only; file format, validation and all state remain in Rust.
@@ -245,6 +247,12 @@ func _ready() -> void:
 	var spacer := Control.new()
 	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	nav.add_child(spacer)
+	search_button = Button.new()
+	search_button.text = tr("Suche")
+	search_button.tooltip_text = tr("Flughäfen und eigene Routen suchen (Strg+F)")
+	search_button.theme_type_variation = "GhostButton"
+	search_button.pressed.connect(_open_search)
+	nav.add_child(search_button)
 	new_game_button = Button.new()
 	new_game_button.text = "Neues Spiel"
 	new_game_button.tooltip_text = new_game_button.text
@@ -439,6 +447,35 @@ func _open_save_slots(saving: bool) -> void:
 	)
 	save_slots_dialog.autosave_settings = autosave
 	save_slots_dialog.open(simulation, save_user_dir, saving)
+
+
+func _unhandled_key_input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_F and (event.ctrl_pressed or event.meta_pressed) and not event.alt_pressed:
+		_open_search()
+		get_viewport().set_input_as_handled()
+
+
+func _open_search() -> void:
+	if jump_in_progress or not overview.visible: return
+	if is_instance_valid(search_dialog) or is_instance_valid(save_slots_dialog) or is_instance_valid(decision_dialog) or is_instance_valid(ferry_dialog): return
+	var layer := CanvasLayer.new()
+	layer.layer = 90
+	add_child(layer)
+	search_dialog = preload("res://scripts/search_dialog.gd").new()
+	layer.add_child(search_dialog)
+	search_dialog.tree_exited.connect(layer.queue_free)
+	search_dialog.activated.connect(_open_search_result)
+	search_dialog.open(simulation)
+
+
+func _open_search_result(result: Dictionary) -> void:
+	if result["kind"] == "airport":
+		_show_page(3)
+		map_panel.select_airport(result["icao"])
+		navigation[3].grab_focus()
+	else:
+		_show_page(2)
+		routes_panel.focus_route(result["id"])
 
 
 # Single-file compatibility entry points for the Windows restart fixtures.
@@ -1452,6 +1489,7 @@ func _resize_frame() -> void:
 		navigation[index].text = "" if compact else PAGES[index]["title"]
 		navigation[index].alignment = HORIZONTAL_ALIGNMENT_CENTER if compact else HORIZONTAL_ALIGNMENT_LEFT
 	new_game_button.text = "+" if compact else "Neues Spiel"
+	search_button.text = "?" if compact else tr("Suche")
 
 
 func _open_attention(entry: Dictionary) -> void:
