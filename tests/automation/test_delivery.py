@@ -94,3 +94,28 @@ class DeliveryTest(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             controller.promote(blocked, {})
         controller.pc.call.assert_called_once_with("/issues/issue-id/recovery-actions")
+
+    def test_stale_notice_fallback_requires_same_idle_assignment(self):
+        for runs in ([], [{"status": "running"}]):
+            controller = object.__new__(delivery.Controller)
+            controller.cfg = {"developer": "developer"}
+            controller.pc = Mock()
+            controller.intent = Mock(return_value=True)
+            controller.now = 42
+            blocked = ISSUE | {"id": "issue-id", "status": "blocked"}
+            action = {"id": "recovery-id", "kind": "deliberate_wait_without_target", "returnOwnerAgentId": "developer"}
+            conflict = delivery.APIError("POST", "/issues/issue-id/recovery-actions/resolve",
+                                         409, "disposition_recovery_retry_stale")
+            controller.pc.call.side_effect = [{"active": action}, conflict, blocked, runs, None]
+            history = {}
+            if runs:
+                with self.assertRaises(delivery.APIError):
+                    controller.promote(blocked, history)
+                self.assertFalse(history)
+                self.assertEqual(controller.pc.call.call_count, 4)
+            else:
+                controller.promote(blocked, history)
+                self.assertTrue(history["resumed"])
+                controller.pc.call.assert_called_with("/issues/issue-id", "PATCH", {
+                    "status": "todo", "assigneeAgentId": "developer",
+                })

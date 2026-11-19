@@ -10,5 +10,6 @@ NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
-ReadWritePaths=/opt/airline-delivery/token /opt/airline-delivery/token-staging
+# Keep the two root-managed sibling directories on the same mount for atomic rename.
+ReadWritePaths=/opt/airline-delivery
 UMask=0077
