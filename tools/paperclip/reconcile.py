@@ -107,6 +107,13 @@ def notes_cycle(sha, issues, developer, planner):
     return f"{sha}:{previous}"
 
 
+class APIError(RuntimeError):
+    def __init__(self, method, path, status, code=None):
+        super().__init__(f"{method} {path.split('?')[0]} failed: HTTP {status}")
+        self.status = status
+        self.code = code
+
+
 class API:
     def __init__(self, base, token, github=False):
         self.base = base
@@ -123,8 +130,16 @@ class API:
                 result = response.read()
                 return json.loads(result) if result else None
         except HTTPError as error:
+            code = None
+            if error.code == 409:
+                try:
+                    result = json.loads(error.read(8192))
+                    if isinstance(result, dict) and result.get("code") == "disposition_recovery_retry_stale":
+                        code = result["code"]
+                except (OSError, ValueError):
+                    pass
             # Do not log body/headers: either service may return private metadata.
-            raise RuntimeError(f"{method} {path.split('?')[0]} failed: HTTP {error.code}") from None
+            raise APIError(method, path, error.code, code) from None
 
 
 def age(timestamp, now):
@@ -253,10 +268,23 @@ class Controller:
                         or issue.get("assigneeAgentId") != developer):
                     raise RuntimeError(f"{issue['identifier']} has a different recovery owner or action; leaving it untouched.")
                 if self.intent(f"{issue['identifier']} restore existing assignment ({recovery['kind']})"):
-                    self.pc.call(path + "/resolve", "POST", {
-                        "actionId": recovery["id"], "outcome": "restored", "sourceIssueStatus": "todo",
-                        "resolutionNote": "Approved backlog recovery: resume the same worktree with CI-backed verification.",
-                    })
+                    try:
+                        self.pc.call(path + "/resolve", "POST", {
+                            "actionId": recovery["id"], "outcome": "restored", "sourceIssueStatus": "todo",
+                            "resolutionNote": "Approved backlog recovery: resume the same worktree with CI-backed verification.",
+                        })
+                    except APIError as error:
+                        if (recovery["kind"] != "deliberate_wait_without_target" or error.status != 409
+                                or error.code != "disposition_recovery_retry_stale"):
+                            raise
+                        issue_path = f"/issues/{issue['id']}"
+                        fresh = self.pc.call(issue_path)
+                        if (fresh["status"] != "blocked" or fresh.get("assigneeAgentId") != developer
+                                or fresh.get("checkoutRunId") or fresh.get("executionRunId")
+                                or self.pc.call(issue_path + "/live-runs")):
+                            raise
+                        print(f"{issue['identifier']}: stale recovery notice; returning the verified idle assignment to todo.", flush=True)
+                        self.patch(fresh, "todo", assigneeAgentId=developer)
                     history.update(resumed=True, last_wake=self.now)
                 return
         if self.intent(f"{issue['identifier']} ready: resume in existing worktree"):
