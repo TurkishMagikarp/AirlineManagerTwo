@@ -1,6 +1,7 @@
 import importlib.util
 from pathlib import Path
 import unittest
+from unittest.mock import Mock
 
 ROOT = Path(__file__).resolve().parents[2]
 spec = importlib.util.spec_from_file_location("reconcile", ROOT / "tools/paperclip/reconcile.py")
@@ -64,3 +65,24 @@ class DeliveryTest(unittest.TestCase):
         self.assertEqual(delivery.choose([], [candidate], "developer", "planner", {}), (None, None))
         candidate["createdByAgentId"] = "planner"
         self.assertEqual(delivery.choose([], [candidate], "developer", "planner", {}), (candidate, None))
+
+    def test_restores_only_the_matching_board_recovery(self):
+        controller = object.__new__(delivery.Controller)
+        controller.cfg = {"developer": "developer"}
+        controller.pc = Mock()
+        controller.intent = Mock(return_value=True)
+        controller.now = 42
+        blocked = ISSUE | {"id": "issue-id", "status": "blocked"}
+        action = {"id": "recovery-id", "kind": "stranded_assigned_issue", "returnOwnerAgentId": "developer"}
+        controller.pc.call.return_value = {"active": action}
+        history = {}
+        controller.promote(blocked, history)
+        path, method, body = controller.pc.call.call_args.args
+        self.assertEqual((path, method), ("/issues/issue-id/recovery-actions/resolve", "POST"))
+        self.assertEqual((body["actionId"], body["sourceIssueStatus"]), ("recovery-id", "todo"))
+        self.assertTrue(history["resumed"])
+        controller.pc.call.reset_mock()
+        controller.pc.call.return_value = {"active": action | {"returnOwnerAgentId": "another-agent"}}
+        with self.assertRaises(RuntimeError):
+            controller.promote(blocked, {})
+        controller.pc.call.assert_called_once_with("/issues/issue-id/recovery-actions")

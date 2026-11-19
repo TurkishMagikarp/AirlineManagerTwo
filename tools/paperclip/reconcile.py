@@ -232,6 +232,27 @@ class Controller:
                         for r in rules)
         return files, approved, protected
 
+    def promote(self, issue, history):
+        developer = self.cfg["developer"]
+        if issue["status"] == "blocked":
+            path = f"/issues/{issue['id']}/recovery-actions"
+            recovery = self.pc.call(path).get("active")
+            if recovery:
+                if (recovery["kind"] not in {"stranded_assigned_issue", "deliberate_wait_without_target"}
+                        or recovery.get("returnOwnerAgentId") != developer
+                        or issue.get("assigneeAgentId") != developer):
+                    raise RuntimeError(f"{issue['identifier']} has a different recovery owner or action; leaving it untouched.")
+                if self.intent(f"{issue['identifier']} restore existing assignment ({recovery['kind']})"):
+                    self.pc.call(path + "/resolve", "POST", {
+                        "actionId": recovery["id"], "outcome": "restored", "sourceIssueStatus": "todo",
+                        "resolutionNote": "Approved backlog recovery: resume the same worktree with CI-backed verification.",
+                    })
+                    history.update(resumed=True, last_wake=self.now)
+                return
+        if self.intent(f"{issue['identifier']} ready: resume in existing worktree"):
+            self.patch(issue, "todo", assigneeAgentId=developer)
+            history.update(resumed=True, last_wake=self.now)
+
     def tick(self):
         if self.pc.call(self.company + "/live-runs"):
             return
@@ -263,9 +284,7 @@ class Controller:
                 self.patch(issue, "done")
             return
         if issue["status"] in {"backlog", "blocked"}:
-            if self.intent(f"{ident} ready: resume in existing worktree"):
-                self.patch(issue, "todo", assigneeAgentId=self.cfg["developer"])
-                history.update(resumed=True, last_wake=self.now)
+            self.promote(issue, history)
             return
         jobs, artifact, files, approved, protected = {}, False, [], False, False
         if pr and pr["state"] == "open" and not pr["draft"] and issue["status"] == "in_review":
