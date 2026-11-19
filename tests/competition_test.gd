@@ -57,11 +57,11 @@ func _run() -> void:
 	main._show_page(2)
 	var panel = main.routes_panel
 	panel.refresh()
-	if not _check("Continental Sky" in panel.competition_label.text and "Käufe:" in panel.competition_label.text, "All rival fleets and purchases visible without route selection"):
+	if not _check(panel.competition_empty.visible and not panel.competition_tree.visible and not ("Guthaben" in panel.competition_label.text), "No route selected shows empty state, no internal rival data"):
 		return
 	panel.route_tree.get_root().get_child(0).select(0)
 	panel.route_tree.item_selected.emit()
-	if not _check("Regional Wings" in panel.competition_label.text and "Competition Air" in panel.competition_label.text and "Pax/Tag" in panel.competition_label.text, "Route UI shows real competitor and estimated split"):
+	if not _check(panel.competition_tree.visible and panel.competition_tree.get_root().get_child_count() == 1 and panel.competition_tree.get_root().get_child(0).get_text(0) == "Regional Wings" and "Schätzung" in panel.competition_label.text and not ("Guthaben" in panel.competition_label.text or "Entscheidung" in panel.competition_label.text), "Route UI shows public rival schedules and labeled estimate"):
 		return
 	var route: Dictionary = sim.get_routes()[0]
 	var route_row: TreeItem = panel.route_tree.get_root().get_child(0)
@@ -82,9 +82,9 @@ func _run() -> void:
 	root.size = Vector2i(680, 520)
 	await process_frame
 	var scroll := panel.get_parent().get_parent() as ScrollContainer
-	scroll.ensure_control_visible(panel.competition_label)
+	scroll.ensure_control_visible(panel.competition_tree)
 	await process_frame
-	if not _check(main.size.x <= 680 and panel.competition_label.size.x <= 680, "Competition panel wraps in small window"):
+	if not _check(main.size.x <= 680 and panel.competition_tree.size.x <= 680, "Competition panel wraps in small window"):
 		return
 	# Separate viable-market fixture: the cheap high-frequency player above can
 	# legitimately prevent a rival from accumulating an expansion budget.

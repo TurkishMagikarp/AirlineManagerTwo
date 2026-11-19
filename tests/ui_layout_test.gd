@@ -243,6 +243,10 @@ func _run() -> void:
 				for frame in range(5): await process_frame
 				await RenderingServer.frame_post_draw
 				assert(root.get_texture().get_image().save_png(capture_dir.path_join("alliances-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
+				scroll.scroll_vertical += int(main.routes_panel.competition_label.get_global_rect().position.y - scroll.get_global_rect().position.y) - 8
+				for frame in range(5): await process_frame
+				await RenderingServer.frame_post_draw
+				assert(root.get_texture().get_image().save_png(capture_dir.path_join("route-competition-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
 				scroll.ensure_control_visible(main.routes_panel.destination)
 				for frame in range(5): await process_frame
 				await _capture_picker(main.routes_panel.destination, "route-airport", dimensions)
