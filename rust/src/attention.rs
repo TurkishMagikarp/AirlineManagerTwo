@@ -16,6 +16,7 @@ static RULES: LazyLock<Rules> = LazyLock::new(|| {
         "crew",
         "delay",
         "technicians",
+        "forced_check",
         "salary_reserve",
         "idle",
         "training",
@@ -236,19 +237,39 @@ impl Game {
                 );
             }
             if p.status == AircraftStatus::Maintenance
-                && p.maintenance.as_ref().is_some_and(|v| !v.staffed)
+                && let Some(v) = &p.maintenance
             {
-                add(
-                    "technicians",
-                    format!(
-                        "{} · In Wartung · wartet auf Techniker (Personal-Tab)",
-                        p.identifier()
-                    ),
-                    "fleet",
-                    0,
-                    p.id,
-                    0,
-                );
+                let forced = v.unscheduled
+                    && crate::maintenance::rules(&p.model_id).is_ok_and(|r| p.wear.is_due(r));
+                if forced {
+                    let text = if v.staffed {
+                        format!(
+                            "{} · Pflichtwartung (Verschleißgrenze) · Kosten {} EUR · frei ab {}",
+                            p.identifier(),
+                            v.cost_eur,
+                            operations::display_time(v.end)
+                        )
+                    } else {
+                        format!(
+                            "{} · Pflichtwartung (Verschleißgrenze) · Kosten {} EUR · wartet auf Techniker (Personal-Tab)",
+                            p.identifier(),
+                            v.cost_eur
+                        )
+                    };
+                    add("forced_check", text, "fleet", 0, p.id, 0);
+                } else if !v.staffed {
+                    add(
+                        "technicians",
+                        format!(
+                            "{} · In Wartung · wartet auf Techniker (Personal-Tab)",
+                            p.identifier()
+                        ),
+                        "fleet",
+                        0,
+                        p.id,
+                        0,
+                    );
+                }
             }
             if p.status == AircraftStatus::Parked
                 && p.maintenance.is_none()

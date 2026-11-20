@@ -1576,6 +1576,13 @@ func _open_attention(entry: Dictionary) -> void:
 		scroll.call_deferred("ensure_control_visible", orders_panel.table)
 		orders_panel.table.grab_focus()
 		return
+	if page == 1 and entry.get("kind", "") == "forced_check":
+		fleet_tabs.current_tab = 0
+		_select_fleet_aircraft(entry["aircraft_id"])
+		var scroll := fleet_panel.get_parent().get_parent() as ScrollContainer
+		scroll.call_deferred("ensure_control_visible", maintenance_box)
+		fleet_tree.grab_focus()
+		return
 	if page == 1:
 		fleet_tree.ensure_cursor_is_visible()
 		fleet_tree.grab_focus()
@@ -1586,6 +1593,17 @@ func _open_attention(entry: Dictionary) -> void:
 			staff_panel.focus_pay_group(entry["employee_id"] - 1)
 		else:
 			staff_panel.focus_employee(entry["employee_id"])
+
+
+func _select_fleet_aircraft(aircraft_id: int) -> void:
+	var item := fleet_tree.get_root().get_first_child() if fleet_tree.get_root() != null else null
+	while item != null:
+		if item.get_metadata(0) == aircraft_id:
+			item.select(0)
+			fleet_tree.scroll_to_item(item)
+			_refresh_maintenance()
+			return
+		item = item.get_next()
 
 
 func _refresh_overview_register() -> void:

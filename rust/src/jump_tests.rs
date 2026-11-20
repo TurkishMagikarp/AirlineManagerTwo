@@ -278,3 +278,90 @@ fn jump_to_commitment_stops_early_on_attention() {
         assert_eq!(stopped.clock.elapsed(), Duration::from_secs(at));
     }
 }
+
+fn near_limit() -> Game {
+    let mut g = game();
+    let rules = crate::maintenance::rules("atr72_600").unwrap();
+    g.fleet[0].wear.cycles = rules.interval_cycles - 1;
+    g.fleet[0].wear.check_cycles = rules.interval_cycles - 1;
+    g
+}
+
+fn forced_entries(g: &Game) -> Vec<String> {
+    g.attention_snapshot()
+        .into_iter()
+        .filter(|e| e.kind == "forced_check")
+        .map(|e| e.text)
+        .collect()
+}
+
+#[test]
+fn jump_stops_at_wear_grounding_inside_one_sampling_window_and_resumes() {
+    let initial = near_limit();
+    let landing = initial.due_landing(0).unwrap();
+    let mut jumped = initial.clone();
+    let result = jumped.jump(10.0 * DAY as f64).unwrap();
+    assert_eq!(jumped.clock.elapsed().as_secs(), landing);
+    assert_eq!(result.advanced_seconds, landing);
+    assert!(result.reason.contains(&jumped.fleet[0].identifier()));
+    assert!(result.reason.contains("Pflichtwartung"));
+    assert_eq!(
+        jumped.fleet[0].status,
+        crate::aircraft::AircraftStatus::Maintenance
+    );
+    assert_eq!(forced_entries(&jumped).len(), 1);
+    let mut reference = initial.clone();
+    small_steps(&mut reference, landing);
+    assert_eq!(state(&jumped), state(&reference));
+
+    let end = jumped.fleet[0].maintenance.as_ref().unwrap().end;
+    let cost = jumped.fleet[0].maintenance.as_ref().unwrap().cost_eur;
+    let again = jumped.jump(10.0 * DAY as f64).unwrap();
+    assert!(again.reason.is_empty(), "{}", again.reason);
+    assert!(forced_entries(&jumped).is_empty());
+    let total = landing + again.advanced_seconds;
+    small_steps(&mut reference, again.advanced_seconds);
+    assert_eq!(state(&jumped), state(&reference));
+    assert!(total > end);
+    let paid: i64 = jumped
+        .history
+        .as_ref()
+        .unwrap()
+        .maintenance
+        .iter()
+        .filter(|p| p.time == landing)
+        .map(|p| p.amount)
+        .sum();
+    assert_eq!(paid, cost);
+    assert!(jumped.routes[0].plan.is_some());
+}
+
+#[test]
+fn waiting_forced_check_stops_the_jump_then_updates_when_staffed() {
+    let mut g = near_limit();
+    let landing = g.due_landing(0).unwrap();
+    let techs: Vec<u32> = g
+        .staff
+        .employees
+        .iter()
+        .filter(|e| e.role == crate::staff::Role::Technician)
+        .map(|e| e.id)
+        .collect();
+    for id in techs {
+        g.dismiss_staff(id).unwrap();
+    }
+    let result = g.jump(10.0 * DAY as f64).unwrap();
+    assert_eq!(g.clock.elapsed().as_secs(), landing);
+    assert!(result.reason.contains("Techniker"));
+    assert_eq!(forced_entries(&g).len(), 1);
+    assert!(forced_entries(&g)[0].contains("wartet auf Techniker"));
+    g.staff_up();
+    g.clock.set_running(true);
+    g.advance(1.0);
+    assert_eq!(forced_entries(&g).len(), 1);
+    assert!(forced_entries(&g)[0].contains("frei ab"));
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("forced.json");
+    save::save(&path, &g).unwrap();
+    assert_eq!(forced_entries(&save::load(&path).unwrap()), forced_entries(&g));
+}
