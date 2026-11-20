@@ -1067,6 +1067,16 @@ impl SimulationClock {
     }
 
     #[func]
+    fn wind_down_route(&mut self, route_id: u32) -> GString {
+        self.game
+            .wind_down_route(route_id)
+            .err()
+            .unwrap_or_default()
+            .as_str()
+            .into()
+    }
+
+    #[func]
     fn delete_route(&mut self, route_id: u32) -> GString {
         self.game
             .delete_route(route_id)
@@ -1394,6 +1404,13 @@ impl SimulationClock {
                 let services: Vec<_> = self.game.routes.iter().filter(|s| s.public_id() == r.id).collect();
                 let aircraft_ids: Array<u32> = services.iter().filter_map(|s| s.aircraft_id).collect();
                 let has_plan = services.iter().any(|s| s.plan.is_some());
+                let pending = self.game.pending_releases(r.id);
+                let pending_rows: Array<VarDictionary> = pending.iter().map(|(id, at)| vdict! {
+                    "aircraft_id" => *id,
+                    "identifier" => self.game.fleet.iter().find(|p| p.id == *id).map(|p| p.identifier()).unwrap_or_default().as_str(),
+                    "at_seconds" => *at as i64,
+                    "at" => operations::display_time(*at).as_str(),
+                }).collect();
                 let freighter_only = !aircraft_ids.is_empty() && services.iter().filter_map(|s| self.game.fleet.iter().find(|p| Some(p.id) == s.aircraft_id)).all(|p| aircraft::model(&p.model_id).is_ok_and(|m| m.main_deck_cargo_kg > 0));
                 let mut freight_kg = 0;
                 let mut freight_capacity = 0;
@@ -1438,7 +1455,12 @@ impl SimulationClock {
                     "id" => r.id, "origin_icao" => r.origin_icao.as_str(),
                     "destination_icao" => r.destination_icao.as_str(),
                     "distance_km" => routes::distance_km(&r.origin_icao, &r.destination_icao).unwrap_or(0.0),
-                    "aircraft_id" => r.aircraft_id.unwrap_or(0), "aircraft_ids" => &aircraft_ids, "has_plan" => has_plan, "ticket_eur" => r.ticket_eur, "business_ticket_eur" => r.business_ticket_eur,
+                    "aircraft_id" => r.aircraft_id.unwrap_or(0), "aircraft_ids" => &aircraft_ids, "has_plan" => has_plan, "release_pending" => &pending_rows,
+                    "can_wind_down" => services.iter().any(|s| s.remove_at.is_none() && (s.plan.is_some() || s.aircraft_id.and_then(|a| self.game.fleet.iter().find(|p| p.id == a)).and_then(|p| p.maintenance.as_ref()).and_then(|v| v.resume.as_ref()).is_some_and(|v| v.route_id == s.id))),
+                    "can_delete" => !has_plan && pending.is_empty(),
+                    "delete_available_at_text" => pending.iter().map(|(_, at)| *at).max().map(operations::display_time).unwrap_or_default().as_str(),
+                    "delete_available_at" => pending.iter().map(|(_, at)| *at as i64).max().unwrap_or(-1),
+                    "ticket_eur" => r.ticket_eur, "business_ticket_eur" => r.business_ticket_eur,
                     "freighter_only" => freighter_only,
                     "freight_load_percent" => if freight_capacity > 0 { freight_kg as f64 * 100.0 / freight_capacity as f64 } else { 0.0 },
                     "estimated_cargo_kg" => freight_kg / active_count.max(1),
@@ -2571,7 +2593,7 @@ impl SimulationClock {
                 }).collect();
                 let autosave = save_slots::autosave_entry(&user.join("saves"));
                 let autosave = vdict! {"occupied" => autosave.occupied, "header" => &header(autosave.header),
-                    "backup" => &header(autosave.backup), "error" => autosave.error.as_str()};
+                "backup" => &header(autosave.backup), "error" => autosave.error.as_str()};
                 vdict! {"slots" => &rows, "autosave" => &autosave, "name_length" => save_slots::RULES.name_length as i64, "error" => ""}
             }
             Err(e) => vdict! {"error" => e.as_str()},

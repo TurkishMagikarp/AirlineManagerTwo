@@ -66,3 +66,9 @@ OPS_EMPTY_TITLE,Noch kein Flugbetrieb,No operations yet
 OPS_EMPTY_TEXT,Sobald ein Flugzeug einer Route zugewiesen ist, erscheinen hier Status und nächster Abflug.,Once an aircraft is assigned to a route its state and next departure appear here.
 OPS_EMPTY_ACTION,Route planen,Plan a route
 OPS_ROUTE_TIP,Route #%d · Pünktlichkeit: %s · %d erfasste Flüge,Route #%d · punctuality: %s · %d recorded flights
+ROUTE_WIND_DOWN,Route abwickeln,Wind down route
+ROUTE_WIND_DOWN_TIP,"Gibt alle zugewiesenen Flugzeuge frei, sobald sie sicher am Boden sind. Die Route bleibt zum Löschen übrig.","Releases all assigned aircraft once they are safely on the ground and leaves the route available for deletion."
+ROUTE_WIND_DOWN_DONE,Freigabe aller Flugzeuge der Route angefordert.,Release of all aircraft on this route requested.
+ROUTE_RELEASE_LINE,%s: Freigabe nach Landung und Bodenzeit um %s,%s: released after landing and ground time at %s
+ROUTE_DELETE_AT,Löschen möglich ab %s (Spielzeit).,Delete becomes available at %s (game time).
+ROUTE_DELETE_BLOCKED,"Löschen erst möglich, wenn die Route abgewickelt ist (Route abwickeln).","Delete is available once the route is wound down (Wind down route)."

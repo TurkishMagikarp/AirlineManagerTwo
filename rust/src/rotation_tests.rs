@@ -413,3 +413,106 @@ fn board_rows_flag_maintenance_and_weather_delay() {
     assert_eq!(g.fleet[0].status, AircraftStatus::Maintenance);
     assert_eq!(rows[0].state_kind, "maintenance");
 }
+
+#[test]
+fn wind_down_releases_staggered_aircraft_once_and_allows_deletion() {
+    let mut g = game(3);
+    g.create_route("EDDF", "EDDM", 3).unwrap();
+    g.schedule(1, 1, 240).unwrap();
+    g.add_route_aircraft(1, 2).unwrap();
+    g.schedule(2, 1, 240).unwrap();
+    g.clock.set_running(true);
+    assert!(g.advance(100.0));
+    assert_eq!(g.fleet[0].status, AircraftStatus::InFlight);
+    assert!(g.wind_down_route(99).is_err());
+    let control = g.routes[2].clone();
+    g.wind_down_route(1).unwrap();
+    let pending = g.pending_releases(1);
+    assert_eq!(pending.len(), 1);
+    let before = state(&g);
+    g.wind_down_route(1).unwrap();
+    assert_eq!(state(&g), before);
+    assert!(g.delete_route(1).is_err());
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("wind-down.json");
+    save::save(&path, &g).unwrap();
+    let mut loaded = save::load(&path).unwrap();
+    assert_eq!(loaded.pending_releases(1), pending);
+    let last = pending.iter().map(|(_, t)| *t).max().unwrap();
+    assert!(g.advance((last - 100) as f64));
+    assert!(loaded.advance((last - 100) as f64));
+    assert_eq!(state(&loaded), state(&g));
+    assert!(g.pending_releases(1).is_empty());
+    assert!(
+        g.routes
+            .iter()
+            .filter(|r| r.public_id() == 1)
+            .all(|r| r.plan.is_none() && r.aircraft_id.is_none())
+    );
+    assert!(
+        g.fleet[..2]
+            .iter()
+            .all(|p| p.status == AircraftStatus::Parked)
+    );
+    let now = g.clock.elapsed().as_secs();
+    let closed = g.history.as_ref().unwrap().totals(1, now).flights;
+    assert!(closed >= 1);
+    let landed = g.finance.totals.flights;
+    g.delete_route(1).unwrap();
+    assert!(g.routes.iter().all(|r| r.public_id() != 1));
+    assert_eq!(g.routes.last().unwrap().plan.is_some(), control.plan.is_some());
+    assert!(g.advance(86400.0));
+    assert!(g.finance.totals.flights > landed);
+    let now = g.clock.elapsed().as_secs();
+    assert_eq!(g.history.as_ref().unwrap().totals(1, now).flights, closed);
+    assert_eq!(g.history.as_ref().unwrap().totals(0, now), g.finance.totals);
+}
+
+#[test]
+fn wind_down_at_turnaround_boundary_counts_each_landing_once() {
+    let mut g = game(2);
+    g.schedule(1, 1, 240).unwrap();
+    g.add_route_aircraft(1, 2).unwrap();
+    let (flight, ground) = operations::timings(&g.routes[0], "atr72_600").unwrap();
+    g.routes[0].plan.as_mut().unwrap().interval_seconds = flight + ground;
+    g.clock.set_running(true);
+    assert!(g.advance((60 + flight + ground - 1) as f64));
+    g.wind_down_route(1).unwrap();
+    assert!(g.advance(1.0));
+    assert!(g.advance(2.0 * (flight + ground) as f64));
+    assert!(g.pending_releases(1).is_empty());
+    assert!(
+        g.routes
+            .iter()
+            .all(|r| r.plan.is_none() && r.aircraft_id.is_none())
+    );
+    assert_eq!(
+        g.finance.totals.flights as u64,
+        g.fleet.iter().map(|p| p.wear.cycles).sum::<u64>()
+    );
+    g.validate_operations().unwrap();
+    g.delete_route(1).unwrap();
+}
+
+#[test]
+fn wind_down_in_maintenance_keeps_check_and_clears_resume() {
+    let mut g = game(2);
+    g.schedule(1, 1, 240).unwrap();
+    g.add_route_aircraft(1, 2).unwrap();
+    g.clock.set_running(true);
+    assert!(g.advance(100.0));
+    g.request_maintenance(1).unwrap();
+    g.wind_down_route(1).unwrap();
+    let visit = g.fleet[0].maintenance.as_ref().unwrap();
+    assert!(visit.resume.is_none());
+    let end = visit.end;
+    assert!(g.advance(end as f64));
+    assert!(
+        g.routes
+            .iter()
+            .filter(|r| r.public_id() == 1)
+            .all(|r| r.plan.is_none())
+    );
+    assert!(g.wind_down_route(1).is_err());
+    g.delete_route(1).unwrap();
+}

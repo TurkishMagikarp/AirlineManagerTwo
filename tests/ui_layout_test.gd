@@ -489,6 +489,26 @@ func _run() -> void:
 					await RenderingServer.frame_post_draw
 					assert(root.get_texture().get_image().save_png(capture_dir.path_join("route-field-error-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
 					interval.value = previous
+				var wind_down_path := OS.get_temp_dir().path_join("airline-layout-wind-down.json")
+				assert(sim.save_game(wind_down_path).is_empty())
+				main.routes_panel.focus_route(1)
+				var wind_down_error: String = sim.wind_down_route(1)
+				assert(wind_down_error.is_empty())
+				main.routes_panel.refresh()
+				main.routes_panel.focus_route(1)
+				main.routes_panel.wind_down_button.grab_focus()
+				scroll.ensure_control_visible(main.routes_panel.wind_down_button)
+				for frame in range(5): await process_frame
+				scroll.ensure_control_visible(main.routes_panel.release_label)
+				for frame in range(5): await process_frame
+				assert(root.get_visible_rect().encloses(main.routes_panel.wind_down_button.get_global_rect()) or root.get_visible_rect().encloses(main.routes_panel.release_label.get_global_rect()))
+				assert(main.routes_panel.release_label.visible and main.routes_panel.delete_button.disabled)
+				if not capture_dir.is_empty():
+					await RenderingServer.frame_post_draw
+					assert(root.get_texture().get_image().save_png(capture_dir.path_join("route-wind-down-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
+				assert(sim.load_game(wind_down_path).is_empty())
+				DirAccess.remove_absolute(wind_down_path)
+				main.routes_panel.refresh()
 				scroll.ensure_control_visible(main.routes_panel.results_tree)
 				for frame in range(3):
 					await process_frame

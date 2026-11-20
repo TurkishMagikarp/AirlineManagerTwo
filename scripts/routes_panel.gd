@@ -18,6 +18,8 @@ var empty_label: Control
 var assignment: OptionButton
 var assign_button: Button
 var delete_button: Button
+var wind_down_button: Button
+var release_label: Label
 var delay_input: SpinBox
 var interval_input: SpinBox
 var schedule_button: Button
@@ -114,11 +116,24 @@ func _ready() -> void:
 	assign_button.text = "Flugzeug hinzufügen"
 	assign_button.pressed.connect(_assign)
 	actions.add_child(assign_button)
+	wind_down_button = Button.new()
+	wind_down_button.text = tr("ROUTE_WIND_DOWN")
+	wind_down_button.tooltip_text = tr("ROUTE_WIND_DOWN_TIP")
+	wind_down_button.pressed.connect(func():
+		var route := _route()
+		if not route.is_empty():
+			_feedback(simulation.wind_down_route(route["id"]), tr("ROUTE_WIND_DOWN_DONE"))
+	)
+	actions.add_child(wind_down_button)
 	delete_button = Button.new()
 	delete_button.text = "Route löschen"
 	delete_button.theme_type_variation = "DangerButton"
 	delete_button.pressed.connect(_delete)
 	actions.add_child(delete_button)
+	release_label = _label("")
+	release_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	release_label.visible = false
+	add_child(release_label)
 	assignment.item_selected.connect(func(_index: int): _assignment_preview())
 	add_child(_label("Economy-Preis der ausgewählten Route · EUR pro Passagier und Einzelflug (vorläufig)"))
 	ticket_input = SpinBox.new()
@@ -568,7 +583,7 @@ func _selection_changed() -> void:
 			assignment.add_item("%s · %s · %s" % [plane["identifier"], plane["model_name"], "Entfernen" if assigned else "Hinzufügen"])
 			assignment.set_item_metadata(assignment.item_count - 1, plane["id"])
 	assignment.disabled = route.is_empty()
-	delete_button.disabled = route.is_empty()
+	_update_wind_down(route)
 	_update_fare(route)
 	_update_connections(route)
 	_assignment_preview()
@@ -607,11 +622,28 @@ func _update_schedule_controls(route: Dictionary) -> void:
 	schedule_button.disabled = route.is_empty() or not route.get("can_schedule", false)
 	schedule_button.text = "Flugplan gesperrt · Wartung" if not hangar.is_empty() and not route.get("has_plan", false) else "Flugplan gesperrt · Besatzung fehlt" if not crew.is_empty() else "Flugplan aktivieren"
 	stop_button.disabled = route.is_empty() or not route.get("has_plan", false)
+	_update_wind_down(route)
 	var notice := hangar
 	if not crew.is_empty():
 		notice = crew if notice.is_empty() else notice + "\n" + crew
 	maintenance_label.text = notice
 	maintenance_label.visible = not notice.is_empty()
+
+
+func _update_wind_down(route: Dictionary) -> void:
+	var pending: Array = route.get("release_pending", [])
+	wind_down_button.disabled = route.is_empty() or not route.get("can_wind_down", false)
+	delete_button.disabled = route.is_empty() or not route.get("can_delete", true)
+	var lines: PackedStringArray = []
+	for release: Dictionary in pending:
+		lines.append(tr("ROUTE_RELEASE_LINE") % [release["identifier"], release["at"]])
+	if not pending.is_empty():
+		lines.append(tr("ROUTE_DELETE_AT") % route["delete_available_at_text"])
+	elif route.get("has_plan", false):
+		lines.append(tr("ROUTE_DELETE_BLOCKED"))
+	release_label.text = "\n".join(lines)
+	release_label.visible = not lines.is_empty()
+	delete_button.tooltip_text = "" if not delete_button.disabled else tr("ROUTE_DELETE_BLOCKED")
 
 
 static func rival_services(routes: Array, a: String, b: String) -> Array:
