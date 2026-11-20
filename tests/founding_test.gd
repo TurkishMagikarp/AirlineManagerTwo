@@ -6,12 +6,18 @@ func _initialize() -> void:
 
 
 func _run() -> void:
+	var directory := OS.get_cache_dir().path_join("air-founding-slots-%d" % OS.get_process_id())
+	DirAccess.make_dir_recursive_absolute(directory)
 	var scene: PackedScene = load("res://scenes/main.tscn")
 	var main = scene.instantiate()
 	root.add_child(main)
 	await process_frame
 	main.set_process(false)
+	main.save_user_dir = directory
+	main.autosave = preload("res://scripts/autosave.gd").new(directory.path_join("preferences.cfg"))
 	if not _check(main.founding.visible and not main.overview.visible and not main.simulation.has_airline() and main.name_input.has_focus(), "New game begins at founding form"):
+		return
+	if not _check("pausiert" in main.founding_status.text and "benannten Speicherplatz" in main.founding_status.text and not "ersetzt" in main.founding_status.text, "First launch message: paused start and named slot"):
 		return
 	main.name_input.text = "   "
 	await _click(main.found_button)
@@ -48,8 +54,16 @@ func _run() -> void:
 		return
 	main.simulation.start()
 	main.simulation.advance(12.5)
+	main.save_button.pressed.emit()
+	await process_frame
+	main.save_slots_dialog.name_field.text = "Erste Airline"
+	main.save_slots_dialog.request_save()
+	main.save_slots_dialog.close_dialog()
+	await process_frame
 	await _click(main.new_game_button)
 	if not _check(main.founding.visible and main.simulation.get_airline_info() == airline, "Opening new game does not destroy existing company"):
+		return
+	if not _check("ersetzt die laufende Airline" in main.founding_status.text and "ungespeichertem Fortschritt" in main.founding_status.text and "unter Laden" in main.founding_status.text, "New Game message: replaces running company, slots stay under Load"):
 		return
 	await _click(main.cancel_founding_button)
 	if not _check(main.overview.visible and main.simulation.get_elapsed_seconds() == 12.5 and main.simulation.is_running(), "Cancel keeps company, time and running status"):
@@ -59,6 +73,24 @@ func _run() -> void:
 	await _click(main.found_button)
 	if not _check(main.heading.text == "Second Air" and main.simulation.get_elapsed_seconds() == 0.0 and not main.simulation.is_running(), "Confirmed new game replaces state and resets time"):
 		return
+	main.simulation.start()
+	main.simulation.advance(3.0)
+	main.save_button.pressed.emit()
+	await process_frame
+	main.save_slots_dialog.name_field.text = "Zweite Airline"
+	main.save_slots_dialog.request_save()
+	var slots: Array = main.simulation.get_save_slots(directory)["slots"]
+	if not _check(slots[0]["occupied"] and slots[1]["occupied"] and not main.simulation.get_save_slots(directory)["autosave"]["occupied"], "Second company saved in a free slot, first slot and autosave untouched"):
+		return
+	main.save_slots_dialog.close_dialog()
+	await process_frame
+	for case in [[0, "Bosporus 日本 Air", 12.5], [1, "Second Air", 3.0]]:
+		main._open_save_slots(false)
+		await process_frame
+		main.save_slots_dialog.load_slot(case[0], false)
+		await process_frame
+		if not _check(main.simulation.get_airline_info()["name"] == case[1] and main.simulation.get_elapsed_seconds() == case[2], "Slot %d loads its own company and saved clock" % case[0]):
+			return
 	root.size = Vector2i(680, 520)
 	await process_frame
 	await process_frame
