@@ -65,6 +65,13 @@ func _run() -> void:
 		print("PASS: ancillary Finances and Routes at both sizes")
 		quit(0)
 		return
+	if OS.get_environment("AIRLINE_UI_CAPTURE_FORCED_CHECK_ONLY") == "1":
+		await _forced_check_views(sim)
+		main.queue_free()
+		await process_frame
+		print("PASS: forced-check Attention entry on Overview and its Fleet maintenance details at both sizes")
+		quit(0)
+		return
 	if OS.get_environment("AIRLINE_UI_CAPTURE_WEATHER_ONLY") == "1":
 		await _weather_views(sim)
 		main.queue_free()
@@ -1245,6 +1252,48 @@ func _ancillary_views(sim: RefCounted) -> void:
 					assert(root.get_visible_rect().encloses(control.get_global_rect()))
 					await RenderingServer.frame_post_draw
 					assert(root.get_texture().get_image().save_png(capture_dir.path_join("ancillary-finances-%s-%dx%d.png" % [view[1], dimensions.x, dimensions.y])) == OK)
+
+func _forced_check_views(sim: RefCounted) -> void:
+	assert(sim.buy_aircraft("atr72_600").is_empty())
+	assert(sim.buy_aircraft("atr72_600").is_empty())
+	assert(sim.hire_missing_staff().is_empty())
+	assert(sim.create_route("EDDF", "EDDM", 1).is_empty())
+	assert(sim.schedule_route(1, 1, 120).is_empty())
+	main._sync_view()
+	var plane_id := -1
+	for i in range(12):
+		main.jump_buttons[3].pressed.emit()
+		while main.jump_in_progress:
+			await process_frame
+		for entry in sim.get_attention_snapshot():
+			if entry["kind"] == "forced_check":
+				plane_id = entry["aircraft_id"]
+		if plane_id >= 0:
+			break
+	assert(plane_id >= 0)
+	TranslationServer.set_locale("de")
+	for dimensions in [Vector2i(1440, 1000), Vector2i(680, 520)]:
+		root.size = dimensions
+		main._show_page(0)
+		main._sync_view()
+		for frame in range(5): await process_frame
+		var scroll: ScrollContainer = main.fleet_panel.get_parent().get_parent()
+		scroll.scroll_vertical = 0
+		for frame in range(5): await process_frame
+		await RenderingServer.frame_post_draw
+		assert(root.get_texture().get_image().save_png(capture_dir.path_join("forced-check-overview-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
+		main._show_page(0)
+		var button: Button
+		for i in range(main.attention_rows.get_child_count()):
+			if "Pflichtwartung" in main.attention_rows.get_child(i).text or "Wartung" in main.attention_rows.get_child(i).text:
+				button = main.attention_rows.get_child(i)
+		assert(button != null)
+		button.pressed.emit()
+		for frame in range(8): await process_frame
+		assert(main.current_page == 1 and main.selected_aircraft == plane_id)
+		await RenderingServer.frame_post_draw
+		assert(root.get_texture().get_image().save_png(capture_dir.path_join("forced-check-fleet-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
+
 
 func _weather_views(sim: RefCounted) -> void:
 	assert(sim.buy_aircraft("atr72_600").is_empty())
