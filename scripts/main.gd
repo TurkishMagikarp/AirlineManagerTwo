@@ -297,6 +297,10 @@ func _ready() -> void:
 	routes_panel = RoutesPanel.new()
 	routes_panel.simulation = simulation
 	routes_panel.changed.connect(func(): save_status.text = "Routen geändert · bitte Spielstand speichern.")
+	routes_panel.staff_requested.connect(func():
+		_show_page(5)
+		staff_panel.focus_hiring()
+	)
 	content.add_child(routes_panel)
 	map_panel = MapPanel.new()
 	map_panel.simulation = simulation

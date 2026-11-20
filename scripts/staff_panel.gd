@@ -167,6 +167,16 @@ func _ready() -> void:
 	people.add_child(dismissal_rules)
 	refresh(true)
 
+func focus_hiring() -> void:
+	refresh(true)
+	var scroll := get_parent().get_parent() as ScrollContainer
+	for _i in range(6):
+		await get_tree().process_frame
+		scroll.ensure_control_visible(shortage_label)
+		scroll.ensure_control_visible(hire_missing_button)
+	var target: Control = hire_missing_button if not hire_missing_button.disabled else role_select
+	target.grab_focus()
+
 func _process(delta: float) -> void:
 	if not is_visible_in_tree():
 		return
