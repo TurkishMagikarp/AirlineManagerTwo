@@ -2,6 +2,7 @@ extends VBoxContainer
 ## Presentation only: Rust owns routes, availability, distances and validation.
 
 signal changed
+signal staff_requested
 const ThemeTokens = preload("res://scripts/ui/operations_theme.gd")
 const UI = preload("res://scripts/ui/components.gd")
 
@@ -23,6 +24,7 @@ var interval_input: SpinBox
 var schedule_button: Button
 var stop_button: Button
 var maintenance_label: Label
+var crew_button: Button
 var operations_label: Label
 var operations_tree: Tree
 var operations_empty: PanelContainer
@@ -232,7 +234,7 @@ func _ready() -> void:
 	schedule_button.pressed.connect(func():
 		var route := _route()
 		if not route.is_empty():
-			_feedback(simulation.schedule_route(route["id"], int(delay_input.value), int(interval_input.value)), "Flugplan aktiviert.", interval_input)
+			_feedback(simulation.schedule_route(route["id"], int(delay_input.value), int(interval_input.value)), "Flugplan aktiviert.", interval_input, 0, schedule_button)
 	)
 	add_child(schedule_button)
 	stop_button = Button.new()
@@ -248,6 +250,13 @@ func _ready() -> void:
 	maintenance_label.add_theme_color_override("font_color", UI.NEGATIVE)
 	maintenance_label.visible = false
 	add_child(maintenance_label)
+	crew_button = Button.new()
+	crew_button.text = "Personal öffnen und einstellen"
+	crew_button.theme_type_variation = "PrimaryButton"
+	crew_button.visible = false
+	crew_button.tooltip_text = "Öffnet Personal mit Mangel und Einstellen. Die ausgewählte Route und deine Eingaben bleiben erhalten."
+	crew_button.pressed.connect(func(): staff_requested.emit())
+	add_child(crew_button)
 	operations_label = _label("")
 	add_child(operations_label)
 	_arrange_workspace()
@@ -255,6 +264,8 @@ func _ready() -> void:
 		UI.field_from_label(control)
 	for pair in [[ticket_input, "EUR"], [business_input, "EUR"], [cargo_input, "EUR/kg"], [delay_input, "min"], [interval_input, "min"]]:
 		UI.field_from_label(pair[0], pair[1], ticket_button.tooltip_text if pair[0] == ticket_input else "")
+	interval_input.value_changed.connect(func(_value: float): UI.field_error(interval_input, ""))
+	delay_input.value_changed.connect(func(_value: float): UI.field_error(interval_input, ""))
 	codeshare_panel = preload("res://scripts/codeshare_panel.gd").new()
 	codeshare_panel.simulation = simulation
 	add_child(codeshare_panel)
@@ -357,12 +368,70 @@ func _arrange_workspace() -> void:
 	ops_panel.add_child(operations_empty)
 	results_tree = UI.table(["Landung / Route", "Strecke", "Pax / Auslastung", "Gesamtumsatz", "Flugkosten", "Ergebnis", "Fracht kg / EUR (in Umsatz)"], [170, 145, 135, 120, 110, 110, 260], 240)
 	result_panel.add_child(results_tree)
-	results_empty = UI.empty_state("Noch keine Landungen", "Flugplan: Pendelverkehr mit abwechselndem Hin- und Rückflug. Keine automatische Überführung.", schedule_button.text, func():
-		var next_control: Control = origin if simulation.get_routes().is_empty() else route_tree if _route().is_empty() else schedule_button
-		get_parent().get_parent().ensure_control_visible(next_control)
-		next_control.grab_focus()
-	)
+	results_empty = UI.empty_state("Noch keine Landungen", "Flugplan: Pendelverkehr mit abwechselndem Hin- und Rückflug. Keine automatische Überführung.", "Route erstellen", _results_empty_action)
 	result_panel.add_child(results_empty)
+
+
+func _live_route() -> Dictionary:
+	var selected := _route()
+	for route in simulation.get_routes():
+		if route["id"] == selected.get("id", 0):
+			return route
+	return {}
+
+
+## "start" | "select" | "assign" | "staff" | "schedule" | "active" | "maintenance"
+func _results_state() -> String:
+	if simulation.get_routes().is_empty():
+		return "start"
+	var route := _live_route()
+	if route.is_empty():
+		return "select"
+	if route.get("has_plan", false):
+		return "active"
+	if route.get("aircraft_ids", []).is_empty():
+		return "assign"
+	if not String(route.get("maintenance_status", "")).is_empty():
+		return "maintenance"
+	if not String(route.get("staff_status", "")).is_empty():
+		return "staff"
+	return "schedule" if route.get("can_schedule", false) else "maintenance"
+
+
+func _update_results_empty(_route_now: Dictionary) -> void:
+	var state := _results_state()
+	var labels := results_empty.find_children("*", "Label", true, false)
+	var button: Button = results_empty.find_children("*", "Button", true, false)[0]
+	var live := _live_route()
+	var texts := {
+		"start": ["Route erstellen", "Erstelle zuerst eine Route im Planer."],
+		"select": ["Route auswählen", "Wähle eine Route im Register, um ihren Flugplan einzurichten."],
+		"assign": ["Flugzeug zuweisen", "Die ausgewählte Route hat kein Flugzeug. Weise eines zu, um einen Flugplan zu starten."],
+		"staff": ["Personal öffnen und einstellen", "Dieser Flugplan kann nicht starten: %s" % live.get("staff_status", "")],
+		"schedule": ["Flugplan einrichten", "Die Route ist startklar. Lege Abflug und Abstand fest und aktiviere den Flugplan."],
+		"active": ["", "Der Flugplan ist aktiv. Ergebnisse erscheinen nach der ersten Landung."],
+		"maintenance": ["", "Dieser Flugplan kann nicht starten: %s" % live.get("maintenance_status", "Flugplan derzeit nicht möglich.")],
+	}
+	labels[0].text = "Noch keine Landungen"
+	labels[1].text = texts[state][1]
+	button.visible = not String(texts[state][0]).is_empty()
+	button.text = texts[state][0]
+
+
+func _results_empty_action() -> void:
+	var scroll := get_parent().get_parent() as ScrollContainer
+	var state := _results_state()
+	if state == "staff":
+		staff_requested.emit()
+		return
+	var target: Control = {"start": origin, "select": route_tree, "assign": assignment, "schedule": delay_input}.get(state, route_tree)
+	if target == delay_input:
+		scroll.ensure_control_visible(interval_input)
+		scroll.ensure_control_visible(delay_input)
+		delay_input.get_line_edit().grab_focus()
+		return
+	scroll.ensure_control_visible(target)
+	target.grab_focus()
 
 
 func _label(text: String) -> Label:
@@ -492,7 +561,7 @@ func refresh_operations() -> void:
 	var results: Array = simulation.get_flight_results()
 	results_tree.visible = not results.is_empty()
 	results_empty.visible = results.is_empty()
-	results_empty.get_child(0).get_child(2).text = create_button.text if metrics.is_empty() else "Flugplan aktivieren"
+	_update_results_empty(metrics.get(_route().get("id", 0), {}))
 	results_tree.set_meta("breakdowns", {})
 	for result in results:
 		var row := results_tree.create_item(root_item)
@@ -612,6 +681,7 @@ func _update_schedule_controls(route: Dictionary) -> void:
 		notice = crew if notice.is_empty() else notice + "\n" + crew
 	maintenance_label.text = notice
 	maintenance_label.visible = not notice.is_empty()
+	crew_button.visible = not route.is_empty() and not crew.is_empty() and not route.get("has_plan", false)
 
 
 static func rival_services(routes: Array, a: String, b: String) -> Array:
@@ -685,7 +755,7 @@ func _assignment_preview() -> void:
 		status.text = result["error"]
 
 
-func _feedback(error: String, success: String, field: Control = null, select_id := 0) -> void:
+func _feedback(error: String, success: String, field: Control = null, select_id := 0, anchor: Control = null) -> void:
 	refresh()
 	if select_id != 0:
 		var row := route_tree.get_root().get_first_child()
@@ -700,6 +770,13 @@ func _feedback(error: String, success: String, field: Control = null, select_id 
 		changed.emit()
 	await get_tree().process_frame
 	var scroll := get_parent().get_parent() as ScrollContainer
+	if anchor != null:
+		scroll.ensure_control_visible(anchor)
+		if field != null and field.has_meta("field_help"):
+			scroll.ensure_control_visible(field.get_meta("field_help"))
+		var focus_target: Control = field.get_line_edit() if field is SpinBox and not error.is_empty() else stop_button if stop_button.is_visible_in_tree() and not stop_button.disabled else anchor
+		focus_target.grab_focus()
+		return
 	if select_id != 0 and error.is_empty():
 		await get_tree().process_frame
 	if select_id != 0 and error.is_empty() and ticket_input.get_line_edit().is_visible_in_tree():
