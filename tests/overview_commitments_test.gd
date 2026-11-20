@@ -25,6 +25,8 @@ func _run() -> void:
 	_main._refresh_commitments()
 	assert(sim.get_upcoming_commitments().is_empty())
 	assert(_main.commitments_empty.visible and not _main.commitments_table.visible)
+	assert(_main.commitments_jump_button.disabled and sim.get_next_commitment_jump().is_empty())
+	assert(not sim.begin_jump_to_commitment(1)["started"])
 
 	assert(sim.place_order("atr72_600", 2).is_empty())
 	assert(sim.hire_pilots("737", 2).is_empty())
@@ -41,6 +43,11 @@ func _run() -> void:
 	assert(not _main.commitments_empty.visible and _main.commitments_table.visible)
 	var rows := _rows()
 	assert(rows.size() == 4)
+	# Tied training deadlines: the action names the shared timestamp and is keyboard-operable.
+	assert(list[0]["at"] == list[1]["at"])
+	assert(not _main.commitments_jump_button.disabled and _main.commitments_jump_button.focus_mode == Control.FOCUS_ALL)
+	assert(_main.commitments_jump_button.text.contains(list[0]["date"]))
+	assert(_main.commitments_jump_target["at"] == list[0]["at"])
 	assert(rows[0][0].begins_with("Tag ") and rows[0][1] == "Umschulung" and rows[0][3] == "ATR 72")
 	assert(rows[2][1] == "Lieferung" and rows[2][2] == "ATR 72-600" and rows[2][3] == "—")
 
@@ -63,6 +70,29 @@ func _run() -> void:
 	assert(_rows().size() == 2)
 
 	await _capture("after")
+
+	# A stale displayed target advances nothing and refreshes the action.
+	var before_time: float = sim.get_elapsed_seconds()
+	var stale_at: int = _main.commitments_jump_target["at"]
+	_main.commitments_jump_target = {"at": stale_at + 1}
+	await _main._jump_to_commitment()
+	assert(sim.get_elapsed_seconds() == before_time)
+	assert(_main.commitments_jump_target["at"] == stale_at)
+
+	# Jump from a fractional clock position to the exact commitment timestamp.
+	assert(sim.advance(0.0123))
+	sim.pause()
+	assert(sim.get_elapsed_seconds() != floor(sim.get_elapsed_seconds()))
+	var next: Dictionary = sim.get_next_commitment_jump()
+	assert(not next.is_empty())
+	await _main._jump_to_commitment()
+	if _main.jump_status.text.begins_with("Sprung um"):
+		assert(sim.get_elapsed_seconds() == float(next["at"]))
+	else:
+		assert(sim.get_elapsed_seconds() <= float(next["at"]))
+	var remaining: Array = sim.get_upcoming_commitments()
+	var reachable: bool = not remaining.is_empty() and float(remaining[0]["at"]) - sim.get_elapsed_seconds() <= 2592000.0
+	assert(_main.commitments_jump_button.disabled == not reachable)
 	_main.queue_free()
 	await process_frame
 	print("PASS: overview commitments empty, merged order, reload and time advance")
@@ -77,8 +107,8 @@ func _capture(prefix: String) -> void:
 		_main._show_page(0)
 		for frame in range(5): await process_frame
 		var scroll: ScrollContainer = _main.fleet_panel.get_parent().get_parent()
-		scroll.ensure_control_visible(_main.commitments_table)
+		scroll.ensure_control_visible(_main.commitments_jump_button)
 		for frame in range(5): await process_frame
-		scroll.ensure_control_visible(_main.commitments_table)
+		scroll.ensure_control_visible(_main.commitments_jump_button)
 		await RenderingServer.frame_post_draw
 		assert(root.get_texture().get_image().save_png(dir.path_join("overview-commitments-%s-%dx%d.png" % [prefix, dimensions.x, dimensions.y])) == OK)

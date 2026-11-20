@@ -6,6 +6,8 @@ use std::{sync::LazyLock, time::Duration};
 pub type WorkerResult = (Game, Result<ResultSummary, &'static str>);
 
 const DAY: u64 = 86400;
+pub const STALE_TARGET: &str =
+    "Der nächste Termin hat sich geändert. Bitte erneut auswählen.";
 #[derive(Deserialize)]
 pub struct OptionRule {
     pub label: String,
@@ -96,11 +98,40 @@ impl Game {
         }
         let step = Duration::try_from_secs_f64(game_seconds).map_err(|_| error)?;
         // Events use u64 seconds, and UI results use signed integers.
-        let start = self.clock.elapsed();
-        let target = start.checked_add(step).ok_or(error)?;
+        let target = self.clock.elapsed().checked_add(step).ok_or(error)?;
         if step.as_secs() > i64::MAX as u64 || target.as_secs() > i64::MAX as u64 {
             return Err(error);
         }
+        self.jump_until(target)
+    }
+
+    /// First future commitment, if it lies within the longest jump preset.
+    /// Held orders are already excluded by `upcoming_commitments`.
+    pub fn next_commitment_jump(&self) -> Option<crate::orders::Commitment> {
+        let now = self.clock.elapsed();
+        let longest = RULES.options.iter().map(|o| o.seconds).max()?;
+        let next = self
+            .upcoming_commitments()
+            .into_iter()
+            .find(|c| Duration::from_secs(c.at) > now)?;
+        (Duration::from_secs(next.at) - now <= Duration::from_secs(longest)).then_some(next)
+    }
+
+    /// The target is the timestamp the UI displayed; a changed next commitment
+    /// is rejected without advancing.
+    pub fn jump_to_commitment(&mut self, at: u64) -> Result<ResultSummary, &'static str> {
+        if self.next_commitment_jump().is_none_or(|c| c.at != at) {
+            return Err(STALE_TARGET);
+        }
+        self.jump_until(Duration::from_secs(at))
+    }
+
+    fn jump_until(&mut self, target: Duration) -> Result<ResultSummary, &'static str> {
+        let error = "Zeitsprung abgelehnt: ungültige Dauer, fehlende Airline oder Zeitüberlauf.";
+        if self.airline.is_none() || self.insolvent() || target <= self.clock.elapsed() {
+            return Err(error);
+        }
+        let start = self.clock.elapsed();
         let running = self.clock.is_running();
         let speed = self.clock.speed();
         let mut staged = self.clone();
@@ -116,8 +147,14 @@ impl Game {
                     chunk = chunk.min(until);
                 }
             }
+            let expected = staged.clock.elapsed() + chunk;
             if !staged.advance(chunk.as_secs_f64()) {
                 return Err(error);
+            }
+            // The f64 round trip may miss the intended end by nanoseconds.
+            let reached = staged.clock.elapsed();
+            if reached != expected && reached.abs_diff(expected) <= Duration::from_micros(1) {
+                staged.clock = Clock::from_state(expected, true, 1).ok_or(error)?;
             }
             let entries = staged.attention_snapshot();
             if staged.insolvent() || (!distressed && staged.distressed()) {
