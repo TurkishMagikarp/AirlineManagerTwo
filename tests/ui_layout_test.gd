@@ -260,7 +260,22 @@ func _run() -> void:
 				scroll.ensure_control_visible(main.commitments_jump_button)
 				await RenderingServer.frame_post_draw
 				assert(root.get_texture().get_image().save_png(capture_dir.path_join("overview-commitments-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
+			if page == 4 and not capture_dir.is_empty():
+				var fin = main.finances_panel
+				fin.route_tree.get_root().get_first_child().select(0)
+				fin.route_tree.item_selected.emit()
+				for table_view in [[fin.route_tree, "finances-route-rows"], [fin.flights_tree, "finances-flight-archive"]]:
+					scroll.ensure_control_visible(table_view[0])
+					for frame in range(5): await process_frame
+					scroll.ensure_control_visible(table_view[0])
+					await RenderingServer.frame_post_draw
+					assert(root.get_texture().get_image().save_png(capture_dir.path_join("%s-%dx%d.png" % [table_view[1], dimensions.x, dimensions.y])) == OK)
 			if page == 2 and not capture_dir.is_empty():
+				scroll.ensure_control_visible(main.routes_panel.results_tree)
+				for frame in range(5): await process_frame
+				scroll.ensure_control_visible(main.routes_panel.results_tree)
+				await RenderingServer.frame_post_draw
+				assert(root.get_texture().get_image().save_png(capture_dir.path_join("route-results-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
 				scroll.ensure_control_visible(main.routes_panel.operations_tree)
 				for frame in range(5): await process_frame
 				scroll.ensure_control_visible(main.routes_panel.operations_tree)

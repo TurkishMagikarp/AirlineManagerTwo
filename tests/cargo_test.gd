@@ -167,7 +167,7 @@ func _views() -> bool:
 	var results: Array = main.simulation.get_flight_results()
 	for i in range(results.size()):
 		var row: TreeItem = panel.results_tree.get_root().get_child(i)
-		if not _check(row.get_text(3) == main.UI.money(results[i]["ticket_revenue_eur"]) and row.get_text(6) == _cargo_text(results[i]), "Route flight ticket/cargo cells match Rust"):
+		if not _check(row.get_text(3) == main.UI.money(results[i]["revenue_eur"]) and row.get_tooltip_text(3).contains("Ticketumsatz: %s" % main.UI.money(results[i]["ticket_revenue_eur"])) and row.get_text(6) == _cargo_text(results[i]), "Route flight ticket/cargo cells match Rust"):
 			return false
 	await _click(main.navigation[4])
 	panel = main.finances_panel
@@ -179,12 +179,12 @@ func _views() -> bool:
 	var rows: Array = main.simulation.get_route_finances()
 	for i in range(rows.size()):
 		var row: TreeItem = panel.route_tree.get_root().get_child(i)
-		if not _check(row.get_text(2) == main.UI.money(rows[i]["ticket_revenue_eur"]) and row.get_text(6) == _cargo_text(rows[i]), "Finance route ticket/cargo match Rust"):
+		if not _check(row.get_text(2) == main.UI.money(rows[i]["revenue_eur"]) and row.get_tooltip_text(2).contains("Ticketumsatz: %s" % main.UI.money(rows[i]["ticket_revenue_eur"])) and row.get_text(6) == _cargo_text(rows[i]), "Finance route ticket/cargo match Rust"):
 			return false
 	rows = main.simulation.get_route_flight_page(1, 0)
 	for i in range(rows.size()):
 		var row: TreeItem = panel.flights_tree.get_root().get_child(i)
-		if not _check(row.get_text(5) == main.UI.money(rows[i]["ticket_revenue_eur"]) and row.get_text(8) == _cargo_text(rows[i]), "Finance flight ticket/cargo match Rust"):
+		if not _check(row.get_text(5) == main.UI.money(rows[i]["revenue_eur"]) and row.get_tooltip_text(5).contains("Ticketumsatz: %s" % main.UI.money(rows[i]["ticket_revenue_eur"])) and row.get_text(8) == _cargo_text(rows[i]), "Finance flight ticket/cargo match Rust"):
 			return false
 	await _reveal(panel.chart_select)
 	await _click(panel.chart_select)

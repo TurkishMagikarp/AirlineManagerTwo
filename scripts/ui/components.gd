@@ -692,6 +692,25 @@ static func breakdown_tooltip(parts: Array) -> Control:
 		row.add_child(value)
 	return card
 
+static func revenue_parts(d: Dictionary) -> Array:
+	return [["Ticketumsatz", money(d["ticket_revenue_eur"])], ["Frachtumsatz", money(d["cargo_revenue_eur"])], ["Zusatzumsätze", money(d["ancillary_revenue_eur"])], ["Gesamtumsatz", money(d["revenue_eur"])]]
+
+static func cost_parts(d: Dictionary) -> Array:
+	var parts: Array = []
+	for pair in [["Treibstoff", "fuel_eur"], ["CO2-Abgabe", "carbon_eur"], ["Flughäfen", "airport_eur"], ["Personal", "crew_eur"], ["Wartung / Verwaltung", "overhead_eur"], ["Bordservice (± Standard)", "service_eur"], ["Betreuung / Entschädigung", "care_eur"], ["Prämienkosten", "loyalty_cost_eur"], ["Flugkosten", "costs_eur"]]:
+		parts.append([pair[0], money(d[pair[1]])])
+	return parts
+
+static func set_breakdown(tree: Tree, row: TreeItem, column: int, parts: Array) -> void:
+	var lines: Array = []
+	for part in parts:
+		lines.append("%s: %s" % [part[0], part[1]])
+	var text := "\n".join(lines)
+	row.set_tooltip_text(column, text)
+	var breakdowns: Dictionary = tree.get_meta("breakdowns", {})
+	breakdowns[text] = parts
+	tree.set_meta("breakdowns", breakdowns)
+
 static func signed_money(amount: int) -> String:
 	return "+" + money(amount) if amount >= 0 else money(amount)
 

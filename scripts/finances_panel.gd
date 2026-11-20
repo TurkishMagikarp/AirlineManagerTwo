@@ -267,7 +267,7 @@ func _ready() -> void:
 	export_dialog.current_file = "routenergebnisse.csv"
 	export_dialog.file_selected.connect(export_route_csv)
 	add_child(export_dialog)
-	route_tree = UI.table(["Route / Strecke", "Flüge", "Tickets", "Kosten", "Ergebnis", "Auslastung", "Fracht kg / EUR"], [190, 65, 115, 115, 115, 95, 260], 210)
+	route_tree = UI.table(["Route / Strecke", "Flüge", "Gesamtumsatz", "Flugkosten", "Ergebnis", "Auslastung", "Fracht kg / EUR (in Umsatz)"], [190, 65, 125, 115, 115, 95, 260], 210)
 	route_tree.item_selected.connect(_select_route)
 	routes.add_child(route_tree)
 	routes.add_child(export_status)
@@ -278,7 +278,7 @@ func _ready() -> void:
 	load_chart = Chart.new()
 	history.add_child(load_chart)
 	history.add_child(UI.label("Auslastung je Zeitabschnitt · Lücken = keine Landungen · nach Sitzplätzen gewichtet", ThemeTokens.SMALL, UI.MUTED))
-	flights_tree = UI.table(["Landung", "Richtung", "Ticket", "Pax / Sitze", "Auslastung", "Tickets", "Kosten", "Ergebnis", "Fracht kg / EUR"], [170, 140, 90, 95, 90, 110, 110, 110, 260], 250)
+	flights_tree = UI.table(["Landung", "Richtung", "Ticketpreis je Pax", "Pax / Sitze", "Auslastung", "Gesamtumsatz", "Flugkosten", "Ergebnis", "Fracht kg / EUR (in Umsatz)"], [170, 140, 90, 95, 90, 110, 110, 110, 260], 250)
 	history.add_child(flights_tree)
 	# The archive count grows with the save; wrap actions when its label no longer fits.
 	var paging := HFlowContainer.new()
@@ -395,6 +395,7 @@ func refresh(force: bool = false) -> void:
 	chart_range.text = "%s → %s\nBis zu 64 Zeitpunkte · Werte im Tooltip · Käufe und Tilgung sind keine Betriebskosten; Zinsen und Leasingraten sind enthalten; Verkäufe und Kautionen erscheinen im Kontostand." % [company_series[0]["time"], company_series[-1]["time"]] if not company_series.is_empty() else "Noch keine Finanzhistorie."
 	_chart()
 	route_tree.clear()
+	route_tree.set_meta("breakdowns", {})
 	var root := route_tree.create_item()
 	var selected: TreeItem = null
 	flight_count = 0
@@ -403,11 +404,10 @@ func refresh(force: bool = false) -> void:
 		row.set_metadata(0, r)
 		UI.cell_text(row, 0, "#%d %s–%s%s" % [r["route_id"], r["origin"], r["destination"], " · gelöscht" if not r["active"] else ""])
 		UI.cell_text(row, 1, str(r["flights"]))
-		row.set_tooltip_text(2, "Economy: %s (%d Pax) · Business: %s (%d Pax)" % [UI.money(r["economy_revenue_eur"]), r["economy_passengers"], UI.money(r["business_revenue_eur"]), r["business_passengers"]])
 		for pair in [[2, "revenue_eur"], [3, "costs_eur"], [4, "profit_eur"]]:
 			UI.cell_text(row, pair[0], UI.money(r[pair[1]]))
-		UI.cell_text(row, 2, UI.money(r["ticket_revenue_eur"]))
-		row.set_tooltip_text(3, "Davon Betreuung / Entschädigung: %s" % UI.money(r["care_eur"]))
+		UI.set_breakdown(route_tree, row, 2, UI.revenue_parts(r))
+		UI.set_breakdown(route_tree, row, 3, UI.cost_parts(r))
 		UI.cell_text(row, 6, "%d kg / %s" % [r["cargo_kg"], UI.money(r["cargo_revenue_eur"])])
 		UI.cell_text(row, 5, "%.1f %%" % r["load_percent"] if r["flights"] > 0 else "Keine Flüge")
 		if r["flights"] > 0:
@@ -472,7 +472,7 @@ func _select_route() -> void:
 		offset = 0
 	route_id = r["route_id"]
 	flight_count = r["flights"]
-	detail.text = "Route #%d · %s–%s · %d Landungen · %s\nFlugkosten ohne zentrale Gehälter und Wartungschecks; diese sind im Unternehmensergebnis enthalten. Historische Crewkosten bleiben erhalten. Kostenaufschlüsselung und Ticketpreis im Flug-Tooltip." % [route_id, r["origin"], r["destination"], flight_count, "Keine Flüge" if flight_count == 0 else "Gewinn" if r["profit_eur"] >= 0 else "Verlust"]
+	detail.text = "Route #%d · %s–%s · %d Landungen · %s\nFlugkosten ohne zentrale Gehälter und Wartungschecks; diese sind im Unternehmensergebnis enthalten. Historische Crewkosten bleiben erhalten. Gesamtumsatz = Ticket + Fracht + Zusatzumsätze; Ergebnis = Gesamtumsatz − Flugkosten. Aufschlüsselung im Tooltip der Umsatz- und Kostenzellen." % [route_id, r["origin"], r["destination"], flight_count, "Keine Flüge" if flight_count == 0 else "Gewinn" if r["profit_eur"] >= 0 else "Verlust"]
 	detail.text += "\n" + tr("ANCILLARY_ROUTE_REVENUE") % UI.money(r["ancillary_revenue_eur"])
 	detail.text += "\n" + tr("LOYALTY_ROUTE_COST") % UI.money(r["loyalty_cost_eur"])
 	detail.text += "\nBordservice (Kosten / Ersparnis gegenüber Standard): %s." % UI.money(r["service_eur"])
@@ -487,16 +487,16 @@ func _reset_flights() -> void:
 
 func _flights() -> void:
 	flights_tree.clear()
+	flights_tree.set_meta("breakdowns", {})
 	var root := flights_tree.create_item()
 	var rows: Array = simulation.get_route_flight_page(route_id, offset)
 	for f in rows:
 		var row := flights_tree.create_item(root)
-		var values := [f["landing"], "%s → %s" % [f["origin"], f["destination"]], ("—" if f["seats"] == 0 else UI.money(f["ticket_eur"])), "%d / %d" % [f["passengers"], f["seats"]], "%.1f %%" % f["load_percent"], UI.money(f["ticket_revenue_eur"]), UI.money(f["costs_eur"]), UI.money(f["profit_eur"]), "%d kg / %s" % [f["cargo_kg"], UI.money(f["cargo_revenue_eur"])]]
+		var values := [f["landing"], "%s → %s" % [f["origin"], f["destination"]], ("—" if f["seats"] == 0 else UI.money(f["ticket_eur"])), "%d / %d" % [f["passengers"], f["seats"]], "%.1f %%" % f["load_percent"], UI.money(f["revenue_eur"]), UI.money(f["costs_eur"]), UI.money(f["profit_eur"]), "%d kg / %s" % [f["cargo_kg"], UI.money(f["cargo_revenue_eur"])]]
 		for i in range(values.size()):
 			UI.cell_text(row, i, values[i])
-			row.set_tooltip_text(i, "Ticket: %s\nTreibstoff: %s\nCO2-Abgabe: %s\nFlughäfen: %s\nPersonal: %s\nWartung / Verwaltung: %s\nBordservice (± Standard): %s" % [("—" if f["seats"] == 0 else UI.money(f["ticket_eur"])), UI.money(f["fuel_eur"]), UI.money(f["carbon_eur"]), UI.money(f["airport_eur"]), UI.money(f["crew_eur"]), UI.money(f["overhead_eur"]), UI.money(f["service_eur"])])
-			row.set_tooltip_text(i, row.get_tooltip_text(i) + "\nBetreuung / Entschädigung: %s" % UI.money(f["care_eur"]))
-		row.set_tooltip_text(6, row.get_tooltip_text(6) + "\n" + tr("LOYALTY_ROUTE_COST") % UI.money(f["loyalty_cost_eur"]))
+		UI.set_breakdown(flights_tree, row, 5, UI.revenue_parts(f))
+		UI.set_breakdown(flights_tree, row, 6, UI.cost_parts(f))
 		UI.cell_result(row, 7, f["profit_eur"])
 	page_label.text = "%d–%d von %d · neueste zuerst" % [offset + 1 if not rows.is_empty() else 0, offset + rows.size(), flight_count]
 	previous_button.disabled = offset == 0
