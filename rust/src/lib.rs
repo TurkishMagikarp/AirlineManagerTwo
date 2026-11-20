@@ -2723,6 +2723,42 @@ impl SimulationClock {
         true
     }
 
+    /// Next commitment the jump action may target; empty when unavailable.
+    #[func]
+    fn get_next_commitment_jump(&self) -> VarDictionary {
+        let Some(c) = self.game.next_commitment_jump() else {
+            return VarDictionary::new();
+        };
+        let (kind, title) = match &c.kind {
+            orders::CommitmentKind::Delivery { model, .. } => ("delivery", model.as_str()),
+            orders::CommitmentKind::Training { name, .. } => ("training", name.as_str()),
+        };
+        vdict! {
+            "kind" => kind, "title" => title, "at" => c.at as i64,
+            "date" => operations::display_time(c.at).as_str()
+        }
+    }
+
+    /// Validates the displayed target against current state before starting the
+    /// worker; a stale target starts nothing and reports `stale`.
+    #[func]
+    fn begin_jump_to_commitment(&mut self, at: i64) -> VarDictionary {
+        if self.jump_worker.is_some() {
+            return vdict! { "started" => false, "stale" => false, "message" => "Ein Zeitsprung läuft bereits." };
+        }
+        let target = u64::try_from(at).ok();
+        if target.is_none_or(|t| self.game.next_commitment_jump().is_none_or(|c| c.at != t)) {
+            return vdict! { "started" => false, "stale" => true, "message" => jumps::STALE_TARGET };
+        }
+        let target = target.unwrap();
+        let mut game = self.game.clone();
+        self.jump_worker = Some(std::thread::spawn(move || {
+            let result = game.jump_to_commitment(target);
+            (game, result)
+        }));
+        vdict! { "started" => true, "stale" => false, "message" => "" }
+    }
+
     #[func]
     fn poll_jump(&mut self) -> VarDictionary {
         if !self

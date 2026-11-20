@@ -203,3 +203,78 @@ fn jumps_busy_six_ai_thirty_day_timing() {
     assert!(reference.advance((30 * DAY) as f64));
     assert_eq!(state(&g), state(&reference));
 }
+
+fn commitment_game() -> Game {
+    let mut g = Game::default();
+    g.found("Commit Air", "DE", "EDDF").unwrap();
+    g.competitors.clear();
+    g.history.as_mut().unwrap().opening_balance += 1_000_000_000 - g.cash();
+    g.airline.as_mut().unwrap().capital_eur = 1_000_000_000;
+    g.place_order("atr72_600", 1).unwrap();
+    g.hire_pilots("737", 1).unwrap();
+    let id = g.staff.employees[0].id;
+    g.train_pilot(id, "ATR 72").unwrap();
+    g
+}
+
+#[test]
+fn jump_to_commitment_arrives_exactly_from_fractional_clock_and_matches_advance() {
+    for start_ms in [0u64, 125, 999] {
+        for speed in [1, 4, 16] {
+            let mut g = commitment_game();
+            g.clock = Clock::from_state(Duration::from_millis(start_ms), false, speed).unwrap();
+            let next = g.next_commitment_jump();
+            let next = next.expect("commitment within the longest preset");
+            let mut reference = g.clone();
+            let summary = g.jump_to_commitment(next.at).unwrap();
+            assert!(summary.reason.is_empty(), "{}", summary.reason);
+            {
+                assert_eq!(g.clock.elapsed(), Duration::from_secs(next.at));
+                small_steps(&mut reference, next.at - start_ms / 1000);
+                // Reference started at the same fraction, so compare after aligning.
+                reference.clock =
+                    Clock::from_state(Duration::from_secs(next.at), false, speed).unwrap();
+                g.clock = reference.clock.clone();
+                assert_eq!(state(&g), state(&reference));
+            }
+        }
+    }
+}
+
+#[test]
+fn jump_to_commitment_stale_or_out_of_range_target_leaves_time_intact() {
+    let mut g = commitment_game();
+    let before = state(&g);
+    assert!(g.jump_to_commitment(1).is_err());
+    assert!(g.jump_to_commitment(u64::MAX).is_err());
+    assert_eq!(state(&g), before);
+    let next = g.next_commitment_jump();
+    if let Some(next) = next {
+        assert!(g.jump_to_commitment(next.at + 1).is_err());
+        assert_eq!(state(&g), before);
+    }
+    let mut far = commitment_game();
+    far.orders[0].delivery_at = 400 * DAY;
+    far.staff.employees[0].training = None;
+    assert!(far.next_commitment_jump().is_none());
+    assert!(far.jump_to_commitment(400 * DAY).is_err());
+    let mut held = commitment_game();
+    held.staff.employees[0].training = None;
+    held.orders[0].held_since = Some(0);
+    assert!(held.next_commitment_jump().is_none());
+}
+
+#[test]
+fn jump_to_commitment_stops_early_on_attention() {
+    let mut g = game();
+    g.place_order("atr72_600", 1).unwrap();
+    let at = g.orders[0].delivery_at;
+    g.orders[0].delivery_at = at.min(5 * DAY);
+    let at = g.orders[0].delivery_at;
+    let mut stopped = g.clone();
+    let summary = stopped.jump_to_commitment(at).unwrap();
+    assert!(stopped.clock.elapsed() <= Duration::from_secs(at));
+    if summary.reason.is_empty() {
+        assert_eq!(stopped.clock.elapsed(), Duration::from_secs(at));
+    }
+}

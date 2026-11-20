@@ -126,6 +126,8 @@ var aircraft_cards: Array[Dictionary] = []
 var overview_register: Tree
 var commitments_table: Tree
 var commitments_empty: Control
+var commitments_jump_button: Button
+var commitments_jump_target: Dictionary = {}
 var overview_operations: VBoxContainer
 var fleet_operations: VBoxContainer
 var last_clock_view := ""
@@ -383,6 +385,21 @@ func _autosave_tick(delta: float) -> void:
 
 func _jump(seconds: int) -> void:
 	if jump_in_progress or is_instance_valid(save_slots_dialog) or not simulation.begin_jump(seconds): return
+	await _finish_jump()
+
+
+func _jump_to_commitment() -> void:
+	if jump_in_progress or is_instance_valid(save_slots_dialog) or commitments_jump_target.is_empty(): return
+	var started: Dictionary = simulation.begin_jump_to_commitment(commitments_jump_target["at"])
+	if not started["started"]:
+		jump_status.text = started["message"]
+		jump_status.show()
+		_refresh_commitments()
+		return
+	await _finish_jump()
+
+
+func _finish_jump() -> void:
 	jump_in_progress = true
 	var return_focus := get_viewport().gui_get_focus_owner()
 	var progress := _jump_progress()
@@ -1415,6 +1432,11 @@ func _build_finance(content: VBoxContainer) -> void:
 		_show_page(1)
 		fleet_tabs.current_tab = 1)
 	commitments.add_child(commitments_empty)
+	commitments_jump_button = Button.new()
+	commitments_jump_button.focus_mode = Control.FOCUS_ALL
+	commitments_jump_button.clip_text = true
+	commitments_jump_button.pressed.connect(_jump_to_commitment)
+	commitments.add_child(commitments_jump_button)
 	var finance := UI.panel(finance_panel, "FINANZÜBERSICHT  /  KUMULIERT")
 	finance_breakdown = UI.label("")
 	finance.add_child(finance_breakdown)
@@ -1541,6 +1563,19 @@ func _refresh_commitments() -> void:
 		UI.cell_status(row, 1, "Lieferung" if delivery else "Umschulung", "info" if delivery else "neutral")
 		UI.cell_text(row, 2, entry["title"])
 		UI.cell_text(row, 3, "—" if delivery else entry["detail"])
+	_refresh_commitments_jump()
+
+
+func _refresh_commitments_jump() -> void:
+	commitments_jump_target = simulation.get_next_commitment_jump()
+	var available := not commitments_jump_target.is_empty()
+	commitments_jump_button.disabled = not available
+	if available:
+		commitments_jump_button.text = tr("Zum nächsten Termin springen · %s · %s") % [commitments_jump_target["date"], commitments_jump_target["title"]]
+		commitments_jump_button.tooltip_text = ""
+	else:
+		commitments_jump_button.text = tr("Zum nächsten Termin springen")
+		commitments_jump_button.tooltip_text = tr("Nicht verfügbar: kein Termin oder der nächste Termin liegt jenseits des längsten Sprungs.")
 
 
 func _render_operations(parent: VBoxContainer) -> void:
