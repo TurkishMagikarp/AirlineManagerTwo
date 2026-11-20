@@ -92,7 +92,7 @@ func _run() -> void:
 		var expected: Dictionary = FileAccess.open(path + ".expected", FileAccess.READ).get_var()
 		if not _check(_snapshot() == expected, "Fresh-process continuation equals uninterrupted reference, including AI"):
 			return
-		if not _check(sim.save_game(path).is_empty() and JSON.parse_string(FileAccess.get_file_as_string(path))["version"] == 46, "Resave as v46"):
+		if not _check(sim.save_game(path).is_empty() and JSON.parse_string(FileAccess.get_file_as_string(path))["version"] == 47, "Resave as v47"):
 			return
 	elif not await _layouts("profit"):
 		return

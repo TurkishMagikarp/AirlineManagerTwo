@@ -184,11 +184,38 @@ pub fn fuel_mean() -> i64 {
     CONFIG.fuel_cents_per_kg
 }
 
+/// Physical fuel burn of one flight, scaled by 3600 so no rounding happens early.
+fn fuel_quantity(rates: &Rates, seconds: i128) -> i128 {
+    seconds * i128::from(rates.fuel_kg_per_hour) + i128::from(rates.fuel_cycle_kg) * 3600
+}
+
+/// Carbon charge for one flight of `model` on `route` at the given EUR/tonne.
+pub fn carbon_bill(route: &Route, model: &str, price: i64) -> Result<i64, String> {
+    let seconds = operations::timings(route, model)?.0 as i128;
+    Ok(crate::emissions::charge(
+        fuel_quantity(&CONFIG.models[model], seconds),
+        price,
+    ))
+}
+
+/// Cruise CO2 grams per seat-km (per payload tonne-km for freighters), from the
+/// same fuel rates the flights burn.
+pub fn co2_grams_per_km(model: &aircraft::Model) -> f64 {
+    let capacity = if model.main_deck_cargo_kg > 0 {
+        f64::from(model.payload_kg) / 1000.0
+    } else {
+        f64::from(model.seats)
+    };
+    CONFIG.models.get(&model.id).map_or(0.0, |r| {
+        crate::emissions::grams_per_km(r.fuel_kg_per_hour, model.cruise_kmh, capacity)
+    })
+}
+
 /// Price in hundredths of a cent/kg, preserving the blended share exactly.
 pub fn fuel_bill(route: &Route, model: &str, price: i64) -> Result<i64, String> {
     let seconds = operations::timings(route, model)?.0 as i128;
     let r = &CONFIG.models[model];
-    let quantity = seconds * i128::from(r.fuel_kg_per_hour) + i128::from(r.fuel_cycle_kg) * 3600;
+    let quantity = fuel_quantity(r, seconds);
     i64::try_from((quantity * i128::from(price) + 35_999_999) / 36_000_000)
         .map_err(|_| "Treibstoffüberlauf.".into())
 }
@@ -205,8 +232,10 @@ pub fn flight_cost_ceiling(route: &Route, model_id: &str, fuel_price: i64) -> Re
         .map_err(|_| "Zeitüberlauf.")?;
     let seats = i64::from(model.seats);
     let overhead = rates.overhead_cycle_eur + (seconds * rates.overhead_eur_per_hour + 3599) / 3600;
+    let airport = airport_bill(route, model_id, seats)?;
     fuel_bill(route, model_id, fuel_price)?
-        .checked_add(airport_bill(route, model_id, seats)?)
+        .checked_add(carbon_bill(route, model_id, crate::emissions::max_price())?)
+        .and_then(|v| v.checked_add(airport))
         .and_then(|v| v.checked_add(overhead))
         .and_then(|v| {
             v.checked_add(
@@ -232,7 +261,12 @@ pub fn flight_cost_ceiling(route: &Route, model_id: &str, fuel_price: i64) -> Re
 }
 
 /// Same physical costs as a passenger departure, without payload or demand.
-pub fn empty_flight_quote(route: &Route, model: &str, price: i64) -> Result<Totals, String> {
+pub fn empty_flight_quote(
+    route: &Route,
+    model: &str,
+    price: i64,
+    carbon_price: i64,
+) -> Result<Totals, String> {
     let rates = &CONFIG.models[model];
     let seconds = operations::timings(route, model)?.0 as i64;
     Ok(Totals {
@@ -241,6 +275,7 @@ pub fn empty_flight_quote(route: &Route, model: &str, price: i64) -> Result<Tota
             model,
             price.checked_mul(100).ok_or("Treibstoffüberlauf.")?,
         )?,
+        carbon: carbon_bill(route, model, carbon_price)?,
         airport: airport_bill(route, model, 0)?,
         overhead: rates.overhead_cycle_eur + (seconds * rates.overhead_eur_per_hour + 3599) / 3600,
         ..Default::default()
@@ -340,6 +375,9 @@ pub struct Totals {
     /// Operating income: tickets, cargo and ancillary fees (reported separately).
     pub revenue: i64,
     pub fuel: i64,
+    /// Carbon charge on the burned fuel; additive, zero in results from older saves.
+    #[serde(default, skip_serializing_if = "zero")]
+    pub carbon: i64,
     #[serde(default)]
     pub fuel_contract_effect: i64,
     pub airport: i64,
@@ -387,6 +425,7 @@ impl Totals {
     }
     pub fn costs(&self) -> i64 {
         self.fuel
+            + self.carbon
             + self.airport
             + self.crew
             + self.overhead
@@ -436,6 +475,7 @@ impl Totals {
             seats,
             revenue,
             fuel,
+            carbon,
             fuel_contract_effect,
             airport,
             crew,
@@ -453,6 +493,7 @@ impl Totals {
         );
         let costs = self
             .fuel
+            .checked_add(self.carbon)?
             .checked_add(self.airport)?
             .checked_add(self.crew)?
             .checked_add(self.overhead)?
@@ -501,6 +542,7 @@ pub fn quote_shared(
 }
 
 /// Annual-demand planning quote. Actual departures use `quote_at_time`.
+#[cfg(test)]
 pub fn quote_at_price(
     route: &Route,
     model_id: &str,
@@ -528,7 +570,16 @@ fn quote_with_time(
     departure: Option<u64>,
 ) -> Result<Totals, String> {
     let mut market = QuoteMarket::new(route, model_id, routes)?;
-    quote_prepared(route, model_id, routes, fuel_cents, departure, &mut market)
+    let carbon = crate::emissions::price_at(departure.unwrap_or(0));
+    quote_prepared(
+        route,
+        model_id,
+        routes,
+        fuel_cents,
+        carbon,
+        departure,
+        &mut market,
+    )
 }
 
 /// Current event snapshot only: no cache-size invalidation or eviction.
@@ -684,6 +735,7 @@ pub(crate) fn quote_prepared(
     _model_id: &str,
     _routes: &[crate::demand::Offer],
     fuel_cents: i64,
+    carbon_price: i64,
     departure: Option<u64>,
     market: &mut QuoteMarket,
 ) -> Result<Totals, String> {
@@ -727,6 +779,7 @@ pub(crate) fn quote_prepared(
         fuel: ((seconds * rates.fuel_kg_per_hour + rates.fuel_cycle_kg * 3600) * fuel_cents
             + 359999)
             / 360000,
+        carbon: crate::emissions::charge(fuel_quantity(rates, i128::from(seconds)), carbon_price),
         airport: endpoint_bill(
             rates.airport_base_eur + c.airport_eur_per_passenger * passengers,
             market.airport_levels,
@@ -771,11 +824,16 @@ impl Game {
         };
         let mut supply = self.market_routes();
         supply.insert(0, self.market_offer(&route, plane)?);
-        quote_at_price(
+        let now = self.clock.elapsed().as_secs();
+        let mut market = QuoteMarket::new(&route, &plane.model_id, &supply)?;
+        quote_prepared(
             &route,
             &plane.model_id,
             &supply,
-            self.fuel_market.price_at(self.clock.elapsed().as_secs()),
+            self.fuel_market.price_at(now),
+            crate::emissions::price_at(now),
+            None,
+            &mut market,
         )
     }
     pub fn set_ticket_price(&mut self, id: u32, price: i64) -> Result<(), String> {
@@ -826,11 +884,13 @@ impl Game {
                 && t.seats >= t.passengers
                 && t.revenue >= 0
                 && t.fuel >= 0
+                && t.carbon >= 0
                 && t.airport >= 0
                 && t.crew >= 0
                 && t.overhead >= 0
                 && t.fuel
-                    .checked_add(t.airport)
+                    .checked_add(t.carbon)
+                    .and_then(|v| v.checked_add(t.airport))
                     .and_then(|v| v.checked_add(t.crew))
                     .and_then(|v| v.checked_add(t.overhead))
                     .and_then(|v| v.checked_add(t.service))
@@ -885,6 +945,7 @@ impl Game {
             || sum.seats > t.seats
             || sum.revenue > t.revenue
             || sum.fuel > t.fuel
+            || sum.carbon > t.carbon
             || sum.airport > t.airport
             || sum.crew > t.crew
             || sum.overhead > t.overhead
@@ -906,6 +967,7 @@ mod tests {
             seats: 20,
             revenue: 1000,
             fuel: 10,
+            carbon: 3,
             fuel_contract_effect: -2,
             airport: 5,
             crew: 3,
@@ -1254,7 +1316,10 @@ mod tests {
                     .unwrap();
                     assert!(t.passengers <= previous && t.passengers <= t.seats);
                     previous = t.passengers;
-                    assert_eq!(t.costs(), t.fuel + t.airport + t.crew + t.overhead);
+                    assert_eq!(
+                        t.costs(),
+                        t.fuel + t.carbon + t.airport + t.crew + t.overhead
+                    );
                     // Exercise real landings and the ledger for every model/price,
                     // not just isolated quotes. No personal save file is touched.
                     let country = match origin {

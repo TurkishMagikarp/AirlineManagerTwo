@@ -283,9 +283,16 @@ fn single_cabin_fare_sweep_matches_fresh_quotes() {
                 prepared.reprice_single(route);
                 for fuel in [50, 80, 120] {
                     let fresh = economy::quote_at_price(route, model, &supply, fuel).unwrap();
-                    let reused =
-                        economy::quote_prepared(route, model, &supply, fuel, None, &mut prepared)
-                            .unwrap();
+                    let reused = economy::quote_prepared(
+                        route,
+                        model,
+                        &supply,
+                        fuel,
+                        crate::emissions::price_at(0),
+                        None,
+                        &mut prepared,
+                    )
+                    .unwrap();
                     assert_eq!(reused, fresh, "{model} fare={fare} fuel={fuel}");
                 }
             }

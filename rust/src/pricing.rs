@@ -65,6 +65,7 @@ pub fn review(
     forecast: bool,
 ) -> Result<Suggestion, String> {
     let fuel = game.fuel_market.price_at(game.clock.elapsed().as_secs());
+    let carbon = crate::emissions::price_at(game.clock.elapsed().as_secs());
     let mut candidate = route.clone();
     let mut fare_supply: Vec<_> = supply
         .iter()
@@ -98,6 +99,7 @@ pub fn review(
                 &plane.model_id,
                 supply,
                 fuel,
+                carbon,
                 None,
                 &mut market,
             )?
@@ -145,6 +147,7 @@ impl Game {
                 &plane.model_id,
                 &supply,
                 self.fuel_market.price_at(now),
+                crate::emissions::price_at(now),
                 Some(now),
                 &mut market,
             )?;

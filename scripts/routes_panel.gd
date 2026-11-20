@@ -498,12 +498,12 @@ func refresh_operations() -> void:
 		var values := ["%s / #%d" % [result["landing"], result["route_id"]], "%s–%s" % [result["origin"], result["destination"]], "%d/%d · %.1f %%" % [result["passengers"], result["seats"], result["load_percent"]], UI.money(result["ticket_revenue_eur"]), UI.money(result["costs_eur"]), UI.money(result["profit_eur"])]
 		for i in range(values.size()):
 			UI.cell_text(row, i, values[i])
-			row.set_tooltip_text(i, "Ticket: %s\nTreibstoff: %s\nFlughäfen: %s\nPersonal: %s\nWartung / Verwaltung: %s\nBordservice (± Standard): %s" % [UI.money(result["ticket_eur"]), UI.money(result["fuel_eur"]), UI.money(result["airport_eur"]), UI.money(result["crew_eur"]), UI.money(result["overhead_eur"]), UI.money(result["service_eur"])])
+			row.set_tooltip_text(i, "Ticket: %s\nTreibstoff: %s\nCO2-Abgabe: %s\nFlughäfen: %s\nPersonal: %s\nWartung / Verwaltung: %s\nBordservice (± Standard): %s" % [UI.money(result["ticket_eur"]), UI.money(result["fuel_eur"]), UI.money(result["carbon_eur"]), UI.money(result["airport_eur"]), UI.money(result["crew_eur"]), UI.money(result["overhead_eur"]), UI.money(result["service_eur"])])
 			row.set_tooltip_text(i, row.get_tooltip_text(i) + "\nBetreuung / Entschädigung: %s" % UI.money(result["care_eur"]))
 		row.set_tooltip_text(4, row.get_tooltip_text(4) + "\n" + tr("ANCILLARY_ROUTE_REVENUE") % UI.money(result["ancillary_revenue_eur"]))
 		var tooltip := row.get_tooltip_text(4)
 		var parts: Array = [[tr("ANCILLARY_REVENUE"), UI.money(result["ancillary_revenue_eur"])]]
-		for pair in [["Treibstoff", "fuel_eur"], ["Flughäfen", "airport_eur"], ["Personal", "crew_eur"], ["Wartung / Verwaltung", "overhead_eur"], ["Bordservice (± Standard)", "service_eur"], ["Betreuung / Entschädigung", "care_eur"], ["Kosten", "costs_eur"]]:
+		for pair in [["Treibstoff", "fuel_eur"], ["CO2-Abgabe", "carbon_eur"], ["Flughäfen", "airport_eur"], ["Personal", "crew_eur"], ["Wartung / Verwaltung", "overhead_eur"], ["Bordservice (± Standard)", "service_eur"], ["Betreuung / Entschädigung", "care_eur"], ["Kosten", "costs_eur"]]:
 			parts.append([pair[0], UI.money(result[pair[1]])])
 		var breakdowns: Dictionary = results_tree.get_meta("breakdowns")
 		breakdowns[tooltip] = parts

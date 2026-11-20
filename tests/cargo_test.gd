@@ -69,7 +69,7 @@ func _run() -> void:
 			_store(path + ".expected", _snapshot())
 		elif not _check(_snapshot() == _read(path + ".expected"), "Long continuation equals uninterrupted player/AI world, history, charts and quotes"):
 			return
-		if not _check(sim.save_game(probe_path).is_empty() and JSON.parse_string(FileAccess.get_file_as_string(probe_path))["version"] == 46, "Writes current v46"):
+		if not _check(sim.save_game(probe_path).is_empty() and JSON.parse_string(FileAccess.get_file_as_string(probe_path))["version"] == 47, "Writes current v47"):
 			return
 	if not await _layouts():
 		return

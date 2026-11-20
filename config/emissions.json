@@ -1,0 +1,7 @@
+{
+  "co2_kg_per_kg_fuel": 3.16,
+  "start_eur_per_tonne": 15,
+  "yearly_step_eur_per_tonne": 5,
+  "cap_eur_per_tonne": 100,
+  "year_days": 365
+}

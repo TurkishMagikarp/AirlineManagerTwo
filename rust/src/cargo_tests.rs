@@ -365,6 +365,7 @@ fn cargo_reused_market_refreshes_payload_and_matches_fresh_seasonal_quotes() {
                 "a320_200",
                 &supply,
                 100,
+                crate::emissions::price_at(time),
                 Some(time),
                 &mut quote_market,
             )

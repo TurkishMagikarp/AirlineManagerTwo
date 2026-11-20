@@ -84,7 +84,7 @@ func _run() -> void:
 	elif mode.begins_with("read-"):
 		if not _check(_snapshot() == FileAccess.open(path + ".expected", FileAccess.READ).get_var(), "Restart continuation equals uninterrupted world, active terms, AI, cumulative effect and frozen quotes"):
 			return
-		if not _check(sim.save_game(path).is_empty() and JSON.parse_string(FileAccess.get_file_as_string(path))["version"] == 46, "Resave as v46"):
+		if not _check(sim.save_game(path).is_empty() and JSON.parse_string(FileAccess.get_file_as_string(path))["version"] == 47, "Resave as v47"):
 			return
 	if not await _layouts("expired"):
 		return

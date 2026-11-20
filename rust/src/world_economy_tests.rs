@@ -244,14 +244,28 @@ fn world_economy_phase_changes_do_not_add_attention_or_stop_jumps() {
     reference.clock.set_running(true);
     assert!(reference.advance(364.0 * DAY as f64));
     for _ in 0..52 {
-        let result = g.jump(7.0 * DAY as f64).unwrap();
+        let mut result = g.jump(7.0 * DAY as f64).unwrap();
+        if result.reason.starts_with("CO2-Preis") {
+            // The scheduled carbon price step is announced by design.
+            let rest = 7 * DAY - result.advanced_seconds;
+            result = g.jump(rest as f64).unwrap();
+            result.advanced_seconds = 7 * DAY;
+        }
         assert_eq!(result.advanced_seconds, 7 * DAY);
+        assert!(result.reason.is_empty());
     }
     assert_eq!(
         g.world_economy.index_at(364 * DAY),
         reference.world_economy.index_at(364 * DAY)
     );
-    assert_eq!(g.attention_snapshot().len(), attention.len());
+    // The scheduled CO2 price step is announced ahead of day 365 by design.
+    let quiet = |g: &Game| {
+        g.attention_snapshot()
+            .iter()
+            .filter(|e| e.kind != "carbon_step")
+            .count()
+    };
+    assert_eq!(quiet(&g), attention.len());
     assert!(!g.world_economy.take_notifications(364 * DAY).is_empty());
 }
 

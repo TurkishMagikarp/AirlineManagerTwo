@@ -184,11 +184,27 @@ fn transfers_stored_quotes_equal_fresh_after_long_run_and_commercial_events() {
             // builds a fresh snapshot at the review date.
             for time in [Some(60), Some(400 * 86400), Some(401 * 86400 + 123)] {
                 let mut fresh = economy::QuoteMarket::new(route, model, &supply).unwrap();
-                let expected =
-                    economy::quote_prepared(route, model, &supply, 100, time, &mut fresh).unwrap();
+                let expected = economy::quote_prepared(
+                    route,
+                    model,
+                    &supply,
+                    100,
+                    crate::emissions::price_at(time.unwrap_or(0)),
+                    time,
+                    &mut fresh,
+                )
+                .unwrap();
                 let mut stored = g.departure_markets.market(route, model).unwrap();
-                let actual =
-                    economy::quote_prepared(route, model, &supply, 100, time, &mut stored).unwrap();
+                let actual = economy::quote_prepared(
+                    route,
+                    model,
+                    &supply,
+                    100,
+                    crate::emissions::price_at(time.unwrap_or(0)),
+                    time,
+                    &mut stored,
+                )
+                .unwrap();
                 assert_eq!(actual, expected, "event={event}, time={time:?}");
             }
         }
@@ -244,6 +260,7 @@ fn transfers_dependency_epochs_track_commercial_events_and_diverging_clones() {
             model,
             &supply,
             100,
+            crate::emissions::price_at(0),
             None,
             &mut stored.market(route, model).unwrap(),
         )
@@ -276,14 +293,22 @@ fn transfers_reputation_reordering_keeps_stored_seat_reservations_fresh() {
         for route in &g.routes {
             let mut fresh = economy::QuoteMarket::new(route, "a320_200", &supply).unwrap();
             for time in [None, Some(60), Some(180 * 86400), Some(400 * 86400)] {
-                let expected =
-                    economy::quote_prepared(route, "a320_200", &supply, 100, time, &mut fresh)
-                        .unwrap();
+                let expected = economy::quote_prepared(
+                    route,
+                    "a320_200",
+                    &supply,
+                    100,
+                    crate::emissions::price_at(time.unwrap_or(0)),
+                    time,
+                    &mut fresh,
+                )
+                .unwrap();
                 let actual = economy::quote_prepared(
                     route,
                     "a320_200",
                     &supply,
                     100,
+                    crate::emissions::price_at(time.unwrap_or(0)),
                     time,
                     &mut stored.market(route, "a320_200").unwrap(),
                 )

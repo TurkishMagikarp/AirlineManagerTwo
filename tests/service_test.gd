@@ -164,7 +164,7 @@ func _run() -> void:
 	if mode == "read-v17":
 		await _click(main.navigation[0])
 		main._save_legacy_game()
-		if not _check(main.save_status.text == "Spielstand gespeichert." and JSON.parse_string(FileAccess.get_file_as_string(path))["version"] == 46, "Migrated v17 resaves as v46"):
+		if not _check(main.save_status.text == "Spielstand gespeichert." and JSON.parse_string(FileAccess.get_file_as_string(path))["version"] == 47, "Migrated v17 resaves as v47"):
 			return
 	print("PASS: real service input, frozen costs, archive/Finances agreement and layout; mode=" + mode)
 	main.queue_free()
