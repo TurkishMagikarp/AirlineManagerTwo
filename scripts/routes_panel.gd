@@ -771,9 +771,14 @@ func _feedback(error: String, success: String, field: Control = null, select_id 
 	await get_tree().process_frame
 	var scroll := get_parent().get_parent() as ScrollContainer
 	if anchor != null:
-		scroll.ensure_control_visible(anchor)
-		if field != null and field.has_meta("field_help"):
-			scroll.ensure_control_visible(field.get_meta("field_help"))
+		for pass_index in range(2):
+			if pass_index > 0:
+				await get_tree().process_frame
+			if field != null:
+				scroll.ensure_control_visible(field)
+				if field.has_meta("field_help"):
+					scroll.ensure_control_visible(field.get_meta("field_help"))
+			scroll.ensure_control_visible(anchor)
 		var focus_target: Control = field.get_line_edit() if field is SpinBox and not error.is_empty() else stop_button if stop_button.is_visible_in_tree() and not stop_button.disabled else anchor
 		focus_target.grab_focus()
 		return
