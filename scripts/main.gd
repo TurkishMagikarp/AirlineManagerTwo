@@ -74,6 +74,12 @@ var cancel_founding_button: Button
 var founding_status: Label
 var founding_capital: Label
 var new_game_button: Button
+var terminal_notice: PanelContainer
+var terminal_title: Label
+var terminal_body: Label
+var terminal_load_button: Button
+var terminal_new_game_button: Button
+var terminal_state := false
 var orders_panel: VBoxContainer
 var charters_panel: VBoxContainer
 var used_rows: VBoxContainer
@@ -265,6 +271,7 @@ func _ready() -> void:
 	column.add_theme_constant_override("separation", 0)
 	frame.add_child(column)
 	_add_time_controls(column)
+	_build_terminal_notice(column)
 	resized.connect(_resize_frame)
 	_resize_frame()
 	var scroll := ScrollContainer.new()
@@ -376,6 +383,43 @@ func _add_time_controls(column: VBoxContainer) -> void:
 	_refresh_time()
 
 
+func _build_terminal_notice(column: VBoxContainer) -> void:
+	terminal_notice = UI.frame_panel(column, ThemeTokens.SPACE_3)
+	terminal_notice.hide()
+	var box := VBoxContainer.new()
+	terminal_notice.add_child(box)
+	terminal_title = _label("", ThemeTokens.LABEL, ThemeTokens.STOP)
+	terminal_title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box.add_child(terminal_title)
+	terminal_body = _label("", ThemeTokens.BODY)
+	terminal_body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box.add_child(terminal_body)
+	var row := HFlowContainer.new()
+	row.add_theme_constant_override("h_separation", ThemeTokens.SPACE_2)
+	box.add_child(row)
+	terminal_load_button = Button.new()
+	terminal_load_button.text = "Laden"
+	terminal_load_button.pressed.connect(_load_game)
+	row.add_child(terminal_load_button)
+	terminal_new_game_button = Button.new()
+	terminal_new_game_button.text = "Neues Spiel"
+	terminal_new_game_button.pressed.connect(_open_founding)
+	row.add_child(terminal_new_game_button)
+
+
+func _set_terminal_state(airline: Dictionary) -> void:
+	if terminal_notice == null: return
+	var ended: bool = airline.get("insolvent", false)
+	if ended:
+		var body := tr("%s ist insolvent: Die Finanznot wurde bis zur Frist nicht behoben. Die eingefrorene Firma bleibt einsehbar und speicherbar.") % airline.get("name", "—")
+		if terminal_body.text != body: terminal_body.text = body
+		terminal_title.text = tr("Unternehmensführung beendet")
+	if ended == terminal_state and terminal_notice.visible == ended: return
+	terminal_state = ended
+	terminal_notice.visible = ended
+	if is_instance_valid(commitments_jump_button): _refresh_commitments_jump()
+
+
 func _autosave_tick(delta: float) -> void:
 	var ready: bool = simulation.has_airline() and not founding.visible and not jump_in_progress and not is_instance_valid(save_slots_dialog)
 	if not autosave.tick(delta, ready): return
@@ -384,12 +428,12 @@ func _autosave_tick(delta: float) -> void:
 
 
 func _jump(seconds: int) -> void:
-	if jump_in_progress or is_instance_valid(save_slots_dialog) or not simulation.begin_jump(seconds): return
+	if terminal_state or jump_in_progress or is_instance_valid(save_slots_dialog) or not simulation.begin_jump(seconds): return
 	await _finish_jump()
 
 
 func _jump_to_commitment() -> void:
-	if jump_in_progress or is_instance_valid(save_slots_dialog) or commitments_jump_target.is_empty(): return
+	if terminal_state or jump_in_progress or is_instance_valid(save_slots_dialog) or commitments_jump_target.is_empty(): return
 	var started: Dictionary = simulation.begin_jump_to_commitment(commitments_jump_target["at"])
 	if not started["started"]:
 		jump_status.text = started["message"]
@@ -556,17 +600,20 @@ func _refresh_time() -> void:
 	var airline: Dictionary = simulation.get_airline_info()
 	cash_label.text = UI.money(airline.get("capital_eur", 0))
 	cash_label.add_theme_color_override("font_color", ThemeTokens.STOP if airline.get("capital_eur", 0) < 0 else ThemeTokens.INK)
+	_set_terminal_state(airline)
 	for button in jump_buttons:
-		button.disabled = not simulation.has_airline()
+		button.disabled = not simulation.has_airline() or terminal_state
 	var display: String = simulation.get_display_time()
-	var view := "%s/%s/%d" % [display, simulation.is_running(), simulation.get_speed()]
+	var view := "%s/%s/%d/%s" % [display, simulation.is_running(), simulation.get_speed(), terminal_state]
 	if view == last_clock_view: return
 	last_clock_view = view
 	time_label.text = display
 	state_label.text = "%s · %d×" % ["Läuft" if simulation.is_running() else "Pausiert", simulation.get_speed()]
 	state_label.add_theme_color_override("font_color", UI.POSITIVE if simulation.is_running() else UI.MUTED)
-	start_button.disabled = simulation.is_running()
+	start_button.disabled = simulation.is_running() or terminal_state
 	pause_button.disabled = not simulation.is_running()
+	for button in speed_buttons:
+		button.disabled = terminal_state
 	pause_button.set_pressed_no_signal(not simulation.is_running())
 	for button in speed_buttons:
 		button.set_pressed_no_signal(simulation.is_running() and button.text == "%d×" % simulation.get_speed())
@@ -1340,7 +1387,7 @@ func _found_airline() -> void:
 	if country_select.selected < 0 or airport_select.selected < 0:
 		founding_status.text = "Bitte Heimatland und Heimatflughafen auswählen."
 		return
-	var error: String = simulation.found_airline_with_levels(name_input.text, country_select.get_selected_metadata(), airport_select.get_selected_metadata(), _difficulty_level("capital"), _difficulty_level("competition"), _difficulty_level("crises"))
+	var error: String = simulation.start_new_world(name_input.text, country_select.get_selected_metadata(), airport_select.get_selected_metadata(), _difficulty_level("capital"), _difficulty_level("competition"), _difficulty_level("crises"))
 	if not error.is_empty():
 		founding_status.text = error
 		return
@@ -1569,13 +1616,14 @@ func _refresh_commitments() -> void:
 func _refresh_commitments_jump() -> void:
 	commitments_jump_target = simulation.get_next_commitment_jump()
 	var available := not commitments_jump_target.is_empty()
+	available = available and not terminal_state
 	commitments_jump_button.disabled = not available
 	if available:
 		commitments_jump_button.text = tr("Zum nächsten Termin springen · %s · %s") % [commitments_jump_target["date"], commitments_jump_target["title"]]
 		commitments_jump_button.tooltip_text = ""
 	else:
 		commitments_jump_button.text = tr("Zum nächsten Termin springen")
-		commitments_jump_button.tooltip_text = tr("Nicht verfügbar: kein Termin oder der nächste Termin liegt jenseits des längsten Sprungs.")
+		commitments_jump_button.tooltip_text = tr("Nicht verfügbar: Unternehmensführung beendet.") if terminal_state else tr("Nicht verfügbar: kein Termin oder der nächste Termin liegt jenseits des längsten Sprungs.")
 
 
 func _render_operations(parent: VBoxContainer) -> void:
