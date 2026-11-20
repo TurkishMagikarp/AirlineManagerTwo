@@ -29,6 +29,7 @@ func _run() -> void:
 		if not _check(sim.found_airline("Airport Charges", "DE", "EDDF").is_empty() and sim.buy_aircraft("atr72_600").is_empty(), "Found airline and purchase"):
 			return
 		main._sync_view()
+		main.routes_panel.reset_for_world()
 		await _click(main.navigation[2])
 		var panel = main.routes_panel
 		# Open the actual destination popup and navigate by keyboard; no signals

@@ -35,7 +35,10 @@ func _run() -> void:
 				main.model_select.item_selected.emit(i)
 		await _click(main.buy_button)
 		await _click(main.navigation[2])
+		_choose_destination(main.routes_panel, "EDDM")
 		await _click(main.routes_panel.create_button)
+		for _i in range(5):
+			await process_frame
 		if not _check(main.simulation.get_routes().size() == 1, "Route created before schedule"):
 			return
 		var row: TreeItem = main.routes_panel.route_tree.get_root().get_child(0)
@@ -146,3 +149,11 @@ func _check(condition: bool, message: String) -> bool:
 func _ops_row_matches(panel, operation: Dictionary, chip: String) -> bool:
 	var row: TreeItem = panel.operations_tree.get_root().get_first_child()
 	return row != null and row.get_text(0) == operation["identifier"] and row.get_text(2) == chip and row.get_text(3) == operation["next_departure"] and row.get_text(4) == operation["expected_landing"] and row.get_text(4) != "—"
+
+
+func _choose_destination(panel, code: String) -> void:
+	for i in range(panel.destination.item_count):
+		if panel.destination.get_item_metadata(i) == code:
+			panel.destination.select(i)
+			panel.destination.item_selected.emit(i)
+			return

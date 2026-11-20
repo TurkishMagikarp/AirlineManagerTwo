@@ -29,7 +29,8 @@ static func setup(main: Control, tree: SceneTree) -> void:
 	panel.aircraft.item_selected.emit(0)
 	assert(not panel.create_button.disabled)
 	panel.create_button.pressed.emit()
-	await tree.process_frame
+	for _i in 4:
+		await tree.process_frame
 	var row: TreeItem = panel.route_tree.get_root().get_first_child()
 	row.select(0)
 	panel.route_tree.item_selected.emit()

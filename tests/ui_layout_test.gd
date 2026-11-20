@@ -278,6 +278,23 @@ func _run() -> void:
 				scroll.ensure_control_visible(main.routes_panel.destination)
 				for frame in range(5): await process_frame
 				await _capture_picker(main.routes_panel.destination, "route-airport", dimensions)
+				var routes_panel = main.routes_panel
+				routes_panel.reset_for_world()
+				scroll.ensure_control_visible(routes_panel.create_button)
+				for frame in range(5): await process_frame
+				scroll.ensure_control_visible(routes_panel.create_button)
+				await RenderingServer.frame_post_draw
+				assert(root.get_texture().get_image().save_png(capture_dir.path_join("route-planner-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
+				for i in range(routes_panel.destination.item_count):
+					if routes_panel.destination.get_item_metadata(i) == "EDDM":
+						routes_panel.destination.select(i)
+				routes_panel.refresh_operations()
+				routes_panel._create()
+				for frame in range(8): await process_frame
+				await RenderingServer.frame_post_draw
+				assert(root.get_texture().get_image().save_png(capture_dir.path_join("route-created-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
+				sim.delete_route(sim.get_routes().back()["id"])
+				routes_panel.reset_for_world()
 			if page == 3:
 				var map = main.map_panel
 				map.canvas.reset_view()

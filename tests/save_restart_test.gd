@@ -47,6 +47,12 @@ func _run() -> void:
 		await _click(main.buy_button)
 		await _click(main.buy_button)
 		await _click(main.navigation[2])
+		for pair in [[main.routes_panel.origin, "EDDF"], [main.routes_panel.destination, "EDDM"]]:
+			var select: OptionButton = pair[0]
+			for index in range(select.item_count):
+				if select.get_item_metadata(index) == pair[1]:
+					select.select(index)
+					select.item_selected.emit(index)
 		await _click(main.routes_panel.create_button)
 		await _click(main.navigation[0])
 		main._save_legacy_game()
