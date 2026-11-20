@@ -19,6 +19,8 @@ CHECKS = {"rust", "godot", "windows", "macos"}
 SHA = r"[0-9a-f]{40}"
 MAX_RETRIES = 3
 COOLDOWN = 8 * 60
+PLANNING_RETRY = 30 * 60
+PLANNING_RETRY_MAX = 6 * 3600
 SENSITIVE = (".github/", "tools/", "docs/game-design/", "docs/delivery/",
              "AGENTS.md", "CLAUDE.md")
 UI_PATHS = ("scripts/", "scenes/", "resources/", "project.godot", "rust/src/lib.rs")
@@ -98,13 +100,26 @@ def choose(queue, issues, developer, planner, history):
     return (min(planned, key=lambda i: i["createdAt"]), None) if planned else (None, None)
 
 
-def notes_cycle(sha, issues, developer, planner):
+def notes_cycle(sha, issues, developer, planner, now):
+    """Name the next planning round, or None while the last one is open or cooling down."""
     source = f"Delivery source: {sha}"
     attempted = [i for i in issues if i.get("createdByAgentId") == planner
                  and i.get("assigneeAgentId") == developer and i["status"] in TERMINAL | {"blocked"}
                  and source in (i.get("description") or "").splitlines()]
     previous = max(attempted, key=lambda i: (i["createdAt"], i["identifier"]))["identifier"] if attempted else "initial"
-    return f"{sha}:{previous}"
+    base = f"{sha}:{previous}"
+    # A round that left no Developer issue is repeated with a growing pause, so planning never ends.
+    rounds = [i for i in issues if any(
+        line == f"Notes cycle: {base}" or line.startswith(f"Notes cycle: {base}:r")
+        for line in (i.get("description") or "").splitlines())]
+    if not rounds:
+        return base
+    if any(i["status"] not in TERMINAL | {"blocked"} for i in rounds):
+        return None
+    pause = min(PLANNING_RETRY * 2 ** (len(rounds) - 1), PLANNING_RETRY_MAX)
+    if min(age(i["updatedAt"], now) for i in rounds) < pause:
+        return None
+    return f"{base}:r{len(rounds)}"
 
 
 class APIError(RuntimeError):
@@ -191,7 +206,7 @@ class Controller:
             }, {"Idempotency-Key": idem})
 
     def notes(self, issues):
-        # Trigger on a new approved note revision, never on a timer alone.
+        # Called only while no Developer work is queued or active.
         note_paths = ("docs/game-design", "docs/delivery/requests")
         changes = []
         for path in note_paths:
@@ -203,12 +218,14 @@ class Controller:
         sha = latest["sha"]
         if sha == self.cfg.get("initial_notes_revision"):
             return
-        cycle = notes_cycle(sha, issues, self.cfg["developer"], self.cfg["planner"])
+        cycle = notes_cycle(sha, issues, self.cfg["developer"], self.cfg["planner"], self.now)
+        if not cycle:
+            return
         marker = f"Notes cycle: {cycle}"
         if any(marker in (i.get("description") or "").splitlines() for i in issues):
             return
         self.create("notes-" + cycle, "Reconcile approved repository notes",
-                    f"Notes revision: {sha}\n{marker}\nRead the approved notes and create at most one outstanding Developer issue.",
+                    f"Notes revision: {sha}\n{marker}\nPlan the next step toward the alpha and create exactly one Developer issue.",
                     self.cfg["planner"])
 
     def verified_pr(self, issue):
