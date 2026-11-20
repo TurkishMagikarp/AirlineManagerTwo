@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 import importlib.util
 from pathlib import Path
 import unittest
@@ -69,10 +70,33 @@ class DeliveryTest(unittest.TestCase):
     def test_notes_cycle_advances_once_for_completed_or_parked_work(self):
         candidate = ISSUE | {"status": "in_review", "createdAt": "2026-11-19",
                              "createdByAgentId": "planner", "description": f"Delivery source: {HEAD}"}
-        self.assertEqual(delivery.notes_cycle(HEAD, [candidate], "developer", "planner"), f"{HEAD}:initial")
+        self.assertEqual(delivery.notes_cycle(HEAD, [candidate], "developer", "planner", 0), f"{HEAD}:initial")
         for status in ("done", "blocked"):
-            self.assertEqual(delivery.notes_cycle(HEAD, [candidate | {"status": status}], "developer", "planner"),
+            self.assertEqual(delivery.notes_cycle(HEAD, [candidate | {"status": status}], "developer", "planner", 0),
                              f"{HEAD}:AIR-398")
+
+    def test_planning_round_without_a_developer_issue_is_repeated_after_a_growing_pause(self):
+        now = 1_800_000_000
+
+        def planning(cycle, status, seconds_ago):
+            updated = datetime.fromtimestamp(now - seconds_ago, timezone.utc).isoformat()
+            return {"status": status, "updatedAt": updated, "description": f"Notes revision: {HEAD}\nNotes cycle: {cycle}"}
+
+        def cycle(*issues):
+            return delivery.notes_cycle(HEAD, list(issues), "developer", "planner", now)
+
+        first = f"{HEAD}:initial"
+        self.assertIsNone(cycle(planning(first, "in_progress", 9999)))
+        self.assertIsNone(cycle(planning(first, "done", delivery.PLANNING_RETRY - 1)))
+        for status in ("done", "blocked"):
+            self.assertEqual(cycle(planning(first, status, delivery.PLANNING_RETRY)), f"{first}:r1")
+        old = planning(first, "done", 99999)
+        self.assertIsNone(cycle(old, planning(f"{first}:r1", "done", 2 * delivery.PLANNING_RETRY - 1)))
+        self.assertEqual(cycle(old, planning(f"{first}:r1", "done", 2 * delivery.PLANNING_RETRY)), f"{first}:r2")
+        many = [planning(f"{first}:r{n}", "done", delivery.PLANNING_RETRY_MAX) for n in range(1, 12)]
+        self.assertEqual(cycle(old, *many), f"{first}:r12")
+        # A cycle whose key merely starts the same is a different round.
+        self.assertEqual(cycle(planning(f"{HEAD}:initial-other", "done", 99999)), first)
 
     def test_restores_only_the_matching_board_recovery(self):
         controller = object.__new__(delivery.Controller)
