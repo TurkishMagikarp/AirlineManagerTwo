@@ -1271,7 +1271,7 @@ func _build_founding() -> void:
 	cancel_founding_button.theme_type_variation = "GhostButton"
 	cancel_founding_button.pressed.connect(_sync_view)
 	actions.add_child(cancel_founding_button)
-	founding_status = _label("Gründen startet pausiert bei Tag 1. Erst Speichern ersetzt den lokalen Spielstand.", ThemeTokens.SMALL, ThemeTokens.INK_MUTED)
+	founding_status = _label("Die neue Airline startet pausiert bei Tag 1 und lässt sich danach in einem benannten Speicherplatz sichern.", ThemeTokens.SMALL, ThemeTokens.INK_MUTED)
 	founding_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	column.add_child(founding_status)
 	for i in range(country_select.item_count):
@@ -1381,7 +1381,7 @@ func _open_founding() -> void:
 	name_input.clear()
 	_apply_difficulty_preset("standard")
 	founding_scroll.scroll_vertical = 0
-	founding_status.text = "Neues Spiel: Gründen ersetzt den laufenden Zustand. Ungespeicherter Fortschritt geht verloren. Abbrechen kehrt zurück."
+	founding_status.text = "Neues Spiel: Gründen ersetzt die laufende Airline samt ungespeichertem Fortschritt. Bestehende manuelle Spielstände bleiben unter Laden erhalten. Abbrechen kehrt zur laufenden Airline zurück."
 	name_input.grab_focus()
 
 
