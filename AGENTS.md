@@ -12,7 +12,7 @@ Godot 4.6+ UI over a Rust (godot-rust 0.5.5, edition 2024) simulation core. Docs
 - `scripts/main.gd` — main UI; panels: `routes_panel.gd`, `finances_panel.gd`, `finance_chart.gd`, `map_*.gd`; theme in `scripts/ui/`.
 - `tests/*_test.gd` — headless Godot tests; `tests/run_*_restart_test.ps1` — multi-process save/restart tests.
 - UI kit (target look): `docs/ui-kit/` — `README.md` (rules), `tokens.json` (all colours/type/spacing), `components/<Name>/README.md` (spec + Godot mapping), `bundle.css` (exact sizes/states). For UI work read the README and only the component folders you implement; don't read `preview.html` files unless you need the markup.
-- Design docs: `docs/game-design/` (decisions in `decisions/DECISION-REGISTER.md`); topic docs: `docs/{economy,demand,map,ui-design,staff}.md`; history: `docs/verification-log.md`.
+- Design docs: `docs/game-design/` (decisions in `decisions/DECISION-REGISTER.md`); topic docs: `docs/{economy,demand,map,ui-design,staff}.md`; history: `docs/verification-log.md`. Alpha goal and Studio Lead decisions: `docs/studio/`.
 
 ## Commands
 Use `AIRLINE_ENFORCE_PERF_BUDGET=1 cargo test --locked --manifest-path rust/Cargo.toml million_flight -- --test-threads=1` after long-advance changes; it prints wall and process CPU time and the enforced budget is process CPU time (the server is never quiet). Report both in the PR.
