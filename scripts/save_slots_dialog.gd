@@ -42,6 +42,10 @@ func open(sim: RefCounted, directory: String, save_mode: bool) -> void:
 	content.add_theme_constant_override("separation", Tokens.SPACE_3)
 	card.add_child(content)
 	content.add_child(UI.label(tr("Spielstand speichern") if saving else tr("Spielstand laden"), UI.DIALOG_TITLE))
+	var hold := UI.label(tr("Die Spielzeit ist angehalten, solange dieses Fenster offen ist."), Tokens.SMALL, Tokens.INK_MUTED)
+	hold.name = "TimeHoldNotice"
+	hold.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	content.add_child(hold)
 	if autosave_settings != null:
 		autosave_choice = OptionButton.new()
 		autosave_choice.tooltip_text = tr("Autosave in festen Echtzeit-Abständen in einen eigenen Eintrag. Standardmäßig aus.")

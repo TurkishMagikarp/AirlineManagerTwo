@@ -573,6 +573,9 @@ func _process(delta: float) -> void:
 	if jump_in_progress: return
 	if founding.visible:
 		return
+	if is_instance_valid(save_slots_dialog) and not save_slots_dialog.is_queued_for_deletion():
+		_refresh_time()
+		return
 	if not simulation.advance(delta):
 		simulation.pause()
 		var message := "Simulation angehalten: Die Spielzeit konnte nicht fortgeschrieben werden (z. B. Zahlenüberlauf). Bitte letzten Spielstand laden."
