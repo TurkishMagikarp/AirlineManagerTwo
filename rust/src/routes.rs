@@ -270,6 +270,55 @@ impl Game {
         Ok(())
     }
 
+    /// Release every aircraft of a route at its next safe moment, as one operation.
+    pub fn wind_down_route(&mut self, route_id: u32) -> Result<(), String> {
+        self.require_active()?;
+        let mut active = Vec::new();
+        let mut pending = false;
+        for r in self.routes.iter().filter(|r| r.public_id() == route_id) {
+            let Some(aircraft) = r.aircraft_id else {
+                continue;
+            };
+            let resumes = self
+                .fleet
+                .iter()
+                .find(|p| p.id == aircraft)
+                .and_then(|p| p.maintenance.as_ref())
+                .and_then(|v| v.resume.as_ref())
+                .is_some_and(|v| v.route_id == r.id);
+            if r.remove_at.is_some() {
+                pending = true;
+            } else if r.plan.is_some() || resumes {
+                active.push(aircraft);
+            }
+        }
+        if !self.routes.iter().any(|r| r.public_id() == route_id) {
+            return Err("Unbekannte Route.".into());
+        }
+        if active.is_empty() {
+            return if pending {
+                Ok(())
+            } else {
+                Err("Diese Route hat keinen aktiven Flugplan.".into())
+            };
+        }
+        let mut staged = self.clone();
+        for aircraft in active {
+            staged.remove_route_aircraft(route_id, aircraft)?;
+        }
+        *self = staged;
+        Ok(())
+    }
+
+    /// Pending releases of a route: (aircraft id, release time in game seconds).
+    pub fn pending_releases(&self, route_id: u32) -> Vec<(u32, u64)> {
+        self.routes
+            .iter()
+            .filter(|r| r.public_id() == route_id)
+            .filter_map(|r| Some((r.aircraft_id?, r.remove_at?)))
+            .collect()
+    }
+
     pub fn next_rotation_event(&self) -> Option<u64> {
         self.routes
             .iter()
@@ -380,6 +429,9 @@ impl Game {
 
     pub fn delete_route(&mut self, route_id: u32) -> Result<(), String> {
         self.require_active()?;
+        if !self.pending_releases(route_id).is_empty() {
+            return Err("Freigabe läuft noch; Löschen ist danach möglich.".into());
+        }
         self.require_no_plan(route_id)?;
         let _index = self
             .routes
