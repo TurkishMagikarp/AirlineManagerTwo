@@ -355,7 +355,7 @@ func _arrange_workspace() -> void:
 		origin.grab_focus()
 	)
 	ops_panel.add_child(operations_empty)
-	results_tree = UI.table(["Landung / Route", "Strecke", "Pax / Auslastung", "Tickets", "Kosten", "Ergebnis", "Fracht kg / EUR"], [170, 145, 135, 110, 110, 110, 260], 240)
+	results_tree = UI.table(["Landung / Route", "Strecke", "Pax / Auslastung", "Gesamtumsatz", "Flugkosten", "Ergebnis", "Fracht kg / EUR (in Umsatz)"], [170, 145, 135, 120, 110, 110, 260], 240)
 	result_panel.add_child(results_tree)
 	results_empty = UI.empty_state("Noch keine Landungen", "Flugplan: Pendelverkehr mit abwechselndem Hin- und Rückflug. Keine automatische Überführung.", schedule_button.text, func():
 		var next_control: Control = origin if simulation.get_routes().is_empty() else route_tree if _route().is_empty() else schedule_button
@@ -496,21 +496,13 @@ func refresh_operations() -> void:
 	results_tree.set_meta("breakdowns", {})
 	for result in results:
 		var row := results_tree.create_item(root_item)
-		var values := ["%s / #%d" % [result["landing"], result["route_id"]], "%s–%s" % [result["origin"], result["destination"]], "%d/%d · %.1f %%" % [result["passengers"], result["seats"], result["load_percent"]], UI.money(result["ticket_revenue_eur"]), UI.money(result["costs_eur"]), UI.money(result["profit_eur"])]
+		var values := ["%s / #%d" % [result["landing"], result["route_id"]], "%s–%s" % [result["origin"], result["destination"]], "%d/%d · %.1f %%" % [result["passengers"], result["seats"], result["load_percent"]], UI.money(result["revenue_eur"]), UI.money(result["costs_eur"]), UI.money(result["profit_eur"])]
 		for i in range(values.size()):
 			UI.cell_text(row, i, values[i])
-			row.set_tooltip_text(i, "Ticket: %s\nTreibstoff: %s\nCO2-Abgabe: %s\nFlughäfen: %s\nPersonal: %s\nWartung / Verwaltung: %s\nBordservice (± Standard): %s" % [UI.money(result["ticket_eur"]), UI.money(result["fuel_eur"]), UI.money(result["carbon_eur"]), UI.money(result["airport_eur"]), UI.money(result["crew_eur"]), UI.money(result["overhead_eur"]), UI.money(result["service_eur"])])
-			row.set_tooltip_text(i, row.get_tooltip_text(i) + "\nBetreuung / Entschädigung: %s" % UI.money(result["care_eur"]))
-		row.set_tooltip_text(4, row.get_tooltip_text(4) + "\n" + tr("ANCILLARY_ROUTE_REVENUE") % UI.money(result["ancillary_revenue_eur"]))
-		var tooltip := row.get_tooltip_text(4)
-		var parts: Array = [[tr("ANCILLARY_REVENUE"), UI.money(result["ancillary_revenue_eur"])]]
-		for pair in [["Treibstoff", "fuel_eur"], ["CO2-Abgabe", "carbon_eur"], ["Flughäfen", "airport_eur"], ["Personal", "crew_eur"], ["Wartung / Verwaltung", "overhead_eur"], ["Bordservice (± Standard)", "service_eur"], ["Betreuung / Entschädigung", "care_eur"], ["Kosten", "costs_eur"]]:
-			parts.append([pair[0], UI.money(result[pair[1]])])
-		var breakdowns: Dictionary = results_tree.get_meta("breakdowns")
-		breakdowns[tooltip] = parts
+		UI.set_breakdown(results_tree, row, 3, UI.revenue_parts(result))
+		UI.set_breakdown(results_tree, row, 4, UI.cost_parts(result))
 		UI.cell_text(row, 2, "Y %d/%d · J %d/%d" % [result["economy_passengers"], result["economy_seats"], result["business_passengers"], result["business_seats"]])
-		row.set_tooltip_text(2, tr("TRANSFER_RESULT") % [result["local_passengers"], result["connecting_passengers"]])
-		row.set_tooltip_text(3, tr("TRANSFER_REVENUE") % UI.money(result["connecting_revenue_eur"]) + "\n" + "Economy: %s · Business: %s" % [UI.money(result["economy_revenue_eur"]), UI.money(result["business_revenue_eur"])])
+		row.set_tooltip_text(2, tr("TRANSFER_RESULT") % [result["local_passengers"], result["connecting_passengers"]] + "\n" + tr("TRANSFER_REVENUE") % UI.money(result["connecting_revenue_eur"]) + "\n" + "Economy: %s · Business: %s" % [UI.money(result["economy_revenue_eur"]), UI.money(result["business_revenue_eur"])])
 		UI.cell_text(row, 6, "%d kg / %s" % [result["cargo_kg"], UI.money(result["cargo_revenue_eur"])])
 		UI.cell_result(row, 5, result["profit_eur"])
 

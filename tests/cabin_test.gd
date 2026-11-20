@@ -99,7 +99,7 @@ func _run() -> void:
 		_select_route()
 		var result: Dictionary = sim.get_flight_results()[0]
 		var row: TreeItem = panel.results_tree.get_root().get_child(0)
-		if not _check(result["business_passengers"] > 0 and result["economy_passengers"] > 0 and row.get_text(2) == "Y %d/%d · J %d/%d" % [result["economy_passengers"], result["economy_seats"], result["business_passengers"], result["business_seats"]] and row.get_tooltip_text(3) == tr("TRANSFER_REVENUE") % main.UI.money(result["connecting_revenue_eur"]) + "\n" + "Economy: %s · Business: %s" % [main.UI.money(result["economy_revenue_eur"]), main.UI.money(result["business_revenue_eur"])], "Results show both class loads and revenue"):
+		if not _check(result["business_passengers"] > 0 and result["economy_passengers"] > 0 and row.get_text(2) == "Y %d/%d · J %d/%d" % [result["economy_passengers"], result["economy_seats"], result["business_passengers"], result["business_seats"]] and row.get_tooltip_text(2).ends_with(tr("TRANSFER_REVENUE") % main.UI.money(result["connecting_revenue_eur"]) + "\n" + "Economy: %s · Business: %s" % [main.UI.money(result["economy_revenue_eur"]), main.UI.money(result["business_revenue_eur"])]), "Results show both class loads and revenue"):
 			return
 		if not _check(result["economy_revenue_eur"] == result["economy_passengers"] * 73 and result["business_revenue_eur"] == result["business_passengers"] * 181 and result["revenue_eur"] == result["economy_revenue_eur"] + result["business_revenue_eur"] + result["cargo_revenue_eur"], "Per-class receipts match the separate fares"):
 			return

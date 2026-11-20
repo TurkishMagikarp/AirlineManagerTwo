@@ -166,7 +166,7 @@ func _care_views(care: int) -> bool:
 	var panel = main.finances_panel
 	panel.refresh(true)
 	var row: TreeItem = panel.route_tree.get_root().get_first_child()
-	if not _check(row.get_tooltip_text(3) == "Davon Betreuung / Entschädigung: %s" % main.UI.money(care) and main.simulation.get_route_finances()[0]["care_eur"] == care and main.simulation.get_financial_summary()["care_eur"] == care, "Route/company care is booked once"):
+	if not _check(row.get_tooltip_text(3).contains("Betreuung / Entschädigung: %s" % main.UI.money(care)) and main.simulation.get_route_finances()[0]["care_eur"] == care and main.simulation.get_financial_summary()["care_eur"] == care, "Route/company care is booked once"):
 		return false
 	await _reveal(panel.route_tree)
 	await _mouse(panel.route_tree.global_position + panel.route_tree.get_item_area_rect(row, 0).get_center())
