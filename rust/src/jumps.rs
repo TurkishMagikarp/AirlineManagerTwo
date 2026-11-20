@@ -147,6 +147,15 @@ impl Game {
                     chunk = chunk.min(until);
                 }
             }
+            // A forced check can start and end inside one chunk: end the chunk at the grounding.
+            let now = staged.clock.elapsed().as_secs();
+            if let Some(due) = (0..staged.fleet.len())
+                .filter_map(|p| staged.due_landing(p))
+                .min()
+            {
+                let until = Duration::from_secs(due.saturating_sub(now).max(1));
+                chunk = chunk.min(until);
+            }
             let expected = staged.clock.elapsed() + chunk;
             if !staged.advance(chunk.as_secs_f64()) {
                 return Err(error);
