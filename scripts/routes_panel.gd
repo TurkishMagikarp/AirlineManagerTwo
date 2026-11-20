@@ -55,6 +55,7 @@ var fare_last: Label
 var fare_key: Array = []
 var fare_cached: Dictionary = {}
 var results_empty: Control
+var editor_panel: Control
 
 
 func _ready() -> void:
@@ -72,9 +73,8 @@ func _ready() -> void:
 			select.add_item("%s · Gebühren %d %% · %s (%s)" % [airport["iata"], airport["charge_percent"], String(airport["name"]).left(32) + ("…" if String(airport["name"]).length() > 32 else ""), airport["icao"]])
 			select.set_item_metadata(select.item_count - 1, airport["icao"])
 			select.set_item_tooltip(select.item_count - 1, "%s · Gebührenstufe %d %% des Modell-/Passagiertarifs an diesem Endpunkt; Start und Ziel werden addiert." % [airport["name"], airport["charge_percent"]])
-	for i in range(origin.item_count):
-		if origin.get_item_metadata(i) == "EDDF": origin.select(i)
-		if destination.get_item_metadata(i) == "EDDM": destination.select(i)
+	origin.select(-1)
+	destination.select(-1)
 	aircraft = _select("Verfügbares Flugzeug")
 	preview = _label("")
 	add_child(preview)
@@ -319,6 +319,7 @@ func _arrange_workspace() -> void:
 	var ops_panel := UI.panel(grid, tr("OPS_PANEL_TITLE"))
 	var planner := UI.panel(grid, "02  /  VERBINDUNG PLANEN")
 	var editor := UI.panel(self, "03  /  AUSGEWÄHLTE ROUTE · ZUWEISUNG & FLUGPLAN")
+	editor_panel = editor.get_parent()
 	var editor_grid := GridContainer.new()
 	editor_grid.add_theme_constant_override("h_separation", ThemeTokens.SPACE_4)
 	editor_grid.add_theme_constant_override("v_separation", ThemeTokens.SPACE_4)
@@ -514,7 +515,27 @@ func refresh_operations() -> void:
 		UI.cell_result(row, 5, result["profit_eur"])
 
 
+func reset_for_world() -> void:
+	var home: String = simulation.get_airline_info().get("airport_icao", "")
+	origin.select(-1)
+	for i in range(origin.item_count):
+		if origin.get_item_metadata(i) == home:
+			origin.select(i)
+	destination.select(-1)
+	aircraft.clear()
+	route_tree.deselect_all()
+	refresh()
+	status.text = ""
+
+
 func _preview() -> void:
+	if origin.selected < 0 or destination.selected < 0:
+		preview.text = "Wähle Start- und Zielflughafen, um Entfernung und Reichweite zu prüfen." if origin.selected < 0 else "Zielflughafen wählen: Startflughafen ist %s." % origin.get_selected_metadata()
+		UI.field_error(aircraft, "")
+		create_button.disabled = true
+		if aircraft.item_count == 0:
+			preview.text += "\nKein freies Flugzeug. Im Flotte-Tab kaufen oder eine Zuweisung lösen."
+		return
 	var result: Dictionary = simulation.preview_route(origin.get_selected_metadata(), destination.get_selected_metadata(), _selected_id(aircraft), 0)
 	preview.text = "Entfernung: %.1f km · %s" % [result["distance_km"], "Reichweite ausreichend" if result["error"].is_empty() else result["error"]]
 	preview.text += "\n%s · %s" % [result["origin_slots"], result["destination_slots"]]
@@ -672,19 +693,45 @@ func _assignment_preview() -> void:
 		status.text = result["error"]
 
 
-func _feedback(error: String, success: String, field: Control = null) -> void:
+func _feedback(error: String, success: String, field: Control = null, select_id := 0) -> void:
 	refresh()
+	if select_id != 0:
+		var row := route_tree.get_root().get_first_child()
+		while row != null and row.get_metadata(0)["id"] != select_id:
+			row = row.get_next()
+		if row != null:
+			row.select(0)
+			_selection_changed()
 	if field != null: UI.field_error(field, error)
 	status.text = success + " Bitte speichern." if error.is_empty() else error
 	if error.is_empty():
 		changed.emit()
 	await get_tree().process_frame
 	var scroll := get_parent().get_parent() as ScrollContainer
+	if select_id != 0 and error.is_empty():
+		await get_tree().process_frame
+	if select_id != 0 and error.is_empty() and ticket_input.get_line_edit().is_visible_in_tree():
+		scroll.scroll_vertical += int(editor_panel.global_position.y - scroll.global_position.y)
+		await get_tree().process_frame
+		scroll.ensure_control_visible(ticket_input)
+		ticket_input.get_line_edit().grab_focus()
+		return
 	scroll.ensure_control_visible(status)
 
 
 func _create() -> void:
-	_feedback(simulation.create_route(origin.get_selected_metadata(), destination.get_selected_metadata(), _selected_id(aircraft)), "Route erstellt.")
+	if origin.selected < 0 or destination.selected < 0:
+		return
+	var known: Array = []
+	for route in simulation.get_routes():
+		known.append(route["id"])
+	var error: String = simulation.create_route(origin.get_selected_metadata(), destination.get_selected_metadata(), _selected_id(aircraft))
+	var created := 0
+	if error.is_empty():
+		for route in simulation.get_routes():
+			if not route["id"] in known:
+				created = route["id"]
+	_feedback(error, "Route erstellt.", null, created)
 
 
 func _assign() -> void:

@@ -116,8 +116,10 @@ func _slot_views() -> bool:
 	if not _check(used > 120, "Migration fixture exceeds hub capacity"):
 		return false
 	main._sync_view()
+	main.routes_panel.reset_for_world()
 	await _click(main.navigation[2])
 	var panel = main.routes_panel
+	_choose_destination(panel, "EDDM")
 	if not _check(expected in panel.preview.text and panel.create_button.disabled and "FRA is full: 0 of 120 daily slots free (1 required)" in panel.preview.text, "Full hub preview shows exact shared usage, airport, free/required slots and disables creation"):
 		return false
 	var before := _snapshot()
@@ -162,6 +164,7 @@ func _slot_views() -> bool:
 	if not _check(released in map.details.text, "Selected map detail refreshes when schedules release slots"):
 		return false
 	await _click(main.navigation[2])
+	_choose_destination(panel, "EDDM")
 	if not _check(released in panel.preview.text and not panel.create_button.disabled, "Live preview enables creation when the hub has room again"):
 		return false
 	var near_full: Array = sim.get_attention_snapshot().filter(func(e): return e["kind"] == "slots")
@@ -178,3 +181,11 @@ func _slot_views() -> bool:
 
 func _snapshot() -> Array:
 	return super._snapshot() + [main.simulation.get_map_airports(), main.simulation.get_attention_snapshot()]
+
+
+func _choose_destination(panel, code: String) -> void:
+	for i in range(panel.destination.item_count):
+		if panel.destination.get_item_metadata(i) == code:
+			panel.destination.select(i)
+			panel.destination.item_selected.emit(i)
+			return

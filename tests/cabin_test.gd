@@ -49,7 +49,10 @@ func _run() -> void:
 			if not _check(sim.get_airline_info()["capital_eur"] == balance - plane["cabin_fee_eur"], "Unchanged layout is free"):
 				return
 		await _click(main.navigation[2])
+		_choose_destination(panel, "EDDM")
 		await _click(panel.create_button)
+		for _i in range(5):
+			await process_frame
 		_select_route()
 		panel.ticket_input.value = 73
 		await _click(panel.ticket_button)
@@ -188,3 +191,11 @@ func _check(condition: bool, message: String) -> bool:
 		push_error("FAIL: " + message)
 		quit(1)
 	return condition
+
+
+func _choose_destination(panel, code: String) -> void:
+	for i in range(panel.destination.item_count):
+		if panel.destination.get_item_metadata(i) == code:
+			panel.destination.select(i)
+			panel.destination.item_selected.emit(i)
+			return

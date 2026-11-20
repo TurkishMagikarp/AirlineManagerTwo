@@ -504,6 +504,7 @@ func _open_save_slots(saving: bool) -> void:
 		if loaded:
 			last_clock_view = ""
 			_sync_view()
+			routes_panel.reset_for_world()
 			_refresh_time()
 	)
 	save_slots_dialog.autosave_settings = autosave
@@ -554,6 +555,7 @@ func _load_legacy_game() -> void:
 	save_status.tooltip_text = save_path
 	if error.is_empty():
 		_sync_view()
+		routes_panel.reset_for_world()
 		if not simulation.has_airline():
 			founding_status.text = "Alter Zeit-Spielstand geladen. Noch keine Airline vorhanden; Gründen beginnt ein neues Spiel."
 	_refresh_time()
@@ -1393,6 +1395,7 @@ func _found_airline() -> void:
 		return
 	save_status.text = "Airline gegründet · bitte Spielstand speichern."
 	_sync_view()
+	routes_panel.reset_for_world()
 
 
 func _sync_view() -> void:
