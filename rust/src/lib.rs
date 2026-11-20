@@ -2473,6 +2473,37 @@ impl SimulationClock {
         }
     }
 
+    /// Founds a separate world; the current game is replaced only after the new one is valid.
+    #[func]
+    fn start_new_world(
+        &mut self,
+        name: GString,
+        country: GString,
+        airport: GString,
+        capital: GString,
+        competition: GString,
+        crises: GString,
+    ) -> GString {
+        if self.jump_worker.is_some() {
+            return "Zeitsprung läuft.".into();
+        }
+        let mut staged = Game::default();
+        match staged.found_with_levels(
+            &name.to_string(),
+            &country.to_string(),
+            &airport.to_string(),
+            &capital.to_string(),
+            &competition.to_string(),
+            &crises.to_string(),
+        ) {
+            Ok(()) => {
+                self.game = staged;
+                GString::new()
+            }
+            Err(error) => error.as_str().into(),
+        }
+    }
+
     #[func]
     fn has_airline(&self) -> bool {
         self.game.airline.is_some()
@@ -2515,7 +2546,8 @@ impl SimulationClock {
             "difficulty_capital" => self.game.difficulty.capital.key(),
             "difficulty_competition" => self.game.difficulty.competition.key(),
             "difficulty_crises" => self.game.difficulty.crises.key(),
-            "capital_eur" => airline.capital_eur
+            "capital_eur" => airline.capital_eur,
+            "insolvent" => self.game.insolvent()
         }
     }
 
