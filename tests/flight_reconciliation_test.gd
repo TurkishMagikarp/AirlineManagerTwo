@@ -76,6 +76,11 @@ func _compare(main: Control, sim: RefCounted, expect_cargo: bool, expect_ancilla
 	for r in results:
 		if r["landing"] == latest["landing"] and r["route_id"] == route["route_id"]:
 			_check(r["revenue_eur"] == latest["revenue_eur"] and r["costs_eur"] == latest["costs_eur"] and r["profit_eur"] == latest["profit_eur"], label + " screens agree on the same landing")
+	var company: Dictionary = sim.get_financial_summary()
+	_check(company["company_revenue_eur"] == company["ticket_revenue_eur"] + company["cargo_revenue_eur"] + company["ancillary_revenue_eur"] + company["charter_revenue_eur"], label + " company receipts sum to company revenue")
+	_check(company["company_revenue_eur"] - company["company_costs_eur"] == company["profit_eur"], label + " company revenue - costs = result")
+	_check(fin.metrics["revenue"].text == UI.money(company["company_revenue_eur"]) and fin.metrics["costs"].text == UI.money(company["company_costs_eur"]) and fin.metrics["profit"].text == UI.signed_money(company["profit_eur"]), label + " Finances company totals")
+	_check(main.finance_breakdown.text.contains(UI.money(company["company_revenue_eur"])) and main.finance_breakdown.text.contains(UI.money(company["company_costs_eur"])) and main.finance_breakdown.text.contains(UI.signed_money(company["profit_eur"])), label + " Overview company totals")
 	_check(fin.flights_tree.get_column_title(2) == "Ticketpreis je Pax", label + " ticket price label")
 	_check(fin.detail.text.contains("zentrale Gehälter und Wartungschecks"), label + " central costs explained")
 

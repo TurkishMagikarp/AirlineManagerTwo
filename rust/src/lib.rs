@@ -763,6 +763,8 @@ impl SimulationClock {
             h.charter_through(u64::MAX, trading::Kind::CharterPenalty)
         });
         let profit = i128::from(t.revenue) + charter_fees - charter_penalties - costs;
+        let company_revenue = i128::from(t.revenue) + charter_fees;
+        let company_costs = costs + charter_penalties;
         let now = self.game.clock.elapsed().as_secs();
         vdict! { "carbon_eur_per_tonne" => emissions::price_at(now),
         "carbon_next_eur_per_tonne" => emissions::price_at(now.saturating_add(emissions::year_seconds())),
@@ -788,6 +790,8 @@ impl SimulationClock {
         "aircraft_cash_eur" => aircraft_cash.clamp(i128::from(i64::MIN), i128::from(i64::MAX)) as i64,
         "fuel_eur" => t.fuel, "carbon_eur" => t.carbon, "airport_eur" => t.airport, "crew_eur" => t.crew, "overhead_eur" => t.overhead, "care_eur" => t.care, "punctuality_percent" => disruptions::percent(t), "punctuality_flights" => t.punctuality_flights, "service_eur" => t.service, "ancillary_revenue_eur" => t.ancillary, "loyalty_cost_eur" => t.loyalty_cost,
         "costs_eur" => costs.min(i128::from(i64::MAX)) as i64,
+        "company_revenue_eur" => company_revenue.clamp(i128::from(i64::MIN), i128::from(i64::MAX)) as i64,
+        "company_costs_eur" => company_costs.clamp(i128::from(i64::MIN), i128::from(i64::MAX)) as i64,
         "profit_eur" => profit.clamp(i128::from(i64::MIN), i128::from(i64::MAX)) as i64, "purchases_eur" => purchases,
         "load_percent" => t.load_percent() }
     }

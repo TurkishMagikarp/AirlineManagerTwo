@@ -267,6 +267,13 @@ func _run() -> void:
 				scroll.ensure_control_visible(main.commitments_jump_button)
 				await RenderingServer.frame_post_draw
 				assert(root.get_texture().get_image().save_png(capture_dir.path_join("overview-commitments-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
+			if (page == 0 or page == 4) and not capture_dir.is_empty():
+				var totals_control: Control = main.finance_breakdown if page == 0 else main.finances_panel.metrics["profit"]
+				scroll.ensure_control_visible(totals_control)
+				for frame in range(5): await process_frame
+				scroll.ensure_control_visible(totals_control)
+				await RenderingServer.frame_post_draw
+				assert(root.get_texture().get_image().save_png(capture_dir.path_join("%s-company-results-%dx%d.png" % [["overview", "", "", "", "finances"][page], dimensions.x, dimensions.y])) == OK)
 			if page == 4 and not capture_dir.is_empty():
 				var fin = main.finances_panel
 				fin.route_tree.get_root().get_first_child().select(0)
