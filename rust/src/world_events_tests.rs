@@ -207,8 +207,16 @@ fn events_are_few_and_weighted_towards_large_airports() {
         .filter(|a| a.market_size < 0.6)
         .map(|a| counts.get(a.icao.as_str()).copied().unwrap_or(0))
         .sum();
-    let n_large = catalog.airports.iter().filter(|a| a.market_size >= 1.0).count() as f64;
-    let n_small = catalog.airports.iter().filter(|a| a.market_size < 0.6).count() as f64;
+    let n_large = catalog
+        .airports
+        .iter()
+        .filter(|a| a.market_size >= 1.0)
+        .count() as f64;
+    let n_small = catalog
+        .airports
+        .iter()
+        .filter(|a| a.market_size < 0.6)
+        .count() as f64;
     assert!(large as f64 / n_large > 2.0 * small as f64 / n_small.max(1.0));
 }
 
@@ -408,7 +416,10 @@ fn events_match_across_speeds_step_sizes_jumps_and_restarts() {
         stepped = restart(&stepped);
     }
     assert_eq!(normal(&stepped), normal(&expected));
-    assert_eq!(state(&jumped).get("world_economy"), state(&expected).get("world_economy"));
+    assert_eq!(
+        state(&jumped).get("world_economy"),
+        state(&expected).get("world_economy")
+    );
 }
 
 #[test]
@@ -457,12 +468,18 @@ fn v42_saves_get_no_retroactive_events() {
     }
     // Something is eventually announced after loading, and nothing else changed.
     assert!(
-        (0..800).any(|d| !world_events::visible_at(&loaded.world_economy, now + d * DAY).is_empty())
+        (0..800)
+            .any(|d| !world_events::visible_at(&loaded.world_economy, now + d * DAY).is_empty())
     );
     assert_eq!(loaded.finance, g.finance);
     assert_eq!(loaded.routes, g.routes);
     assert_eq!(loaded.cash(), g.cash());
-    assert!(loaded.attention_snapshot().iter().all(|a| a.kind != "event"));
+    assert!(
+        loaded
+            .attention_snapshot()
+            .iter()
+            .all(|a| a.kind != "event")
+    );
 }
 
 #[test]

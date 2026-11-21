@@ -492,7 +492,7 @@ static func attention_row(entry: Dictionary, destination: String) -> Button:
 	row.offset_right = -ThemeTokens.SPACE_4
 	var kind: String = entry["kind"]
 	var state: Array = {
-		"event": ["Ereignis", "info"], "weather": ["Wetter", "info"], "negative_cash": ["Guthaben", "stop"], "crew": ["Personal", "stop"],
+		"event": ["Ereignis", "info"], "weather": ["Wetter", "info"], "negative_cash": ["Guthaben", "stop"], "financial_distress": ["Finanznot", "stop"], "restructuring": ["Restrukturierung", "stop"], "crew": ["Personal", "stop"],
 		"technicians": ["Wartung", "caution"], "salary_reserve": ["Personalreserve", "caution"],
 		"idle": ["Geparkt", "neutral"], "training": ["Umschulung", "info"],
 		"delay": ["Verspätung", "caution"], "slots": ["Slots", "caution"],

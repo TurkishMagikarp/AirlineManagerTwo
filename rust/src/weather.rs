@@ -33,8 +33,8 @@ pub struct Rules {
     pub kinds: Vec<Kind>,
 }
 pub static RULES: LazyLock<Rules> = LazyLock::new(|| {
-    let r: Rules = serde_json::from_str(include_str!("../../config/weather.json"))
-        .expect("weather config");
+    let r: Rules =
+        serde_json::from_str(include_str!("../../config/weather.json")).expect("weather config");
     assert!((1..=14).contains(&r.warning_days) && (1..=30).contains(&r.slot_days));
     assert!(r.southern_shift_days < YEAR_DAYS && (1..=8).contains(&r.kinds.len()));
     for k in &r.kinds {
@@ -141,12 +141,17 @@ impl Draws {
     }
 }
 fn icao_hash(icao: &str) -> u64 {
-    icao.bytes()
-        .fold(0xcbf29ce484222325u64, |h, b| (h ^ u64::from(b)).wrapping_mul(0x100000001b3))
+    icao.bytes().fold(0xcbf29ce484222325u64, |h, b| {
+        (h ^ u64::from(b)).wrapping_mul(0x100000001b3)
+    })
 }
 
 fn in_season(kind: &Kind, latitude: f64, day: u64) -> bool {
-    let shift = if latitude < 0.0 { RULES.southern_shift_days } else { 0 };
+    let shift = if latitude < 0.0 {
+        RULES.southern_shift_days
+    } else {
+        0
+    };
     let doy = (day + YEAR_DAYS - shift) % YEAR_DAYS;
     let (a, b) = (kind.season_start_day, kind.season_end_day);
     if a <= b {
@@ -165,19 +170,25 @@ fn derive(seed: u64, index: usize, airport: &'static Airport, slot: u64) -> Opti
         return None;
     }
     let mut d = Draws(
-        mix(seed ^ 0x57455448 ^ ((index as u64 + 1) << 56) ^ icao_hash(&airport.icao).rotate_left(8))
+        mix(seed
+            ^ 0x57455448
+            ^ ((index as u64 + 1) << 56)
+            ^ icao_hash(&airport.icao).rotate_left(8))
             ^ slot.wrapping_mul(0xd6e8feb86659fd93),
     );
     let chance = d.next() % 1000;
     let duration = kind.min_days + d.next() % (kind.max_days - kind.min_days + 1);
     let offset = d.next() % (RULES.slot_days - duration + 1);
-    let delay = kind.min_delay_seconds + d.next() % (kind.max_delay_seconds - kind.min_delay_seconds + 1);
+    let delay =
+        kind.min_delay_seconds + d.next() % (kind.max_delay_seconds - kind.min_delay_seconds + 1);
     let start_day = slot * RULES.slot_days + offset;
     if chance >= kind.chance_permille || !in_season(kind, airport.latitude, start_day) {
         return None;
     }
     Some(Episode {
-        id: ((index as u64 + 1) << 56) | ((icao_hash(&airport.icao) & 0xffff_ffff) << 16) | (slot & 0xffff),
+        id: ((index as u64 + 1) << 56)
+            | ((icao_hash(&airport.icao) & 0xffff_ffff) << 16)
+            | (slot & 0xffff),
         kind,
         icao: &airport.icao,
         start_day,

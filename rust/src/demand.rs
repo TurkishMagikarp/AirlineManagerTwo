@@ -90,12 +90,14 @@ pub fn market_in_economy(
     context: crate::world_economy::Context,
     time: Option<u64>,
 ) -> Result<Market, String> {
-    Ok(MarketInputs::new(route, price)?.at(&crate::world_economy::route_factors(
-        Some(context),
-        time,
-        &route.origin_icao,
-        &route.destination_icao,
-    )))
+    Ok(
+        MarketInputs::new(route, price)?.at(&crate::world_economy::route_factors(
+            Some(context),
+            time,
+            &route.origin_icao,
+            &route.destination_icao,
+        )),
+    )
 }
 
 fn market_with_season(route: &Route, price: i64, time: Option<u64>) -> Result<Market, String> {
@@ -690,10 +692,9 @@ impl LocalPrepared {
         if self.neutral_choice != crate::reputation::NEUTRAL_CHOICE.with(|v| v.get()) {
             self.refresh_constants();
         }
-        let (origin, destination) = self
-            .matching
-            .first()
-            .map_or(("", ""), |o| (&*o.route.origin_icao, &*o.route.destination_icao));
+        let (origin, destination) = self.matching.first().map_or(("", ""), |o| {
+            (&*o.route.origin_icao, &*o.route.destination_icao)
+        });
         let season = crate::world_economy::route_factors(
             self.matching.iter().find_map(|o| o.economy),
             time,

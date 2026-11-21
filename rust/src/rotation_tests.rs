@@ -370,8 +370,14 @@ fn board_rows_show_both_directions_airborne_landing_and_pending_release() {
     g.add_route_aircraft(1, 2).unwrap();
     let rows = board(&g);
     assert_eq!(rows.len(), 2);
-    assert!(rows.iter().all(|r| r.state_kind == "scheduled" && r.expected_landing.is_none()));
-    assert_eq!((rows[0].origin.as_str(), rows[0].destination.as_str()), ("EDDF", "EDDM"));
+    assert!(
+        rows.iter()
+            .all(|r| r.state_kind == "scheduled" && r.expected_landing.is_none())
+    );
+    assert_eq!(
+        (rows[0].origin.as_str(), rows[0].destination.as_str()),
+        ("EDDF", "EDDM")
+    );
     assert_eq!(rows[0].next_departure, Some(60));
     assert_eq!(rows[1].next_departure, Some(7260));
     g.clock.set_running(true);
@@ -395,7 +401,10 @@ fn board_rows_show_both_directions_airborne_landing_and_pending_release() {
     assert!(g.advance(14400.0));
     let rows = board(&g);
     assert_eq!(rows[0].state_kind, "scheduled");
-    assert_eq!((rows[0].origin.as_str(), rows[0].destination.as_str()), ("EDDM", "EDDF"));
+    assert_eq!(
+        (rows[0].origin.as_str(), rows[0].destination.as_str()),
+        ("EDDM", "EDDF")
+    );
     assert_eq!(rows[0].next_departure, Some(7260 + 14400));
 }
 
@@ -460,7 +469,10 @@ fn wind_down_releases_staggered_aircraft_once_and_allows_deletion() {
     let landed = g.finance.totals.flights;
     g.delete_route(1).unwrap();
     assert!(g.routes.iter().all(|r| r.public_id() != 1));
-    assert_eq!(g.routes.last().unwrap().plan.is_some(), control.plan.is_some());
+    assert_eq!(
+        g.routes.last().unwrap().plan.is_some(),
+        control.plan.is_some()
+    );
     assert!(g.advance(86400.0));
     assert!(g.finance.totals.flights > landed);
     let now = g.clock.elapsed().as_secs();

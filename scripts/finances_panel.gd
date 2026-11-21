@@ -461,6 +461,27 @@ func _refresh_ancillaries() -> void:
 	lines.append(tr("ANCILLARY_NOTE"))
 	ancillary_status.text = "\n".join(lines)
 
+func focus_lending() -> void:
+	refresh(true)
+	loan_status.focus_mode = Control.FOCUS_ALL
+	loan_status.add_theme_stylebox_override("focus", loan_reschedule.get_theme_stylebox("focus", "Button"))
+	var target: Control = loan_status
+	for button: Button in [loan_reschedule, loan_repay, loan_borrow]:
+		if not button.disabled:
+			target = button
+			break
+	for frame in range(3):
+		await get_tree().process_frame
+	var scroll := get_parent().get_parent() as ScrollContainer
+	var section := loan_status.get_parent() as Control
+	var top := section.global_position.y - scroll.global_position.y + scroll.scroll_vertical
+	var bottom := target.global_position.y + target.size.y - scroll.global_position.y + scroll.scroll_vertical
+	# Show the status and restriction text above the action when both fit.
+	scroll.scroll_vertical = int(top) if bottom - top <= scroll.size.y else int(bottom - scroll.size.y * 0.6)
+	await get_tree().process_frame
+	target.grab_focus()
+
+
 func _loan_action(borrowing: bool) -> void:
 	var error: String = simulation.borrow_money(int(loan_amount.value)) if borrowing else simulation.repay_loan(int(loan_amount.value))
 	loan_result.text = error if not error.is_empty() else "Kredit aufgenommen." if borrowing else "Tilgung gebucht."

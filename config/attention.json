@@ -3,6 +3,8 @@
   "priorities": {
     "slots": 45,
     "negative_cash": 0,
+    "restructuring": 1,
+    "financial_distress": 2,
     "crew": 10,
     "delay": 15,
     "technicians": 20,

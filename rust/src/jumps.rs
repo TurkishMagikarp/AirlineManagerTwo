@@ -6,8 +6,7 @@ use std::{sync::LazyLock, time::Duration};
 pub type WorkerResult = (Game, Result<ResultSummary, &'static str>);
 
 const DAY: u64 = 86400;
-pub const STALE_TARGET: &str =
-    "Der nächste Termin hat sich geändert. Bitte erneut auswählen.";
+pub const STALE_TARGET: &str = "Der nächste Termin hat sich geändert. Bitte erneut auswählen.";
 #[derive(Deserialize)]
 pub struct OptionRule {
     pub label: String,
@@ -138,7 +137,6 @@ impl Game {
         let speed = self.clock.speed();
         let mut staged = self.clone();
         let mut previous = staged.attention_snapshot();
-        let mut distressed = staged.distressed();
         staged.clock = Clock::from_state(start, true, 1).ok_or(error)?;
         let mut reason = String::new();
         let mut attention = None;
@@ -169,11 +167,12 @@ impl Game {
                 staged.clock = Clock::from_state(expected, true, 1).ok_or(error)?;
             }
             let entries = staged.attention_snapshot();
-            if staged.insolvent() || (!distressed && staged.distressed()) {
+            if staged.insolvent() {
                 reason = staged.financing_status().into();
             } else if let Some(entry) = entries
                 .iter()
-                .find(|e| !previous.iter().any(|p| same_entry(e, p)))
+                .filter(|e| !previous.iter().any(|p| same_entry(e, p)))
+                .min_by_key(|e| !matches!(e.kind, "financial_distress" | "restructuring"))
             {
                 reason = entry.text.clone();
                 attention = Some(entry.clone());
@@ -181,7 +180,6 @@ impl Game {
             if !reason.is_empty() {
                 break;
             }
-            distressed = staged.distressed();
             previous = entries;
         }
         let advanced_seconds = (staged.clock.elapsed() - start).as_secs();
