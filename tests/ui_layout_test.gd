@@ -72,6 +72,13 @@ func _run() -> void:
 		print("PASS: forced-check Attention entry on Overview and its Fleet maintenance details at both sizes")
 		quit(0)
 		return
+	if OS.get_environment("AIRLINE_UI_CAPTURE_TECH_WAIT_ONLY") == "1":
+		await _technician_wait_views(sim)
+		main.queue_free()
+		await process_frame
+		print("PASS: technician wait in Fleet register and maintenance details at both sizes")
+		quit(0)
+		return
 	if OS.get_environment("AIRLINE_UI_CAPTURE_WEATHER_ONLY") == "1":
 		await _weather_views(sim)
 		main.queue_free()
@@ -1328,6 +1335,47 @@ func _forced_check_views(sim: RefCounted) -> void:
 		assert(main.current_page == 1 and main.selected_aircraft == plane_id)
 		await RenderingServer.frame_post_draw
 		assert(root.get_texture().get_image().save_png(capture_dir.path_join("forced-check-fleet-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
+
+
+func _technician_wait_views(sim: RefCounted) -> void:
+	assert(sim.buy_aircraft("atr72_600").is_empty())
+	assert(sim.hire_pilots("ATR 72", 4).is_empty())
+	assert(sim.hire_staff("cabin_crew", 3).is_empty())
+	assert(sim.create_route("EDDF", "EDDM", 1).is_empty())
+	assert(sim.schedule_route(1, 1, 120).is_empty())
+	main._sync_view()
+	var plane_id := -1
+	for i in range(12):
+		main.jump_buttons[3].pressed.emit()
+		while main.jump_in_progress:
+			await process_frame
+		for plane in sim.get_fleet():
+			if plane["maintenance_waiting_staff"]:
+				plane_id = plane["id"]
+		if plane_id >= 0:
+			break
+	assert(plane_id >= 0)
+	TranslationServer.set_locale("de")
+	for dimensions in [Vector2i(1440, 1000), Vector2i(680, 520)]:
+		root.size = dimensions
+		main._show_page(0)
+		main._sync_view()
+		for frame in range(5): await process_frame
+		var button: Button
+		for i in range(main.attention_rows.get_child_count()):
+			if "Techniker" in main.attention_rows.get_child(i).text:
+				button = main.attention_rows.get_child(i)
+		assert(button != null)
+		button.pressed.emit()
+		for frame in range(8): await process_frame
+		assert(main.current_page == 1 and main.selected_aircraft == plane_id)
+		await RenderingServer.frame_post_draw
+		assert(root.get_texture().get_image().save_png(capture_dir.path_join("technician-wait-fleet-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
+		main.maintenance_staff_button.pressed.emit()
+		for frame in range(8): await process_frame
+		assert(main.current_page == 5 and main.staff_panel.role_select.has_focus())
+		await RenderingServer.frame_post_draw
+		assert(root.get_texture().get_image().save_png(capture_dir.path_join("technician-wait-staff-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
 
 
 func _weather_views(sim: RefCounted) -> void:

@@ -2950,7 +2950,12 @@ impl SimulationClock {
             .game
             .check_at(&location, w, r, true)
             .unwrap_or_default();
+        let waiting = visit.is_some_and(|v| !v.staffed)
+            && plane.status == aircraft::AircraftStatus::Maintenance;
+        let needed = staff::needs(&plane.model_id).map_or(0, |n| i64::from(n.technicians));
         vdict! {
+            "maintenance_technicians_needed" => if waiting { needed } else { 0 },
+            "maintenance_technicians_available" => if waiting { i64::from(self.game.available_staff(staff::Role::Technician)) } else { 0 },
             "maintenance_location" => location.as_str(),
             "maintenance_location_kind" => if self.game.is_maintenance_base(&location) { "Wartungsbasis" } else { "Außenstation (Aufschlag)" },
             "condition_percent" => w.condition_permille(r) as f64 / 10.0,
@@ -2961,7 +2966,7 @@ impl SimulationClock {
             "interval_cycles" => r.interval_cycles as i64,
             "maintenance_due" => w.is_due(r),
             "maintenance_state" => state,
-            "maintenance_waiting_staff" => visit.is_some_and(|v| !v.staffed) && plane.status == aircraft::AircraftStatus::Maintenance,
+            "maintenance_waiting_staff" => waiting,
             "maintenance_unscheduled" => visit.is_some_and(|v| v.unscheduled),
             "maintenance_start" => shown.as_ref().map(|v| operations::display_time(v.start)).unwrap_or_default().as_str(),
             "maintenance_end" => shown.as_ref().map(|v| operations::display_time(v.end)).unwrap_or_default().as_str(),

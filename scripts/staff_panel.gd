@@ -444,3 +444,12 @@ func focus_pay_group(index: int) -> void:
 	var slider: HSlider = pay_cards[role_keys[index]]["slider"]
 	get_parent().get_parent().ensure_control_visible(slider.get_parent().get_parent())
 	slider.grab_focus()
+
+func focus_technician_hiring() -> void:
+	var index := role_keys.find("technician")
+	if index >= 0:
+		role_select.select(index)
+	for frame in range(4):
+		await get_tree().process_frame
+	get_parent().get_parent().ensure_control_visible(role_select.get_parent())
+	role_select.grab_focus()
