@@ -72,3 +72,10 @@ ROUTE_WIND_DOWN_DONE,Freigabe aller Flugzeuge der Route angefordert.,Release of 
 ROUTE_RELEASE_LINE,%s: Freigabe nach Landung und Bodenzeit um %s,%s: released after landing and ground time at %s
 ROUTE_DELETE_AT,Löschen möglich ab %s (Spielzeit).,Delete becomes available at %s (game time).
 ROUTE_DELETE_BLOCKED,"Löschen erst möglich, wenn die Route abgewickelt ist (Route abwickeln).","Delete is available once the route is wound down (Wind down route)."
+COMPANY_REVENUE,GESAMTUMSATZ,TOTAL REVENUE
+COMPANY_COSTS,GESAMTKOSTEN,TOTAL COSTS
+COMPANY_RESULT,ERGEBNIS,RESULT
+REVENUE_TICKETS,TICKETS,TICKETS
+REVENUE_CARGO,FRACHT,CARGO
+REVENUE_CHARTER,CHARTERENTGELTE,CHARTER FEES
+COST_CHARTER_PENALTY,DAVON CHARTER-VERTRAGSSTRAFEN,INCL. CHARTER PENALTIES

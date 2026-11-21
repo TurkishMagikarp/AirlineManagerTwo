@@ -173,7 +173,7 @@ func _views() -> bool:
 	panel = main.finances_panel
 	panel.refresh(true)
 	var summary: Dictionary = main.simulation.get_financial_summary()
-	if not _check(panel.metrics["revenue"].text == main.UI.money(summary["ticket_revenue_eur"]) and panel.metrics["cargo"].text == main.UI.money(summary["cargo_revenue_eur"]) and summary["ticket_revenue_eur"] + summary["cargo_revenue_eur"] == summary["revenue_eur"], "Separate company ticket/cargo totals reconcile"):
+	if not _check(panel.metrics["ticket"].text == main.UI.money(summary["ticket_revenue_eur"]) and panel.metrics["cargo"].text == main.UI.money(summary["cargo_revenue_eur"]) and summary["ticket_revenue_eur"] + summary["cargo_revenue_eur"] == summary["revenue_eur"], "Separate company ticket/cargo totals reconcile"):
 		return false
 	await _select(panel.route_tree)
 	var rows: Array = main.simulation.get_route_finances()

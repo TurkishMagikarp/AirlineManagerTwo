@@ -67,7 +67,7 @@ func _ready() -> void:
 	add_child(grid)
 	get_viewport().size_changed.connect(func(): grid.columns = 4 if get_viewport_rect().size.x >= 1280 else 2)
 	grid.columns = 4 if get_viewport_rect().size.x >= 1280 else 2
-	for item in [["balance", "KONTOSTAND"], ["revenue", "TICKETUMSÄTZE"], ["cargo", "FRACHTUMSÄTZE"], ["ancillary", "ANCILLARY_REVENUE"], ["costs", "GESAMTKOSTEN"], ["profit", "GEWINN / VERLUST"]]:
+	for item in [["balance", "KONTOSTAND"], ["revenue", "COMPANY_REVENUE"], ["ticket", "REVENUE_TICKETS"], ["cargo", "REVENUE_CARGO"], ["ancillary", "ANCILLARY_REVENUE"], ["charter", "REVENUE_CHARTER"], ["costs", "COMPANY_COSTS"], ["penalty", "COST_CHARTER_PENALTY"], ["profit", "COMPANY_RESULT"]]:
 		metrics[item[0]] = UI.metric(grid, tr(item[1]))
 	note = UI.label("", ThemeTokens.SMALL, UI.MUTED)
 	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -358,9 +358,12 @@ func refresh(force: bool = false) -> void:
 	note.tooltip_text = "Treibstoff: weltweiter Preis, wöchentlich aktualisiert; Kosten bei Abflug fixiert."
 	metrics["balance"].text = UI.money(airline.get("capital_eur", 0))
 	metrics["balance"].add_theme_color_override("font_color", UI.NEGATIVE if airline.get("capital_eur", 0) < 0 else ThemeTokens.INK)
-	for field in ["revenue", "costs", "profit"]:
-		metrics[field].text = UI.signed_money(summary[field + "_eur"]) if field == "profit" else UI.money(summary[field + "_eur"])
-	metrics["revenue"].text = UI.money(summary["ticket_revenue_eur"])
+	metrics["revenue"].text = UI.money(summary["company_revenue_eur"])
+	metrics["costs"].text = UI.money(summary["company_costs_eur"])
+	metrics["profit"].text = UI.signed_money(summary["profit_eur"])
+	metrics["ticket"].text = UI.money(summary["ticket_revenue_eur"])
+	metrics["charter"].text = UI.money(summary["charter_revenue_eur"])
+	metrics["penalty"].text = UI.money(summary["charter_penalty_eur"])
 	metrics["ancillary"].text = UI.money(summary["ancillary_revenue_eur"])
 	_refresh_ancillaries()
 	_refresh_loyalty(summary)
