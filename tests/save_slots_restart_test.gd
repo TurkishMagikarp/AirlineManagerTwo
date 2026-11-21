@@ -354,7 +354,8 @@ func _read(mode: String) -> void:
 	if not _check(control_ok and main.state_label.text.ends_with("%d×" % want["speed"]), "Clock controls show the saved running state and speed"):
 		return
 	if key == "b":
-		await _continue_checks(expected)
+		if not await _continue_checks(expected):
+			return
 	if not _check(not main.jump_in_progress, "No stray jump"):
 		return
 	print("PASS: %s (process %d): %s restored exactly at %s" % [mode, OS.get_process_id(), key, want["time"]])
@@ -362,35 +363,36 @@ func _read(mode: String) -> void:
 
 
 ## Resume the airborne-flight save: same landing, same booking as the uninterrupted run, once.
-func _continue_checks(expected: Dictionary) -> void:
+func _continue_checks(expected: Dictionary) -> bool:
 	var landing: String = expected["landing"]
 	var op: Dictionary = sim.get_operations()[0]
 	if not _check(op["state_kind"] == "airborne" and op["expected_landing"] == landing and _landings(sim.get_route_flight_page(1, 0), landing) == 0, "Pending flight identified after restore"):
-		return
+		return false
 	var reference: Dictionary = expected["reference"]
 	var again := _continue(expected["landing_seconds"])
 	if again.is_empty():
-		return
+		return false
 	for stage in ["landed", "later"]:
 		var got: Dictionary = again[stage]
 		var want: Dictionary = reference[stage]
 		for field in want:
 			if not _check(got[field] == want[field], "%s: %s equals the uninterrupted run" % [stage, field]):
-				return
+				return false
 		if not _check(_landings(got["archive"], landing) == 1 and _landings(got["results"], landing) == 1, "%s: identified flight appears exactly once" % stage):
-			return
+			return false
 	var before: Dictionary = expected["b"]
 	var booked: Dictionary = again["landed"]
 	var new_flights: int = booked["finance"]["flights"] - before["finance"]["flights"]
 	if not _check(new_flights == 1, "Landing booked once in company flights (%d new)" % new_flights):
-		return
+		return false
 	var landed_result: Dictionary = booked["archive"].filter(func(f): return f["landing"] == landing)[0]
 	var delta: int = booked["finance"]["company_revenue_eur"] - before["finance"]["company_revenue_eur"]
 	if not _check(delta == landed_result["revenue_eur"] and delta == _new_flight_revenue(before, booked), "Company revenue rose by exactly the landing's revenue (%d vs %d)" % [delta, landed_result["revenue_eur"]]):
-		return
+		return false
 	var later: Dictionary = again["later"]
 	if not _check(later["finance"]["company_revenue_eur"] - before["finance"]["company_revenue_eur"] == _new_flight_revenue(before, later), "Revenue after a further day equals the archive sum"):
-		return
+		return false
+	return true
 
 
 func _run() -> void:
