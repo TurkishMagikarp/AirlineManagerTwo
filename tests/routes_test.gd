@@ -108,10 +108,12 @@ func _run() -> void:
 		return
 	_choose_airport(panel.destination, "EDDM")
 	await _click(main.new_game_button)
+	main.simulation.start()
+	var held: float = main.simulation.get_elapsed_seconds()
 	await _click(main.cancel_founding_button)
-	await _click(main.navigation[2])
-	if not _check(panel.destination.get_selected_metadata() == "EDDM", "Cancelling New Game keeps the manual draft"):
+	if not _check(main.current_page == 2 and panel.visible and panel.destination.get_selected_metadata() == "EDDM" and main.new_game_button.has_focus() and main.simulation.is_running() and main.simulation.get_elapsed_seconds() == held, "Cancelling New Game returns to Routes with the draft, focus on New Game and clock held"):
 		return
+	main.simulation.pause()
 	await _click(main.new_game_button)
 	main.name_input.text = "Istanbul Routes"
 	for i in range(main.country_select.item_count):

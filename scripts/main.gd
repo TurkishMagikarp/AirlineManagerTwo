@@ -78,6 +78,7 @@ var quit_handler: Callable
 var quit_requested_during_jump := false
 var founding_capital: Label
 var new_game_button: Button
+var founding_opener: Button
 var terminal_notice: PanelContainer
 var terminal_title: Label
 var terminal_body: Label
@@ -269,7 +270,7 @@ func _ready() -> void:
 	new_game_button = Button.new()
 	new_game_button.text = "Neues Spiel"
 	new_game_button.tooltip_text = new_game_button.text
-	new_game_button.pressed.connect(_open_founding)
+	new_game_button.pressed.connect(_open_founding.bind(new_game_button))
 	nav.add_child(new_game_button)
 	var column := VBoxContainer.new()
 	column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -408,7 +409,7 @@ func _build_terminal_notice(column: VBoxContainer) -> void:
 	row.add_child(terminal_load_button)
 	terminal_new_game_button = Button.new()
 	terminal_new_game_button.text = "Neues Spiel"
-	terminal_new_game_button.pressed.connect(_open_founding)
+	terminal_new_game_button.pressed.connect(_open_founding.bind(terminal_new_game_button))
 	row.add_child(terminal_new_game_button)
 
 
@@ -1377,7 +1378,7 @@ func _build_founding() -> void:
 	cancel_founding_button = Button.new()
 	cancel_founding_button.text = "Abbrechen"
 	cancel_founding_button.theme_type_variation = "GhostButton"
-	cancel_founding_button.pressed.connect(_sync_view)
+	cancel_founding_button.pressed.connect(_cancel_founding)
 	actions.add_child(cancel_founding_button)
 	founding_status = _label("Die neue Airline startet pausiert bei Tag 1 und lässt sich danach in einem benannten Speicherplatz sichern.", ThemeTokens.SMALL, ThemeTokens.INK_MUTED)
 	founding_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -1503,7 +1504,8 @@ func _sync_view() -> void:
 		name_input.grab_focus()
 
 
-func _open_founding() -> void:
+func _open_founding(opener: Button = null) -> void:
+	founding_opener = opener
 	overview.hide()
 	founding.show()
 	cancel_founding_button.show()
@@ -1512,6 +1514,17 @@ func _open_founding() -> void:
 	founding_scroll.scroll_vertical = 0
 	founding_status.text = "Neues Spiel: Gründen ersetzt die laufende Airline samt ungespeichertem Fortschritt. Bestehende manuelle Spielstände bleiben unter Laden erhalten. Abbrechen kehrt zur laufenden Airline zurück."
 	name_input.grab_focus()
+
+
+func _cancel_founding() -> void:
+	if not simulation.has_airline():
+		_sync_view()
+		return
+	founding.hide()
+	overview.show()
+	var target: Button = founding_opener if is_instance_valid(founding_opener) and founding_opener.is_visible_in_tree() else new_game_button
+	founding_opener = null
+	target.grab_focus()
 
 
 func _label(text: String, style: Dictionary, color: Color = ThemeTokens.INK) -> Label:

@@ -54,6 +54,14 @@ func _run() -> void:
 		return
 	if not await _capture("fleet.png"):
 		return
+	main.fleet_tree.get_root().get_child(0).select(0)
+	main.fleet_tree.item_selected.emit()
+	main.fleet_tabs.current_tab = 0
+	var chosen: int = main.selected_aircraft
+	await _click(main.new_game_button)
+	await _click(main.cancel_founding_button)
+	if not _check(main.current_page == 1 and main.fleet_panel.is_visible_in_tree() and main.fleet_tabs.current_tab == 0 and chosen != 0 and main.selected_aircraft == chosen and main.fleet_tree.get_selected() != null and main.new_game_button.has_focus(), "Cancelling New Game keeps Fleet page, selected aircraft and focus"):
+		return
 	await _click(main.navigation[0])
 	if not _check(main.metrics["balance"].is_visible_in_tree() and main.metrics["balance"].text == main.UI.money(balance_before), "Overview displays remaining balance, not original start capital"):
 		return
