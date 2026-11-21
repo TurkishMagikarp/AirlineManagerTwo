@@ -33,6 +33,8 @@ pub static RULES: LazyLock<Rules> = LazyLock::new(|| {
 pub struct ResultSummary {
     pub advanced_seconds: u64,
     pub reason: String,
+    /// The Attention entry that stopped the jump; identity only, text may change.
+    pub attention: Option<Entry>,
 }
 impl ResultSummary {
     pub fn message(&self) -> String {
@@ -139,6 +141,7 @@ impl Game {
         let mut distressed = staged.distressed();
         staged.clock = Clock::from_state(start, true, 1).ok_or(error)?;
         let mut reason = String::new();
+        let mut attention = None;
         while staged.clock.elapsed() < target {
             let mut chunk = (target - staged.clock.elapsed()).min(Duration::from_secs(DAY));
             if let Some(event) = staged.next_order_event() {
@@ -173,6 +176,7 @@ impl Game {
                 .find(|e| !previous.iter().any(|p| same_entry(e, p)))
             {
                 reason = entry.text.clone();
+                attention = Some(entry.clone());
             }
             if !reason.is_empty() {
                 break;
@@ -192,6 +196,7 @@ impl Game {
         Ok(ResultSummary {
             advanced_seconds,
             reason,
+            attention,
         })
     }
 }

@@ -130,6 +130,9 @@ fn jumps_new_attention_distress_and_insolvency_reuse_reasons() {
             .text
     );
     assert!(r.advanced_seconds < 31 * DAY);
+    let target = r.attention.as_ref().unwrap();
+    assert_eq!(target.kind, "salary_reserve");
+    assert!(g.attention_snapshot().len() > 1 || g.attention_snapshot()[0].kind == "salary_reserve");
 }
 #[test]
 fn jumps_rejected_inputs_leave_every_owner_untouched() {
@@ -313,11 +316,18 @@ fn jump_stops_at_wear_grounding_inside_one_sampling_window_and_resumes() {
     let mut reference = initial.clone();
     small_steps(&mut reference, landing);
     assert_eq!(state(&jumped), state(&reference));
+    let forced = jumped
+        .attention_snapshot()
+        .into_iter()
+        .find(|e| e.kind == "forced_check")
+        .unwrap();
+    assert_eq!(result.attention, Some(forced));
 
     let end = jumped.fleet[0].maintenance.as_ref().unwrap().end;
     let cost = jumped.fleet[0].maintenance.as_ref().unwrap().cost_eur;
     let again = jumped.jump(10.0 * DAY as f64).unwrap();
     assert!(again.reason.is_empty(), "{}", again.reason);
+    assert!(again.attention.is_none());
     assert!(forced_entries(&jumped).is_empty());
     let total = landing + again.advanced_seconds;
     small_steps(&mut reference, again.advanced_seconds);
@@ -364,4 +374,44 @@ fn waiting_forced_check_stops_the_jump_then_updates_when_staffed() {
     let path = dir.path().join("forced.json");
     save::save(&path, &g).unwrap();
     assert_eq!(forced_entries(&save::load(&path).unwrap()), forced_entries(&g));
+}
+
+#[test]
+fn stopped_jump_names_the_new_entry_among_simultaneous_notices_for_both_entry_points() {
+    let mut base = near_limit();
+    base.place_order("atr72_600", 1).unwrap();
+    let landing = base.due_landing(0).unwrap();
+    base.orders[0].delivery_at = landing + 5 * DAY;
+    let at = base.orders[0].delivery_at;
+    // An unrelated existing notice must not be chosen over the forced check.
+    let mut preset = base.clone();
+    let r = preset.jump(10.0 * DAY as f64).unwrap();
+    let mut commitment = base.clone();
+    let c = commitment.jump_to_commitment(at).unwrap();
+    for (g, r) in [(&preset, &r), (&commitment, &c)] {
+        let forced = g
+            .attention_snapshot()
+            .into_iter()
+            .find(|e| e.kind == "forced_check")
+            .unwrap();
+        assert_eq!(r.attention, Some(forced));
+        assert_eq!(g.clock.elapsed().as_secs(), landing);
+    }
+}
+
+#[test]
+fn financing_stop_and_completed_jump_have_no_attention_target() {
+    let mut g = game();
+    let done = g.jump(DAY as f64).unwrap();
+    assert!(done.reason.is_empty() && done.attention.is_none());
+    let mut rent = Game::default();
+    rent.found("Rent", "DE", "EDDF").unwrap();
+    rent.competitors.clear();
+    rent.lease_aircraft("atr72_600").unwrap();
+    let shift = 1 - rent.cash();
+    rent.airline.as_mut().unwrap().capital_eur += shift;
+    rent.history.as_mut().unwrap().opening_balance += shift;
+    let r = rent.jump((31 * DAY) as f64).unwrap();
+    assert_eq!(r.reason, rent.financing_status());
+    assert!(r.attention.is_none());
 }

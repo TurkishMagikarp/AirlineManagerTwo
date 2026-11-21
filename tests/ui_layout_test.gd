@@ -819,6 +819,20 @@ func _jump_views() -> void:
 		if not capture_dir.is_empty():
 			await RenderingServer.frame_post_draw
 			assert(root.get_texture().get_image().save_png(capture_dir.path_join("jump-status-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
+		var entries: Array = main.simulation.get_attention_snapshot()
+		assert(not entries.is_empty())
+		main.jump_attention_target = entries[0].duplicate()
+		main.jump_attention_target.erase("text")
+		main.jump_attention_target.erase("priority")
+		main._refresh_jump_attention()
+		main.jump_attention_button.grab_focus()
+		for frame in range(5): await process_frame
+		assert(main.jump_attention_button.visible and root.get_visible_rect().encloses(main.jump_attention_button.get_global_rect()))
+		if not capture_dir.is_empty():
+			await RenderingServer.frame_post_draw
+			assert(root.get_texture().get_image().save_png(capture_dir.path_join("jump-action-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
+		main.jump_attention_target = {}
+		main._refresh_jump_attention()
 		var progress: Window = main._jump_progress()
 		for frame in range(5): await process_frame
 		assert(progress.exclusive)
