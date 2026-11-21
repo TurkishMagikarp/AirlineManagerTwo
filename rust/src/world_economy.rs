@@ -126,11 +126,7 @@ impl Cycle {
         10000 + self.crises.scale(index - 10000)
     }
     pub fn validate(&self, now: u64) -> Result<(), String> {
-        if self.started_at > now
-            || self.events_from > now
-            || self.weather_from > now
-            || self.notified_period > self.period(now)
-        {
+        if self.started_at > now || self.events_from > now || self.weather_from > now || self.notified_period > self.period(now) {
             return Err("Ungültige Weltwirtschaft.".into());
         }
         Ok(())
@@ -183,8 +179,7 @@ pub fn with_events(
     destination: &str,
 ) -> crate::demand::Market {
     if let (Some(context), Some(time)) = (context, time)
-        && let Some(e) =
-            crate::world_events::route_factors(&context.cycle, time, origin, destination)
+        && let Some(e) = crate::world_events::route_factors(&context.cycle, time, origin, destination)
     {
         market.business *= e.business;
         market.leisure *= e.leisure;

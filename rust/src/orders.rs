@@ -54,15 +54,8 @@ pub struct Order {
 }
 #[derive(Clone, Debug, PartialEq)]
 pub enum CommitmentKind {
-    Delivery {
-        order_id: u64,
-        model: String,
-    },
-    Training {
-        employee_id: u32,
-        name: String,
-        rating: String,
-    },
+    Delivery { order_id: u64, model: String },
+    Training { employee_id: u32, name: String, rating: String },
 }
 #[derive(Clone, Debug, PartialEq)]
 pub struct Commitment {
@@ -88,34 +81,21 @@ impl Game {
         let mut rows: Vec<(u64, u8, u64, Commitment)> = Vec::new();
         for o in self.orders.iter().filter(|o| o.held_since.is_none()) {
             let model = aircraft::model(&o.model_id).map_or("?".to_string(), |m| m.name.clone());
-            rows.push((
-                o.delivery_at,
-                0,
-                o.id,
-                Commitment {
-                    at: o.delivery_at,
-                    kind: CommitmentKind::Delivery {
-                        order_id: o.id,
-                        model,
-                    },
-                },
-            ));
+            rows.push((o.delivery_at, 0, o.id, Commitment {
+                at: o.delivery_at,
+                kind: CommitmentKind::Delivery { order_id: o.id, model },
+            }));
         }
         for e in &self.staff.employees {
             if let Some(t) = &e.training {
-                rows.push((
-                    t.ends_at,
-                    1,
-                    u64::from(e.id),
-                    Commitment {
-                        at: t.ends_at,
-                        kind: CommitmentKind::Training {
-                            employee_id: e.id,
-                            name: e.name.clone(),
-                            rating: t.rating.clone(),
-                        },
+                rows.push((t.ends_at, 1, u64::from(e.id), Commitment {
+                    at: t.ends_at,
+                    kind: CommitmentKind::Training {
+                        employee_id: e.id,
+                        name: e.name.clone(),
+                        rating: t.rating.clone(),
                     },
-                ));
+                }));
             }
         }
         rows.sort_by_key(|r| (r.0, r.1, r.2));

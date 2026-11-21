@@ -49,8 +49,8 @@ pub struct Rules {
     pub kinds: Vec<KindDef>,
 }
 pub static RULES: LazyLock<Rules> = LazyLock::new(|| {
-    let r: Rules =
-        serde_json::from_str(include_str!("../../config/charters.json")).expect("charters config");
+    let r: Rules = serde_json::from_str(include_str!("../../config/charters.json"))
+        .expect("charters config");
     assert!((1..=30).contains(&r.epoch_days));
     assert!(r.offer_lifetime_days >= 1 && r.offer_lifetime_days <= 60);
     assert!(r.lead_days_min <= r.lead_days_max && r.window_days >= 1);
@@ -61,11 +61,7 @@ pub static RULES: LazyLock<Rules> = LazyLock::new(|| {
     assert!((0..=100).contains(&r.penalty_percent));
     assert!(r.reputation_gain_micro >= 0 && r.reputation_loss_micro >= 0);
     assert!(r.recent_limit >= 1 && !r.kinds.is_empty());
-    assert!(
-        r.kinds
-            .iter()
-            .all(|k| k.weight > 0 && 0 < k.min && k.min <= k.max)
-    );
+    assert!(r.kinds.iter().all(|k| k.weight > 0 && 0 < k.min && k.min <= k.max));
     r
 });
 
@@ -186,9 +182,7 @@ pub fn epoch_offers(cycle: &crate::world_economy::Cycle, epoch: u64) -> Vec<Offe
     let created = epoch * RULES.epoch_days * DAY;
     let season = crate::demand::season_factors(created).leisure;
     let economy = cycle.index_at(created) as f64 / 10000.0;
-    let count = ((RULES.base_offers_per_epoch * season * economy)
-        .round()
-        .max(0.0) as u64)
+    let count = ((RULES.base_offers_per_epoch * season * economy).round().max(0.0) as u64)
         .clamp(RULES.min_offers_per_epoch, RULES.max_offers_per_epoch);
     let (Ok(origins), Ok(destinations)) = (hubs(RULES.origin_pool), hubs(RULES.destination_pool))
     else {
@@ -225,8 +219,8 @@ pub fn epoch_offers(cycle: &crate::world_economy::Cycle, epoch: u64) -> Vec<Offe
         let quantity = kind.min + (mix(r, 3, 0) % u64::from(kind.max - kind.min + 1)) as u32;
         let fee = RULES.base_fee_eur
             + (distance * f64::from(quantity) * kind.rate_milli_eur as f64 / 1000.0).round() as u64;
-        let lead =
-            RULES.lead_days_min + mix(r, 4, 0) % (RULES.lead_days_max - RULES.lead_days_min + 1);
+        let lead = RULES.lead_days_min
+            + mix(r, 4, 0) % (RULES.lead_days_max - RULES.lead_days_min + 1);
         let window_start = created + lead * DAY;
         offers.push(Offer {
             id: epoch * 1000 + slot,
@@ -253,10 +247,7 @@ pub struct Quote {
 }
 impl Quote {
     pub fn cost_eur(&self) -> i64 {
-        self.positioning
-            .as_ref()
-            .map_or(0, |p| p.quote.totals.costs())
-            + self.leg.quote.totals.costs()
+        self.positioning.as_ref().map_or(0, |p| p.quote.totals.costs()) + self.leg.quote.totals.costs()
     }
 }
 
@@ -270,24 +261,17 @@ impl Game {
             if epoch * RULES.epoch_days * DAY < self.charters.since {
                 continue;
             }
-            offers.extend(
-                epoch_offers(&self.world_economy, epoch)
-                    .into_iter()
-                    .filter(|o| {
-                        o.created <= now
-                            && now < o.expires
-                            && !self.charters.taken.iter().any(|t| t.0 == o.id)
-                    }),
-            );
+            offers.extend(epoch_offers(&self.world_economy, epoch).into_iter().filter(|o| {
+                o.created <= now
+                    && now < o.expires
+                    && !self.charters.taken.iter().any(|t| t.0 == o.id)
+            }));
         }
         offers
     }
 
     pub fn charter_job(&self, aircraft_id: u32) -> Option<&Job> {
-        self.charters
-            .jobs
-            .iter()
-            .find(|j| j.aircraft_id == aircraft_id)
+        self.charters.jobs.iter().find(|j| j.aircraft_id == aircraft_id)
     }
 
     fn charter_refusal(&self, offer: &Offer, id: u32) -> Result<(), String> {
@@ -343,11 +327,7 @@ impl Game {
         }
         self.charter_refusal(offer, id)?;
         let plane = self.fleet.iter().find(|p| p.id == id).unwrap();
-        let passengers = if offer.freight() {
-            0
-        } else {
-            i64::from(offer.quantity)
-        };
+        let passengers = if offer.freight() { 0 } else { i64::from(offer.quantity) };
         let positioning = if plane.location_icao == offer.origin {
             None
         } else {
@@ -359,13 +339,7 @@ impl Game {
         if dispatch_at > offer.window_end {
             return Err("Zeitfenster nicht erreichbar: Überführung dauert zu lange.".into());
         }
-        let leg = self.quote_leg(
-            id,
-            &offer.origin,
-            &offer.destination,
-            dispatch_at,
-            passengers,
-        )?;
+        let leg = self.quote_leg(id, &offer.origin, &offer.destination, dispatch_at, passengers)?;
         Ok(Quote {
             positioning,
             leg,
@@ -444,11 +418,7 @@ impl Game {
             cash_eur: cash,
             reason: reason.into(),
         });
-        let excess = self
-            .charters
-            .recent
-            .len()
-            .saturating_sub(RULES.recent_limit);
+        let excess = self.charters.recent.len().saturating_sub(RULES.recent_limit);
         self.charters.recent.drain(..excess);
     }
 
@@ -491,11 +461,7 @@ impl Game {
             .min()
             .or_else(|| {
                 // Due work at this very second (e.g. right after loading).
-                (self
-                    .charters
-                    .jobs
-                    .iter()
-                    .any(|j| j.landing.unwrap_or(j.dispatch_at) <= now)
+                (self.charters.jobs.iter().any(|j| j.landing.unwrap_or(j.dispatch_at) <= now)
                     || self.charters.taken.iter().any(|t| t.1 <= now))
                 .then_some(now)
             })
@@ -512,19 +478,8 @@ impl Game {
         self.charters.taken.retain(|t| t.1 > now);
         let notice = RULES.notice_days * DAY;
         self.charters.recent.retain(|o| o.at + notice > now);
-        for offer_id in self
-            .charters
-            .jobs
-            .iter()
-            .map(|j| j.offer.id)
-            .collect::<Vec<_>>()
-        {
-            let Some(job) = self
-                .charters
-                .jobs
-                .iter()
-                .find(|j| j.offer.id == offer_id)
-                .cloned()
+        for offer_id in self.charters.jobs.iter().map(|j| j.offer.id).collect::<Vec<_>>() {
+            let Some(job) = self.charters.jobs.iter().find(|j| j.offer.id == offer_id).cloned()
             else {
                 continue;
             };
@@ -561,11 +516,7 @@ impl Game {
                 self.fail_charter(offer_id, &reason)?;
                 continue;
             }
-            let passengers = if job.offer.freight() {
-                0
-            } else {
-                i64::from(job.offer.quantity)
-            };
+            let passengers = if job.offer.freight() { 0 } else { i64::from(job.offer.quantity) };
             let leg = self.quote_leg(
                 job.aircraft_id,
                 &job.offer.origin,
@@ -665,10 +616,9 @@ impl Game {
         let now = self.clock.elapsed().as_secs();
         let s = &self.charters;
         if s.since > now
-            || !self
-                .competitors
-                .iter()
-                .all(|c| c.game.charters.taken.is_empty() && c.game.charters.since == 0)
+            || !self.competitors.iter().all(|c| {
+                c.game.charters.taken.is_empty() && c.game.charters.since == 0
+            })
             || s.taken.windows(2).any(|w| w[0] >= w[1])
             || s.jobs.windows(2).any(|w| w[0].offer.id >= w[1].offer.id)
             || s.recent.len() > RULES.recent_limit
@@ -692,8 +642,7 @@ impl Game {
                 || j.dispatch_at < j.accepted_at
                 || j.dispatch_at > o.window_end
                 || j.departure.is_some() != j.landing.is_some()
-                || j.departure
-                    .is_some_and(|d| d > now || j.landing.is_none_or(|l| l <= d))
+                || j.departure.is_some_and(|d| d > now || j.landing.is_none_or(|l| l <= d))
                 || crate::routes::distance_km(&o.origin, &o.destination).is_err()
             {
                 return bad();
