@@ -79,6 +79,13 @@ func _run() -> void:
 		print("PASS: technician wait in Fleet register and maintenance details at both sizes")
 		quit(0)
 		return
+	if OS.get_environment("AIRLINE_UI_CAPTURE_CREW_BLOCKED_ONLY") == "1":
+		await _crew_blocked_views(sim)
+		main.queue_free()
+		await process_frame
+		print("PASS: crew-blocked departure in the Routes operations board at both sizes")
+		quit(0)
+		return
 	if OS.get_environment("AIRLINE_UI_CAPTURE_WEATHER_ONLY") == "1":
 		await _weather_views(sim)
 		main.queue_free()
@@ -1562,6 +1569,36 @@ func _forced_check_views(sim: RefCounted) -> void:
 		await RenderingServer.frame_post_draw
 		assert(root.get_texture().get_image().save_png(capture_dir.path_join("forced-check-fleet-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
 
+
+func _crew_blocked_views(sim: RefCounted) -> void:
+	assert(sim.buy_aircraft("atr72_600").is_empty())
+	assert(sim.buy_aircraft("atr72_600").is_empty())
+	assert(sim.create_route("EDDF", "EDDM", 1).is_empty())
+	assert(sim.create_route("EDDF", "EDDM", 2).is_empty())
+	assert(sim.hire_missing_staff().is_empty())
+	assert(sim.schedule_route(1, 1, 120).is_empty())
+	assert(sim.schedule_route(2, 1, 120).is_empty())
+	assert(sim.set_staff_pay("pilot", 85).is_empty())
+	sim.start()
+	for day in range(300):
+		sim.advance(86400.0)
+		if sim.get_staff_overview()["roles"][0]["resigned"] > 0:
+			break
+	sim.pause()
+	TranslationServer.set_locale("de")
+	main._sync_view()
+	for dimensions in [Vector2i(1440, 1000), Vector2i(680, 520)]:
+		root.size = dimensions
+		main._show_page(2)
+		main.routes_panel._operations_signature = ""
+		main.routes_panel.refresh_operations()
+		for frame in range(5): await process_frame
+		var scroll: ScrollContainer = main.routes_panel.get_parent().get_parent()
+		scroll.ensure_control_visible(main.routes_panel.operations_tree)
+		for frame in range(5): await process_frame
+		scroll.ensure_control_visible(main.routes_panel.operations_tree)
+		await RenderingServer.frame_post_draw
+		assert(root.get_texture().get_image().save_png(capture_dir.path_join("route-crew-blocked-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
 
 func _technician_wait_views(sim: RefCounted) -> void:
 	assert(sim.buy_aircraft("atr72_600").is_empty())

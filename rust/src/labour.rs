@@ -113,6 +113,10 @@ pub struct Hold {
     pub until: u64,
 }
 
+/// Hold end used while qualified crew is missing; any time past `INDEFINITE_HOLD_FLOOR` is that hold.
+pub const INDEFINITE_HOLD: u64 = u64::MAX / 4;
+pub const INDEFINITE_HOLD_FLOOR: u64 = u64::MAX / 8;
+
 impl Game {
     pub fn labour_group(&self, role: Role) -> &Group {
         &self.staff.labour[role as usize]
@@ -390,7 +394,7 @@ impl Game {
             let short = *free < n.pilots || cabin < n.cabin_crew;
             *free = free.saturating_sub(n.pilots);
             cabin = cabin.saturating_sub(n.cabin_crew);
-            let mut hold = short.then_some((now, u64::MAX / 4));
+            let mut hold = short.then_some((now, INDEFINITE_HOLD));
             for role in Role::ALL {
                 if role == Role::CabinCrew && n.cabin_crew == 0 {
                     continue;

@@ -525,6 +525,8 @@ pub struct Movement {
     pub landing: u64,
     pub ready: u64,
     pub completed: u64,
+    /// The next departure waits on an indefinite staffing hold (missing crew).
+    pub crew_blocked: bool,
 }
 
 /// One row of the Routes operations table; Godot only renders it.
@@ -537,6 +539,7 @@ pub struct BoardRow {
     pub expected_landing: Option<u64>,
     pub delay_seconds: u64,
     pub weather_delay: bool,
+    pub crew_blocked: bool,
 }
 
 pub fn board_row(
@@ -547,6 +550,7 @@ pub fn board_row(
     let release_pending = route.remove_at.is_some();
     let airborne = state.filter(|s| s.status == AircraftStatus::InFlight);
     let weather_delay = state.is_some_and(|s| s.delay_seconds > 0 && s.weather_seconds > 0);
+    let crew_blocked = state.is_some_and(|s| s.crew_blocked);
     let state_kind = if plane.status == AircraftStatus::Maintenance {
         "maintenance"
     } else if release_pending {
@@ -554,6 +558,7 @@ pub fn board_row(
     } else if let Some(s) = state {
         match s.status {
             AircraftStatus::InFlight => "airborne",
+            _ if crew_blocked => "crew_blocked",
             _ if weather_delay => "weather_delay",
             AircraftStatus::Ground => "ground",
             AircraftStatus::Parked | AircraftStatus::Maintenance => "scheduled",
@@ -579,10 +584,13 @@ pub fn board_row(
         release_pending,
         origin,
         destination,
-        next_departure: state.filter(|_| !release_pending).map(|s| s.next_departure),
+        next_departure: state
+            .filter(|s| !release_pending && !s.crew_blocked)
+            .map(|s| s.next_departure),
         expected_landing: airborne.map(|s| s.landing),
         delay_seconds: state.map_or(0, |s| s.delay_seconds),
         weather_delay,
+        crew_blocked,
     }
 }
 
@@ -698,6 +706,7 @@ pub fn movement(route: &Route, model: &str, now: u64) -> Result<Movement, String
         landing,
         ready,
         completed: index + u64::from(landed),
+        crew_blocked: false,
     })
 }
 

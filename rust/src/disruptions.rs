@@ -261,22 +261,26 @@ pub fn project(route: &Route, model: &str, now: u64) -> Result<Projection, Strin
     } else {
         &next
     };
+    let next_departure = if in_flight {
+        let mut after = cursor.clone();
+        after.landed(next.clone())?;
+        after.next_timed(route, model, flight, ground)?.departure
+    } else {
+        next.departure
+    };
+    let crew_blocked = next_departure >= crate::labour::INDEFINITE_HOLD_FLOOR;
+    let delay_is_hold = delay_leg.departure >= crate::labour::INDEFINITE_HOLD_FLOOR;
     let state = Movement {
+        crew_blocked,
         status,
         location: if at_destination { destination } else { origin }.clone(),
         origin: origin.clone(),
         destination: destination.clone(),
-        next_departure: if in_flight {
-            let mut after = cursor.clone();
-            after.landed(next.clone())?;
-            after.next_timed(route, model, flight, ground)?.departure
-        } else {
-            next.departure
-        },
+        next_departure,
         landing: displayed.landing,
         ready: displayed.ready,
         completed: cursor.index,
-        weather_seconds: if now < delay_leg.scheduled {
+        weather_seconds: if now < delay_leg.scheduled || delay_is_hold {
             0
         } else {
             let delay = delay_leg.departure - delay_leg.scheduled;
@@ -284,7 +288,7 @@ pub fn project(route: &Route, model: &str, now: u64) -> Result<Projection, Strin
                 .weather_delay(route, delay_leg.index, delay_leg.scheduled)
                 .min(delay)
         },
-        delay_seconds: if now < delay_leg.scheduled {
+        delay_seconds: if now < delay_leg.scheduled || delay_is_hold {
             0
         } else {
             delay_leg.departure - delay_leg.scheduled
