@@ -1866,6 +1866,10 @@ func _render_operations(parent: VBoxContainer) -> void:
 		for flight in flights:
 			if flight["aircraft_id"] == operation["aircraft_id"]: airborne = true
 		if airborne: continue
-		var text := UI.label("%s · %s\nNächster Abflug: %s" % [operation["identifier"], operation["status_text"], operation["next_departure"]])
+		var in_check: bool = operation["state_kind"] in ["maintenance", "technician_wait"]
+		var line: String = "%s · %s" % [operation["identifier"], operation["status_text"]]
+		if not in_check:
+			line += "\nNächster Abflug: %s" % operation["next_departure"]
+		var text := UI.label(line)
 		text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		parent.add_child(text)

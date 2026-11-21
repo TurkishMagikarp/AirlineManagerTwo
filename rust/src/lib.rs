@@ -923,7 +923,27 @@ impl SimulationClock {
             let state =
                 operations::movement(route, &plane.model_id, self.game.clock.elapsed().as_secs())
                     .ok();
-            let text = if let Some(s) = &state {
+            let grounded_visit = plane
+                .maintenance
+                .as_ref()
+                .filter(|_| plane.status == aircraft::AircraftStatus::Maintenance);
+            let text = if let Some(v) = grounded_visit {
+                let resume = v.resume.as_ref().is_some_and(|r| r.route_id == route.id);
+                let label = if v.unscheduled { "Pflichtwartung" } else { "Wartung" };
+                let head = if v.staffed {
+                    format!("In {label} bis {}", operations::display_time(v.end))
+                } else {
+                    format!("{label} wartet auf Techniker · keine Freigabezeit (Personal-Tab)")
+                };
+                format!(
+                    "{head}{}",
+                    if resume {
+                        " · Flugplan wird danach fortgesetzt"
+                    } else {
+                        ""
+                    }
+                )
+            } else if let Some(s) = &state {
                 let phase = match s.status {
                     aircraft::AircraftStatus::InFlight => format!(
                         "Unterwegs {} → {} · Landung {}",
@@ -963,25 +983,10 @@ impl SimulationClock {
                         ""
                     }
                 )
-            } else if let Some(v) = plane
-                .maintenance
-                .as_ref()
-                .filter(|_| plane.status == aircraft::AircraftStatus::Maintenance)
-            {
-                let resume = v.resume.as_ref().is_some_and(|r| r.route_id == route.id);
-                format!(
-                    "In Wartung bis {}{}",
-                    operations::display_time(v.end),
-                    if resume {
-                        " · Flugplan wird danach fortgesetzt"
-                    } else {
-                        ""
-                    }
-                )
             } else {
                 "Kein Flugplan".into()
             };
-            let blocked = state.as_ref().is_some_and(|s| s.crew_blocked);
+            let blocked = state.as_ref().is_some_and(|s| s.crew_blocked) && grounded_visit.is_none();
             let crew_missing = match gaps.iter().find(|g| g.0 == plane.id) {
                 Some(&(_, pilots, cabin)) if blocked => {
                     let mut parts = Vec::new();
@@ -1018,6 +1023,8 @@ impl SimulationClock {
                 "route_id" => route.public_id(), "aircraft_id" => plane.id,
                 "identifier" => plane.identifier().as_str(), "status_text" => text.as_str(),
                 "has_plan" => route.plan.is_some(),
+                "technician_wait" => board.technician_wait,
+                "maintenance_release" => grounded_visit.filter(|v| v.staffed).map(|v| operations::display_time(v.end)).unwrap_or_default().as_str(),
                 "flight_seconds" => flight as i64, "ground_seconds" => ground as i64,
                 "completed_flights" => state.as_ref().map(|s| s.completed as i64).unwrap_or(0),
                 "next_departure_seconds" => next_departure.map(|t| t as i64).unwrap_or(-1),

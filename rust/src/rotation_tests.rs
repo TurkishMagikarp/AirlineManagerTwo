@@ -412,6 +412,11 @@ fn board_rows_flag_maintenance_and_weather_delay() {
     let rows = board(&g);
     assert_eq!(g.fleet[0].status, AircraftStatus::Maintenance);
     assert_eq!(rows[0].state_kind, "maintenance");
+    assert!(!rows[0].technician_wait && rows[0].next_departure.is_none());
+    g.fleet[0].maintenance.as_mut().unwrap().staffed = false;
+    let rows = board(&g);
+    assert_eq!(rows[0].state_kind, "technician_wait");
+    assert!(rows[0].technician_wait && rows[0].next_departure.is_none());
 }
 
 #[test]
