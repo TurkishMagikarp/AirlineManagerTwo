@@ -301,6 +301,12 @@ impl SimulationClock {
             .map(|f| {
                 let mut row = flight_dictionary(f);
                 row.set("route_id", h.public_route(f.route_id));
+                let business_fare = f
+                    .totals
+                    .business_revenue
+                    .checked_div(f.totals.business_passengers)
+                    .map_or_else(Variant::nil, |fare| fare.to_variant());
+                row.set("business_fare_eur", &business_fare);
                 row
             })
             .collect()
