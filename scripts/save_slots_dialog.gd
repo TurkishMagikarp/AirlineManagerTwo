@@ -322,10 +322,17 @@ func _trap_focus() -> void:
 	_collect_focus(content, focusable)
 	for i in range(focusable.size()):
 		var control := focusable[i]
+		if list_box.is_ancestor_of(control) and not control.has_meta("reveal_bound"):
+			control.set_meta("reveal_bound", true)
+			control.focus_entered.connect(_reveal_focused.bind(control))
 		control.focus_next = control.get_path_to(focusable[(i + 1) % focusable.size()])
 		control.focus_previous = control.get_path_to(focusable[(i - 1 + focusable.size()) % focusable.size()])
 		for side in [SIDE_LEFT, SIDE_TOP, SIDE_RIGHT, SIDE_BOTTOM]:
 			control.set_focus_neighbor(side, control.focus_previous if side in [SIDE_LEFT, SIDE_TOP] else control.focus_next)
+
+func _reveal_focused(control: Control) -> void:
+	if is_instance_valid(control) and control.is_inside_tree():
+		list_box.get_parent().ensure_control_visible(control)
 
 func _collect_focus(node: Node, controls: Array[Control]) -> void:
 	if node is Control and node.focus_mode == Control.FOCUS_ALL and node.is_visible_in_tree():

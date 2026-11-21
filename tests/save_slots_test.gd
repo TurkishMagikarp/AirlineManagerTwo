@@ -102,6 +102,94 @@ func _run() -> void:
 		assert(focus != null and dialog.is_ancestor_of(focus))
 	dialog.close_dialog()
 	await process_frame
+	# Dense list at the minimum window size: focus stays inside the scroll viewport.
+	root.size = Vector2i(680, 520)
+	var manual_count: int = sim.get_save_slots(directory)["slots"].size()
+	for id in range(manual_count):
+		assert(sim.save_slot(directory, id, "Dicht %d" % id, id == 0).is_empty())
+	assert(sim.save_slot(directory, manual_count - 2, "Dicht neu", true).is_empty())
+	main._load_game()
+	await process_frame
+	await process_frame
+	dialog = main.save_slots_dialog
+	var scroll: ScrollContainer = dialog.list_box.get_parent()
+	var late: int = manual_count - 2
+	var first_focus: Control = root.gui_get_focus_owner()
+	var seen_late := false
+	var chosen: int = dialog.selected
+	for i in range(80):
+		await _tab(false)
+		focus = root.gui_get_focus_owner()
+		assert(focus != null and dialog.is_ancestor_of(focus))
+		if dialog.list_box.is_ancestor_of(focus):
+			var view := scroll.get_global_rect()
+			var box := focus.get_global_rect()
+			assert(box.position.y >= view.position.y - 1 and box.end.y <= view.end.y + 1)
+			if focus.get_parent().get_parent().get_meta("slot_id", -1) == manual_count - 1: seen_late = true
+	assert(seen_late and dialog.selected == chosen)
+	for i in range(80):
+		await _tab(true)
+		focus = root.gui_get_focus_owner()
+		assert(focus != null and dialog.is_ancestor_of(focus))
+		if dialog.list_box.is_ancestor_of(focus):
+			var view := scroll.get_global_rect()
+			var box := focus.get_global_rect()
+			assert(box.position.y >= view.position.y - 1 and box.end.y <= view.end.y + 1)
+	assert(dialog.selected == chosen)
+	# Select a late slot with a backup by keyboard, reach both load actions, cancel keeps focus on the slot.
+	dialog.select_slot(late, "")
+	await process_frame
+	await process_frame
+	var reached := {}
+	for i in range(80):
+		await _tab(false)
+		focus = root.gui_get_focus_owner()
+		if focus is Button and focus.text in ["Laden", "Sicherung laden"]:
+			reached[focus.text] = true
+			var view := scroll.get_global_rect()
+			var box := focus.get_global_rect()
+			assert(box.position.y >= view.position.y - 1 and box.end.y <= view.end.y + 1)
+			if reached.size() == 2: break
+	assert(reached.size() == 2)
+	focus.pressed.emit()
+	assert(is_instance_valid(dialog.decision))
+	dialog.decision.get_cancel_button().pressed.emit()
+	await process_frame
+	await process_frame
+	focus = root.gui_get_focus_owner()
+	assert(dialog.selected == late and focus != null and focus.get_parent().get_parent().get_meta("slot_id", -1) == late)
+	var view_after := scroll.get_global_rect()
+	assert(focus.get_global_rect().end.y <= view_after.end.y + 1 and focus.get_global_rect().position.y >= view_after.position.y - 1)
+	dialog.close_dialog()
+	await process_frame
+	# Save mode with one free slot: the free-slot action is reachable and tab alone writes nothing.
+	assert(sim.delete_save_slot(directory, manual_count - 1).is_empty())
+	main.save_button.pressed.emit()
+	await process_frame
+	await process_frame
+	dialog = main.save_slots_dialog
+	scroll = dialog.list_box.get_parent()
+	var wrote_before: Dictionary = sim.get_save_slots(directory)
+	var free_reached := false
+	for i in range(80):
+		await _tab(false)
+		focus = root.gui_get_focus_owner()
+		if focus is Button and "Freier Speicherplatz" in focus.text:
+			free_reached = true
+			var view := scroll.get_global_rect()
+			var box := focus.get_global_rect()
+			assert(box.position.y >= view.position.y - 1 and box.end.y <= view.end.y + 1)
+			break
+	assert(free_reached and sim.get_save_slots(directory) == wrote_before)
+	focus.pressed.emit()
+	await process_frame
+	dialog.name_field.text = "Per Tastatur"
+	dialog.save_action.pressed.emit()
+	await process_frame
+	assert(sim.get_save_slots(directory)["slots"][manual_count - 1]["occupied"])
+	dialog.close_dialog()
+	await process_frame
+	for id in range(manual_count): assert(sim.delete_save_slot(directory, id).is_empty())
 	# Autosave: off by default, persisted preference, deferred during jumps, explicit reload only.
 	var prefs := directory.path_join("preferences.cfg")
 	var Autosave := load("res://scripts/autosave.gd")
@@ -171,3 +259,11 @@ func _run() -> void:
 	await process_frame
 	print("PASS: save slots dialog, confirmations, backup load, focus and jump guards")
 	quit(0)
+func _tab(backwards: bool) -> void:
+	var key := InputEventKey.new()
+	key.keycode = KEY_TAB
+	key.shift_pressed = backwards
+	key.pressed = true
+	Input.parse_input_event(key)
+	await process_frame
+	await process_frame
