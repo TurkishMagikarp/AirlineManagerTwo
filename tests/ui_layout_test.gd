@@ -881,6 +881,15 @@ func _save_slot_views(sim: RefCounted) -> void:
 				await RenderingServer.frame_post_draw
 				assert(root.get_texture().get_image().save_png(capture_dir.path_join("save-slots-confirm-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
 				dialog.decision.get_cancel_button().pressed.emit()
+				for frame in range(3): await process_frame
+				dialog.request_load(0, false)
+				for frame in range(3): await process_frame
+				await RenderingServer.frame_post_draw
+				assert(root.get_texture().get_image().save_png(capture_dir.path_join("save-slots-load-confirm-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
+				dialog.decision.get_cancel_button().pressed.emit()
+				for frame in range(3): await process_frame
+				var focused: Control = root.gui_get_focus_owner()
+				assert(focused != null and focused.is_visible_in_tree() and dialog.is_ancestor_of(focused) and root.get_visible_rect().encloses(focused.get_global_rect()))
 			dialog.close_dialog()
 			await process_frame
 	for dimensions in [Vector2i(1440, 1000), Vector2i(680, 520)]:

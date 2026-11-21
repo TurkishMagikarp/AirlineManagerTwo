@@ -70,7 +70,13 @@ func _run() -> void:
 	await _frames(3)
 	assert(sim.get_elapsed_seconds() == paused_at)
 	# Loading a running slot into a paused company uses the slot's settings.
-	main.save_slots_dialog.load_slot(1, false)
+	main.save_slots_dialog.request_load(1, false)
+	assert(is_instance_valid(main.save_slots_dialog.decision))
+	main.save_slots_dialog.decision.get_cancel_button().pressed.emit()
+	await _frames(2)
+	assert(not sim.is_running() and sim.get_elapsed_seconds() == paused_at and is_instance_valid(main.save_slots_dialog))
+	main.save_slots_dialog.request_load(1, false)
+	main.save_slots_dialog.decision.get_ok_button().pressed.emit()
 	await process_frame
 	await process_frame
 	assert(sim.is_running() and sim.get_speed() == 16 and sim.get_elapsed_seconds() == saved_at)
@@ -95,7 +101,8 @@ func _run() -> void:
 	sim.start()
 	main.load_button.pressed.emit()
 	await process_frame
-	main.save_slots_dialog.load_slot(2, false)
+	main.save_slots_dialog.request_load(2, false)
+	main.save_slots_dialog.decision.get_ok_button().pressed.emit()
 	await _frames(2)
 	assert(not sim.is_running())
 	var paused_slot_time: float = sim.get_elapsed_seconds()
