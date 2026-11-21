@@ -156,6 +156,7 @@ var ferry_title: Label
 var ferry_toast: CanvasLayer
 var ferry_aircraft := 0
 var ferry_staff_button: Button
+var ferry_retained := {}
 
 func _build_ferry_card(parent: VBoxContainer) -> void:
 	ferry_card = UI.panel(parent, "FLUGZEUG  /  ÜBERFÜHRUNG")
@@ -177,12 +178,16 @@ func _refresh_ferry_card(plane: Dictionary) -> void:
 	ferry_chip = UI.status_chip(state if not state.is_empty() else {"parked": "Geparkt", "in_flight": "Unterwegs", "ground": "Bodenzeit", "maintenance": "Wartung"}.get(plane.get("status", ""), "Geparkt"), "info" if plane.get("status") == "in_flight" else "neutral")
 	ferry_card.add_child(ferry_chip)
 	ferry_card.move_child(ferry_chip, 1)
-	ferry_button.disabled = not String(plane.get("ferry_error", "")).is_empty()
+	ferry_button.disabled = not String(plane.get("ferry_error", "")).is_empty() and int(plane.get("ferry_pilots_missing", 0)) == 0
 	ferry_button.tooltip_text = plane.get("ferry_error", "")
 	if is_instance_valid(ferry_dialog): _preview_ferry()
 
 func _open_ferry(aircraft_id := 0, destination := "", opener: Control = null) -> void:
 	ferry_aircraft = aircraft_id if aircraft_id != 0 else selected_aircraft
+	var from_fleet := opener == null or opener == ferry_button
+	if opener == null: opener = ferry_button
+	if destination.is_empty() and from_fleet and ferry_retained.get("aircraft_id", 0) == ferry_aircraft:
+		destination = ferry_retained.get("destination", "")
 	var plane: Dictionary = fleet_rows.get(ferry_aircraft, {})
 	if plane.is_empty():
 		for candidate in simulation.get_fleet():
@@ -218,9 +223,11 @@ func _open_ferry(aircraft_id := 0, destination := "", opener: Control = null) ->
 		var rating: String = staff_button.get_meta("rating", "")
 		var missing: int = staff_button.get_meta("missing", 0)
 		dialog.set_meta("to_staff", true)
+		if from_fleet:
+			ferry_retained = {"aircraft_id": ferry_aircraft, "destination": str(ferry_destination.get_selected_metadata())}
 		dialog.queue_free()
 		_show_page(5)
-		staff_panel.prepare_pilot_hire(rating, missing))
+		staff_panel.prepare_pilot_hire(rating, missing, "Flotte" if from_fleet else "Routen"))
 	_preview_ferry()
 	if opener != null:
 		ferry_dialog.tree_exited.connect(func():
@@ -257,6 +264,7 @@ func _send_ferry() -> void:
 	var error: String = simulation.send_ferry(ferry_aircraft, ferry_destination.get_selected_metadata())
 	if is_instance_valid(ferry_toast): ferry_toast.queue_free()
 	ferry_toast = UI.toast(self, "Überführung gestartet." if error.is_empty() else error, error.is_empty())
+	if error.is_empty(): ferry_retained = {}
 	_refresh_fleet()
 	routes_panel.refresh()
 
@@ -1576,6 +1584,7 @@ func _sync_view() -> void:
 	fleet_status.hide()
 	maintenance_status.hide()
 	selected_aircraft = 0
+	ferry_retained = {}
 	routes_panel.status.text = ""
 	overview.visible = simulation.has_airline()
 	founding.visible = not simulation.has_airline()

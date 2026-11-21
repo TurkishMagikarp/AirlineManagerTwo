@@ -54,6 +54,7 @@ func _run() -> void:
 	main.queue_free()
 	await process_frame
 	await _other_errors_have_no_staff_shortcut()
+	await _fleet_pilot_shortage()
 	await _route_reposition()
 	await _existing_route_reposition()
 	print("PASS: ferry dialog range rejection, route-planner repositioning, Rust quote, dispatch, chip, toast, map, restart, landing and archive")
@@ -300,5 +301,69 @@ func _other_errors_have_no_staff_shortcut() -> void:
 	assert(m.ferry_dialog.get_ok_button().disabled and not m.ferry_staff_button.visible)
 	m.ferry_dialog.safe_button.pressed.emit()
 	await process_frame
+	m.queue_free()
+	await process_frame
+
+
+func _fleet_pilot_shortage() -> void:
+	var m = load("res://scenes/main.tscn").instantiate()
+	root.add_child(m)
+	m.set_process(false)
+	var sim = m.simulation
+	assert(sim.found_airline("Fleet Air", "DE", "EDDF").is_empty())
+	assert(sim.buy_aircraft("atr72_600").is_empty() and sim.buy_aircraft("atr72_600").is_empty())
+	var first: int = sim.get_fleet()[0]["id"]
+	var second: int = sim.get_fleet()[1]["id"]
+	m._sync_view()
+	m._show_page(1)
+	m.selected_aircraft = first
+	m._refresh_fleet()
+	assert(not m.ferry_button.disabled and sim.get_fleet()[0]["ferry_pilots_missing"] == 4)
+	var cash: int = sim.get_airline_info()["capital_eur"]
+	var staff_before: int = sim.get_staff().size()
+	m.ferry_button.pressed.emit()
+	await process_frame
+	_pick(m.ferry_destination, "EDDM")
+	assert(m.ferry_dialog.get_ok_button().disabled and m.ferry_staff_button.visible and "ATR 72" in m.ferry_preview.text and "4" in m.ferry_preview.text)
+	m.ferry_staff_button.grab_focus()
+	await _press_enter()
+	for _i in range(8):
+		await process_frame
+	assert(m.current_page == 5 and m.staff_panel.role_keys[m.staff_panel.role_select.selected] == "pilot")
+	assert(m.staff_panel.rating_select.get_item_text(m.staff_panel.rating_select.selected) == "ATR 72" and int(m.staff_panel.count_spin.value) == 4)
+	assert("Flotte" in m.staff_panel.action_status.text and "Routen" not in m.staff_panel.action_status.text)
+	assert(sim.get_airline_info()["capital_eur"] == cash and sim.get_staff().size() == staff_before and sim.get_fleet()[0]["ferry_state"] == "")
+	m._show_page(1)
+	assert(m.selected_aircraft == first)
+	m.ferry_button.pressed.emit()
+	await process_frame
+	assert(m.ferry_destination.get_selected_metadata() == "EDDM" and m.ferry_staff_button.visible and m.ferry_dialog.get_ok_button().disabled)
+	m.ferry_dialog.safe_button.pressed.emit()
+	for _i in range(3):
+		await process_frame
+	assert(m.ferry_button.has_focus())
+	m.selected_aircraft = second
+	m.ferry_button.pressed.emit()
+	await process_frame
+	assert(m.ferry_destination.selected == 0 and m.ferry_aircraft == second)
+	assert(m.ferry_retained.get("aircraft_id", 0) == first)
+	m.ferry_dialog.safe_button.pressed.emit()
+	await process_frame
+	m.selected_aircraft = first
+	assert(sim.hire_pilots("ATR 72", 4).is_empty())
+	m._refresh_fleet()
+	m.ferry_button.pressed.emit()
+	await process_frame
+	assert(m.ferry_destination.get_selected_metadata() == "EDDM" and not m.ferry_staff_button.visible and not m.ferry_dialog.get_ok_button().disabled)
+	m.ferry_dialog.get_ok_button().pressed.emit()
+	for _i in range(3):
+		await process_frame
+	assert(sim.get_fleet()[0]["ferry_state"] == "Überführung" and m.ferry_retained.is_empty())
+	m._refresh_fleet()
+	assert(m.ferry_button.disabled)
+	# A reused aircraft ID in a new world must not inherit a retained destination.
+	m.ferry_retained = {"aircraft_id": 1, "destination": "EDDM"}
+	m._sync_view()
+	assert(m.ferry_retained.is_empty())
 	m.queue_free()
 	await process_frame

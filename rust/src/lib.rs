@@ -2109,6 +2109,7 @@ impl SimulationClock {
                 vdict! {
                     "ferry_state" => self.game.ferry(plane.id).map_or("", |f| if f.settled { "Bodenzeit" } else { "Überführung" }),
                     "ferry_error" => self.game.require_ferry_aircraft(plane.id).err().unwrap_or_default().as_str(),
+                    "ferry_pilots_missing" => match self.game.ferry_blocker(plane.id) { Err(operations::FerryBlocker::Pilots { missing, .. }) => i64::from(missing), _ => 0 },
                     "delay_seconds" => movement.as_ref().map_or(0, |s| s.delay_seconds) as i64,
                     "weather_seconds" => movement.as_ref().map_or(0, |s| s.weather_seconds) as i64,
                     "id" => plane.id, "identifier" => plane.identifier().as_str(),
