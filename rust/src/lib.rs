@@ -2632,9 +2632,20 @@ impl SimulationClock {
         match save_slots::list(&user.join("saves"), &user.join("savegame.json")) {
             Ok(slots) => {
                 let header = |h: Option<save_slots::Header>| -> VarDictionary {
-                    h.map(|h| vdict! {"name" => h.name.as_str(), "game_time" => h.game_time.as_str(),
-                        "cash" => h.cash, "fleet" => h.fleet as i64, "written_at" => h.written_at as i64,
-                        "format_version" => h.format_version as i64, "save_version" => h.save_version as i64}).unwrap_or_default()
+                    h.map(|h| {
+                        let mut d = vdict! {"name" => h.name.as_str(), "game_time" => h.game_time.as_str(),
+                            "cash" => h.cash, "fleet" => h.fleet as i64, "written_at" => h.written_at as i64,
+                            "format_version" => h.format_version as i64, "save_version" => h.save_version as i64};
+                        if let (Some(airline), Some(icao)) = (&h.airline_name, &h.home_airport_icao) {
+                            let airport_name = airports::catalog().ok().and_then(|c| {
+                                c.airports.iter().find(|a| a.icao == *icao).map(|a| a.name.clone())
+                            });
+                            d.set("airline_name", airline.as_str());
+                            d.set("home_airport_icao", icao.as_str());
+                            d.set("home_airport_name", airport_name.unwrap_or_default().as_str());
+                        }
+                        d
+                    }).unwrap_or_default()
                 };
                 let rows: Array<VarDictionary> = slots.into_iter().map(|s| {
                     vdict! {"id" => s.id as i64, "occupied" => s.occupied, "header" => &header(s.header),

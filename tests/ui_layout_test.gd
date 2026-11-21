@@ -413,6 +413,30 @@ func _run() -> void:
 					assert(root.get_texture().get_image().save_png(capture_dir.path_join("quit-dialog-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
 					main.quit_dialog.get_cancel_button().pressed.emit()
 					await process_frame
+					var slots_dir := OS.get_cache_dir().path_join("air-ui-slots-%d-%d" % [OS.get_process_id(), dimensions.x])
+					var other := SimulationClock.new()
+					assert(other.start_new_world("Üñíversal Fernverkehr Gesellschaft 日本語 International", "DE", "EDDM", "standard", "standard", "standard").is_empty())
+					assert(other.save_slot(slots_dir, 0, "Vor dem Ausbau", false).is_empty())
+					assert(other.autosave(slots_dir).is_empty())
+					assert(main.simulation.save_slot(slots_dir, 1, "Vor dem Ausbau", false).is_empty())
+					assert(main.simulation.autosave(slots_dir).is_empty())
+					main.save_user_dir = slots_dir
+					main._load_game()
+					for frame in range(5): await process_frame
+					main.save_slots_dialog.select_slot(main.save_slots_dialog.AUTOSAVE_ID, "")
+					for frame in range(5): await process_frame
+					await RenderingServer.frame_post_draw
+					assert(root.get_texture().get_image().save_png(capture_dir.path_join("save-load-list-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
+					main.save_slots_dialog.request_load(main.save_slots_dialog.AUTOSAVE_ID, true)
+					for frame in range(5): await process_frame
+					assert(root.get_visible_rect().encloses(main.save_slots_dialog.decision.get_ok_button().get_global_rect()))
+					assert(root.get_visible_rect().encloses(main.save_slots_dialog.decision.get_cancel_button().get_global_rect()))
+					await RenderingServer.frame_post_draw
+					assert(root.get_texture().get_image().save_png(capture_dir.path_join("save-load-confirm-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
+					main.save_slots_dialog.decision.get_cancel_button().pressed.emit()
+					await process_frame
+					main.save_slots_dialog.close_dialog()
+					await process_frame
 				main.fleet_tabs.current_tab = 1
 				await process_frame
 				# Capture the market heading, then prove every nested buy control is reachable.

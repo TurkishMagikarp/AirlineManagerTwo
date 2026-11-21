@@ -241,6 +241,56 @@ func _run() -> void:
 	assert(not sim.autosave(directory).is_empty())
 	assert(not sim.load_autosave(directory, false).is_empty())
 	while sim.poll_jump().is_empty(): await process_frame
+	# Airline identity: same labels, two companies, autosave backup from the other company.
+	var second := "Zweite Üñí Air 日本語"
+	assert(sim.save_slot(directory, 0, "Gleich", false).is_empty())
+	assert(sim.start_new_world(second, "DE", "EDDM", "standard", "standard", "standard").is_empty())
+	var second_time: String = sim.get_display_time()
+	assert(sim.save_slot(directory, 1, "Gleich", false).is_empty())
+	assert(sim.autosave(directory).is_empty())
+	assert(sim.load_slot(directory, 0, false).is_empty())
+	assert(sim.autosave(directory).is_empty())
+	var listed: Dictionary = sim.get_save_slots(directory)
+	assert(listed["slots"][0]["header"]["airline_name"] == "Slots Air" and listed["slots"][0]["header"]["home_airport_icao"] == "EDDF")
+	assert(listed["slots"][1]["header"]["airline_name"] == second and listed["slots"][1]["header"]["home_airport_icao"] == "EDDM")
+	assert(listed["autosave"]["header"]["airline_name"] == "Slots Air" and listed["autosave"]["backup"]["airline_name"] == second)
+	main._load_game()
+	await process_frame
+	await process_frame
+	dialog = main.save_slots_dialog
+	var card_texts: Array = dialog.list_box.find_children("*", "Label", true, false).map(func(l): return l.text)
+	assert(card_texts.any(func(t): return "Slots Air · EDDF" in t) and card_texts.any(func(t): return second + " · EDDM" in t))
+	dialog.select_slot(dialog.AUTOSAVE_ID, "")
+	card_texts = dialog.list_box.find_children("*", "Label", true, false).map(func(l): return l.text)
+	assert(card_texts.any(func(t): return "Vorheriger Autosave" in t and second in t))
+	var clock_now: String = sim.get_display_time()
+	dialog.request_load(dialog.AUTOSAVE_ID, true)
+	assert(is_instance_valid(dialog.decision))
+	texts = dialog.decision.find_children("*", "Label", true, false).map(func(l): return l.text)
+	assert(texts.any(func(t): return "Aktuelle Airline: Slots Air" in t and "Vorheriger Autosave" in t and second in t and "EDDM" in t and "Nicht gespeicherter Fortschritt" in t))
+	assert(dialog.decision.get_cancel_button().get_global_rect().end.y <= root.size.y and dialog.decision.get_ok_button().get_global_rect().end.y <= root.size.y)
+	dialog.decision.get_cancel_button().pressed.emit()
+	await process_frame
+	await process_frame
+	assert(sim.get_airline_info()["name"] == "Slots Air" and sim.get_display_time() == clock_now and dialog.selected == dialog.AUTOSAVE_ID)
+	focus_owner = root.gui_get_focus_owner()
+	assert(focus_owner != null and dialog.is_ancestor_of(focus_owner))
+	dialog.request_load(dialog.AUTOSAVE_ID, true)
+	dialog.decision.get_ok_button().pressed.emit()
+	await process_frame
+	assert(sim.get_airline_info()["name"] == second and sim.get_airline_info()["airport_icao"] == "EDDM" and sim.get_display_time() == second_time)
+	# Identity lookups for manual duplicates through the confirmation.
+	main._load_game()
+	await process_frame
+	dialog = main.save_slots_dialog
+	dialog.select_slot(0, "")
+	dialog.request_load(0, false)
+	texts = dialog.decision.find_children("*", "Label", true, false).map(func(l): return l.text)
+	assert(texts.any(func(t): return "Aktuelle Airline: " + second in t and "Gleich" in t and "Slots Air · EDDF" in t))
+	dialog.decision.get_cancel_button().pressed.emit()
+	await process_frame
+	dialog.close_dialog()
+	await process_frame
 	DirAccess.remove_absolute(prefs)
 	main.autosave.configure(false, 10)
 	DirAccess.remove_absolute(prefs)

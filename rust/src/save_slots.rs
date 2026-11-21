@@ -31,6 +31,10 @@ pub struct Header {
     pub cash: i64,
     pub fleet: usize,
     pub written_at: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub airline_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub home_airport_icao: Option<String>,
     bytes: u64,
     modified_ns: u128,
 }
@@ -121,7 +125,7 @@ fn modified_ns(m: &fs::Metadata) -> Result<u128, String> {
 }
 fn read_header_metadata(slot: &Path, id: &str) -> Result<Header, String> {
     let dir = generation(slot, id)?;
-    let h: Header = read_small(&dir.join("header.json"))?;
+    let mut h: Header = read_small(&dir.join("header.json"))?;
     validate_name(&h.name)?;
     if h.format_version != 1
         || !(1..=save::VERSION).contains(&h.save_version)
@@ -131,6 +135,14 @@ fn read_header_metadata(slot: &Path, id: &str) -> Result<Header, String> {
         || h.bytes > save::MAX_JSON_BYTES
     {
         return Err("Beschädigter Spielstandkopf.".into());
+    }
+    let identity = |v: &Option<String>, max: usize| {
+        v.as_ref()
+            .is_none_or(|s| !s.trim().is_empty() && s.chars().count() <= max)
+    };
+    if !identity(&h.airline_name, 80) || !identity(&h.home_airport_icao, 8) {
+        h.airline_name = None;
+        h.home_airport_icao = None;
     }
     Ok(h)
 }
@@ -198,6 +210,8 @@ fn write_generation(
         game_time: game.clock.display_time(),
         cash: game.cash(),
         fleet: game.fleet.len(),
+        airline_name: game.airline.as_ref().map(|a| a.name.clone()),
+        home_airport_icao: game.airline.as_ref().map(|a| a.home_airport_icao.clone()),
         written_at: legacy
             .map(fs::metadata)
             .transpose()
