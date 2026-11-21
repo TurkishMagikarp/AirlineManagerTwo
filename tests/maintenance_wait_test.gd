@@ -9,6 +9,23 @@ func _initialize() -> void:
 	call_deferred("_run")
 
 
+func _ops() -> Dictionary:
+	main.routes_panel._operations_signature = ""
+	main.routes_panel.refresh_operations()
+	var row: TreeItem = main.routes_panel.operations_tree.get_root().get_first_child()
+	var op: Dictionary = main.simulation.get_operations()[0]
+	return {"op": op, "cells": [row.get_text(2), row.get_text(3), row.get_tooltip_text(0)]}
+
+
+func _overview_text() -> String:
+	main._render_operations(main.overview_operations)
+	var text := ""
+	for child in main.overview_operations.get_children():
+		if child is Label:
+			text += child.text + "\n"
+	return text
+
+
 func _run() -> void:
 	main = load("res://scenes/main.tscn").instantiate()
 	root.add_child(main)
@@ -45,6 +62,13 @@ func _run() -> void:
 	plane = sim.get_fleet()[0]
 	var row: TreeItem = main.fleet_tree.get_root().get_child(0)
 	if not _check(row.get_text(5) == "Wartet auf Techniker" and estimate_end not in row.get_text(5), "Register shows the wait without a release time"):
+		return
+	var ops := _ops()
+	var cells: Array = ops["cells"]
+	if not _check(ops["op"]["technician_wait"] and cells[0] == main.tr("OPS_STATE_TECH_WAIT") and cells[1] == main.tr("OPS_NEXT_TECH_WAIT") and estimate_end not in cells[2] and "Techniker" in cells[2] and ops["op"]["next_departure"] == "—" and "Techniker" in ops["op"]["status_text"] and estimate_end not in ops["op"]["status_text"], "Routes row and tooltip show the technician wait without times"):
+		return
+	var overview := _overview_text()
+	if not _check("wartet auf Techniker" in overview and estimate_end not in overview and "Nächster Abflug" not in overview, "Overview shows the wait without times"):
 		return
 	var details: String = main.maintenance_details.text
 	if not _check("Techniker" in details and "Benötigt %d" % plane["maintenance_technicians_needed"] in details and "frei: 0" in details and plane["identifier"] in details and "bleibt am Boden" in details and estimate_end not in details and " – " not in details, "Details show the wait, counts and identity"):
@@ -88,6 +112,9 @@ func _run() -> void:
 	await _click(main.navigation[1])
 	if not _check(sim.get_fleet()[0]["maintenance_waiting_staff"] and main.fleet_tree.get_root().get_child(0).get_text(5) == "Wartet auf Techniker" and main.maintenance_staff_button.visible, "Wait and action survive save and load"):
 		return
+	ops = _ops()
+	if not _check(ops["op"]["technician_wait"] and estimate_end not in ops["op"]["status_text"], "Wait survives save and load in Routes"):
+		return
 	await _click(main.navigation[5])
 	var needed: int = plane["maintenance_technicians_needed"]
 	if not _check(needed >= 2, "Check needs several technicians"):
@@ -98,6 +125,8 @@ func _run() -> void:
 	plane = sim.get_fleet()[0]
 	if not _check(plane["maintenance_waiting_staff"] and plane["maintenance_technicians_available"] == needed - 1 and main.maintenance_staff_button.visible, "Too few technicians keep the wait visible"):
 		return
+	if not _check(_ops()["op"]["technician_wait"], "Too few technicians keep the wait in Routes"):
+		return
 	await _click(main.navigation[5])
 	staff.count_spin.value = 1
 	await _click(staff.hire_button)
@@ -106,6 +135,13 @@ func _run() -> void:
 	row = main.fleet_tree.get_root().get_child(0)
 	if not _check(not plane["maintenance_waiting_staff"] and plane["maintenance_state"] == "active" and row.get_text(5).begins_with("Wartung bis") and plane["maintenance_end"] in row.get_text(5) and not main.maintenance_staff_button.visible and "läuft" in main.maintenance_details.text and plane["maintenance_end"] in main.maintenance_details.text, "Staffed check shows the release time and clears the action"):
 		return
+	ops = _ops()
+	cells = ops["cells"]
+	if not _check(not ops["op"]["technician_wait"] and ops["op"]["maintenance_release"] == plane["maintenance_end"] and plane["maintenance_end"] in ops["op"]["status_text"] and plane["maintenance_end"] in cells[1] and plane["maintenance_end"] in cells[2] and ops["op"]["next_departure"] == "—", "Routes shows the Fleet release time once staffed"):
+		return
+	overview = _overview_text()
+	if not _check(plane["maintenance_end"] in overview and "Nächster Abflug" not in overview, "Overview shows the Fleet release time once staffed"):
+		return
 	var flights: int = sim.get_financial_summary()["flights"]
 	sim.advance(3600.0 / 16.0)
 	if not _check(sim.get_fleet()[0]["status"] == "maintenance" and sim.get_financial_summary()["flights"] == flights, "Aircraft stays grounded until completion"):
@@ -113,6 +149,8 @@ func _run() -> void:
 	sim.advance((plane["maintenance_end_seconds"] - sim.get_elapsed_seconds() + 30.0) / 16.0)
 	sim.advance(7300.0 / 16.0)
 	if not _check(sim.get_fleet()[0]["checks"] == 1 and sim.get_financial_summary()["flights"] > flights, "Departures resume after completion"):
+		return
+	if not _check(_ops()["op"]["state_kind"] != "maintenance" and _ops()["op"]["next_departure"] != "—", "Real next departure returns after the check"):
 		return
 	print("PASS: Fleet shows the technician wait, the Staff action and the release time")
 	quit(0)

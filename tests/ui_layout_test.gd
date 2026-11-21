@@ -76,7 +76,7 @@ func _run() -> void:
 		await _technician_wait_views(sim)
 		main.queue_free()
 		await process_frame
-		print("PASS: technician wait in Fleet register and maintenance details at both sizes")
+		print("PASS: technician wait in Fleet, Routes and Overview at both sizes")
 		quit(0)
 		return
 	if OS.get_environment("AIRLINE_UI_CAPTURE_CREW_BLOCKED_ONLY") == "1":
@@ -1634,6 +1634,33 @@ func _technician_wait_views(sim: RefCounted) -> void:
 		assert(main.current_page == 1 and main.selected_aircraft == plane_id)
 		await RenderingServer.frame_post_draw
 		assert(root.get_texture().get_image().save_png(capture_dir.path_join("technician-wait-fleet-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
+		main._show_page(2)
+		main.routes_panel._operations_signature = ""
+		main.routes_panel.refresh_operations()
+		for frame in range(5): await process_frame
+		var routes_scroll: ScrollContainer = main.routes_panel.get_parent().get_parent()
+		routes_scroll.ensure_control_visible(main.routes_panel.operations_tree)
+		for frame in range(5): await process_frame
+		routes_scroll.ensure_control_visible(main.routes_panel.operations_tree)
+		await RenderingServer.frame_post_draw
+		assert(root.get_texture().get_image().save_png(capture_dir.path_join("technician-wait-routes-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
+		main._show_page(0)
+		main._sync_view()
+		for frame in range(5): await process_frame
+		var overview_scroll: Node = main.overview_operations
+		while overview_scroll != null and not overview_scroll is ScrollContainer:
+			overview_scroll = overview_scroll.get_parent()
+		assert(overview_scroll != null)
+		overview_scroll.ensure_control_visible(main.overview_operations)
+		for frame in range(5): await process_frame
+		overview_scroll.ensure_control_visible(main.overview_operations)
+		await RenderingServer.frame_post_draw
+		assert(root.get_texture().get_image().save_png(capture_dir.path_join("technician-wait-overview-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
+		main._show_page(0)
+		for i in range(main.attention_rows.get_child_count()):
+			if "Techniker" in main.attention_rows.get_child(i).text:
+				main.attention_rows.get_child(i).pressed.emit()
+		for frame in range(8): await process_frame
 		main.maintenance_staff_button.pressed.emit()
 		for frame in range(8): await process_frame
 		assert(main.current_page == 5 and main.staff_panel.role_select.has_focus())

@@ -540,6 +540,8 @@ pub struct BoardRow {
     pub delay_seconds: u64,
     pub weather_delay: bool,
     pub crew_blocked: bool,
+    /// Grounded in a check that has no technicians yet; no release time exists.
+    pub technician_wait: bool,
 }
 
 pub fn board_row(
@@ -551,7 +553,11 @@ pub fn board_row(
     let airborne = state.filter(|s| s.status == AircraftStatus::InFlight);
     let weather_delay = state.is_some_and(|s| s.delay_seconds > 0 && s.weather_seconds > 0);
     let crew_blocked = state.is_some_and(|s| s.crew_blocked);
-    let state_kind = if plane.status == AircraftStatus::Maintenance {
+    let grounded = plane.status == AircraftStatus::Maintenance;
+    let technician_wait = grounded && plane.maintenance.as_ref().is_some_and(|v| !v.staffed);
+    let state_kind = if technician_wait {
+        "technician_wait"
+    } else if grounded {
         "maintenance"
     } else if release_pending {
         "release"
@@ -585,12 +591,13 @@ pub fn board_row(
         origin,
         destination,
         next_departure: state
-            .filter(|s| !release_pending && !s.crew_blocked)
+            .filter(|s| !release_pending && !s.crew_blocked && !grounded)
             .map(|s| s.next_departure),
         expected_landing: airborne.map(|s| s.landing),
         delay_seconds: state.map_or(0, |s| s.delay_seconds),
         weather_delay,
         crew_blocked,
+        technician_wait,
     }
 }
 

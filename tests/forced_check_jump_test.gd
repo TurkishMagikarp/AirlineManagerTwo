@@ -45,6 +45,9 @@ func _run() -> void:
 	var plane: Dictionary = fleet.filter(func(p: Dictionary): return p["id"] == plane_id)[0]
 	assert(plane["status"] == "maintenance" and plane["maintenance_unscheduled"])
 	assert(plane["identifier"] in main.jump_status.text and "Pflichtwartung" in main.jump_status.text)
+	var operation: Dictionary = sim.get_operations().filter(func(o: Dictionary): return o["aircraft_id"] == plane_id)[0]
+	assert(operation["state_kind"] == ("technician_wait" if plane["maintenance_waiting_staff"] else "maintenance") and operation["next_departure"] == "—" and "Pflichtwartung" in operation["status_text"])
+	assert(plane["maintenance_waiting_staff"] or operation["maintenance_release"] == plane["maintenance_end"])
 	var elapsed: float = sim.get_elapsed_seconds()
 	# Collapsed Attention, another aircraft selected, 680x520: the clock-bar action opens the grounded aircraft.
 	root.size = Vector2i(680, 520)
