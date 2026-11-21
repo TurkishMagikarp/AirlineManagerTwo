@@ -79,7 +79,7 @@ func _run() -> void:
 	if not _check(main.founding.visible, "New Game opens founding"):
 		return
 	await _click(main.cancel_founding_button)
-	if not _check(main.overview.visible and main.terminal_notice.visible and sim.get_airline_info() == terminal_airline, "Cancel preserves the terminal company"):
+	if not _check(main.overview.visible and main.terminal_notice.visible and sim.get_airline_info() == terminal_airline and main.terminal_new_game_button.has_focus(), "Cancel preserves the terminal company and refocuses its action"):
 		return
 	await _click(main.terminal_new_game_button)
 	main.name_input.text = "   "
