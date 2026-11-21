@@ -3,6 +3,7 @@ extends VBoxContainer
 
 signal changed
 signal procurement_requested
+signal reposition_requested(aircraft_id: int, destination: String)
 const ThemeTokens = preload("res://scripts/ui/operations_theme.gd")
 const UI = preload("res://scripts/ui/components.gd")
 
@@ -13,6 +14,7 @@ var aircraft: OptionButton
 var preview: Label
 var create_button: Button
 var procurement_button: Button
+var reposition_button: Button
 var empty_action: Button
 var status: Label
 var season_label: Label
@@ -95,6 +97,10 @@ func _ready() -> void:
 	procurement_button.visible = false
 	procurement_button.pressed.connect(func(): procurement_requested.emit())
 	add_child(procurement_button)
+	reposition_button = Button.new()
+	reposition_button.visible = false
+	reposition_button.pressed.connect(func(): reposition_requested.emit(_selected_id(aircraft), origin.get_selected_metadata()))
+	add_child(reposition_button)
 	for select in [origin, destination, aircraft]:
 		select.item_selected.connect(func(_index: int): _preview())
 	status = _label("")
@@ -633,6 +639,7 @@ func _preview() -> void:
 		if aircraft.item_count == 0:
 			preview.text += "\nKein freies Flugzeug. Im Flotte-Tab kaufen oder eine Zuweisung lösen."
 		_update_procurement_shortcut()
+		reposition_button.visible = false
 		return
 	var result: Dictionary = simulation.preview_route(origin.get_selected_metadata(), destination.get_selected_metadata(), _selected_id(aircraft), 0)
 	preview.text = "Entfernung: %.1f km · %s" % [result["distance_km"], "Reichweite ausreichend" if result["error"].is_empty() else result["error"]]
@@ -641,6 +648,12 @@ func _preview() -> void:
 		preview.text += "\nPlanung: %d Pax · Kosten %s, davon Flughäfen Start + Ziel %s je Abflug.\nJahresmittel, Standardpreise, 1 Abflug/Tag/Richtung; Personal und Wartungschecks separat." % [result["estimated_passengers"], UI.money(result["estimated_costs_eur"]), UI.money(result["estimated_airport_eur"])]
 	UI.field_error(aircraft, result["error"])
 	create_button.disabled = not result["error"].is_empty()
+	reposition_button.visible = result["needs_reposition"]
+	if result["needs_reposition"]:
+		var plane_name := aircraft.get_item_text(aircraft.selected).get_slice(" · ", 0)
+		reposition_button.text = "%s von %s nach %s überführen" % [plane_name, result["aircraft_location"], origin.get_selected_metadata()]
+		reposition_button.tooltip_text = "Öffnet die Überführungsbestätigung mit Kosten und Dauer. Danach und nach der Bodenzeit kann die Route aus diesem Entwurf erstellt werden."
+		preview.text += "\nAblauf: Überführung bestätigen, landen, Bodenzeit abwarten, dann Route erstellen. Oder Startflughafen bzw. Flugzeug ändern."
 	if aircraft.item_count == 0:
 		preview.text += "\nKein freies Flugzeug. Im Flotte-Tab kaufen oder eine Zuweisung lösen."
 	_update_procurement_shortcut()

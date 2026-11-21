@@ -146,6 +146,22 @@ impl Game {
         Ok(distance)
     }
 
+    pub fn aircraft_location(&self, aircraft_id: u32) -> Option<&str> {
+        self.fleet
+            .iter()
+            .find(|p| p.id == aircraft_id)
+            .map(|p| p.location_icao.as_str())
+    }
+
+    pub fn check_new_route_location(&self, origin: &str, aircraft_id: u32) -> Result<(), String> {
+        match self.aircraft_location(aircraft_id) {
+            Some(at) if at != origin => Err(format!(
+                "Flugzeug steht in {at}, nicht in {origin}. Zuerst nach {origin} überführen."
+            )),
+            _ => Ok(()),
+        }
+    }
+
     pub fn aircraft_range_km(&self, aircraft_id: u32) -> Option<u32> {
         let plane = self.fleet.iter().find(|p| p.id == aircraft_id)?;
         aircraft::model(&plane.model_id).ok().map(|m| m.range_km)

@@ -1020,8 +1020,21 @@ impl SimulationClock {
             .and_then(|distance| self.game.check_slots(&a, &b, 43200).map(|()| distance))
             .err()
             .unwrap_or_default();
+        let location = self.game.aircraft_location(aircraft_id).unwrap_or_default();
+        let misplaced = route_id == 0
+            && error.is_empty()
+            && self.game.check_new_route_location(&a, aircraft_id).is_err();
+        let error = if misplaced {
+            self.game
+                .check_new_route_location(&a, aircraft_id)
+                .err()
+                .unwrap_or_default()
+        } else {
+            error
+        };
         let quote = self.game.planning_quote(&a, &b, aircraft_id).ok();
         vdict! { "distance_km" => distance, "error" => error.as_str(),
+        "needs_reposition" => misplaced, "aircraft_location" => location,
         "origin_slots" => self.game.slot_text(&a).as_str(),
         "destination_slots" => self.game.slot_text(&b).as_str(),
         "has_cost_estimate" => quote.is_some(),
@@ -1047,8 +1060,13 @@ impl SimulationClock {
 
     #[func]
     fn create_route(&mut self, origin: GString, destination: GString, aircraft_id: u32) -> GString {
+        let origin = origin.to_string();
         self.game
-            .create_route(&origin.to_string(), &destination.to_string(), aircraft_id)
+            .check_new_route_location(&origin, aircraft_id)
+            .and_then(|()| {
+                self.game
+                    .create_route(&origin, &destination.to_string(), aircraft_id)
+            })
             .err()
             .unwrap_or_default()
             .as_str()

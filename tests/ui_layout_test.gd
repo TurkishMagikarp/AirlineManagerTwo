@@ -773,6 +773,7 @@ func _ferry_views(sim: RefCounted) -> void:
 	assert(sim.lease_aircraft("a330_300").is_empty())
 	assert(sim.hire_pilots("A330", 6).is_empty())
 	main._sync_view()
+	await _reposition_views()
 	main._show_page(1)
 	main.fleet_tabs.current_tab = 0
 	main._refresh_fleet()
@@ -835,6 +836,38 @@ func _ferry_views(sim: RefCounted) -> void:
 		if not capture_dir.is_empty():
 			await RenderingServer.frame_post_draw
 			assert(root.get_texture().get_image().save_png(capture_dir.path_join("ferry-finances-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
+
+
+func _reposition_views() -> void:
+	var panel = main.routes_panel
+	main._show_page(2)
+	panel.refresh()
+	for select in [panel.origin, panel.destination]:
+		var code := "EDDM" if select == panel.origin else "EDDF"
+		for i in range(select.item_count):
+			if select.get_item_metadata(i) == code:
+				select.select(i)
+				select.item_selected.emit(i)
+	assert(panel.reposition_button.visible and panel.create_button.disabled)
+	var scroll: ScrollContainer = panel.get_parent().get_parent()
+	for dimensions in [Vector2i(1440, 1000), Vector2i(680, 520)]:
+		root.size = dimensions
+		for frame in range(5): await process_frame
+		scroll.ensure_control_visible(panel.reposition_button)
+		for frame in range(5): await process_frame
+		assert(scroll.get_global_rect().encloses(panel.reposition_button.get_global_rect()))
+		if not capture_dir.is_empty():
+			await RenderingServer.frame_post_draw
+			assert(root.get_texture().get_image().save_png(capture_dir.path_join("routes-reposition-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
+		panel.reposition_button.pressed.emit()
+		for frame in range(5): await process_frame
+		assert(root.get_visible_rect().encloses(main.ferry_dialog.card.get_global_rect()))
+		assert(main.ferry_destination.get_selected_metadata() == "EDDM")
+		if not capture_dir.is_empty():
+			await RenderingServer.frame_post_draw
+			assert(root.get_texture().get_image().save_png(capture_dir.path_join("routes-reposition-dialog-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
+		main.ferry_dialog.safe_button.pressed.emit()
+		for frame in range(3): await process_frame
 
 
 func _jump_views() -> void:
