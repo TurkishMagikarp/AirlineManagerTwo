@@ -74,11 +74,13 @@ func _run() -> void:
 	var tax := 0
 	var revenue := 0
 	var costs := 0
+	var result := 0
 	for sample in series:
 		revenue += sample["revenue"]
 		costs += sample["costs"]
+		result += sample["profit"]
 		tax += sample["tax"]
-	if not _check(revenue == sim.get_financial_summary()["revenue_eur"] and costs == sim.get_financial_summary()["costs_eur"], "Chart periods reconcile to real totals"):
+	if not _check(revenue == sim.get_financial_summary()["company_revenue_eur"] and costs == sim.get_financial_summary()["company_costs_eur"] and result == sim.get_financial_summary()["profit_eur"], "Chart periods reconcile to real totals"):
 		return
 	if not _check(tax == sim.get_financial_summary()["tax_eur"] and not sim.get_tax_history().is_empty(), "Annual tax archive reconciles to chart"):
 		return

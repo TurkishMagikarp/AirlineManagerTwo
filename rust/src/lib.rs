@@ -317,6 +317,7 @@ impl SimulationClock {
         let mut previous = economy::Totals::default();
         let mut previous_costs = 0i128;
         let mut previous_tax = 0i128;
+        let mut previous_fees = 0i128;
         (0..=steps).map(|i| {
             let time = h.since + (u128::from(span) * u128::from(i) / u128::from(steps)) as u64;
             let t = h.totals(route_id, time);
@@ -324,14 +325,18 @@ impl SimulationClock {
             let load = if seats == 0 { -1.0 } else { (t.passengers - previous.passengers) as f64 * 100.0 / seats as f64 };
             // Central expenses belong only to the company series, never to
             // every route (which would duplicate them again).
-            let costs = i128::from(t.costs()) + if route_id == 0 {
+            let (fees, penalties) = if route_id == 0 {
+                (h.charter_through(time, trading::Kind::CharterFee), -h.charter_through(time, trading::Kind::CharterPenalty))
+            } else { (0, 0) };
+            let costs = i128::from(t.costs()) + penalties + if route_id == 0 {
                 h.ferry_through(time) + h.maintenance_through(time) + h.payroll_through(time) + h.interest_through(time) + h.rent_through(time) + h.tax_through(time) + h.marketing_through(time) + h.insurance_through(time) + h.alliance_fee_through(time)
             } else { 0 };
             let tax = if route_id == 0 { h.tax_through(time) } else { 0 };
             let period_costs = costs - previous_costs;
-            let period_profit = i128::from(t.revenue - previous.revenue) - period_costs;
+            let period_revenue = i128::from(t.revenue - previous.revenue) + fees - previous_fees;
+            let period_profit = period_revenue - period_costs;
             let row = vdict! { "seconds" => time as i64, "time" => operations::display_time(time).as_str(),
-                "balance" => h.balance(time), "revenue" => t.revenue - previous.revenue,
+                "balance" => h.balance(time), "revenue" => period_revenue.clamp(i128::from(i64::MIN), i128::from(i64::MAX)) as i64,
                 "ancillary" => t.ancillary - previous.ancillary,
                 "loyalty_cost" => t.loyalty_cost - previous.loyalty_cost,
                 "tax" => (tax - previous_tax).min(i128::from(i64::MAX)) as i64,
@@ -341,6 +346,7 @@ impl SimulationClock {
             previous = t;
             previous_costs = costs;
             previous_tax = tax;
+            previous_fees = fees;
             row
         }).collect()
     }
