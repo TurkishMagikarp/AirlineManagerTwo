@@ -256,3 +256,32 @@ fn ferry_save_rejects_corrupt_dispatch_and_archive() {
     g.history.as_mut().unwrap().ferries[0].quote.totals.fuel += 1;
     assert!(g.validate_ferries().is_err());
 }
+
+#[test]
+fn ferry_pilot_shortage_is_structured_and_other_errors_are_not() {
+    use crate::operations::FerryBlocker;
+    let mut g = Game::default();
+    g.found("Ferry", "DE", "EDDF").unwrap();
+    g.competitors.clear();
+    g.lease_aircraft("atr72_600").unwrap();
+    let n = crate::staff::needs("atr72_600").unwrap();
+    assert_eq!(
+        g.ferry_blocker(1),
+        Err(FerryBlocker::Pilots {
+            rating: n.rating.clone(),
+            missing: n.pilots
+        })
+    );
+    g.hire_pilots(&n.rating, 1).unwrap();
+    assert_eq!(
+        g.ferry_blocker(1),
+        Err(FerryBlocker::Pilots {
+            rating: n.rating.clone(),
+            missing: n.pilots - 1
+        })
+    );
+    g.hire_pilots(&n.rating, n.pilots - 1).unwrap();
+    assert_eq!(g.ferry_blocker(1), Ok(()));
+    g.send_ferry(1, "EDDM").unwrap();
+    assert!(matches!(g.ferry_blocker(1), Err(FerryBlocker::Other(_))));
+}

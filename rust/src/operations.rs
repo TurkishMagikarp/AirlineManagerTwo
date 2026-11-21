@@ -167,6 +167,21 @@ pub struct Ferry {
     pub settled: bool,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum FerryBlocker {
+    Pilots { rating: String, missing: u32 },
+    Other(String),
+}
+
+impl FerryBlocker {
+    pub fn message(&self) -> String {
+        match self {
+            Self::Pilots { rating, .. } => format!("Berechtigte Piloten fehlen: {rating}."),
+            Self::Other(m) => m.clone(),
+        }
+    }
+}
+
 impl Game {
     pub fn ferry(&self, id: u32) -> Option<&Ferry> {
         self.ferries.iter().find(|f| f.aircraft_id == id)
@@ -277,37 +292,53 @@ impl Game {
     }
 
     pub fn require_ferry_aircraft(&self, id: u32) -> Result<(), String> {
+        self.ferry_blocker(id).map_err(|b| b.message())
+    }
+
+    /// Why `id` cannot be dispatched on a ferry; a pilot shortage is reported as structured data.
+    pub fn ferry_blocker(&self, id: u32) -> Result<(), FerryBlocker> {
         if self.charter_job(id).is_some() {
-            return Err("Flugzeug hat einen Charterauftrag.".into());
+            return Err(FerryBlocker::Other(
+                "Flugzeug hat einen Charterauftrag.".into(),
+            ));
         }
-        self.require_free_aircraft(id)
+        self.free_aircraft_blocker(id)
     }
 
     pub(crate) fn require_free_aircraft(&self, id: u32) -> Result<(), String> {
-        self.require_solvent()?;
+        self.free_aircraft_blocker(id).map_err(|b| b.message())
+    }
+
+    fn free_aircraft_blocker(&self, id: u32) -> Result<(), FerryBlocker> {
+        let other = |m: &str| FerryBlocker::Other(m.into());
+        self.require_solvent().map_err(FerryBlocker::Other)?;
         let plane = self
             .fleet
             .iter()
             .find(|p| p.id == id)
-            .ok_or("Unbekanntes Flugzeug.")?;
+            .ok_or_else(|| other("Unbekanntes Flugzeug."))?;
         if plane.status != AircraftStatus::Parked || self.ferry(id).is_some() {
-            return Err("Überführung benötigt ein geparktes Flugzeug.".into());
+            return Err(other("Überführung benötigt ein geparktes Flugzeug."));
         }
         if plane.maintenance.is_some() {
-            return Err("Wartung ist geplant oder läuft.".into());
+            return Err(other("Wartung ist geplant oder läuft."));
         }
         if self.routes.iter().any(|r| r.aircraft_id == Some(id)) {
-            return Err("Flugzeug ist einer Route zugewiesen.".into());
+            return Err(other("Flugzeug ist einer Route zugewiesen."));
         }
-        let needs = crate::staff::needs(&plane.model_id)?;
+        let needs = crate::staff::needs(&plane.model_id).map_err(FerryBlocker::Other)?;
         if [crate::staff::Role::Pilot, crate::staff::Role::Technician]
             .into_iter()
             .any(|r| self.labour_group(r).strike_until.is_some())
         {
-            return Err("Streik: keine neuen Abflüge bis zum Streikende.".into());
+            return Err(other("Streik: keine neuen Abflüge bis zum Streikende."));
         }
-        if self.rated_available(&needs.rating) < needs.pilots {
-            return Err(format!("Berechtigte Piloten fehlen: {}.", needs.rating));
+        let available = self.rated_available(&needs.rating);
+        if available < needs.pilots {
+            return Err(FerryBlocker::Pilots {
+                rating: needs.rating.clone(),
+                missing: needs.pilots - available,
+            });
         }
         Ok(())
     }
