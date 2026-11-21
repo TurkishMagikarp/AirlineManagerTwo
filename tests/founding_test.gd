@@ -6,6 +6,7 @@ func _initialize() -> void:
 
 
 func _run() -> void:
+	TranslationServer.set_locale("de")
 	var directory := OS.get_cache_dir().path_join("air-founding-slots-%d" % OS.get_process_id())
 	DirAccess.make_dir_recursive_absolute(directory)
 	var scene: PackedScene = load("res://scenes/main.tscn")
@@ -81,7 +82,7 @@ func _run() -> void:
 		return
 	var dialog_text := ""
 	for node in dialog.find_children("*", "Label", true, false): dialog_text += node.text + "\n"
-	if not _check("Bosporus 日本 Air" in dialog_text and "Second Air" in dialog_text and ("Unsaved progress" in dialog_text or "ungespeichert" in dialog_text) and ("Named saves" in dialog_text or "Spielstände bleiben" in dialog_text), "Confirmation names both airlines and unsaved progress"):
+	if not _check("Bosporus 日本 Air" in dialog_text and "Second Air" in dialog_text and ("Unsaved progress" in dialog_text or "Nicht gespeicherter Fortschritt" in dialog_text) and ("Named saves" in dialog_text or "Spielstände bleiben" in dialog_text), "Confirmation names both airlines and unsaved progress"):
 		return
 	if not _check(dialog.safe_button.has_focus(), "Initial focus on Cancel"):
 		return
@@ -166,9 +167,11 @@ func _run() -> void:
 		if argument.begins_with("--capture-dir="):
 			await RenderingServer.frame_post_draw
 			root.get_texture().get_image().save_png(argument.trim_prefix("--capture-dir=").path_join("founding-minimum.png"))
-	print("PASS: founding UI, Rust validation, real airport choices, configured capital, overview and cancellable new game")
 	main.queue_free()
 	await process_frame
+	if not await _english_founding():
+		return
+	print("PASS: founding UI, Rust validation, real airport choices, configured capital, overview and cancellable new game")
 	quit(0)
 
 
@@ -189,3 +192,80 @@ func _check(condition: bool, message: String) -> bool:
 		push_error("FAIL: " + message)
 		quit(1)
 	return condition
+
+
+func _texts(node: Node) -> String:
+	var text := ""
+	for child in node.find_children("*", "Label", true, false): text += child.text + "\n"
+	for child in node.find_children("*", "Button", true, false): text += child.text + "\n"
+	return text
+
+
+func _english_founding() -> bool:
+	TranslationServer.set_locale("en")
+	var directory := OS.get_cache_dir().path_join("air-founding-en-%d" % OS.get_process_id())
+	DirAccess.make_dir_recursive_absolute(directory)
+	var main = (load("res://scenes/main.tscn") as PackedScene).instantiate()
+	root.add_child(main)
+	await process_frame
+	main.set_process(false)
+	main.save_user_dir = directory
+	main.autosave = preload("res://scripts/autosave.gd").new(directory.path_join("preferences.cfg"))
+	var form := _texts(main.founding)
+	for expected in ["YOUR OWN AIRLINE", "A new beginning.", "Your airline's name", "Home country", "Home airport", "Found airline", "Load game", "Cancel", "starts paused on day 1"]:
+		if not _check(expected in form, "English founding shows: " + expected):
+			return false
+	for german in ["Heimat", "Name deiner", "gründen", "Abbrechen", "pausiert", "Ein neuer"]:
+		if not _check(not german in form, "English founding has no German: " + german):
+			return false
+	if not _check(main.name_input.placeholder_text == "Airline name (1–80 characters)", "English placeholder"):
+		return false
+	var names := []
+	for i in range(main.country_select.item_count): names.append(main.country_select.get_item_text(i))
+	if not _check("Germany" in names and not "Deutschland" in names and not "Türkei" in names, "Country menu in English"):
+		return false
+	for i in range(main.country_select.item_count):
+		if main.country_select.get_item_metadata(i) == "TR":
+			main.country_select.select(i)
+			main.country_select.item_selected.emit(i)
+	for i in range(main.airport_select.item_count):
+		if main.airport_select.get_item_metadata(i) == "LTFJ": main.airport_select.select(i)
+	main.difficulty_choices["capital"][0].pressed.emit()
+	var level: String = main._difficulty_level("capital")
+	for blank in ["", "   "]:
+		main.name_input.text = blank
+		await _click(main.found_button)
+		if not _check(not main.simulation.has_airline() and main.founding.visible and "Please enter an airline name of 1 to 80 characters" in main.founding_status.text and main.name_input.has_focus(), "Blank name gives English correction hint and focus"):
+			return false
+	if not _check(main.country_select.get_selected_metadata() == "TR" and main.airport_select.get_selected_metadata() == "LTFJ" and main._difficulty_level("capital") == level, "Base and start conditions survive the error"):
+		return false
+	main.name_input.text = "English Air"
+	await _click(main.found_button)
+	var airline: Dictionary = main.simulation.get_airline_info()
+	if not _check(main.overview.visible and airline["name"] == "English Air" and airline["airport_icao"] == "LTFJ" and not main.simulation.is_running() and main.simulation.get_elapsed_seconds() == 0.0 and main.metrics["balance"].text == main.UI.money(airline["capital_eur"]), "Corrected English founding opens the paused overview"):
+		return false
+	if not _check("founded" in main.save_status.text, "English founding feedback"):
+		return false
+	await _click(main.new_game_button)
+	if not _check("replaces the running airline" in main.founding_status.text, "English New Game message"):
+		return false
+	main.name_input.text = "   "
+	await _click(main.found_button)
+	if not _check(main.founding.visible and "Please enter an airline name" in main.founding_status.text and not is_instance_valid(main.new_game_dialog), "English invalid New Game stays in form"):
+		return false
+	main.name_input.text = "Next Air"
+	await _click(main.found_button)
+	await process_frame
+	var dialog = main.new_game_dialog
+	var body := _texts(dialog)
+	if not _check(is_instance_valid(dialog) and "Current airline: English Air" in body and "New airline: Next Air" in body and "Found a new airline?" in body and "Named saves stay available" in body and "Cancel" in body and "Found airline" in body, "English confirmation"):
+		return false
+	await _click(dialog.safe_button)
+	await process_frame
+	await process_frame
+	if not _check(main.name_input.text == "Next Air" and main.simulation.get_airline_info() == airline, "Cancel keeps draft and company"):
+		return false
+	main.queue_free()
+	await process_frame
+	TranslationServer.set_locale("de")
+	return true

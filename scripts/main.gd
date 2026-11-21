@@ -689,7 +689,7 @@ func _load_legacy_game() -> void:
 		_sync_view()
 		routes_panel.reset_for_world()
 		if not simulation.has_airline():
-			founding_status.text = "Alter Zeit-Spielstand geladen. Noch keine Airline vorhanden; Gründen beginnt ein neues Spiel."
+			founding_status.text = tr("Alter Zeit-Spielstand geladen. Noch keine Airline vorhanden; Gründen beginnt ein neues Spiel.")
 	_refresh_time()
 
 
@@ -1407,7 +1407,7 @@ func _build_founding() -> void:
 	column.add_theme_constant_override("separation", 12)
 	founding.add_child(column)
 	column.add_child(_label("AIRLINE MANAGER", ThemeTokens.SCREEN_TITLE))
-	column.add_child(_label("DEINE EIGENE FLUGGESELLSCHAFT", ThemeTokens.SMALL, ThemeTokens.ACCENT_TEXT))
+	column.add_child(_label(tr("DEINE EIGENE FLUGGESELLSCHAFT"), ThemeTokens.SMALL, ThemeTokens.ACCENT_TEXT))
 	var scroll := ScrollContainer.new()
 	founding_scroll = scroll
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -1425,14 +1425,14 @@ func _build_founding() -> void:
 	scroll.add_child(focus_margin)
 	var panel := UI.panel(focus_margin, "")
 	panel.add_child(form)
-	form.add_child(_label("Ein neuer Anfang.", ThemeTokens.SCREEN_TITLE))
-	form.add_child(_label("Name deiner Airline", ThemeTokens.BODY))
+	form.add_child(_label(tr("Ein neuer Anfang."), ThemeTokens.SCREEN_TITLE))
+	form.add_child(_label(tr("Name deiner Airline"), ThemeTokens.BODY))
 	name_input = LineEdit.new()
-	name_input.placeholder_text = "Airline-Name (1–80 Zeichen)"
+	name_input.placeholder_text = tr("Airline-Name (1–80 Zeichen)")
 	name_input.max_length = 80
 	name_input.custom_minimum_size.y = 40
 	form.add_child(name_input)
-	form.add_child(_label("Heimatland", ThemeTokens.BODY))
+	form.add_child(_label(tr("Heimatland"), ThemeTokens.BODY))
 	country_select = OptionButton.new()
 	country_select.custom_minimum_size.y = 40
 	country_select.get_popup().max_size = Vector2i(600, 280)
@@ -1443,7 +1443,7 @@ func _build_founding() -> void:
 		country_select.set_item_metadata(country_select.item_count - 1, country["code"])
 	country_select.item_selected.connect(_country_changed)
 	form.add_child(country_select)
-	form.add_child(_label("Heimatflughafen", ThemeTokens.BODY))
+	form.add_child(_label(tr("Heimatflughafen"), ThemeTokens.BODY))
 	airport_select = OptionButton.new()
 	airport_select.custom_minimum_size.y = 40
 	airport_select.get_popup().max_size = Vector2i(600, 280)
@@ -1460,7 +1460,7 @@ func _build_founding() -> void:
 		form.add_child(title)
 		difficulty_choices[key] = _difficulty_segments(form, difficulty_options["levels"], "DIFFICULTY_LEVEL_", func(_level: String): _difficulty_edited())
 		for button in difficulty_choices[key]: button.tooltip_text = title.tooltip_text
-	founding_capital = _label("Startkapital: %s · vorläufig konfiguriert" % simulation.get_starting_capital(), ThemeTokens.BODY, ThemeTokens.ACCENT_TEXT)
+	founding_capital = _label("", ThemeTokens.BODY, ThemeTokens.ACCENT_TEXT)
 	founding_capital.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	form.add_child(founding_capital)
 	_apply_difficulty_preset("standard")
@@ -1468,20 +1468,20 @@ func _build_founding() -> void:
 	actions.add_theme_constant_override("separation", 12)
 	column.add_child(actions)
 	found_button = Button.new()
-	found_button.text = "Airline gründen"
+	found_button.text = tr("Airline gründen")
 	found_button.theme_type_variation = "PrimaryButton"
 	found_button.pressed.connect(_found_airline)
 	actions.add_child(found_button)
 	founding_load_button = Button.new()
-	founding_load_button.text = "Spielstand laden"
+	founding_load_button.text = tr("Spielstand laden")
 	founding_load_button.pressed.connect(_load_game)
 	actions.add_child(founding_load_button)
 	cancel_founding_button = Button.new()
-	cancel_founding_button.text = "Abbrechen"
+	cancel_founding_button.text = tr("Abbrechen")
 	cancel_founding_button.theme_type_variation = "GhostButton"
 	cancel_founding_button.pressed.connect(_cancel_founding)
 	actions.add_child(cancel_founding_button)
-	founding_status = _label("Die neue Airline startet pausiert bei Tag 1 und lässt sich danach in einem benannten Speicherplatz sichern.", ThemeTokens.SMALL, ThemeTokens.INK_MUTED)
+	founding_status = _label(tr("Die neue Airline startet pausiert bei Tag 1 und lässt sich danach in einem benannten Speicherplatz sichern."), ThemeTokens.SMALL, ThemeTokens.INK_MUTED)
 	founding_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	column.add_child(founding_status)
 	for i in range(country_select.item_count):
@@ -1549,14 +1549,15 @@ func _country_changed(index: int) -> void:
 func _found_airline() -> void:
 	if is_instance_valid(new_game_dialog) and not new_game_dialog.is_queued_for_deletion(): return
 	if country_select.selected < 0 or airport_select.selected < 0:
-		founding_status.text = "Bitte Heimatland und Heimatflughafen auswählen."
+		founding_status.text = tr("Bitte Heimatland und Heimatflughafen auswählen.")
 		return
 	if not simulation.has_airline():
 		_start_new_world()
 		return
 	var error: String = simulation.validate_new_world(name_input.text, country_select.get_selected_metadata(), airport_select.get_selected_metadata(), _difficulty_level("capital"), _difficulty_level("competition"), _difficulty_level("crises"))
 	if not error.is_empty():
-		founding_status.text = error
+		founding_status.text = tr(error) # Rust decides validity; the German message is the translation key.
+		name_input.grab_focus()
 		return
 	var current: Dictionary = simulation.get_airline_info()
 	var body := tr("Aktuelle Airline: %s (Basis %s)") % [current.get("name", "—"), current.get("airport_icao", "—")]
@@ -1572,9 +1573,10 @@ func _found_airline() -> void:
 func _start_new_world() -> void:
 	var error: String = simulation.start_new_world(name_input.text, country_select.get_selected_metadata(), airport_select.get_selected_metadata(), _difficulty_level("capital"), _difficulty_level("competition"), _difficulty_level("crises"))
 	if not error.is_empty():
-		founding_status.text = error
+		founding_status.text = tr(error) # Rust decides validity; the German message is the translation key.
+		name_input.grab_focus()
 		return
-	save_status.text = "Airline gegründet · bitte Spielstand speichern."
+	save_status.text = tr("Airline gegründet · bitte Spielstand speichern.")
 	_sync_view()
 	routes_panel.reset_for_world()
 
@@ -1616,7 +1618,7 @@ func _open_founding(opener: Button = null) -> void:
 	name_input.clear()
 	_apply_difficulty_preset("standard")
 	founding_scroll.scroll_vertical = 0
-	founding_status.text = "Neues Spiel: Gründen ersetzt die laufende Airline samt ungespeichertem Fortschritt. Bestehende manuelle Spielstände bleiben unter Laden erhalten. Abbrechen kehrt zur laufenden Airline zurück."
+	founding_status.text = tr("Neues Spiel: Gründen ersetzt die laufende Airline samt ungespeichertem Fortschritt. Bestehende manuelle Spielstände bleiben unter Laden erhalten. Abbrechen kehrt zur laufenden Airline zurück.")
 	name_input.grab_focus()
 
 

@@ -18,6 +18,8 @@ func _run() -> void:
 		print("PASS: flight archive fares, receipts and row selection at both sizes and languages")
 		quit(0)
 		return
+	if not capture_dir.is_empty():
+		await _founding_language_views()
 	main = load("res://scenes/main.tscn").instantiate()
 	root.add_child(main)
 	main.set_process(false)
@@ -2063,3 +2065,26 @@ func _charter_views(sim: RefCounted) -> void:
 		if not capture_dir.is_empty():
 			await RenderingServer.frame_post_draw
 			assert(root.get_texture().get_image().save_png(capture_dir.path_join("charters-jobs-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
+
+
+## Founding form with a rejected blank name in both supported languages (AIR-508).
+func _founding_language_views() -> void:
+	for locale in ["de", "en"]:
+		TranslationServer.set_locale(locale)
+		var view = load("res://scenes/main.tscn").instantiate()
+		root.add_child(view)
+		view.set_process(false)
+		await process_frame
+		view.name_input.text = "   "
+		view.found_button.pressed.emit()
+		for dimensions in [Vector2i(1440, 1000), Vector2i(680, 520)]:
+			root.size = dimensions
+			for frame in range(5): await process_frame
+			assert(view.name_input.has_focus())
+			assert(root.get_visible_rect().encloses(view.found_button.get_global_rect()))
+			assert(root.get_visible_rect().encloses(view.founding_status.get_global_rect()))
+			await RenderingServer.frame_post_draw
+			assert(root.get_texture().get_image().save_png(capture_dir.path_join("founding-error-%s-%dx%d.png" % [locale, dimensions.x, dimensions.y])) == OK)
+		view.queue_free()
+		await process_frame
+	TranslationServer.set_locale("de")
