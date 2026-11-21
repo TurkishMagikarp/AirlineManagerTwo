@@ -101,6 +101,8 @@ func _run() -> void:
 	await _click(main.new_game_button)
 	main.name_input.text = "Fresh Routes"
 	await _click(main.found_button)
+	await _click(main.new_game_dialog.danger_button)
+	await process_frame
 	await _click(main.navigation[2])
 	if not _check(main.simulation.get_routes().is_empty() and panel.empty_label.visible and panel.create_button.disabled, "New game clears routes and stale assignments"):
 		return
@@ -120,6 +122,8 @@ func _run() -> void:
 		if main.airport_select.get_item_metadata(i) == "LTFJ":
 			main.airport_select.select(i)
 	await _click(main.found_button)
+	await _click(main.new_game_dialog.danger_button)
+	await process_frame
 	await _click(main.navigation[2])
 	if not _check(panel.origin.get_selected_metadata() == "LTFJ" and panel.destination.selected == -1 and panel.create_button.disabled and panel.route_tree.get_selected() == null, "Founding at LTFJ starts the planner at LTFJ and drops the old draft"):
 		return
