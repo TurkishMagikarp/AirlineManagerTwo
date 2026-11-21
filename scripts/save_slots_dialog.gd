@@ -178,14 +178,14 @@ func _render_slot(row: Dictionary) -> void:
 	if id == selected:
 		var actions := HFlowContainer.new()
 		column.add_child(actions)
-		if not damaged: actions.add_child(_button(tr("Laden"), func(): load_slot(id, false), "" if saving else "PrimaryButton"))
+		if not damaged: actions.add_child(_button(tr("Laden"), func(): request_load(id, false), "" if saving else "PrimaryButton"))
 		actions.add_child(_button(tr("Löschen"), func(): request_delete(id, title), "DangerButton"))
 		if not row["backup"].is_empty():
 			var backup: Dictionary = row["backup"]
 			var backup_facts := UI.label(tr("Sicherung") + " · " + backup.get("name", "") + "\n" + _facts(backup), Tokens.CODE, Tokens.INK_MUTED)
 			backup_facts.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 			column.add_child(backup_facts)
-			column.add_child(_button(tr("Sicherung laden"), func(): load_slot(id, true), "PrimaryButton" if damaged and not saving else ""))
+			column.add_child(_button(tr("Sicherung laden"), func(): request_load(id, true), "PrimaryButton" if damaged and not saving else ""))
 
 func _render_autosave() -> void:
 	var header: Dictionary = autosave["header"]
@@ -216,13 +216,13 @@ func _render_autosave() -> void:
 	if AUTOSAVE_ID == selected:
 		var actions := HFlowContainer.new()
 		column.add_child(actions)
-		if not damaged: actions.add_child(_button(tr("Laden"), func(): load_slot(AUTOSAVE_ID, false), "PrimaryButton"))
+		if not damaged: actions.add_child(_button(tr("Laden"), func(): request_load(AUTOSAVE_ID, false), "PrimaryButton"))
 		if not autosave["backup"].is_empty():
 			var backup: Dictionary = autosave["backup"]
 			var backup_facts := UI.label(tr("Vorheriger Autosave") + "\n" + _facts(backup), Tokens.CODE, Tokens.INK_MUTED)
 			backup_facts.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 			column.add_child(backup_facts)
-			column.add_child(_button(tr("Sicherung laden"), func(): load_slot(AUTOSAVE_ID, true), "PrimaryButton" if damaged else ""))
+			column.add_child(_button(tr("Sicherung laden"), func(): request_load(AUTOSAVE_ID, true), "PrimaryButton" if damaged else ""))
 
 func _facts(header: Dictionary) -> String:
 	# Wall clock is display only; simulation time is already formatted by Rust.
@@ -254,6 +254,33 @@ func _store(id: int, title: String, overwrite: bool) -> void:
 	if error.is_empty(): failed_slots.erase(id)
 	refresh()
 
+func request_load(id: int, backup: bool) -> void:
+	if not simulation.has_airline():
+		load_slot(id, backup)
+		return
+	var row := _entry(id)
+	var header: Dictionary = row.get("backup", {}) if backup else row.get("header", {})
+	var shown: String = header.get("name", "")
+	if id == AUTOSAVE_ID: shown = tr("Vorheriger Autosave") if backup else tr("Autosave")
+	elif shown.is_empty(): shown = tr("Beschädigter Spielstand")
+	if header.has("game_time"): shown += " · " + header["game_time"]
+	var question := tr("Sicherung laden?") if backup else (tr("Autosave laden?") if id == AUTOSAVE_ID else tr("Spielstand laden?"))
+	_confirm(question, shown + "\n" + tr("Nicht gespeicherter Fortschritt in der aktuellen Airline geht verloren."), tr("Sicherung laden") if backup else tr("Laden"), func(): load_slot(id, backup), _focus_selected)
+
+func _entry(id: int) -> Dictionary:
+	if id == AUTOSAVE_ID: return autosave
+	for row in rows:
+		if row["id"] == id: return row
+	return {}
+
+func _focus_selected() -> void:
+	if not is_inside_tree() or is_queued_for_deletion(): return
+	for card in list_box.get_children():
+		if card.get_meta("slot_id", -1) == selected:
+			card.get_child(0).get_child(0).grab_focus()
+			return
+	_focus_default()
+
 func load_slot(id: int, backup: bool) -> void:
 	var error: String = simulation.load_autosave(user_dir, backup) if id == AUTOSAVE_ID else simulation.load_slot(user_dir, id, backup)
 	if error.is_empty():
@@ -273,10 +300,10 @@ func request_delete(id: int, title: String) -> void:
 		refresh()
 	)
 
-func _confirm(title: String, body: String, action: String, confirmed: Callable) -> void:
+func _confirm(title: String, body: String, action: String, confirmed: Callable, refocus: Callable = Callable()) -> void:
 	decision = UI.dialog(self, title, body, tr("Abbrechen"), action, confirmed)
 	decision.tree_exited.connect(func():
-		if is_inside_tree(): _focus_default.call_deferred()
+		if is_inside_tree(): (refocus if refocus.is_valid() else _focus_default).call_deferred()
 	)
 	decision.popup_centered()
 

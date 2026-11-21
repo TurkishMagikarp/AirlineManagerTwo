@@ -102,3 +102,7 @@ Route,Route,Route
 Keine Treffer für „%s“.,Keine Treffer für „%s“.,No results for “%s”.
 %d Treffer,%d Treffer,%d results
 Flughäfen und eigene Routen suchen (Strg+F),Flughäfen und eigene Routen suchen (Strg+F),Search airports and your routes (Ctrl+F)
+Spielstand laden?,Spielstand laden?,Load saved game?
+Sicherung laden?,Sicherung laden?,Load backup?
+Autosave laden?,Autosave laden?,Load autosave?
+Nicht gespeicherter Fortschritt in der aktuellen Airline geht verloren.,Nicht gespeicherter Fortschritt in der aktuellen Airline geht verloren.,Unsaved progress in the current airline will be lost.

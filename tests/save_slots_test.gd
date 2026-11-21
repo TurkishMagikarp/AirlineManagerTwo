@@ -40,7 +40,31 @@ func _run() -> void:
 	dialog.decision.get_cancel_button().pressed.emit()
 	await process_frame
 	assert(sim.get_save_slots(directory)["slots"][0]["occupied"])
-	dialog.load_slot(0, true)
+	# Loading over an open airline asks first; cancel keeps the company and the selection.
+	var later: Dictionary = sim.get_financial_summary().duplicate(true)
+	dialog.select_slot(0, "Nach dem Kauf")
+	dialog.request_load(0, true)
+	assert(is_instance_valid(dialog.decision))
+	assert(dialog.decision.safe_button.text == "Abbrechen")
+	var texts: Array = dialog.decision.find_children("*", "Label", true, false).map(func(l): return l.text)
+	assert(texts.any(func(t): return "Sicherung laden?" == t) and texts.any(func(t): return "Vor dem Sprung" in t and "Tag 1" in t and "Nicht gespeicherter Fortschritt" in t))
+	dialog.decision.get_cancel_button().pressed.emit()
+	await process_frame
+	await process_frame
+	assert(sim.get_financial_summary() == later and not sim.get_fleet().is_empty())
+	assert(dialog.selected == 0 and is_instance_valid(main.save_slots_dialog))
+	var focus_owner: Control = root.gui_get_focus_owner()
+	assert(focus_owner != null and focus_owner.is_visible_in_tree() and dialog.is_ancestor_of(focus_owner))
+	dialog.request_load(0, false)
+	assert(is_instance_valid(dialog.decision))
+	dialog.decision.get_ok_button().pressed.emit()
+	await process_frame
+	assert(sim.get_financial_summary() == later)
+	main._load_game()
+	await process_frame
+	dialog = main.save_slots_dialog
+	dialog.request_load(0, true)
+	dialog.decision.get_ok_button().pressed.emit()
 	await process_frame
 	assert(sim.get_financial_summary() == before)
 	assert(sim.get_fleet().is_empty())
@@ -113,7 +137,16 @@ func _run() -> void:
 	dialog = main.save_slots_dialog
 	assert(not dialog.autosave.is_empty())
 	assert(dialog.list_box.get_children().any(func(card): return card.get_meta("slot_id", -1) == dialog.AUTOSAVE_ID))
-	dialog.load_slot(dialog.AUTOSAVE_ID, false)
+	var current: Dictionary = sim.get_financial_summary().duplicate(true)
+	dialog.select_slot(dialog.AUTOSAVE_ID, "")
+	dialog.request_load(dialog.AUTOSAVE_ID, false)
+	assert(is_instance_valid(dialog.decision))
+	dialog.decision.get_cancel_button().pressed.emit()
+	await process_frame
+	await process_frame
+	assert(sim.get_financial_summary() == current and dialog.selected == dialog.AUTOSAVE_ID)
+	dialog.request_load(dialog.AUTOSAVE_ID, false)
+	dialog.decision.get_ok_button().pressed.emit()
 	await process_frame
 	assert(sim.get_financial_summary() == settled)
 	assert(sim.begin_jump(86400))
