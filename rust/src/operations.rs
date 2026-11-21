@@ -344,15 +344,27 @@ impl Game {
     }
 
     pub fn quote_ferry(&self, id: u32, destination: &str) -> Result<Ferry, String> {
-        self.require_ferry_aircraft(id)?;
+        self.quote_ferry_checked(id, destination)
+            .map_err(|b| b.message())
+    }
+
+    /// Like `quote_ferry`, but a pilot shortage is reported as data and only for a feasible leg.
+    pub fn quote_ferry_checked(&self, id: u32, destination: &str) -> Result<Ferry, FerryBlocker> {
+        let blocker = self.ferry_blocker(id);
+        if let Err(FerryBlocker::Other(m)) = blocker {
+            return Err(FerryBlocker::Other(m));
+        }
         let plane = self.fleet.iter().find(|p| p.id == id).unwrap();
-        self.quote_leg(
-            id,
-            &plane.location_icao,
-            destination,
-            self.clock.elapsed().as_secs(),
-            0,
-        )
+        let leg = self
+            .quote_leg(
+                id,
+                &plane.location_icao,
+                destination,
+                self.clock.elapsed().as_secs(),
+                0,
+            )
+            .map_err(FerryBlocker::Other)?;
+        blocker.map(|()| leg)
     }
 
     /// One empty-cabin dispatch quote from `from` to `to`, leaving at `departure`.

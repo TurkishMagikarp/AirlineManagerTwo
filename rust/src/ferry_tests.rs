@@ -285,3 +285,34 @@ fn ferry_pilot_shortage_is_structured_and_other_errors_are_not() {
     g.send_ferry(1, "EDDM").unwrap();
     assert!(matches!(g.ferry_blocker(1), Err(FerryBlocker::Other(_))));
 }
+
+#[test]
+fn ferry_destination_blockers_come_before_pilot_shortage() {
+    use crate::operations::FerryBlocker;
+    let mut g = Game::default();
+    g.found("Ferry", "DE", "EDDF").unwrap();
+    g.competitors.clear();
+    g.lease_aircraft("atr72_600").unwrap();
+    let n = crate::staff::needs("atr72_600").unwrap();
+    let before = state(&g);
+    for (destination, text) in [
+        ("NZAA", "außerhalb der Reichweite"),
+        ("EDDF", "verschieden"),
+        ("XXXX", "Zielflughäfen"),
+    ] {
+        match g.quote_ferry_checked(1, destination) {
+            Err(FerryBlocker::Other(m)) => assert!(m.contains(text), "{destination}: {m}"),
+            other => panic!("{destination}: {:?}", other.map(|_| ())),
+        }
+        assert!(g.quote_ferry(1, destination).unwrap_err().contains(text));
+        assert!(g.send_ferry(1, destination).unwrap_err().contains(text));
+    }
+    assert!(matches!(
+        g.quote_ferry_checked(1, "EDDM"),
+        Err(FerryBlocker::Pilots { missing, .. }) if missing == n.pilots
+    ));
+    assert!(g.send_ferry(1, "EDDM").is_err());
+    assert_eq!(state(&g), before);
+    g.hire_pilots(&n.rating, n.pilots).unwrap();
+    assert!(g.quote_ferry_checked(1, "EDDM").is_ok());
+}

@@ -57,6 +57,7 @@ func _run() -> void:
 	await _fleet_pilot_shortage()
 	await _route_reposition()
 	await _existing_route_reposition()
+	await _destination_blockers_first()
 	print("PASS: ferry dialog range rejection, route-planner repositioning, Rust quote, dispatch, chip, toast, map, restart, landing and archive")
 	quit(0)
 
@@ -365,5 +366,60 @@ func _fleet_pilot_shortage() -> void:
 	m.ferry_retained = {"aircraft_id": 1, "destination": "EDDM"}
 	m._sync_view()
 	assert(m.ferry_retained.is_empty())
+	m.queue_free()
+	await process_frame
+
+
+func _destination_blockers_first() -> void:
+	var m = load("res://scenes/main.tscn").instantiate()
+	root.add_child(m)
+	m.set_process(false)
+	root.size = Vector2i(680, 520)
+	var sim = m.simulation
+	assert(sim.found_airline("Blocker Air", "DE", "EDDF").is_empty())
+	assert(sim.buy_aircraft("atr72_600").is_empty())
+	assert(not sim.preview_ferry(1, "XXXX")["error"].is_empty() and not sim.preview_ferry(1, "XXXX").has("pilots_missing"))
+	assert("verschieden" in sim.preview_ferry(1, "EDDF")["error"] and not sim.preview_ferry(1, "EDDF").has("pilots_missing"))
+	assert(not sim.send_ferry(1, "XXXX").is_empty() and not sim.send_ferry(1, "NZAA").is_empty())
+	m._sync_view()
+	m._show_page(1)
+	m.selected_aircraft = 1
+	m._refresh_fleet()
+	m.ferry_button.pressed.emit()
+	await process_frame
+	var staff: int = sim.get_staff().size()
+	for _round in range(2):
+		_pick(m.ferry_destination, "NZAA")
+		assert(m.ferry_dialog.get_ok_button().disabled and "Reichweite" in m.ferry_preview.text and not m.ferry_staff_button.visible)
+		assert(not "Piloten" in m.ferry_preview.text)
+		assert(m.ferry_destination.get_node(m.ferry_destination.focus_next) == m.ferry_dialog.danger_button)
+		_pick(m.ferry_destination, "EDDM")
+		assert(m.ferry_dialog.get_ok_button().disabled and m.ferry_staff_button.visible and "ATR 72" in m.ferry_preview.text and "4" in m.ferry_preview.text)
+		assert(m.ferry_destination.get_node(m.ferry_destination.focus_next) == m.ferry_staff_button)
+	_pick(m.ferry_destination, "NZAA")
+	assert(not m.ferry_staff_button.visible)
+	assert(sim.get_staff().size() == staff and sim.get_fleet()[0]["ferry_state"] == "")
+	m.ferry_dialog.safe_button.pressed.emit()
+	await process_frame
+	m._show_page(2)
+	var panel = m.routes_panel
+	panel.refresh()
+	_pick(panel.origin, "KORD")
+	_pick(panel.destination, "KJFK")
+	assert(panel.reposition_button.visible)
+	panel.reposition_button.pressed.emit()
+	await process_frame
+	assert(m.ferry_destination.get_selected_metadata() == "KORD")
+	assert(m.ferry_dialog.get_ok_button().disabled and "Reichweite" in m.ferry_preview.text and "Entwurf" in m.ferry_preview.text and not m.ferry_staff_button.visible)
+	assert(root.get_visible_rect().encloses(m.ferry_dialog.card.get_global_rect()))
+	m.ferry_dialog.safe_button.pressed.emit()
+	for _i in range(3):
+		await process_frame
+	assert(panel.reposition_button.has_focus() and panel.origin.get_selected_metadata() == "KORD" and panel.destination.get_selected_metadata() == "KJFK")
+	m._open_ferry(1, "KORD", panel.assign_ferry_button)
+	await process_frame
+	assert(m.ferry_dialog.get_ok_button().disabled and "Reichweite" in m.ferry_preview.text and not m.ferry_staff_button.visible)
+	m.ferry_dialog.safe_button.pressed.emit()
+	await process_frame
 	m.queue_free()
 	await process_frame
