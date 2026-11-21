@@ -52,6 +52,8 @@ var pause_button: Button
 var speed_buttons: Array[Button] = []
 var jump_buttons: Array[Button] = []
 var jump_status: Label
+var jump_attention_button: Button
+var jump_attention_target: Dictionary = {}
 var jump_in_progress := false
 var save_slots_dialog: Control
 var autosave
@@ -372,6 +374,13 @@ func _add_time_controls(column: VBoxContainer) -> void:
 	jump_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	jump_status.hide()
 	panel.add_child(jump_status)
+	jump_attention_button = Button.new()
+	jump_attention_button.text = tr("Hinweis öffnen")
+	jump_attention_button.tooltip_text = tr("Öffnet den Hinweis, der den Zeitsprung angehalten hat.")
+	jump_attention_button.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	jump_attention_button.hide()
+	jump_attention_button.pressed.connect(_open_jump_attention)
+	panel.add_child(jump_attention_button)
 	save_button = Button.new()
 	save_button.text = "Speichern"
 	save_button.pressed.connect(_save_game)
@@ -476,6 +485,8 @@ func _jump_to_commitment() -> void:
 	if not started["started"]:
 		jump_status.text = started["message"]
 		jump_status.show()
+		jump_attention_target = {}
+		_refresh_jump_attention()
 		_refresh_commitments()
 		return
 	await _finish_jump()
@@ -496,6 +507,7 @@ func _finish_jump() -> void:
 	_notify_economy()
 	jump_status.text = result["message"]
 	jump_status.show()
+	jump_attention_target = result.get("attention", {})
 	last_clock_view = ""
 	_refresh_time()
 	_refresh_attention()
@@ -504,6 +516,31 @@ func _finish_jump() -> void:
 	if quit_requested_during_jump:
 		quit_requested_during_jump = false
 		request_quit()
+
+
+func _current_jump_attention() -> Dictionary:
+	if jump_attention_target.is_empty(): return {}
+	for entry: Dictionary in simulation.get_attention_snapshot():
+		var same := true
+		for key in jump_attention_target:
+			if entry.get(key) != jump_attention_target[key]:
+				same = false
+				break
+		if same: return entry
+	return {}
+
+
+func _refresh_jump_attention() -> void:
+	if jump_attention_button == null: return
+	var entry := _current_jump_attention()
+	if entry.is_empty(): jump_attention_target = {}
+	jump_attention_button.visible = not entry.is_empty() and jump_status.visible
+
+
+func _open_jump_attention() -> void:
+	var entry := _current_jump_attention()
+	_refresh_jump_attention()
+	if not entry.is_empty(): _open_attention(entry)
 
 
 func _jump_progress() -> Window:
@@ -1482,6 +1519,8 @@ func _sync_view() -> void:
 	if is_instance_valid(economy_toast): economy_toast.queue_free()
 	milestones_panel.reset_view()
 	jump_status.hide()
+	jump_attention_target = {}
+	_refresh_jump_attention()
 	fleet_status.text = ""
 	maintenance_status.text = ""
 	fleet_status.hide()
@@ -1620,6 +1659,7 @@ func _refresh_attention() -> void:
 	if key == attention_signature:
 		return
 	attention_signature = key
+	_refresh_jump_attention()
 	attention_button.text = "Aufmerksamkeit (%d) · zum Ein-/Ausklappen" % entries.size() if not entries.is_empty() else "Aufmerksamkeit · Keine aktuellen Hinweise"
 	attention_button.disabled = entries.is_empty()
 	attention_scroll.visible = attention_expanded and not entries.is_empty()

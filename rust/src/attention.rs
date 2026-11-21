@@ -35,7 +35,7 @@ static RULES: LazyLock<Rules> = LazyLock::new(|| {
     r
 });
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Entry {
     pub order_id: u64,
     pub kind: &'static str,
