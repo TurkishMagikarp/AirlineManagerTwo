@@ -3,7 +3,7 @@ extends VBoxContainer
 
 signal changed
 signal procurement_requested
-signal reposition_requested(aircraft_id: int, destination: String)
+signal reposition_requested(aircraft_id: int, destination: String, opener: Control)
 const ThemeTokens = preload("res://scripts/ui/operations_theme.gd")
 const UI = preload("res://scripts/ui/components.gd")
 
@@ -22,6 +22,7 @@ var route_tree: Tree
 var empty_label: Control
 var assignment: OptionButton
 var assign_button: Button
+var assign_ferry_button: Button
 var delete_button: Button
 var wind_down_button: Button
 var release_label: Label
@@ -99,7 +100,7 @@ func _ready() -> void:
 	add_child(procurement_button)
 	reposition_button = Button.new()
 	reposition_button.visible = false
-	reposition_button.pressed.connect(func(): reposition_requested.emit(_selected_id(aircraft), origin.get_selected_metadata()))
+	reposition_button.pressed.connect(func(): reposition_requested.emit(_selected_id(aircraft), origin.get_selected_metadata(), reposition_button))
 	add_child(reposition_button)
 	for select in [origin, destination, aircraft]:
 		select.item_selected.connect(func(_index: int): _preview())
@@ -136,6 +137,13 @@ func _ready() -> void:
 	assign_button.text = "Flugzeug hinzufügen"
 	assign_button.pressed.connect(_assign)
 	actions.add_child(assign_button)
+	assign_ferry_button = Button.new()
+	assign_ferry_button.visible = false
+	assign_ferry_button.pressed.connect(func():
+		var route := _route()
+		if not route.is_empty():
+			reposition_requested.emit(_selected_id(assignment), route["origin_icao"], assign_ferry_button))
+	actions.add_child(assign_ferry_button)
 	wind_down_button = Button.new()
 	wind_down_button.text = tr("ROUTE_WIND_DOWN")
 	wind_down_button.tooltip_text = tr("ROUTE_WIND_DOWN_TIP")
@@ -469,6 +477,7 @@ func refresh() -> void:
 
 func refresh_operations() -> void:
 	_preview()
+	_assignment_preview(false)
 	# Refresh live metrics without rebuilding selection or resetting ticket inputs.
 	var metrics: Dictionary = {}
 	for route in simulation.get_routes():
@@ -681,12 +690,15 @@ func _selection_changed() -> void:
 		_update_service_cost(route)
 	if schedule_button != null:
 		_update_schedule_controls(route)
+	var selected_assignment := _selected_id(assignment)
 	assignment.clear()
 	for plane in simulation.get_fleet():
 		if plane["route_id"] == 0 or plane["route_id"] == route.get("id", -1):
 			var assigned: bool = plane["id"] in route.get("aircraft_ids", [])
 			assignment.add_item("%s · %s · %s" % [plane["identifier"], plane["model_name"], "Entfernen" if assigned else "Hinzufügen"])
 			assignment.set_item_metadata(assignment.item_count - 1, plane["id"])
+			if plane["id"] == selected_assignment:
+				assignment.select(assignment.item_count - 1)
 	assignment.disabled = route.is_empty()
 	_update_wind_down(route)
 	_update_fare(route)
@@ -806,10 +818,11 @@ func _refresh_competition() -> void:
 			row.set_tooltip_text(0, "Veröffentlicht als %s → %s" % [service["origin_icao"], service["destination_icao"]])
 
 
-func _assignment_preview() -> void:
+func _assignment_preview(report := true) -> void:
 	var route := _route()
 	assign_button.disabled = route.is_empty() or assignment.item_count == 0
 	assign_button.tooltip_text = ""
+	assign_ferry_button.visible = false
 	var removing: bool = _selected_id(assignment) in route.get("aircraft_ids", [])
 	assign_button.text = "Flugzeug entfernen" if removing else "Flugzeug hinzufügen"
 	if removing:
@@ -819,7 +832,13 @@ func _assignment_preview() -> void:
 		var result: Dictionary = simulation.preview_route(route["origin_icao"], route["destination_icao"], _selected_id(assignment), route["id"])
 		assign_button.disabled = not result["error"].is_empty()
 		assign_button.tooltip_text = result["error"]
-		status.text = result["error"]
+		if result["needs_reposition"]:
+			var plane_name := assignment.get_item_text(assignment.selected).get_slice(" · ", 0)
+			assign_ferry_button.text = "%s von %s nach %s überführen" % [plane_name, result["aircraft_location"], route["origin_icao"]]
+			assign_ferry_button.tooltip_text = "Öffnet die Überführungsbestätigung mit Kosten und Dauer. Nach Landung und Bodenzeit kann das Flugzeug hier hinzugefügt werden."
+			assign_ferry_button.visible = true
+		if report or not result["error"].is_empty():
+			status.text = result["error"]
 
 
 func _feedback(error: String, success: String, field: Control = null, select_id := 0) -> void:

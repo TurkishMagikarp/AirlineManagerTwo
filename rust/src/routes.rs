@@ -162,6 +162,10 @@ impl Game {
         }
     }
 
+    pub fn aircraft_is_assigned(&self, aircraft_id: u32) -> bool {
+        self.routes.iter().any(|r| r.aircraft_id == Some(aircraft_id))
+    }
+
     pub fn aircraft_range_km(&self, aircraft_id: u32) -> Option<u32> {
         let plane = self.fleet.iter().find(|p| p.id == aircraft_id)?;
         aircraft::model(&plane.model_id).ok().map(|m| m.range_km)
@@ -232,6 +236,7 @@ impl Game {
             .ok_or("Unbekannte Route.")?
             .clone();
         self.check_route(&root.origin_icao, &root.destination_icao, aircraft_id, None)?;
+        self.check_new_route_location(&root.origin_icao, aircraft_id)?;
         let mut staged = self.clone();
         let id = staged.next_route_id;
         staged.next_route_id = id
