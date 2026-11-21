@@ -938,6 +938,26 @@ func _ferry_pilot_views(sim: RefCounted) -> void:
 		if not capture_dir.is_empty():
 			await RenderingServer.frame_post_draw
 			assert(root.get_texture().get_image().save_png(capture_dir.path_join("ferry-pilot-shortage-dialog-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
+		main.ferry_dialog.safe_button.pressed.emit()
+		await process_frame
+		main._show_page(1)
+		main.selected_aircraft = atr
+		main._refresh_fleet()
+		main.ferry_button.grab_focus()
+		main.ferry_button.pressed.emit()
+		for frame in range(5): await process_frame
+		assert(main.ferry_staff_button.visible and main.ferry_dialog.get_ok_button().disabled and not main.ferry_button.disabled)
+		assert(root.get_visible_rect().encloses(main.ferry_staff_button.get_global_rect()) and root.get_visible_rect().encloses(main.ferry_dialog.safe_button.get_global_rect()))
+		main.ferry_staff_button.grab_focus()
+		assert(main.ferry_staff_button.has_focus())
+		if not capture_dir.is_empty():
+			await RenderingServer.frame_post_draw
+			assert(root.get_texture().get_image().save_png(capture_dir.path_join("fleet-ferry-pilot-shortage-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
+		main.ferry_dialog.safe_button.pressed.emit()
+		for frame in range(3): await process_frame
+		assert(main.ferry_button.has_focus())
+		main._open_ferry(atr, "EDDM")
+		for frame in range(5): await process_frame
 		main.ferry_staff_button.pressed.emit()
 		for frame in range(8): await process_frame
 		assert(main.current_page == 5 and main.staff_panel.count_spin.get_line_edit().has_focus())
