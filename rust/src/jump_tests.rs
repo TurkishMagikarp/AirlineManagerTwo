@@ -96,7 +96,7 @@ fn jumps_new_attention_distress_and_insolvency_reuse_reasons() {
     let mut reference = g.clone();
     let r = g.jump((31 * DAY) as f64).unwrap();
     assert_eq!(r.advanced_seconds, 30 * DAY);
-    assert_eq!(r.reason, g.financing_status());
+    assert_eq!(r.reason, r.attention.as_ref().unwrap().text);
     assert!(g.distressed());
     small_steps(&mut reference, r.advanced_seconds);
     assert_eq!(state(&g), state(&reference));
@@ -373,7 +373,10 @@ fn waiting_forced_check_stops_the_jump_then_updates_when_staffed() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("forced.json");
     save::save(&path, &g).unwrap();
-    assert_eq!(forced_entries(&save::load(&path).unwrap()), forced_entries(&g));
+    assert_eq!(
+        forced_entries(&save::load(&path).unwrap()),
+        forced_entries(&g)
+    );
 }
 
 #[test]
@@ -399,11 +402,7 @@ fn stopped_jump_names_the_new_entry_among_simultaneous_notices_for_both_entry_po
     }
 }
 
-#[test]
-fn financing_stop_and_completed_jump_have_no_attention_target() {
-    let mut g = game();
-    let done = g.jump(DAY as f64).unwrap();
-    assert!(done.reason.is_empty() && done.attention.is_none());
+fn rent_game() -> Game {
     let mut rent = Game::default();
     rent.found("Rent", "DE", "EDDF").unwrap();
     rent.competitors.clear();
@@ -411,7 +410,93 @@ fn financing_stop_and_completed_jump_have_no_attention_target() {
     let shift = 1 - rent.cash();
     rent.airline.as_mut().unwrap().capital_eur += shift;
     rent.history.as_mut().unwrap().opening_balance += shift;
-    let r = rent.jump((31 * DAY) as f64).unwrap();
-    assert_eq!(r.reason, rent.financing_status());
+    rent
+}
+
+fn stage(g: &Game, kind: &str) -> crate::attention::Entry {
+    g.attention_snapshot()
+        .into_iter()
+        .find(|e| e.kind == kind)
+        .unwrap()
+}
+
+#[test]
+fn completed_jump_has_no_attention_target() {
+    let mut g = game();
+    let done = g.jump(DAY as f64).unwrap();
+    assert!(done.reason.is_empty() && done.attention.is_none());
+}
+
+#[test]
+fn financial_distress_and_restructuring_stop_with_current_finance_entry() {
+    let grace = crate::financing::RULES.distress_grace_days;
+    let window = crate::financing::RULES.restructuring_days;
+    let mut g = rent_game();
+    let r = g.jump((31 * DAY) as f64).unwrap();
+    assert!(r.advanced_seconds < 31 * DAY && !g.insolvent());
+    let entry = r.attention.clone().unwrap();
+    assert_eq!(entry.kind, "financial_distress");
+    assert_eq!(entry.page, "finances");
+    assert_eq!(entry, stage(&g, "financial_distress"));
+    let start = g.resolution.distress_since.unwrap() + grace * DAY;
+    assert!(entry.text.contains(&crate::operations::display_time(start)));
+    // The same stage does not stop again; the grace end enters restructuring.
+    let before = g.clock.elapsed();
+    let r = g.jump((grace * DAY) as f64).unwrap();
+    assert_eq!(
+        g.clock.elapsed() - before,
+        Duration::from_secs(r.advanced_seconds)
+    );
+    let entry = r.attention.clone().unwrap();
+    assert_eq!(entry.kind, "restructuring");
+    assert_eq!(entry, stage(&g, "restructuring"));
+    assert!(
+        g.attention_snapshot()
+            .iter()
+            .all(|e| e.kind != "financial_distress")
+    );
+    let deadline = g.resolution.deadline.unwrap();
+    assert!(
+        entry
+            .text
+            .contains(&crate::operations::display_time(deadline))
+    );
+    // Within restructuring, a later jump runs on without stopping for it.
+    let r = g.jump((window * DAY / 2) as f64).unwrap();
+    assert!(r.attention.is_none() || r.attention.unwrap().kind != "restructuring");
+    // The final insolvency stop uses the terminal notice instead of an entry.
+    let r = g.jump((window * DAY) as f64).unwrap();
+    assert!(g.insolvent());
+    assert_eq!(r.reason, g.financing_status());
     assert!(r.attention.is_none());
+    assert!(
+        g.attention_snapshot()
+            .iter()
+            .all(|e| !matches!(e.kind, "financial_distress" | "restructuring"))
+    );
+}
+
+#[test]
+fn overdue_principal_with_nonnegative_cash_is_a_distress_entry_and_recovery_clears_it() {
+    let mut g = Game::default();
+    g.found("Overdue", "DE", "EDDF").unwrap();
+    g.competitors.clear();
+    g.borrow(1_200_000).unwrap();
+    g.financing.overdue = 5000;
+    g.observe_distress();
+    assert!(g.cash() >= 0);
+    let entry = stage(&g, "financial_distress");
+    assert_eq!(entry.page, "finances");
+    assert!(entry.text.contains("überfällige Tilgung: 5000 EUR"));
+    assert!(!entry.text.contains("Guthaben negativ"));
+    let r = g.jump((10 * DAY) as f64).unwrap();
+    assert!(r.attention.is_none());
+    g.financing.overdue = 0;
+    g.observe_distress();
+    assert!(!g.distressed());
+    assert!(
+        g.attention_snapshot()
+            .iter()
+            .all(|e| !matches!(e.kind, "financial_distress" | "restructuring"))
+    );
 }

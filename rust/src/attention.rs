@@ -13,6 +13,8 @@ static RULES: LazyLock<Rules> = LazyLock::new(|| {
         .expect("Aufmerksamkeitskonfiguration ungültig");
     for key in [
         "negative_cash",
+        "financial_distress",
+        "restructuring",
         "crew",
         "delay",
         "technicians",
@@ -118,6 +120,44 @@ impl Game {
                 0,
                 0,
             );
+        }
+        if self.distressed() && !self.insolvent() {
+            let mut causes = Vec::new();
+            if airline.capital_eur < 0 {
+                causes.push(format!("Guthaben negativ: {} EUR", airline.capital_eur));
+            }
+            if self.financing.overdue > 0 {
+                causes.push(format!(
+                    "überfällige Tilgung: {} EUR",
+                    self.financing.overdue
+                ));
+            }
+            let (kind, text) = if let Some(deadline) = self.resolution.deadline {
+                (
+                    "restructuring",
+                    format!(
+                        "Restrukturierung bis {} · {}",
+                        operations::display_time(deadline),
+                        causes.join(", ")
+                    ),
+                )
+            } else {
+                let since = self
+                    .resolution
+                    .distress_since
+                    .unwrap_or(self.clock.elapsed().as_secs());
+                let start =
+                    since.saturating_add(crate::financing::RULES.distress_grace_days * 86400);
+                (
+                    "financial_distress",
+                    format!(
+                        "Finanznot: {} · Restrukturierung ab {}",
+                        causes.join(", "),
+                        operations::display_time(start)
+                    ),
+                )
+            };
+            add(kind, text, "finances", 0, 0, 0);
         }
         if self.reputation.score <= crate::disruptions::RULES.reputation_attention_score
             && self.reputation.trend < 0

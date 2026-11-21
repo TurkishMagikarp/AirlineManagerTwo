@@ -126,6 +126,7 @@ fn attention_order_is_stable_and_snapshot_does_not_touch_any_owner() {
         kinds(&g),
         [
             "negative_cash",
+            "financial_distress",
             "crew",
             "idle",
             "idle",
@@ -133,8 +134,8 @@ fn attention_order_is_stable_and_snapshot_does_not_touch_any_owner() {
             "training"
         ]
     );
-    assert_eq!(expected[2].aircraft_id, 1);
-    assert_eq!(expected[3].aircraft_id, 2);
+    assert_eq!(expected[3].aircraft_id, 1);
+    assert_eq!(expected[4].aircraft_id, 2);
     g.fleet.reverse();
     g.staff.employees.reverse();
     assert_eq!(g.attention_snapshot(), expected);

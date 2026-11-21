@@ -831,6 +831,17 @@ func _jump_views() -> void:
 		if not capture_dir.is_empty():
 			await RenderingServer.frame_post_draw
 			assert(root.get_texture().get_image().save_png(capture_dir.path_join("jump-action-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
+		var finance: Array = entries.filter(func(e: Dictionary): return e["kind"] in ["financial_distress", "restructuring"])
+		assert(finance.size() == 1)
+		main._show_page(0)
+		main._open_attention(finance[0])
+		for frame in range(8): await process_frame
+		assert(main.current_page == 4 and root.gui_get_focus_owner() != null)
+		assert(root.get_visible_rect().encloses(root.gui_get_focus_owner().get_global_rect()))
+		if not capture_dir.is_empty():
+			await RenderingServer.frame_post_draw
+			assert(root.get_texture().get_image().save_png(capture_dir.path_join("finances-lending-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
+		main._show_page(0)
 		main.jump_attention_target = {}
 		main._refresh_jump_attention()
 		var progress: Window = main._jump_progress()

@@ -1704,6 +1704,9 @@ func _open_attention(entry: Dictionary) -> void:
 	if page == 1:
 		selected_aircraft = entry["aircraft_id"]
 	_show_page(page)
+	if page == 4 and entry.get("kind", "") in ["financial_distress", "restructuring"]:
+		finances_panel.focus_lending()
+		return
 	if page == 1 and entry.get("kind", "") == "delivery":
 		fleet_tabs.current_tab = 1
 		orders_panel.select_order(entry.get("order_id", 0))
