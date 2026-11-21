@@ -108,6 +108,26 @@ fn labour_resignations_remove_rated_pilots_and_hiring_releases_grounded_plan() {
     g.validate_staff().unwrap();
 }
 #[test]
+fn crew_gaps_name_the_held_aircraft_and_clear_after_hiring() {
+    let mut g = game();
+    g.schedule(1, 1, 120).unwrap();
+    assert!(g.crew_gaps().is_empty());
+    g.set_pay_level(Role::Pilot, 85).unwrap();
+    g.staff.labour[0].morale = 30;
+    g.staff.labour[0].pay_percent = 85;
+    g.clock.set_running(true);
+    assert!(g.advance(30.0 * DAY));
+    let g = reload(&g);
+    let id = g.routes[0].aircraft_id.unwrap();
+    assert_eq!(g.crew_gaps(), vec![(id, 1, 0)]);
+    let entries = g.attention_snapshot();
+    assert!(entries.iter().any(|e| e.kind == "crew" && e.aircraft_id == id));
+    let mut g = g;
+    g.hire_pilots("ATR 72", 1).unwrap();
+    assert!(g.crew_gaps().is_empty());
+    assert!(!g.attention_snapshot().iter().any(|e| e.kind == "crew"));
+}
+#[test]
 fn labour_warning_raise_averts_strike_and_jump_stops_on_strike() {
     let mut base = game();
     base.schedule(1, 1, 120).unwrap();

@@ -256,6 +256,7 @@ func _aircraft(overview: Dictionary) -> void:
 	var root := aircraft_tree.create_item()
 	for plane in overview["aircraft"]:
 		var row := aircraft_tree.create_item(root)
+		row.set_metadata(0, plane["id"])
 		var status := ""
 		var color := UI.MUTED
 		match plane["state"]:
@@ -438,6 +439,22 @@ func _confirm_pay(key: String) -> void:
 		changed.emit())
 	pay_dialog.get_ok_button().theme_type_variation = "PrimaryButton"
 	pay_dialog.popup_centered()
+
+func focus_shortage(aircraft_id: int) -> void:
+	refresh(true)
+	var row := aircraft_tree.get_root().get_first_child() if aircraft_tree.get_root() != null else null
+	while row != null:
+		if aircraft_id == row.get_metadata(0):
+			aircraft_tree.set_selected(row, 0)
+			break
+		row = row.get_next()
+	for frame in range(4):
+		await get_tree().process_frame
+	hire_missing_button.grab_focus()
+	var scroll := get_parent().get_parent() as ScrollContainer
+	scroll.ensure_control_visible(hire_missing_button.get_parent())
+	await get_tree().process_frame
+	scroll.ensure_control_visible(hire_missing_button.get_parent())
 
 func focus_pay_group(index: int) -> void:
 	if index < 0 or index >= role_keys.size(): return

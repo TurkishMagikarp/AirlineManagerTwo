@@ -2239,6 +2239,7 @@ impl SimulationClock {
             .next_payroll_event()
             .map(operations::display_time)
             .unwrap_or_else(|| "—".to_string());
+        let gaps = g.crew_gaps();
         let mut aircraft_rows = Array::<VarDictionary>::new();
         for p in &g.fleet {
             let Ok(n) = staff::needs(&p.model_id) else {
@@ -2246,6 +2247,7 @@ impl SimulationClock {
             };
             let reserved = g.planned_route(p.id).is_some()
                 || p.maintenance.as_ref().is_some_and(|v| v.resume.is_some());
+            let gap = gaps.iter().find(|x| x.0 == p.id);
             let (state, problem) = match &p.maintenance {
                 Some(v) if p.status == aircraft::AircraftStatus::Maintenance && !v.staffed => (
                     "waiting_technicians",
@@ -2258,6 +2260,19 @@ impl SimulationClock {
                 Some(_) if p.status == aircraft::AircraftStatus::Maintenance => {
                     ("hangar", String::new())
                 }
+                _ if let Some(&(_, lack_pilots, lack_cabin)) = gap => {
+                    let mut parts = Vec::new();
+                    if lack_pilots > 0 {
+                        parts.push(format!("{lack_pilots} Piloten ({})", n.rating));
+                    }
+                    if lack_cabin > 0 {
+                        parts.push(format!("{lack_cabin} Flugbegleiter"));
+                    }
+                    (
+                        "short",
+                        format!("Besatzung fehlt: {} · Flugplan angehalten", parts.join(" und ")),
+                    )
+                }
                 _ if reserved => ("crewed", String::new()),
                 _ => match g.require_crew(&p.model_id) {
                     Ok(()) => ("ready", String::new()),
@@ -2269,7 +2284,10 @@ impl SimulationClock {
                 "model_name" => aircraft::model(&p.model_id).map(|m| m.name.as_str()).unwrap_or(""),
                 "pilots" => i64::from(n.pilots), "cabin_crew" => i64::from(n.cabin_crew),
                 "technicians" => i64::from(n.technicians),
-                "state" => state, "problem" => problem.as_str()
+                "state" => state, "problem" => problem.as_str(),
+                "rating" => n.rating.as_str(),
+                "missing_pilots" => gap.map_or(0, |x| i64::from(x.1)),
+                "missing_cabin" => gap.map_or(0, |x| i64::from(x.2))
             });
         }
         let mut overview = vdict! {

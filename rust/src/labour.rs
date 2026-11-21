@@ -324,6 +324,33 @@ impl Game {
     }
     /// Rebuild only on labour events or staffing actions. Normal flight quotes
     /// read one optional dated hold from the existing deterministic cursor.
+    /// Scheduled aircraft lacking crew under the same route-order allocation the staffing hold uses:
+    /// `(aircraft_id, missing pilots, missing cabin crew)`.
+    pub fn crew_gaps(&self) -> Vec<(u32, u32, u32)> {
+        let mut pilots: std::collections::BTreeMap<_, _> = staff::ratings()
+            .into_iter()
+            .map(|r| {
+                let n = self.rated_count(&r);
+                (r, n)
+            })
+            .collect();
+        let mut cabin = self.staff_count(Role::CabinCrew);
+        let mut gaps = Vec::new();
+        for route in self.routes.iter().filter(|r| r.plan.is_some()) {
+            let Some(id) = route.aircraft_id else { continue };
+            let Some(plane) = self.fleet.iter().find(|p| p.id == id) else { continue };
+            let Ok(n) = staff::needs(&plane.model_id) else { continue };
+            let Some(free) = pilots.get_mut(&n.rating) else { continue };
+            let (lack_pilots, lack_cabin) = (n.pilots.saturating_sub(*free), n.cabin_crew.saturating_sub(cabin));
+            *free = free.saturating_sub(n.pilots);
+            cabin = cabin.saturating_sub(n.cabin_crew);
+            if lack_pilots > 0 || lack_cabin > 0 {
+                gaps.push((id, lack_pilots, lack_cabin));
+            }
+        }
+        gaps
+    }
+
     pub(crate) fn refresh_labour_holds(&mut self) -> Result<(), String> {
         let now = self.clock.elapsed().as_secs();
         if self.staff.resignations == 0

@@ -1675,6 +1675,8 @@ func _open_attention(entry: Dictionary) -> void:
 	elif page == 5:
 		if entry.get("kind", "") in ["strike", "strike_warning"]:
 			staff_panel.focus_pay_group(entry["employee_id"] - 1)
+		elif entry.get("kind", "") == "crew":
+			staff_panel.focus_shortage(entry["aircraft_id"])
 		else:
 			staff_panel.focus_employee(entry["employee_id"])
 
