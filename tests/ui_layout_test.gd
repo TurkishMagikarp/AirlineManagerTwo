@@ -79,6 +79,13 @@ func _run() -> void:
 		print("PASS: technician wait in Fleet, Routes and Overview at both sizes")
 		quit(0)
 		return
+	if OS.get_environment("AIRLINE_UI_CAPTURE_MAINT_PENDING_ONLY") == "1":
+		await _pending_maintenance_views(sim)
+		main.queue_free()
+		await process_frame
+		print("PASS: maintenance after landing in Routes and Overview at both sizes")
+		quit(0)
+		return
 	if OS.get_environment("AIRLINE_UI_CAPTURE_CREW_BLOCKED_ONLY") == "1":
 		await _crew_blocked_views(sim)
 		main.queue_free()
@@ -1666,6 +1673,43 @@ func _technician_wait_views(sim: RefCounted) -> void:
 		assert(main.current_page == 5 and main.staff_panel.role_select.has_focus())
 		await RenderingServer.frame_post_draw
 		assert(root.get_texture().get_image().save_png(capture_dir.path_join("technician-wait-staff-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
+
+
+func _pending_maintenance_views(sim: RefCounted) -> void:
+	assert(sim.buy_aircraft("atr72_600").is_empty())
+	assert(sim.hire_pilots("ATR 72", 4).is_empty())
+	assert(sim.hire_staff("cabin_crew", 3).is_empty())
+	assert(sim.create_route("EDDF", "EDDM", 1).is_empty())
+	assert(sim.schedule_route(1, 1, 120).is_empty())
+	sim.start()
+	sim.set_speed(16)
+	sim.advance(7300.0 / 16.0)
+	assert(sim.request_maintenance(1).is_empty())
+	TranslationServer.set_locale("de")
+	for dimensions in [Vector2i(1440, 1000), Vector2i(680, 520)]:
+		root.size = dimensions
+		main._show_page(2)
+		main.routes_panel._operations_signature = ""
+		main.routes_panel.refresh_operations()
+		for frame in range(5): await process_frame
+		var routes_scroll: ScrollContainer = main.routes_panel.get_parent().get_parent()
+		routes_scroll.ensure_control_visible(main.routes_panel.operations_tree)
+		for frame in range(5): await process_frame
+		routes_scroll.ensure_control_visible(main.routes_panel.operations_tree)
+		await RenderingServer.frame_post_draw
+		assert(root.get_texture().get_image().save_png(capture_dir.path_join("maintenance-pending-routes-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
+		main._show_page(0)
+		main._sync_view()
+		for frame in range(5): await process_frame
+		var overview_scroll: Node = main.overview_operations
+		while overview_scroll != null and not overview_scroll is ScrollContainer:
+			overview_scroll = overview_scroll.get_parent()
+		assert(overview_scroll != null)
+		overview_scroll.ensure_control_visible(main.overview_operations)
+		for frame in range(5): await process_frame
+		overview_scroll.ensure_control_visible(main.overview_operations)
+		await RenderingServer.frame_post_draw
+		assert(root.get_texture().get_image().save_png(capture_dir.path_join("maintenance-pending-overview-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
 
 
 func _weather_views(sim: RefCounted) -> void:

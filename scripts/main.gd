@@ -1857,11 +1857,20 @@ func _render_operations(parent: VBoxContainer) -> void:
 		parent.remove_child(child)
 		child.queue_free()
 	var flights: Array = simulation.get_map_flights()
+	var operations: Array = simulation.get_operations()
 	for flight in flights:
+		var pending_end := ""
+		for operation in operations:
+			if operation["aircraft_id"] == flight["aircraft_id"] and operation["maintenance_pending"]:
+				pending_end = operation["maintenance_estimate_end"]
 		parent.add_child(UI.label(flight["identifier"], ThemeTokens.CODE))
 		parent.add_child(UI.status_chip("Unterwegs", "info"))
 		parent.add_child(UI.route_leg(flight["origin"], flight["destination"], flight["progress"] * 100, flight["arrival"]))
-	for operation in simulation.get_operations():
+		if not pending_end.is_empty():
+			var note := UI.label("Wartung nach Landung · Ende voraussichtlich %s" % pending_end)
+			note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			parent.add_child(note)
+	for operation in operations:
 		var airborne := false
 		for flight in flights:
 			if flight["aircraft_id"] == operation["aircraft_id"]: airborne = true

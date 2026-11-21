@@ -407,7 +407,15 @@ fn board_rows_flag_maintenance_and_weather_delay() {
     assert!(g.advance(100.0));
     g.request_maintenance(1).unwrap();
     let end = g.fleet[0].maintenance.as_ref().unwrap().end;
-    assert_eq!(board(&g)[0].state_kind, "airborne");
+    let pending = board(&g);
+    assert_eq!(pending[0].state_kind, "maintenance_pending");
+    assert!(pending[0].maintenance_pending && pending[0].next_departure.is_none());
+    assert!(pending[0].expected_landing.is_some());
+    g.cancel_maintenance(1).unwrap();
+    let cancelled = board(&g);
+    assert_eq!(cancelled[0].state_kind, "airborne");
+    assert!(cancelled[0].next_departure.is_some());
+    g.request_maintenance(1).unwrap();
     assert!(g.advance((end - 100 - 1) as f64));
     let rows = board(&g);
     assert_eq!(g.fleet[0].status, AircraftStatus::Maintenance);

@@ -966,7 +966,7 @@ impl SimulationClock {
                     .as_ref()
                     .map(|v| {
                         format!(
-                            " · Wartung ab Landung bis {}",
+                            " · Wartung nach Landung, Ende voraussichtlich {}",
                             operations::display_time(v.end)
                         )
                     })
@@ -1024,6 +1024,8 @@ impl SimulationClock {
                 "identifier" => plane.identifier().as_str(), "status_text" => text.as_str(),
                 "has_plan" => route.plan.is_some(),
                 "technician_wait" => board.technician_wait,
+                "maintenance_pending" => board.maintenance_pending,
+                "maintenance_estimate_end" => plane.maintenance.as_ref().filter(|_| board.maintenance_pending).map(|v| operations::display_time(v.end)).unwrap_or_default().as_str(),
                 "maintenance_release" => grounded_visit.filter(|v| v.staffed).map(|v| operations::display_time(v.end)).unwrap_or_default().as_str(),
                 "flight_seconds" => flight as i64, "ground_seconds" => ground as i64,
                 "completed_flights" => state.as_ref().map(|s| s.completed as i64).unwrap_or(0),

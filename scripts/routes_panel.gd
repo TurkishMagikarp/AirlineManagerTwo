@@ -320,7 +320,7 @@ func _ready() -> void:
 const OPS_KINDS := {
 	"airborne": ["OPS_STATE_AIRBORNE", "info"], "ground": ["OPS_STATE_GROUND", "neutral"],
 	"scheduled": ["OPS_STATE_SCHEDULED", "neutral"], "weather_delay": ["OPS_STATE_WEATHER", "caution"],
-	"maintenance": ["OPS_STATE_MAINTENANCE", "caution"], "technician_wait": ["OPS_STATE_TECH_WAIT", "stop"], "release": ["OPS_STATE_RELEASE", "caution"], "crew_blocked": ["OPS_STATE_CREW_BLOCKED", "stop"],
+	"maintenance": ["OPS_STATE_MAINTENANCE", "caution"], "technician_wait": ["OPS_STATE_TECH_WAIT", "stop"], "maintenance_pending": ["OPS_STATE_MAINT_PENDING", "caution"], "release": ["OPS_STATE_RELEASE", "caution"], "crew_blocked": ["OPS_STATE_CREW_BLOCKED", "stop"],
 	"no_plan": ["OPS_STATE_NO_PLAN", "neutral"],
 }
 
@@ -342,10 +342,12 @@ func _refresh_operations_table(metrics: Dictionary) -> void:
 		UI.cell_text(row, 1, "%s → %s" % [operation["origin"], operation["destination"]])
 		var kind: Array = OPS_KINDS[operation["state_kind"]]
 		UI.cell_status(row, 2, tr(kind[0]), kind[1])
-		var blocked: bool = operation["crew_blocked"] and operation["state_kind"] in ["crew_blocked", "airborne"]
+		var blocked: bool = operation["crew_blocked"] and operation["state_kind"] in ["crew_blocked", "airborne"] and not operation["maintenance_pending"]
 		var next_text: String = operation["next_departure"]
 		if operation["technician_wait"]:
 			next_text = tr("OPS_NEXT_TECH_WAIT")
+		elif operation["maintenance_pending"]:
+			next_text = tr("OPS_NEXT_MAINT_PENDING")
 		elif operation["state_kind"] == "maintenance":
 			next_text = tr("OPS_NEXT_RELEASE") % operation["maintenance_release"]
 		UI.cell_text(row, 3, tr("OPS_NEXT_CREW_BLOCKED") if blocked else next_text)
