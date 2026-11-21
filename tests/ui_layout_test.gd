@@ -1,5 +1,5 @@
 extends SceneTree
-## Real renderer captures are opt-in; all data comes from the unchanged Rust API.
+## Real renderer captures are opt-in; all data comes from the Rust API.
 
 const UI = preload("res://scripts/ui/components.gd")
 var main: Control
@@ -13,6 +13,11 @@ func _run() -> void:
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--capture-dir="):
 			capture_dir = arg.trim_prefix("--capture-dir=")
+	if OS.get_environment("AIRLINE_UI_CAPTURE_FLIGHT_ARCHIVE_ONLY") == "1":
+		await _flight_archive_views()
+		print("PASS: flight archive fares, receipts and row selection at both sizes and languages")
+		quit(0)
+		return
 	main = load("res://scenes/main.tscn").instantiate()
 	root.add_child(main)
 	main.set_process(false)
@@ -635,8 +640,75 @@ func _run() -> void:
 	await _jump_views()
 	main.queue_free()
 	await process_frame
+	await _flight_archive_views()
 	print("PASS: populated overview/fleet/routes/map/finances/staff and founding at 1440x1000, 1100x720, 680x520; deep controls reachable; no financial changes")
 	quit(0)
+
+func _flight_archive_views() -> void:
+	var host: Control = load("res://scenes/main.tscn").instantiate()
+	root.add_child(host)
+	host.set_process(false)
+	var sim: RefCounted = host.simulation
+	assert(sim.found_airline("Cabin UI Air", "DE", "EDDF").is_empty())
+	assert(sim.buy_aircraft("atr72_600").is_empty())
+	assert(sim.set_cabin_layout(1, 8).is_empty())
+	assert(sim.hire_missing_staff().is_empty())
+	assert(sim.create_route("EDDF", "EDDM", 1).is_empty())
+	assert(sim.set_ticket_price(1, 73).is_empty())
+	assert(sim.set_business_ticket_price(1, 181).is_empty())
+	assert(sim.set_ancillary_policy("standard").is_empty())
+	assert(sim.schedule_route(1, 1, 120).is_empty())
+	sim.start()
+	assert(sim.advance(60.0))
+	assert(sim.set_ticket_price(1, 61).is_empty())
+	assert(sim.set_business_ticket_price(1, 95).is_empty())
+	assert(sim.advance(10800.0))
+	sim.pause()
+	host._sync_view()
+	host._show_page(4)
+	var finance: Control = host.finances_panel
+	var table: Tree = finance.flights_tree
+	var detail: Label = finance.landing_detail
+	var scroll: ScrollContainer = finance.get_parent().get_parent()
+	finance.route_tree.set_selected(finance.route_tree.get_root().get_first_child(), 0)
+	finance.route_tree.item_selected.emit()
+	for language in ["de", "en"]:
+		TranslationServer.set_locale(language)
+		finance.refresh(true)
+		for dimensions in [Vector2i(1440, 1000), Vector2i(680, 520)]:
+			root.size = dimensions
+			for frame in range(5): await process_frame
+			scroll.ensure_control_visible(table)
+			for frame in range(3): await process_frame
+			var first: TreeItem = table.get_root().get_first_child()
+			var older: TreeItem = first.get_next()
+			var click_point := table.get_global_transform() * table.get_item_area_rect(first, 0).get_center()
+			for pressed in [true, false]:
+				var mouse := InputEventMouseButton.new()
+				mouse.button_index = MOUSE_BUTTON_LEFT
+				mouse.position = click_point
+				mouse.pressed = pressed
+				root.push_input(mouse)
+			assert(table.has_focus() and table.get_selected() == first, "Mouse selects a landing in the archive")
+			assert(detail.text.contains("95\u00a0EUR") and detail.text.contains("61\u00a0EUR"))
+			for pressed in [true, false]:
+				var key := InputEventKey.new()
+				key.keycode = KEY_DOWN
+				key.pressed = pressed
+				root.push_input(key)
+			assert(table.get_selected() == older, "Keyboard selects the older landing")
+			assert(detail.text.contains("181\u00a0EUR") and detail.text.contains("73\u00a0EUR"))
+			assert(detail.text.contains("Economy-Direkttarif" if language == "de" else "Economy direct fare"))
+			for frame in range(3): await process_frame
+			assert(scroll.get_global_rect().encloses(detail.get_global_rect()), "Selected landing detail is reachable at %s" % dimensions)
+			assert(scroll.get_global_rect().encloses(table.get_global_rect()), "Archive rows %s and selected landing detail %s fit inside %s" % [table.get_global_rect(), detail.get_global_rect(), scroll.get_global_rect()])
+			if not capture_dir.is_empty():
+				await RenderingServer.frame_post_draw
+				var screen := "finances-landing-fares" if language == "de" else "finances-landing-fares-en"
+				assert(root.get_texture().get_image().save_png(capture_dir.path_join("%s-%dx%d.png" % [screen, dimensions.x, dimensions.y])) == OK)
+	host.queue_free()
+	await process_frame
+	TranslationServer.set_locale("de")
 
 func _schedule_recovery_views(sim: RefCounted) -> void:
 	assert(sim.buy_aircraft("atr72_600").is_empty())

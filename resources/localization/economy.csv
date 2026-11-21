@@ -21,6 +21,12 @@ FARE_ASOF,Stand: %s,As of: %s
 FARE_TOOLTIP,"Prognose mit heutiger Nachfrage, Saison, Konjunktur, Treibstoff und Konkurrenz einschließlich Umsteigern. Gewinn je Abflug, bei mehreren Flugzeugen Mittelwert. Gilt für neue Abflüge; laufende Flüge behalten ihren Preis.","Forecast using today’s demand, season, economy, fuel and competition including connections. Profit per departure; average across aircraft. Applies to new departures; airborne flights keep their fare."
 FARE_AUTO_TOOLTIP,"Wöchentliche KI-Preisprüfung: aktueller Preis und ±10 EUR, bei Gleichstand bleibt der Preis. Jahresnachfrage wie bei der KI; daher kann der Tagesvorschlag abweichen. Ändert nur Passagierpreise. Manuelle Preise bleiben möglich.","Weekly AI fare review: current fare and ±10 EUR; ties keep the current fare. Annual demand as for rivals, so today’s suggestion may differ. Changes passenger fares only. Manual fares remain available."
 FARE_DATE,Tag %d · %s,Day %d · %s
+ARCHIVE_LANDING,Landung %s · %s · %d / %d Pax,Landing %s · %s · %d / %d pax
+ARCHIVE_ECONOMY_COLUMN,Economy-Direkttarif / Pax,Economy direct fare / pax
+ARCHIVE_ECONOMY_FARE,Economy-Direkttarif je Passagier: %s,Economy direct fare per passenger: %s
+ARCHIVE_BUSINESS_FARE,Abgerechneter Business-Tarif je Passagier: %s,Charged Business fare per passenger: %s
+ARCHIVE_RECEIPTS,Ticketerlös: %s · Fracht: %d kg / %s · Nebenerlöse: %s,Ticket revenue: %s · Cargo: %d kg / %s · Ancillary revenue: %s
+ARCHIVE_RESULT,Gesamtumsatz: %s · Flugkosten: %s · Ergebnis: %s,Total revenue: %s · Flight costs: %s · Result: %s
 DIFFICULTY_PRESET,Startbedingungen,Starting conditions
 DIFFICULTY_RELAXED,Entspannt,Relaxed
 DIFFICULTY_STANDARD,Standard,Standard

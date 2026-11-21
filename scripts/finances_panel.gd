@@ -17,6 +17,7 @@ var export_dialog: FileDialog
 var export_status: Label
 var flights_tree: Tree
 var detail: Label
+var landing_detail: Label
 var page_label: Label
 var previous_button: Button
 var next_button: Button
@@ -278,8 +279,21 @@ func _ready() -> void:
 	load_chart = Chart.new()
 	history.add_child(load_chart)
 	history.add_child(UI.label("Auslastung je Zeitabschnitt · Lücken = keine Landungen · nach Sitzplätzen gewichtet", ThemeTokens.SMALL, UI.MUTED))
-	flights_tree = UI.table(["Landung", "Richtung", "Ticketpreis je Pax", "Pax / Sitze", "Auslastung", "Gesamtumsatz", "Flugkosten", "Ergebnis", "Fracht kg / EUR (in Umsatz)"], [170, 140, 90, 95, 90, 110, 110, 110, 260], 250)
-	history.add_child(flights_tree)
+	var archive := VBoxContainer.new()
+	archive.add_theme_constant_override("separation", ThemeTokens.SPACE_3)
+	history.add_child(archive)
+	flights_tree = UI.table(["Landung", "Richtung", tr("ARCHIVE_ECONOMY_COLUMN"), "Pax / Sitze", "Auslastung", "Gesamtumsatz", "Flugkosten", "Ergebnis", "Fracht kg / EUR (in Umsatz)"], [170, 140, 180, 95, 90, 110, 110, 110, 260], 250)
+	get_viewport().size_changed.connect(_resize_archive)
+	_resize_archive()
+	flights_tree.item_selected.connect(func():
+		_show_landing_detail()
+		if flights_tree.has_focus() and not get_tree().process_frame.is_connected(_reveal_archive):
+			get_tree().process_frame.connect(_reveal_archive, CONNECT_ONE_SHOT)
+	)
+	archive.add_child(flights_tree)
+	landing_detail = UI.label("")
+	landing_detail.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	archive.add_child(landing_detail)
 	# The archive count grows with the save; wrap actions when its label no longer fits.
 	var paging := HFlowContainer.new()
 	history.add_child(paging)
@@ -509,22 +523,61 @@ func _reset_flights() -> void:
 	load_chart.set_series([], "load", true)
 	_flights()
 
+func _resize_archive() -> void:
+	flights_tree.custom_minimum_size.y = 148 if get_viewport_rect().size.y < 640 else 250
+
+func _reveal_archive() -> void:
+	if flights_tree.has_focus():
+		var scroll := get_parent().get_parent() as ScrollContainer
+		scroll.ensure_control_visible(flights_tree.get_parent())
+
 func _flights() -> void:
+	var previous := flights_tree.get_selected()
+	var previous_flight: Dictionary = previous.get_metadata(0) if previous != null else {}
 	flights_tree.clear()
+	flights_tree.set_column_title(2, tr("ARCHIVE_ECONOMY_COLUMN"))
 	flights_tree.set_meta("breakdowns", {})
 	var root := flights_tree.create_item()
 	var rows: Array = simulation.get_route_flight_page(route_id, offset)
+	var selected: TreeItem
 	for f in rows:
 		var row := flights_tree.create_item(root)
-		var values := [f["landing"], "%s → %s" % [f["origin"], f["destination"]], ("—" if f["seats"] == 0 else UI.money(f["ticket_eur"])), "%d / %d" % [f["passengers"], f["seats"]], "%.1f %%" % f["load_percent"], UI.money(f["revenue_eur"]), UI.money(f["costs_eur"]), UI.money(f["profit_eur"]), "%d kg / %s" % [f["cargo_kg"], UI.money(f["cargo_revenue_eur"])]]
+		row.set_metadata(0, f)
+		if selected == null and f == previous_flight:
+			selected = row
+		var values := [f["landing"], "%s → %s" % [f["origin"], f["destination"]], _economy_fare(f), "%d / %d" % [f["passengers"], f["seats"]], "%.1f %%" % f["load_percent"], UI.money(f["revenue_eur"]), UI.money(f["costs_eur"]), UI.money(f["profit_eur"]), "%d kg / %s" % [f["cargo_kg"], UI.money(f["cargo_revenue_eur"])]]
 		for i in range(values.size()):
 			UI.cell_text(row, i, values[i])
 		UI.set_breakdown(flights_tree, row, 5, UI.revenue_parts(f))
 		UI.set_breakdown(flights_tree, row, 6, UI.cost_parts(f))
 		UI.cell_result(row, 7, f["profit_eur"])
+	if selected == null:
+		selected = root.get_first_child()
+	if selected != null:
+		flights_tree.set_selected(selected, 0)
+		flights_tree.scroll_to_item(selected)
+	_show_landing_detail()
 	page_label.text = "%d–%d von %d · neueste zuerst" % [offset + 1 if not rows.is_empty() else 0, offset + rows.size(), flight_count]
 	previous_button.disabled = offset == 0
 	next_button.disabled = offset + 50 >= flight_count
+
+func _economy_fare(f: Dictionary) -> String:
+	return "—" if f["seats"] == 0 else UI.money(f["ticket_eur"])
+
+func _show_landing_detail() -> void:
+	var row := flights_tree.get_selected()
+	landing_detail.visible = row != null
+	if row == null:
+		return
+	var f: Dictionary = row.get_metadata(0)
+	var business := "—" if f["business_fare_eur"] == null else UI.money(f["business_fare_eur"])
+	landing_detail.text = "\n".join([
+		tr("ARCHIVE_LANDING") % [f["landing"], row.get_text(1), f["passengers"], f["seats"]],
+		tr("ARCHIVE_ECONOMY_FARE") % _economy_fare(f),
+		tr("ARCHIVE_BUSINESS_FARE") % business,
+		tr("ARCHIVE_RECEIPTS") % [UI.money(f["ticket_revenue_eur"]), f["cargo_kg"], UI.money(f["cargo_revenue_eur"]), UI.money(f["ancillary_revenue_eur"])],
+		tr("ARCHIVE_RESULT") % [UI.money(f["revenue_eur"]), UI.money(f["costs_eur"]), UI.signed_money(f["profit_eur"])],
+	]).replace(" EUR", "\u00a0EUR")
 
 func _refresh_loyalty(summary: Dictionary) -> void:
 	var data: Dictionary = simulation.get_loyalty()

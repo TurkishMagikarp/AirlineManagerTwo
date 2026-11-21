@@ -69,19 +69,33 @@ func _compare(main: Control, sim: RefCounted, expect_cargo: bool, expect_ancilla
 		_check(flight_row.get_text(5) == UI.money(f["revenue_eur"]) and flight_row.get_text(6) == UI.money(f["costs_eur"]) and flight_row.get_text(7) == UI.money(f["profit_eur"]), label + " archive row")
 		_tooltip_has(flight_row, 5, UI.revenue_parts(f), label + " archive revenue")
 		_tooltip_has(flight_row, 6, UI.cost_parts(f), label + " archive cost")
+		fin.flights_tree.set_selected(flight_row, 0)
+		fin.flights_tree.item_selected.emit()
+		var detail: String = fin.landing_detail.text.replace("\u00a0", " ")
+		var economy := "—" if f["seats"] == 0 else UI.money(f["ticket_eur"])
+		_check(flight_row.get_text(2) == economy and detail.contains("Economy-Direkttarif je Passagier: " + economy), label + " archive Economy direct fare")
+		if f["business_passengers"] == 0:
+			_check(f["business_fare_eur"] == null and detail.contains("Business-Tarif je Passagier: —"), label + " archive shows missing Business fare")
+		else:
+			_check(typeof(f["business_fare_eur"]) == TYPE_INT and f["business_fare_eur"] * f["business_passengers"] == f["business_revenue_eur"], label + " Rust derives charged Business fare")
+			_check(detail.contains("Business-Tarif je Passagier: " + UI.money(f["business_fare_eur"])), label + " archive shows charged Business fare")
+		_check(detail.contains("Ticketerlös: " + UI.money(f["ticket_revenue_eur"])) and detail.contains("Fracht: %d kg / %s" % [f["cargo_kg"], UI.money(f["cargo_revenue_eur"])]), label + " selected landing receipts")
+		_check(detail.contains("Nebenerlöse: " + UI.money(f["ancillary_revenue_eur"])) and detail.contains("Ergebnis: " + UI.signed_money(f["profit_eur"])), label + " selected landing ancillary revenue and result")
 		flight_row = flight_row.get_next()
 	_check(page.size() == route["flights"], label + " page holds all landings")
 	_check(revenue == route["revenue_eur"] and costs == route["costs_eur"], label + " flights add up to route total")
 	var latest: Dictionary = page[0]
-	for r in results:
-		if r["landing"] == latest["landing"] and r["route_id"] == route["route_id"]:
-			_check(r["revenue_eur"] == latest["revenue_eur"] and r["costs_eur"] == latest["costs_eur"] and r["profit_eur"] == latest["profit_eur"], label + " screens agree on the same landing")
+	var matching := results.filter(func(r): return r["landing"] == latest["landing"] and r["route_id"] == route["route_id"])
+	_check(matching.size() == 1, label + " latest landing appears in both screens")
+	if matching.size() == 1:
+		var r: Dictionary = matching[0]
+		_check(r["revenue_eur"] == latest["revenue_eur"] and r["costs_eur"] == latest["costs_eur"] and r["profit_eur"] == latest["profit_eur"], label + " screens agree on the same landing")
 	var company: Dictionary = sim.get_financial_summary()
 	_check(company["company_revenue_eur"] == company["ticket_revenue_eur"] + company["cargo_revenue_eur"] + company["ancillary_revenue_eur"] + company["charter_revenue_eur"], label + " company receipts sum to company revenue")
 	_check(company["company_revenue_eur"] - company["company_costs_eur"] == company["profit_eur"], label + " company revenue - costs = result")
 	_check(fin.metrics["revenue"].text == UI.money(company["company_revenue_eur"]) and fin.metrics["costs"].text == UI.money(company["company_costs_eur"]) and fin.metrics["profit"].text == UI.signed_money(company["profit_eur"]), label + " Finances company totals")
 	_check(main.finance_breakdown.text.contains(UI.money(company["company_revenue_eur"])) and main.finance_breakdown.text.contains(UI.money(company["company_costs_eur"])) and main.finance_breakdown.text.contains(UI.signed_money(company["profit_eur"])), label + " Overview company totals")
-	_check(fin.flights_tree.get_column_title(2) == "Ticketpreis je Pax", label + " ticket price label")
+	_check(fin.flights_tree.get_column_title(2) == "Economy-Direkttarif / Pax", label + " Economy direct fare column")
 	_check(fin.detail.text.contains("zentrale Gehälter und Wartungschecks"), label + " central costs explained")
 
 func _passenger(main: Control, fees: String, loyalty: String) -> RefCounted:
@@ -98,18 +112,77 @@ func _passenger(main: Control, fees: String, loyalty: String) -> RefCounted:
 	sim.pause()
 	return sim
 
+func _advance_to(sim: RefCounted, seconds: int) -> void:
+	assert(seconds > sim.get_elapsed_seconds())
+	sim.start()
+	assert(sim.advance(seconds - sim.get_elapsed_seconds()))
+	sim.pause()
+
+func _set_fares(panel: Control, economy: int, business: int) -> void:
+	_check(not panel.ticket_button.disabled and not panel.business_button.disabled, "manual fare buttons available")
+	panel.ticket_input.value = economy
+	panel.ticket_button.pressed.emit()
+	panel.business_input.value = business
+	panel.business_button.pressed.emit()
+	await process_frame
+
+func _mixed_fare_change(main: Control) -> RefCounted:
+	var sim: RefCounted = main.simulation
+	assert(sim.found_airline("Cabin UI Air", "DE", "EDDF").is_empty())
+	assert(sim.buy_aircraft("atr72_600").is_empty())
+	assert(sim.set_cabin_layout(1, 8).is_empty())
+	assert(sim.hire_missing_staff().is_empty())
+	assert(sim.create_route("EDDF", "EDDM", 1).is_empty())
+	assert(sim.set_pricing_autopilot(1, false).is_empty())
+	assert(sim.set_ancillary_policy("standard").is_empty())
+	assert(sim.set_loyalty_level("basic").is_empty())
+	main._sync_view()
+	main._show_page(2)
+	var panel: Control = main.routes_panel
+	panel.route_tree.get_root().get_first_child().select(0)
+	panel.route_tree.item_selected.emit()
+	await _set_fares(panel, 73, 181)
+	assert(sim.schedule_route(1, 1, 120).is_empty())
+	_advance_to(sim, sim.get_operations()[0]["next_departure_seconds"])
+	assert(sim.get_fleet()[0]["status"] == "in_flight")
+	var first_landing: int = sim.get_operations()[0]["expected_landing_seconds"]
+	await _set_fares(panel, 61, 95)
+	var route: Dictionary = sim.get_routes()[0]
+	_check(route["has_plan"] and not route["pricing_autopilot"] and route["ticket_eur"] == 61 and route["business_ticket_eur"] == 95, "changed both prices while the schedule stays active")
+	_advance_to(sim, first_landing)
+	_check_fare_history(sim, [[73, 181]])
+	_advance_to(sim, sim.get_operations()[0]["next_departure_seconds"])
+	_advance_to(sim, sim.get_operations()[0]["expected_landing_seconds"])
+	_check_fare_history(sim, [[61, 95], [73, 181]])
+	await _set_fares(panel, 61, 0)
+	_advance_to(sim, sim.get_operations()[0]["next_departure_seconds"])
+	_advance_to(sim, sim.get_operations()[0]["expected_landing_seconds"])
+	_check_fare_history(sim, [[61, 0], [61, 95], [73, 181]])
+	return sim
+
+func _check_fare_history(sim: RefCounted, fares: Array) -> void:
+	var archive: Array = sim.get_route_flight_page(1, 0)
+	assert(archive.size() == fares.size())
+	for i in range(fares.size()):
+		var f: Dictionary = archive[i]
+		_check(f["economy_passengers"] > 0 and f["business_passengers"] > 0, "mixed flight carried passengers in both cabins")
+		_check(f["ticket_eur"] == fares[i][0] and f["business_fare_eur"] == fares[i][1], "landing keeps the fares set at its departure")
+
 func _run() -> void:
+	TranslationServer.set_locale("de")
 	var main = load("res://scenes/main.tscn").instantiate()
 	root.add_child(main)
 	main.set_process(false)
-	var sim := _passenger(main, "standard", "basic")
-	await _compare(main, sim, true, true, true, "passenger")
-	var path := OS.get_environment("TMPDIR") + "/flight_reconciliation.save"
-	if OS.get_environment("TMPDIR").is_empty(): path = "user://flight_reconciliation.save"
+	var sim := await _mixed_fare_change(main)
+	await _compare(main, sim, true, true, true, "mixed passenger")
+	var path := OS.get_temp_dir().path_join("flight_reconciliation_%d.save" % OS.get_process_id())
 	var before: Array = sim.get_flight_results()
+	var archive_before: Array = sim.get_route_flight_page(1, 0)
 	_check(sim.save_game(path).is_empty(), "save")
 	_check(sim.load_game(path).is_empty(), "load")
 	_check(sim.get_flight_results() == before, "recorded amounts intact after reload")
+	_check(sim.get_route_flight_page(1, 0) == archive_before, "recorded archive intact after reload")
+	_check_fare_history(sim, [[61, 0], [61, 95], [73, 181]])
 	await _compare(main, sim, true, true, true, "reloaded")
 	DirAccess.remove_absolute(path)
 	root.size = Vector2i(680, 520)
@@ -143,5 +216,5 @@ func _run() -> void:
 	if failures > 0:
 		quit(1)
 		return
-	print("PASS: revenue, costs and results reconcile in Routes and Finances, after reload, without fees and for a freighter")
+	print("PASS: archived fares survive active-route edits and reload; passenger and freighter results reconcile in Routes and Finances")
 	quit(0)
