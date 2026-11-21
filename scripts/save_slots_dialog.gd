@@ -333,7 +333,7 @@ func _collect_focus(node: Node, controls: Array[Control]) -> void:
 	for child in node.get_children(): _collect_focus(child, controls)
 
 func _input(event: InputEvent) -> void:
-	if is_instance_valid(decision): return
+	if is_instance_valid(decision) or not get_tree().get_nodes_in_group("quit_prompt").is_empty(): return
 	if event.is_action_pressed("ui_cancel"):
 		get_viewport().set_input_as_handled()
 		close_dialog()
