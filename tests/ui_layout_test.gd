@@ -837,6 +837,7 @@ func _ferry_views(sim: RefCounted) -> void:
 			await RenderingServer.frame_post_draw
 			assert(root.get_texture().get_image().save_png(capture_dir.path_join("ferry-finances-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
 	await _assign_reposition_views(sim)
+	await _ferry_pilot_views(sim)
 
 
 func _reposition_views() -> void:
@@ -920,6 +921,31 @@ func _assign_reposition_views(sim: RefCounted) -> void:
 		assert(main.ferry_destination.get_selected_metadata() == "EDDM")
 		main.ferry_dialog.safe_button.pressed.emit()
 		for frame in range(3): await process_frame
+
+
+func _ferry_pilot_views(sim: RefCounted) -> void:
+	assert(sim.buy_aircraft("atr72_600").is_empty())
+	var atr: int = sim.get_fleet()[-1]["id"]
+	main._sync_view()
+	for dimensions in [Vector2i(1440, 1000), Vector2i(680, 520)]:
+		root.size = dimensions
+		main._show_page(1)
+		main._open_ferry(atr, "EDDM")
+		for frame in range(5): await process_frame
+		assert(main.ferry_staff_button.visible and main.ferry_dialog.get_ok_button().disabled)
+		assert(root.get_visible_rect().encloses(main.ferry_dialog.card.get_global_rect()))
+		assert(root.get_visible_rect().encloses(main.ferry_staff_button.get_global_rect()))
+		if not capture_dir.is_empty():
+			await RenderingServer.frame_post_draw
+			assert(root.get_texture().get_image().save_png(capture_dir.path_join("ferry-pilot-shortage-dialog-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
+		main.ferry_staff_button.pressed.emit()
+		for frame in range(8): await process_frame
+		assert(main.current_page == 5 and main.staff_panel.count_spin.get_line_edit().has_focus())
+		var focus: LineEdit = main.staff_panel.count_spin.get_line_edit()
+		assert(main.staff_panel.get_parent().get_parent().get_global_rect().encloses(focus.get_global_rect()))
+		if not capture_dir.is_empty():
+			await RenderingServer.frame_post_draw
+			assert(root.get_texture().get_image().save_png(capture_dir.path_join("ferry-pilot-shortage-staff-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
 
 
 func _jump_views() -> void:

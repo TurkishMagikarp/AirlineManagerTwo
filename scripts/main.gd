@@ -155,6 +155,7 @@ var ferry_chip: Control
 var ferry_title: Label
 var ferry_toast: CanvasLayer
 var ferry_aircraft := 0
+var ferry_staff_button: Button
 
 func _build_ferry_card(parent: VBoxContainer) -> void:
 	ferry_card = UI.panel(parent, "FLUGZEUG  /  ÜBERFÜHRUNG")
@@ -206,15 +207,24 @@ func _open_ferry(aircraft_id := 0, destination := "", opener: Control = null) ->
 	ferry_preview.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	content.add_child(ferry_preview)
 	content.move_child(ferry_preview, 3)
-	# Include the selector in keyboard traversal inside the dialog.
-	ferry_dialog.safe_button.focus_next = ferry_dialog.safe_button.get_path_to(ferry_destination)
-	ferry_destination.focus_next = ferry_destination.get_path_to(ferry_dialog.danger_button)
-	ferry_destination.focus_previous = ferry_destination.get_path_to(ferry_dialog.safe_button)
-	ferry_dialog.danger_button.focus_previous = ferry_dialog.danger_button.get_path_to(ferry_destination)
+	ferry_staff_button = Button.new()
+	ferry_staff_button.theme_type_variation = "PrimaryButton"
+	ferry_staff_button.visible = false
+	content.add_child(ferry_staff_button)
+	content.move_child(ferry_staff_button, 4)
+	var dialog := ferry_dialog
+	var staff_button := ferry_staff_button
+	staff_button.pressed.connect(func():
+		var rating: String = staff_button.get_meta("rating", "")
+		var missing: int = staff_button.get_meta("missing", 0)
+		dialog.set_meta("to_staff", true)
+		dialog.queue_free()
+		_show_page(5)
+		staff_panel.prepare_pilot_hire(rating, missing))
 	_preview_ferry()
 	if opener != null:
 		ferry_dialog.tree_exited.connect(func():
-			if is_instance_valid(opener) and opener.is_visible_in_tree():
+			if not dialog.get_meta("to_staff", false) and is_instance_valid(opener) and opener.is_visible_in_tree():
 				opener.grab_focus.call_deferred())
 	ferry_dialog.popup_centered()
 
@@ -226,6 +236,22 @@ func _preview_ferry() -> void:
 	ferry_dialog.get_ok_button().tooltip_text = error
 	ferry_preview.text = error if not error.is_empty() else "%.0f km · %.0f min\nErwartete Kosten: %s\nTreibstoff %s · Flughäfen %s · Betrieb %s" % [quote["distance_km"], quote["flight_seconds"] / 60.0, UI.money(quote["cost_eur"]), UI.money(quote["fuel_eur"]), UI.money(quote["airport_eur"]), UI.money(quote["overhead_eur"])]
 	ferry_preview.add_theme_color_override("font_color", ThemeTokens.STOP if not error.is_empty() else ThemeTokens.INK)
+	var missing: int = quote.get("pilots_missing", 0)
+	ferry_staff_button.visible = missing > 0
+	if missing > 0:
+		var rating: String = quote["pilot_rating"]
+		ferry_staff_button.set_meta("rating", rating)
+		ferry_staff_button.set_meta("missing", missing)
+		ferry_staff_button.text = "Personal öffnen: %d Pilot%s %s" % [missing, "" if missing == 1 else "en", rating]
+		ferry_preview.text = "Berechtigte Piloten fehlen: %d mit Muster %s." % [missing, rating]
+	# Keep the selector and the optional Staff action in keyboard traversal inside the dialog.
+	var last: Control = ferry_staff_button if missing > 0 else ferry_destination
+	ferry_dialog.safe_button.focus_next = ferry_dialog.safe_button.get_path_to(ferry_destination)
+	ferry_destination.focus_previous = ferry_destination.get_path_to(ferry_dialog.safe_button)
+	ferry_destination.focus_next = ferry_destination.get_path_to(last if missing > 0 else ferry_dialog.danger_button)
+	ferry_staff_button.focus_previous = ferry_staff_button.get_path_to(ferry_destination)
+	ferry_staff_button.focus_next = ferry_staff_button.get_path_to(ferry_dialog.danger_button)
+	ferry_dialog.danger_button.focus_previous = ferry_dialog.danger_button.get_path_to(last)
 
 func _send_ferry() -> void:
 	var error: String = simulation.send_ferry(ferry_aircraft, ferry_destination.get_selected_metadata())

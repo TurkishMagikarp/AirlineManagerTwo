@@ -53,6 +53,7 @@ func _run() -> void:
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 	main.queue_free()
 	await process_frame
+	await _other_errors_have_no_staff_shortcut()
 	await _route_reposition()
 	await _existing_route_reposition()
 	print("PASS: ferry dialog range rejection, route-planner repositioning, Rust quote, dispatch, chip, toast, map, restart, landing and archive")
@@ -112,13 +113,36 @@ func _route_reposition() -> void:
 	assert(m.ferry_destination.get_selected_metadata() == "EDDM")
 	assert(root.get_visible_rect().encloses(m.ferry_dialog.card.get_global_rect()))
 	assert(m.ferry_dialog.get_ok_button().disabled and "ATR 72" in m.ferry_preview.text)
+	assert(m.ferry_staff_button.visible and "4" in m.ferry_staff_button.text and "ATR 72" in m.ferry_staff_button.text)
 	m.ferry_dialog.safe_button.pressed.emit()
 	for _i in range(3):
 		await process_frame
 	assert(panel.reposition_button.has_focus())
 	assert(sim.get_fleet()[0]["ferry_state"] == "" and panel.origin.get_selected_metadata() == "EDDM" and panel.destination.get_selected_metadata() == "EDDF")
 	assert(sim.get_routes().is_empty() and panel.create_button.disabled)
-	assert(sim.hire_pilots("ATR 72", 4).is_empty() and sim.hire_staff("cabin_crew", 3).is_empty())
+	var cash: int = sim.get_airline_info()["capital_eur"]
+	var staff_before: int = sim.get_staff().size()
+	panel.reposition_button.pressed.emit()
+	await process_frame
+	m.ferry_staff_button.grab_focus()
+	await _press_enter()
+	for _i in range(6):
+		await process_frame
+	assert(not is_instance_valid(m.ferry_dialog) or not m.ferry_dialog.is_inside_tree())
+	assert(m.current_page == 5 and m.staff_panel.visible)
+	assert(m.staff_panel.role_keys[m.staff_panel.role_select.selected] == "pilot")
+	assert(m.staff_panel.rating_select.get_item_text(m.staff_panel.rating_select.selected) == "ATR 72")
+	assert(int(m.staff_panel.count_spin.value) == 4)
+	assert(m.staff_panel.count_spin.get_line_edit().has_focus() and m.staff_panel.count_spin.get_line_edit().is_visible_in_tree())
+	assert(sim.get_airline_info()["capital_eur"] == cash and sim.get_staff().size() == staff_before)
+	assert(sim.get_fleet()[0]["ferry_state"] == "" and sim.get_routes().is_empty())
+	m.staff_panel.hire_button.pressed.emit()
+	for _i in range(3):
+		await process_frame
+	assert(sim.get_staff().size() == staff_before + 4)
+	assert(sim.hire_staff("cabin_crew", 3).is_empty())
+	m._show_page(2)
+	assert(panel.origin.get_selected_metadata() == "EDDM" and panel.destination.get_selected_metadata() == "EDDF" and panel.reposition_button.visible)
 	panel.reposition_button.pressed.emit()
 	await process_frame
 	assert(m.ferry_destination.get_selected_metadata() == "EDDM" and not m.ferry_dialog.get_ok_button().disabled)
@@ -156,7 +180,7 @@ func _existing_route_reposition() -> void:
 	var sim = m.simulation
 	assert(sim.found_airline("Add Air", "DE", "EDDF").is_empty())
 	assert(sim.buy_aircraft("atr72_600").is_empty() and sim.buy_aircraft("atr72_600").is_empty())
-	assert(sim.hire_pilots("ATR 72", 8).is_empty() and sim.hire_staff("cabin_crew", 6).is_empty())
+	assert(sim.hire_pilots("ATR 72", 4).is_empty() and sim.hire_staff("cabin_crew", 6).is_empty())
 	var first: int = sim.get_fleet()[0]["id"]
 	var second: int = sim.get_fleet()[1]["id"]
 	var first_quote: Dictionary = sim.preview_ferry(first, "EDDM")
@@ -191,14 +215,32 @@ func _existing_route_reposition() -> void:
 	await _press_enter()
 	await process_frame
 	assert(m.ferry_dialog.visible and m.ferry_aircraft == second and m.ferry_destination.get_selected_metadata() == "EDDM")
-	assert(not m.ferry_dialog.get_ok_button().disabled)
+	assert(m.ferry_dialog.get_ok_button().disabled and m.ferry_staff_button.visible and "4" in m.ferry_staff_button.text)
 	m.ferry_dialog.safe_button.pressed.emit()
 	for _i in range(3):
 		await process_frame
 	assert(panel.assign_ferry_button.has_focus() and sim.get_fleet()[1]["ferry_state"] == "")
 	assert(panel._selected_id(panel.assignment) == second and panel._route().get("id", 0) == route_id)
+	var cash: int = sim.get_airline_info()["capital_eur"]
+	var staff_before: int = sim.get_staff().size()
 	panel.assign_ferry_button.pressed.emit()
 	await process_frame
+	m.ferry_staff_button.grab_focus()
+	await _press_enter()
+	for _i in range(6):
+		await process_frame
+	assert(m.current_page == 5 and int(m.staff_panel.count_spin.value) == 4)
+	assert(m.staff_panel.rating_select.get_item_text(m.staff_panel.rating_select.selected) == "ATR 72")
+	assert(sim.get_airline_info()["capital_eur"] == cash and sim.get_staff().size() == staff_before)
+	m.staff_panel.hire_button.pressed.emit()
+	for _i in range(3):
+		await process_frame
+	assert(sim.get_staff().size() == staff_before + 4)
+	m._show_page(2)
+	assert(panel._selected_id(panel.assignment) == second and panel._route().get("id", 0) == route_id and panel.assign_ferry_button.visible)
+	panel.assign_ferry_button.pressed.emit()
+	await process_frame
+	assert(not m.ferry_dialog.get_ok_button().disabled and not m.ferry_staff_button.visible)
 	var quote: Dictionary = sim.preview_ferry(second, "EDDM")
 	m.ferry_dialog.get_ok_button().pressed.emit()
 	for _i in range(3):
@@ -229,6 +271,34 @@ func _existing_route_reposition() -> void:
 	panel._assignment_preview()
 	assert(panel.assign_button.text == "Flugzeug entfernen")
 	panel.assign_button.pressed.emit()
+	await process_frame
+	m.queue_free()
+	await process_frame
+
+
+func _other_errors_have_no_staff_shortcut() -> void:
+	var m = load("res://scenes/main.tscn").instantiate()
+	root.add_child(m)
+	m.set_process(false)
+	var sim = m.simulation
+	assert(sim.found_airline("Other Air", "DE", "EDDF").is_empty())
+	assert(sim.buy_aircraft("atr72_600").is_empty() and sim.hire_pilots("ATR 72", 4).is_empty())
+	m._sync_view()
+	m._show_page(1)
+	m.ferry_button.pressed.emit()
+	await process_frame
+	_pick(m.ferry_destination, "NZAA")
+	assert(m.ferry_dialog.get_ok_button().disabled and "Reichweite" in m.ferry_preview.text and not m.ferry_staff_button.visible)
+	_pick(m.ferry_destination, "EDDM")
+	assert(not m.ferry_dialog.get_ok_button().disabled and not m.ferry_staff_button.visible)
+	m.ferry_dialog.get_ok_button().pressed.emit()
+	for _i in range(3):
+		await process_frame
+	assert(sim.get_fleet()[0]["ferry_state"] == "Überführung")
+	m._open_ferry(1, "EDDF")
+	await process_frame
+	assert(m.ferry_dialog.get_ok_button().disabled and not m.ferry_staff_button.visible)
+	m.ferry_dialog.safe_button.pressed.emit()
 	await process_frame
 	m.queue_free()
 	await process_frame

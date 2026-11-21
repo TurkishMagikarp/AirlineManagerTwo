@@ -470,3 +470,21 @@ func focus_technician_hiring() -> void:
 		await get_tree().process_frame
 	get_parent().get_parent().ensure_control_visible(role_select.get_parent())
 	role_select.grab_focus()
+
+func prepare_pilot_hire(rating: String, missing: int) -> void:
+	refresh(true)
+	role_select.select(role_keys.find("pilot"))
+	for i in range(rating_select.item_count):
+		if rating_select.get_item_text(i) == rating:
+			rating_select.select(i)
+	count_spin.value = clampi(missing, int(count_spin.min_value), int(count_spin.max_value))
+	var text := "Für die Überführung fehlen %d Piloten mit Muster %s. Bitte prüfen und einstellen; danach in Routen zurückkehren." % [missing, rating]
+	action_status.text = text
+	action_status.add_theme_color_override("font_color", UI.MUTED)
+	for frame in range(4):
+		await get_tree().process_frame
+	var scroll := get_parent().get_parent() as ScrollContainer
+	scroll.ensure_control_visible(count_spin.get_parent())
+	count_spin.get_line_edit().grab_focus()
+	await get_tree().process_frame
+	scroll.ensure_control_visible(count_spin.get_parent())

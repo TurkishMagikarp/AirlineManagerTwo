@@ -1864,7 +1864,12 @@ impl SimulationClock {
             Ok(f) => {
                 vdict! { "error" => "", "distance_km" => routes::distance_km(&f.quote.origin, &f.quote.destination).unwrap_or(0.0), "flight_seconds" => (f.quote.landing - f.departure) as i64, "cost_eur" => f.quote.totals.costs(), "fuel_eur" => f.quote.totals.fuel, "carbon_eur" => f.quote.totals.carbon, "airport_eur" => f.quote.totals.airport, "overhead_eur" => f.quote.totals.overhead }
             }
-            Err(error) => vdict! { "error" => error.as_str() },
+            Err(error) => match self.game.ferry_blocker(aircraft_id) {
+                Err(operations::FerryBlocker::Pilots { rating, missing }) => {
+                    vdict! { "error" => error.as_str(), "pilot_rating" => rating.as_str(), "pilots_missing" => i64::from(missing) }
+                }
+                _ => vdict! { "error" => error.as_str() },
+            },
         }
     }
 
