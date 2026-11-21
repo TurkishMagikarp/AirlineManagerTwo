@@ -163,7 +163,7 @@ func _build_ferry_card(parent: VBoxContainer) -> void:
 	ferry_card.add_child(ferry_title)
 	ferry_button = Button.new()
 	ferry_button.text = "Flugzeug überführen"
-	ferry_button.pressed.connect(_open_ferry)
+	ferry_button.pressed.connect(func(): _open_ferry())
 	ferry_card.add_child(ferry_button)
 
 func _refresh_ferry_card(plane: Dictionary) -> void:
@@ -180,9 +180,13 @@ func _refresh_ferry_card(plane: Dictionary) -> void:
 	ferry_button.tooltip_text = plane.get("ferry_error", "")
 	if is_instance_valid(ferry_dialog): _preview_ferry()
 
-func _open_ferry() -> void:
-	ferry_aircraft = selected_aircraft
-	var plane: Dictionary = fleet_rows[ferry_aircraft]
+func _open_ferry(aircraft_id := 0, destination := "", opener: Control = null) -> void:
+	ferry_aircraft = aircraft_id if aircraft_id != 0 else selected_aircraft
+	var plane: Dictionary = fleet_rows.get(ferry_aircraft, {})
+	if plane.is_empty():
+		for candidate in simulation.get_fleet():
+			if candidate["id"] == ferry_aircraft:
+				plane = candidate
 	ferry_dialog = UI.dialog(self, "%s überführen?" % plane["identifier"], "Einmaliger Leerflug ohne Erlös. Kosten werden bei Landung gebucht; danach gilt die normale Bodenzeit.", "Abbrechen", "Überführung starten", _send_ferry)
 	ferry_dialog.get_ok_button().theme_type_variation = "PrimaryButton"
 	var content: VBoxContainer = ferry_dialog.card.get_child(0)
@@ -193,6 +197,8 @@ func _open_ferry() -> void:
 		if airport["icao"] == plane["location_icao"]: continue
 		ferry_destination.add_item("%s · %s" % [airport["icao"], airport["name"]])
 		ferry_destination.set_item_metadata(ferry_destination.item_count - 1, airport["icao"])
+		if airport["icao"] == destination:
+			ferry_destination.select(ferry_destination.item_count - 1)
 	ferry_destination.item_selected.connect(func(_index: int): _preview_ferry())
 	var field := UI.field(content, "Zielflughafen", ferry_destination)
 	content.move_child(field, 2)
@@ -206,6 +212,10 @@ func _open_ferry() -> void:
 	ferry_destination.focus_previous = ferry_destination.get_path_to(ferry_dialog.safe_button)
 	ferry_dialog.danger_button.focus_previous = ferry_dialog.danger_button.get_path_to(ferry_destination)
 	_preview_ferry()
+	if opener != null:
+		ferry_dialog.tree_exited.connect(func():
+			if is_instance_valid(opener) and opener.is_visible_in_tree():
+				opener.grab_focus.call_deferred())
 	ferry_dialog.popup_centered()
 
 func _preview_ferry() -> void:
@@ -222,6 +232,7 @@ func _send_ferry() -> void:
 	if is_instance_valid(ferry_toast): ferry_toast.queue_free()
 	ferry_toast = UI.toast(self, "Überführung gestartet." if error.is_empty() else error, error.is_empty())
 	_refresh_fleet()
+	routes_panel.refresh()
 
 
 func _ready() -> void:
@@ -306,6 +317,8 @@ func _ready() -> void:
 	routes_panel.simulation = simulation
 	routes_panel.changed.connect(func(): save_status.text = "Routen geändert · bitte Spielstand speichern.")
 	routes_panel.procurement_requested.connect(_open_procurement)
+	routes_panel.reposition_requested.connect(func(aircraft_id: int, destination: String):
+		_open_ferry(aircraft_id, destination, routes_panel.reposition_button))
 	content.add_child(routes_panel)
 	map_panel = MapPanel.new()
 	map_panel.simulation = simulation

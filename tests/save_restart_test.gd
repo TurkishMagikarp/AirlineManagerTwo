@@ -47,7 +47,7 @@ func _run() -> void:
 		await _click(main.buy_button)
 		await _click(main.buy_button)
 		await _click(main.navigation[2])
-		for pair in [[main.routes_panel.origin, "EDDF"], [main.routes_panel.destination, "EDDM"]]:
+		for pair in [[main.routes_panel.origin, "LTFJ"], [main.routes_panel.destination, "LTFM"]]:
 			var select: OptionButton = pair[0]
 			for index in range(select.item_count):
 				if select.get_item_metadata(index) == pair[1]:
@@ -71,7 +71,7 @@ func _run() -> void:
 		return
 	var fleet: Array = clock.get_fleet()
 	var routes: Array = clock.get_routes()
-	if not _check(routes.size() == 1 and routes[0]["origin_icao"] == "EDDF" and routes[0]["destination_icao"] == "EDDM" and routes[0]["aircraft_id"] == 1 and fleet[0]["route_id"] == 1, "Route and exclusive assignment survive complete restart"):
+	if not _check(routes.size() == 1 and routes[0]["origin_icao"] == "LTFJ" and routes[0]["destination_icao"] == "LTFM" and routes[0]["aircraft_id"] == 1 and fleet[0]["route_id"] == 1, "Route and exclusive assignment survive complete restart"):
 		return
 	if mode.begins_with("read-"):
 		if not _check(not clock.create_route("LTFM", "LTFJ", 1).is_empty() and clock.get_routes() == routes, "Duplicate assignment rejected after restart"):
