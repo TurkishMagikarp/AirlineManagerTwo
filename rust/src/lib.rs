@@ -2499,6 +2499,33 @@ impl SimulationClock {
         }
     }
 
+    /// Checks a New Game form with the founding rules without touching the current game.
+    #[func]
+    fn validate_new_world(
+        &self,
+        name: GString,
+        country: GString,
+        airport: GString,
+        capital: GString,
+        competition: GString,
+        crises: GString,
+    ) -> GString {
+        if self.jump_worker.is_some() {
+            return "Zeitsprung läuft.".into();
+        }
+        match Game::default().found_with_levels(
+            &name.to_string(),
+            &country.to_string(),
+            &airport.to_string(),
+            &capital.to_string(),
+            &competition.to_string(),
+            &crises.to_string(),
+        ) {
+            Ok(()) => GString::new(),
+            Err(error) => error.as_str().into(),
+        }
+    }
+
     /// Founds a separate world; the current game is replaced only after the new one is valid.
     #[func]
     fn start_new_world(

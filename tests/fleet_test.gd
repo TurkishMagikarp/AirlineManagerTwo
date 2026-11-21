@@ -72,6 +72,8 @@ func _run() -> void:
 	await _click(main.new_game_button)
 	main.name_input.text = "Fresh Fleet Air"
 	await _click(main.found_button)
+	await _click(main.new_game_dialog.danger_button)
+	await process_frame
 	await _click(main.navigation[1])
 	if not _check(main.simulation.get_fleet().is_empty() and main.empty_fleet.visible and main.simulation.get_airline_info()["capital_eur"] == initial_balance, "Confirmed new game clears old fleet and resets funds"):
 		return

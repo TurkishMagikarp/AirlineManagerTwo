@@ -106,3 +106,8 @@ Spielstand laden?,Spielstand laden?,Load saved game?
 Sicherung laden?,Sicherung laden?,Load backup?
 Autosave laden?,Autosave laden?,Load autosave?
 Nicht gespeicherter Fortschritt in der aktuellen Airline geht verloren.,Nicht gespeicherter Fortschritt in der aktuellen Airline geht verloren.,Unsaved progress in the current airline will be lost.
+Aktuelle Airline: %s (Basis %s),Aktuelle Airline: %s (Basis %s),Current airline: %s (base %s)
+Neue Airline: %s (Basis %s),Neue Airline: %s (Basis %s),New airline: %s (base %s)
+Nicht gespeicherter Fortschritt in der aktuellen Airline geht verloren. Benannte Spielstände bleiben unter Laden erhalten.,Nicht gespeicherter Fortschritt in der aktuellen Airline geht verloren. Benannte Spielstände bleiben unter Laden erhalten.,Unsaved progress in the current airline will be lost. Named saves stay available under Load.
+Neue Airline gründen?,Neue Airline gründen?,Found a new airline?
+Airline gründen,Airline gründen,Found airline
