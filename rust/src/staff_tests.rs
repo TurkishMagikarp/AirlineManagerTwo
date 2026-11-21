@@ -655,22 +655,15 @@ fn external_conversion_is_faster_dearer_atomic_and_awards_the_same_rating() {
     let t0 = base.clock.elapsed().as_secs();
     let payroll_before = base.history.as_ref().unwrap().payroll_through(u64::MAX);
     let money = capital(&base);
-    assert_eq!(
-        base.conversion_ends_at(Course::External),
-        t0 + ex_days * 86_400
-    );
-    base.train_pilot_course(id, "ATR 72", Course::External)
-        .unwrap();
+    assert_eq!(base.conversion_ends_at(Course::External), t0 + ex_days * 86_400);
+    base.train_pilot_course(id, "ATR 72", Course::External).unwrap();
     assert_eq!(money - capital(&base), ex_cost);
     assert_eq!(
         base.history.as_ref().unwrap().payroll_through(u64::MAX) - payroll_before,
         i128::from(ex_cost)
     );
     let t = base.staff.employees[0].training.clone().unwrap();
-    assert_eq!(
-        (t.start(), t.ends_at, t.external),
-        (t0, t0 + ex_days * 86_400, true)
-    );
+    assert_eq!((t.start(), t.ends_at, t.external), (t0, t0 + ex_days * 86_400, true));
     assert_eq!(base.rated_available("737"), 0);
     assert_eq!(base.rated_available("ATR 72"), 0);
     assert!(base.dismiss_staff(id).is_err());
@@ -706,10 +699,7 @@ fn external_conversion_is_faster_dearer_atomic_and_awards_the_same_rating() {
     let path = dir.path().join("external.json");
     crate::save::save(&path, &mid).unwrap();
     let loaded = crate::save::load(&path).unwrap();
-    assert_eq!(
-        loaded.staff.employees[0].training,
-        mid.staff.employees[0].training
-    );
+    assert_eq!(loaded.staff.employees[0].training, mid.staff.employees[0].training);
 }
 
 #[test]
@@ -722,17 +712,10 @@ fn external_conversion_needs_cash_and_an_available_pilot() {
     g.airline.as_mut().unwrap().capital_eur = Course::External.terms().0 - 1;
     assert!(Course::External.terms().0 - 1 >= in_cost);
     let before = state(&g);
-    assert!(
-        g.train_pilot_course(id, "ATR 72", Course::External)
-            .unwrap_err()
-            .contains("Guthaben")
-    );
+    assert!(g.train_pilot_course(id, "ATR 72", Course::External).unwrap_err().contains("Guthaben"));
     assert_eq!(state(&g), before);
     g.train_pilot_course(id, "ATR 72", Course::InHouse).unwrap();
-    assert!(
-        g.train_pilot_course(id, "A320 family", Course::External)
-            .is_err()
-    );
+    assert!(g.train_pilot_course(id, "A320 family", Course::External).is_err());
     assert!(Course::parse("night_school").is_err());
 }
 
@@ -750,9 +733,6 @@ fn old_save_training_keeps_its_deadline_and_in_house_progress() {
     let old: crate::staff::Employee = serde_json::from_value(value).unwrap();
     let t = old.training.unwrap();
     assert_eq!((t.ends_at, t.external), (ends, false));
-    assert_eq!(
-        t.start(),
-        ends - crate::staff::conversion_terms().1 * 86_400
-    );
+    assert_eq!(t.start(), ends - crate::staff::conversion_terms().1 * 86_400);
     assert!((t.progress_percent(t.start() + (ends - t.start()) / 2) - 50.0).abs() < 0.01);
 }

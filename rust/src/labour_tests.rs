@@ -121,11 +121,7 @@ fn crew_gaps_name_the_held_aircraft_and_clear_after_hiring() {
     let id = g.routes[0].aircraft_id.unwrap();
     assert_eq!(g.crew_gaps(), vec![(id, 1, 0)]);
     let entries = g.attention_snapshot();
-    assert!(
-        entries
-            .iter()
-            .any(|e| e.kind == "crew" && e.aircraft_id == id)
-    );
+    assert!(entries.iter().any(|e| e.kind == "crew" && e.aircraft_id == id));
     let mut g = g;
     g.hire_pilots("ATR 72", 1).unwrap();
     assert!(g.crew_gaps().is_empty());

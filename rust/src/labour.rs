@@ -337,22 +337,11 @@ impl Game {
         let mut cabin = self.staff_count(Role::CabinCrew);
         let mut gaps = Vec::new();
         for route in self.routes.iter().filter(|r| r.plan.is_some()) {
-            let Some(id) = route.aircraft_id else {
-                continue;
-            };
-            let Some(plane) = self.fleet.iter().find(|p| p.id == id) else {
-                continue;
-            };
-            let Ok(n) = staff::needs(&plane.model_id) else {
-                continue;
-            };
-            let Some(free) = pilots.get_mut(&n.rating) else {
-                continue;
-            };
-            let (lack_pilots, lack_cabin) = (
-                n.pilots.saturating_sub(*free),
-                n.cabin_crew.saturating_sub(cabin),
-            );
+            let Some(id) = route.aircraft_id else { continue };
+            let Some(plane) = self.fleet.iter().find(|p| p.id == id) else { continue };
+            let Ok(n) = staff::needs(&plane.model_id) else { continue };
+            let Some(free) = pilots.get_mut(&n.rating) else { continue };
+            let (lack_pilots, lack_cabin) = (n.pilots.saturating_sub(*free), n.cabin_crew.saturating_sub(cabin));
             *free = free.saturating_sub(n.pilots);
             cabin = cabin.saturating_sub(n.cabin_crew);
             if lack_pilots > 0 || lack_cabin > 0 {

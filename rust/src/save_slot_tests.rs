@@ -259,10 +259,7 @@ fn autosave_roundtrip_failed_write_and_isolation() {
     assert_eq!(state(&slots::load_autosave(&root, false).unwrap()), first);
     assert!(slots::autosave_entry(&root).error.is_empty());
     slots::store_autosave(&root, &g).unwrap();
-    assert_eq!(
-        state(&slots::load_autosave(&root, false).unwrap()),
-        state(&g)
-    );
+    assert_eq!(state(&slots::load_autosave(&root, false).unwrap()), state(&g));
     assert_eq!(state(&slots::load_autosave(&root, true).unwrap()), first);
     let listed = slots::list(&root, &legacy).unwrap();
     assert_eq!(listed.iter().filter(|s| s.occupied).count(), 2);

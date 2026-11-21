@@ -389,11 +389,7 @@ fn kinds(g: &Game) -> Vec<(u64, String)> {
                 c.at,
                 match &c.kind {
                     Delivery { order_id, .. } => format!("d{order_id}"),
-                    Training {
-                        employee_id,
-                        rating,
-                        ..
-                    } => format!("t{employee_id}{rating}"),
+                    Training { employee_id, rating, .. } => format!("t{employee_id}{rating}"),
                 },
             )
         })

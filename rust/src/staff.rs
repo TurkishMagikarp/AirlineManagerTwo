@@ -203,8 +203,10 @@ pub struct Training {
 
 impl Training {
     pub fn start(&self) -> u64 {
-        self.started_at
-            .unwrap_or_else(|| self.ends_at.saturating_sub(conversion_terms().1 * 86_400))
+        self.started_at.unwrap_or_else(|| {
+            self.ends_at
+                .saturating_sub(conversion_terms().1 * 86_400)
+        })
     }
 
     /// Progress in whole-second precision, 0.0..=100.0.
@@ -447,9 +449,7 @@ impl Game {
         }
         let (cost, days) = course.terms();
         let started_at = self.clock.elapsed().as_secs();
-        let ends_at = started_at
-            .checked_add(days * 86400)
-            .ok_or("Zeitüberlauf.")?;
+        let ends_at = started_at.checked_add(days * 86400).ok_or("Zeitüberlauf.")?;
         let airline = self.airline.as_mut().ok_or("Airline fehlt.")?;
         if airline.capital_eur < cost {
             return Err("Nicht genügend Guthaben für Umschulung.".into());

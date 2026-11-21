@@ -18,20 +18,14 @@ fn world_with(rivals: bool) -> Game {
     let mut g = Game::default();
     g.found("Alliance audit", "DE", "EDDF").unwrap();
     g.competitors = crate::competition::initial_competitors().unwrap();
-    grow(
-        &mut g.competitors[0].game,
-        &[("EDDF", "LFPG"), ("EDDF", "LEMD")],
-    );
+    grow(&mut g.competitors[0].game, &[("EDDF", "LFPG"), ("EDDF", "LEMD")]);
     let second: &[(&str, &str)] = if rivals {
         &[("EDDF", "EDDM"), ("EDDF", "LSZH")]
     } else {
         &[("EDDF", "LSZH"), ("EDDF", "LTFJ")]
     };
     grow(&mut g.competitors[1].game, second);
-    grow(
-        &mut g,
-        &[("EDDF", "EGLL"), ("EDDF", "EHAM"), ("EDDF", "EGCC")],
-    );
+    grow(&mut g, &[("EDDF", "EGLL"), ("EDDF", "EHAM"), ("EDDF", "EGCC")]);
     g.clock.set_running(true);
     g
 }
@@ -98,20 +92,14 @@ fn player_refusals_explain_each_reason() {
     let mut t = g.clone();
     t.reputation.score = -50 * 10_000;
     let r = t.alliance_check(PLAYER, "aurora").unwrap_err();
-    assert_eq!(
-        (r.code, r.args),
-        ("ALLIANCE_REPUTATION", vec!["-50".into(), "0".into()])
-    );
+    assert_eq!((r.code, r.args), ("ALLIANCE_REPUTATION", vec!["-50".into(), "0".into()]));
     assert_eq!(code(t.apply_alliance("aurora")), "ALLIANCE_REPUTATION");
     assert!(t.alliances.application.is_none());
 
     let mut t = g.clone();
     t.stop_schedule(t.routes[0].id).unwrap();
     let r = t.alliance_check(PLAYER, "aurora").unwrap_err();
-    assert_eq!(
-        (r.code, r.args),
-        ("ALLIANCE_SIZE", vec!["2".into(), "3".into()])
-    );
+    assert_eq!((r.code, r.args), ("ALLIANCE_SIZE", vec!["2".into(), "3".into()]));
 
     let mut t = g.clone();
     t.airline.as_mut().unwrap().capital_eur = 20_000;
@@ -151,10 +139,7 @@ fn player_refusals_explain_each_reason() {
         .iter()
         .map(|r| (r.origin_icao.clone(), r.destination_icao.clone()))
         .collect();
-    let legs: Vec<(&str, &str)> = pairs
-        .iter()
-        .map(|(a, b)| (a.as_str(), b.as_str()))
-        .collect();
+    let legs: Vec<(&str, &str)> = pairs.iter().map(|(a, b)| (a.as_str(), b.as_str())).collect();
     let mut copy = Game::default();
     copy.found("Copycat", "DE", "EDDF").unwrap();
     copy.competitors = probe.competitors.clone();
@@ -188,16 +173,8 @@ fn apply_join_notice_leave_cooldown_and_attention() {
     assert!(accepted[0].text.contains("Aurora Alliance") && accepted[0].text.contains("Aufnahme"));
     let fees_before = g.history.as_ref().unwrap().alliance_fee_through(u64::MAX);
     assert_eq!(fees_before, 0, "nobody pays in the month they join");
-    let ai_fee_before = g.competitors[0]
-        .game
-        .history
-        .as_ref()
-        .unwrap()
-        .alliance_fee_through(u64::MAX);
-    assert!(
-        ai_fee_before > 0,
-        "AI members have been paying since the first review"
-    );
+    let ai_fee_before = g.competitors[0].game.history.as_ref().unwrap().alliance_fee_through(u64::MAX);
+    assert!(ai_fee_before > 0, "AI members have been paying since the first review");
 
     days(&mut g, 10.0);
     g.leave_alliance().unwrap();
@@ -206,10 +183,7 @@ fn apply_join_notice_leave_cooldown_and_attention() {
     assert_eq!(code(g.leave_alliance()), "ALLIANCE_LEAVING");
     first_review(&mut g);
     first_review(&mut g);
-    assert!(
-        g.alliance_of(PLAYER).is_some(),
-        "still a member during the notice"
-    );
+    assert!(g.alliance_of(PLAYER).is_some(), "still a member during the notice");
     assert!(g.clock.elapsed().as_secs() < notice_end || g.alliance_of(PLAYER).is_none());
     first_review(&mut g);
     assert!(g.clock.elapsed().as_secs() >= notice_end);
@@ -218,17 +192,13 @@ fn apply_join_notice_leave_cooldown_and_attention() {
     // Fees were paid at the two cycles after joining and none on the exit review.
     let fees = g.history.as_ref().unwrap().alliance_fee_through(u64::MAX);
     assert_eq!(fees, 2 * i128::from(crate::alliances::monthly_fee(&g)));
-    assert!(
-        g.attention_snapshot()
-            .iter()
-            .any(|e| e.kind == "alliance" && e.text.contains("Austritt"))
-    );
+    assert!(g
+        .attention_snapshot()
+        .iter()
+        .any(|e| e.kind == "alliance" && e.text.contains("Austritt")));
     assert_eq!(reason(&g, "aurora"), "ALLIANCE_COOLDOWN");
     days(&mut g, 61.0);
-    assert_ne!(
-        g.alliance_check(PLAYER, "aurora").err().map(|r| r.code),
-        Some("ALLIANCE_COOLDOWN")
-    );
+    assert_ne!(g.alliance_check(PLAYER, "aurora").err().map(|r| r.code), Some("ALLIANCE_COOLDOWN"));
     g.validate_alliances().unwrap();
 
     // A pending application can be withdrawn without notice.
@@ -250,11 +220,7 @@ fn refused_application_and_removal_are_reported() {
     assert!(g.alliance_of(PLAYER).is_none());
     let n = g.alliances.notices.last().unwrap();
     assert_eq!(n.kind, "refused");
-    assert!(
-        n.text.contains("Nur 2 aktive Strecken, mindestens 3"),
-        "{}",
-        n.text
-    );
+    assert!(n.text.contains("Nur 2 aktive Strecken, mindestens 3"), "{}", n.text);
     assert!(g.attention_snapshot().iter().any(|e| e.kind == "alliance"));
 
     let mut g = world();
@@ -280,10 +246,7 @@ fn rival_alliance_codeshares_end_on_join_and_are_blocked_afterwards() {
     first_review(&mut g);
     assert_eq!(alliance_of(&g, PLAYER), Some("aurora".into()));
     assert!(g.codeshares.iter().any(|c| c.partner == a));
-    assert!(
-        g.codeshares.iter().all(|c| c.partner != b),
-        "rival alliance codeshare ended"
-    );
+    assert!(g.codeshares.iter().all(|c| c.partner != b), "rival alliance codeshare ended");
     assert_eq!(code(g.propose_codeshare(&b)), "CODESHARE_RIVAL_ALLIANCE");
     g.validate_codeshares().unwrap();
 }
@@ -298,26 +261,17 @@ fn members_share_passengers_pay_fees_and_the_ledger_reconciles() {
     let h = g.history.as_ref().unwrap();
     let paid = h.alliance_fee_through(u64::MAX);
     assert_eq!(paid, 2 * i128::from(crate::alliances::monthly_fee(&g)));
-    assert_eq!(
-        i128::from(g.cash()),
-        h.balance(g.clock.elapsed().as_secs()).into()
-    );
+    assert_eq!(i128::from(g.cash()), h.balance(g.clock.elapsed().as_secs()).into());
     g.validate_history().unwrap();
     let t = &g.finance.totals;
     assert!(t.connecting_passengers > 0);
     let shared: i64 = t.codeshare.iter().map(|r| r.passengers).sum();
-    assert!(
-        shared > 0 && shared <= t.connecting_passengers,
-        "alliance partners share connections"
-    );
+    assert!(shared > 0 && shared <= t.connecting_passengers, "alliance partners share connections");
     assert!(t.codeshare.iter().map(|r| r.revenue).sum::<i64>() <= t.connecting_revenue);
     for c in &g.competitors {
         let ch = c.game.history.as_ref().unwrap();
         assert!(ch.alliance_fee_through(u64::MAX) > 0);
-        assert_eq!(
-            i128::from(c.game.cash()),
-            ch.balance(c.game.clock.elapsed().as_secs()).into()
-        );
+        assert_eq!(i128::from(c.game.cash()), ch.balance(c.game.clock.elapsed().as_secs()).into());
     }
     // Pretax profit includes the fee; the ledger row for finances sums it too.
     let none = {
@@ -335,24 +289,11 @@ fn offers_share_codeshare_partners_and_get_a_demand_bonus_only_for_members() {
     first_review(&mut g);
     let key = g.market_owner_key();
     let offers = g.market_routes();
-    assert!(
-        offers
-            .iter()
-            .filter(|o| o.owner == key)
-            .all(|o| o.alliance_bonus_bps == 0)
-    );
+    assert!(offers.iter().filter(|o| o.owner == key).all(|o| o.alliance_bonus_bps == 0));
     let ai0 = offers.iter().find(|o| o.owner == ai(&g, 0)).unwrap();
-    assert!(
-        ai0.alliance_bonus_bps > 0
-            && ai0.alliance_bonus_bps <= crate::alliances::RULES.demand_bonus_max_bps
-    );
+    assert!(ai0.alliance_bonus_bps > 0 && ai0.alliance_bonus_bps <= crate::alliances::RULES.demand_bonus_max_bps);
     assert!(ai0.codeshare_partners.contains(&ai(&g, 1)));
-    assert!(
-        offers
-            .iter()
-            .filter(|o| o.owner == key)
-            .all(|o| o.codeshare_partners.is_empty())
-    );
+    assert!(offers.iter().filter(|o| o.owner == key).all(|o| o.codeshare_partners.is_empty()));
     g.apply_alliance("aurora").unwrap();
     first_review(&mut g);
     let offers = g.market_routes();
@@ -427,22 +368,9 @@ fn scripted(speed: u32, hours_per_step: u32, restart_at: &[u32]) -> Game {
 fn alliance_state_is_identical_at_every_speed_step_size_and_restart() {
     let expected = scripted(1, 24, &[]);
     assert!(expected.alliances.members.iter().any(|m| m.owner == PLAYER));
-    assert!(
-        expected
-            .alliances
-            .members
-            .iter()
-            .find(|m| m.owner == PLAYER)
-            .unwrap()
-            .leaving_at
-            .is_some()
-    );
+    assert!(expected.alliances.members.iter().find(|m| m.owner == PLAYER).unwrap().leaving_at.is_some());
     assert!(!expected.history.as_ref().unwrap().alliance_fees.is_empty());
-    for (speed, hours, restarts) in [
-        (4, 6, vec![]),
-        (16, 1, vec![700]),
-        (1, 24, vec![40, 41, 90]),
-    ] {
+    for (speed, hours, restarts) in [(4, 6, vec![]), (16, 1, vec![700]), (1, 24, vec![40, 41, 90])] {
         let got = scripted(speed, hours, &restarts);
         assert_eq!(state(&got), state(&expected), "speed={speed} hours={hours}");
     }
@@ -458,10 +386,7 @@ fn old_saves_have_no_alliances_and_ai_airlines_form_them_afterwards() {
     let mut old: serde_json::Value = serde_json::from_slice(&std::fs::read(&p).unwrap()).unwrap();
     old["version"] = 44.into();
     old["state"].as_object_mut().unwrap().remove("alliances");
-    old["state"]["history"]
-        .as_object_mut()
-        .unwrap()
-        .remove("alliance_fees");
+    old["state"]["history"].as_object_mut().unwrap().remove("alliance_fees");
     std::fs::write(&p, serde_json::to_vec(&old).unwrap()).unwrap();
     let mut loaded = save::load(&p).unwrap();
     assert!(loaded.alliances.members.is_empty());
@@ -507,10 +432,7 @@ fn alliance_ai_finance_audit() {
         let (without, player_without) = long_run(false, years);
         eprintln!("years={years} player cash with={player_with} without={player_without}");
         for (a, b) in with.iter().zip(&without) {
-            eprintln!(
-                "{} with: cash {} fees {} routes {} | without: cash {} routes {}",
-                a.0, a.1, a.2, a.3, b.1, b.3
-            );
+            eprintln!("{} with: cash {} fees {} routes {} | without: cash {} routes {}", a.0, a.1, a.2, a.3, b.1, b.3);
         }
     }
 }

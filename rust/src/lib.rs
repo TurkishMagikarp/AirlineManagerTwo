@@ -2270,10 +2270,7 @@ impl SimulationClock {
                     }
                     (
                         "short",
-                        format!(
-                            "Besatzung fehlt: {} · Flugplan angehalten",
-                            parts.join(" und ")
-                        ),
+                        format!("Besatzung fehlt: {} · Flugplan angehalten", parts.join(" und ")),
                     )
                 }
                 _ if reserved => ("crewed", String::new()),
@@ -3053,16 +3050,13 @@ fn flight_dictionary(f: &economy::FlightResult) -> VarDictionary {
 fn jump_dictionary(result: Result<jumps::ResultSummary, &'static str>) -> VarDictionary {
     match result {
         Ok(result) => {
-            let attention = result
-                .attention
-                .as_ref()
-                .map_or_else(VarDictionary::new, |e| {
-                    vdict! {
-                        "kind" => e.kind, "page" => e.page, "route_id" => e.route_id,
-                        "aircraft_id" => e.aircraft_id, "employee_id" => e.employee_id,
-                        "order_id" => e.order_id as i64
-                    }
-                });
+            let attention = result.attention.as_ref().map_or_else(VarDictionary::new, |e| {
+                vdict! {
+                    "kind" => e.kind, "page" => e.page, "route_id" => e.route_id,
+                    "aircraft_id" => e.aircraft_id, "employee_id" => e.employee_id,
+                    "order_id" => e.order_id as i64
+                }
+            });
             vdict! {
                 "advanced_seconds" => result.advanced_seconds as i64,
                 "stopped" => !result.reason.is_empty(),
