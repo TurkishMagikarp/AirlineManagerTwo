@@ -55,6 +55,51 @@ pub fn distance_km(origin: &str, destination: &str) -> Result<f64, String> {
     Ok(6371.0088 * 2.0 * h.clamp(0.0, 1.0).sqrt().asin())
 }
 
+pub struct DestinationOption {
+    pub icao: String,
+    pub iata: String,
+    pub name: String,
+    pub charge_percent: u32,
+    pub distance_km: f64,
+    pub in_range: bool,
+}
+
+/// Catalogue destinations for `origin`, excluding the origin. With a range they are
+/// split by the same `distance > range` test as route validation and ordered nearest
+/// first (in range before out of range); without one they are alphabetical.
+pub fn destination_options(
+    origin: &str,
+    range_km: Option<u32>,
+) -> Result<Vec<DestinationOption>, String> {
+    let catalog = airports::catalog()?;
+    let mut options: Vec<DestinationOption> = catalog
+        .airports
+        .iter()
+        .filter(|a| a.icao != origin)
+        .map(|a| {
+            let distance_km = distance_km(origin, &a.icao).unwrap_or(0.0);
+            DestinationOption {
+                icao: a.icao.clone(),
+                iata: a.iata.clone().unwrap_or_default(),
+                name: a.name.clone(),
+                charge_percent: a.charge_percent,
+                in_range: range_km.is_none_or(|range| distance_km <= f64::from(range)),
+                distance_km,
+            }
+        })
+        .collect();
+    match range_km {
+        Some(_) => options.sort_by(|a, b| {
+            (!a.in_range, a.distance_km)
+                .partial_cmp(&(!b.in_range, b.distance_km))
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| a.icao.cmp(&b.icao))
+        }),
+        None => options.sort_by_key(|a| (a.iata.to_lowercase(), a.icao.clone())),
+    }
+    Ok(options)
+}
+
 impl Route {
     pub fn public_id(&self) -> u32 {
         self.parent_route_id.unwrap_or(self.id)
@@ -99,6 +144,11 @@ impl Game {
             ));
         }
         Ok(distance)
+    }
+
+    pub fn aircraft_range_km(&self, aircraft_id: u32) -> Option<u32> {
+        let plane = self.fleet.iter().find(|p| p.id == aircraft_id)?;
+        aircraft::model(&plane.model_id).ok().map(|m| m.range_km)
     }
 
     pub fn create_route(
@@ -535,6 +585,43 @@ mod tests {
         g.buy_aircraft("atr72_600").unwrap();
         g.staff_up();
         g
+    }
+
+    #[test]
+    fn destination_options_split_at_the_validation_range_boundary() {
+        let g = game();
+        let range = g.aircraft_range_km(1).unwrap();
+        let list = destination_options("EDDF", Some(range)).unwrap();
+        assert!(list.iter().all(|o| o.icao != "EDDF"));
+        let first_far = list.iter().position(|o| !o.in_range).unwrap();
+        assert!(list[..first_far].iter().all(|o| o.in_range));
+        assert!(
+            list[..first_far]
+                .windows(2)
+                .all(|w| w[0].distance_km <= w[1].distance_km)
+        );
+        assert!(list[first_far..].iter().all(|o| !o.in_range));
+        for o in &list {
+            assert_eq!(o.in_range, g.check_route("EDDF", &o.icao, 1, None).is_ok());
+        }
+        let eddm = list.iter().find(|o| o.icao == "EDDM").unwrap();
+        assert!(eddm.in_range);
+        assert!(!list.iter().find(|o| o.icao == "LTFM").unwrap().in_range);
+        let d = distance_km("EDDF", "EDDM").unwrap();
+        let exact = destination_options("EDDF", Some(d.floor() as u32)).unwrap();
+        assert!(!exact.iter().find(|o| o.icao == "EDDM").unwrap().in_range);
+        let exact = destination_options("EDDF", Some(d.ceil() as u32)).unwrap();
+        assert!(exact.iter().find(|o| o.icao == "EDDM").unwrap().in_range);
+        let all = destination_options("EDDF", None).unwrap();
+        assert!(all.iter().all(|o| o.in_range) && all.len() == list.len());
+    }
+
+    #[test]
+    fn nairobi_has_no_destination_within_atr_range() {
+        let list = destination_options("HKJK", Some(1370)).unwrap();
+        assert!(list.iter().all(|o| !o.in_range));
+        assert_eq!(list[0].icao, "FAOR");
+        assert!(list[0].distance_km > 2900.0);
     }
 
     #[test]

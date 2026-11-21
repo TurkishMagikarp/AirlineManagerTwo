@@ -1031,6 +1031,21 @@ impl SimulationClock {
     }
 
     #[func]
+    fn get_route_destinations(&self, origin: GString, aircraft_id: u32) -> Array<VarDictionary> {
+        let range = self.game.aircraft_range_km(aircraft_id);
+        routes::destination_options(&origin.to_string(), range)
+            .unwrap_or_default()
+            .into_iter()
+            .map(|o| {
+                vdict! { "icao" => o.icao.as_str(), "iata" => o.iata.as_str(),
+                "name" => o.name.as_str(), "charge_percent" => o.charge_percent,
+                "distance_km" => o.distance_km, "in_range" => o.in_range,
+                "ranged" => range.is_some() }
+            })
+            .collect()
+    }
+
+    #[func]
     fn create_route(&mut self, origin: GString, destination: GString, aircraft_id: u32) -> GString {
         self.game
             .create_route(&origin.to_string(), &destination.to_string(), aircraft_id)
