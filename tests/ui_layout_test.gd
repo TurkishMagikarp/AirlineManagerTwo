@@ -930,6 +930,16 @@ func _ferry_pilot_views(sim: RefCounted) -> void:
 	for dimensions in [Vector2i(1440, 1000), Vector2i(680, 520)]:
 		root.size = dimensions
 		main._show_page(1)
+		for entry in [["ferry-range-blocker-dialog", null], ["routes-ferry-range-blocker-dialog", main.routes_panel.reposition_button]]:
+			main._open_ferry(atr, "NZAA", entry[1])
+			for frame in range(5): await process_frame
+			assert(not main.ferry_staff_button.visible and main.ferry_dialog.get_ok_button().disabled and "Reichweite" in main.ferry_preview.text)
+			assert(root.get_visible_rect().encloses(main.ferry_dialog.card.get_global_rect()))
+			if not capture_dir.is_empty():
+				await RenderingServer.frame_post_draw
+				assert(root.get_texture().get_image().save_png(capture_dir.path_join("%s-%dx%d.png" % [entry[0], dimensions.x, dimensions.y])) == OK)
+			main.ferry_dialog.safe_button.pressed.emit()
+			await process_frame
 		main._open_ferry(atr, "EDDM")
 		for frame in range(5): await process_frame
 		assert(main.ferry_staff_button.visible and main.ferry_dialog.get_ok_button().disabled)
