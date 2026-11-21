@@ -305,6 +305,7 @@ func _ready() -> void:
 	routes_panel = RoutesPanel.new()
 	routes_panel.simulation = simulation
 	routes_panel.changed.connect(func(): save_status.text = "Routen geändert · bitte Spielstand speichern.")
+	routes_panel.procurement_requested.connect(_open_procurement)
 	content.add_child(routes_panel)
 	map_panel = MapPanel.new()
 	map_panel.simulation = simulation
@@ -924,6 +925,16 @@ func _build_fleet(content: VBoxContainer) -> void:
 	fleet_operations = UI.panel(fleet_sections[0], "LIVE-BETRIEB  /  FLOTTE & NETZWERK")
 	_model_selected(model_select.selected)
 	_fleet_tab_changed(0)
+
+
+func _open_procurement() -> void:
+	_show_page(1)
+	fleet_tabs.current_tab = 1
+	var scroll := fleet_panel.get_parent().get_parent() as ScrollContainer
+	model_select.grab_focus()
+	for _pass in range(3):
+		await get_tree().process_frame
+		scroll.scroll_vertical += int(model_select.global_position.y - scroll.global_position.y) - 64
 
 
 func _orders_changed() -> void:

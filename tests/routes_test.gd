@@ -18,13 +18,32 @@ func _run() -> void:
 		return
 	if not _check(panel.origin.get_selected_metadata() == "EDDF" and panel.destination.selected == -1 and "Ziel" in panel.preview.text and not "km" in panel.preview.text, "Default founding at EDDF starts at the home airport with a destination prompt"):
 		return
-	await _click(main.navigation[1])
+	if not _check(panel.procurement_button.visible and panel.empty_action.text == "Flugzeug beschaffen" and "Flotte" in panel.preview.text, "No aircraft: planner and empty state offer Fleet Procurement"):
+		return
+	_choose_airport(panel.destination, "LTFM")
+	var cash_before: int = main.simulation.get_airline_info()["capital_eur"]
+	var original_size := root.size
+	root.size = Vector2i(680, 520)
+	await process_frame
+	panel.get_parent().get_parent().ensure_control_visible(panel.procurement_button)
+	panel.procurement_button.grab_focus()
+	await _press_enter()
+	for _i in range(4):
+		await process_frame
+	var market_scroll := main.fleet_panel.get_parent().get_parent() as ScrollContainer
+	if not _check(main.current_page == 1 and main.fleet_tabs.current_tab == 1 and main.model_select.has_focus() and market_scroll.get_global_rect().encloses(main.model_select.get_global_rect()) and main.simulation.get_airline_info()["capital_eur"] == cash_before and main.simulation.get_fleet().is_empty() and main.simulation.get_routes().is_empty(), "Keyboard shortcut at 680x520 opens Procurement with visible focus and no transaction"):
+		return
+	root.size = original_size
 	for i in range(main.model_select.item_count):
 		if main.model_select.get_item_metadata(i)["id"] == "atr72_600":
 			_choose(main.model_select, i)
 	await _click(main.buy_button)
 	await _click(main.buy_button)
 	await _click(main.navigation[2])
+	if not _check(panel.origin.get_selected_metadata() == "EDDF" and panel.destination.get_selected_metadata() == "LTFM" and panel.aircraft.item_count == 2, "Returning through navigation keeps the airports and refreshes the aircraft list"):
+		return
+	panel.destination.select(-1)
+	panel._preview()
 	if not _check(panel.destination.selected == -1 and panel.create_button.disabled and "Ziel" in panel.preview.text and not "km" in panel.preview.text, "No destination: Create disabled, no distance claims even with aircraft"):
 		return
 	if not _check(_destination_index(panel, "EDDF") < 0 and panel.destination.item_count > 1, "Origin is excluded from the destination picker"):
@@ -229,10 +248,57 @@ func _run() -> void:
 	await _click(main.navigation[2])
 	if not _check(panel.origin.get_selected_metadata() == "LTFJ" and panel.destination.selected == -1 and main.simulation.get_routes().is_empty(), "Loading a world resets the planner to that world's base without changing routes"):
 		return
+	await _click(main.new_game_button)
+	main.name_input.text = "Nairobi Procurement"
+	for i in range(main.country_select.item_count):
+		if main.country_select.get_item_metadata(i) == "KE":
+			main.country_select.select(i)
+			main.country_select.item_selected.emit(i)
+	for i in range(main.airport_select.item_count):
+		if main.airport_select.get_item_metadata(i) == "HKJK":
+			main.airport_select.select(i)
+	await _click(main.found_button)
+	await _click(main.new_game_dialog.danger_button)
+	await process_frame
+	if not _check(main.simulation.buy_aircraft("atr72_600").is_empty(), "Nairobi company buys an ATR"):
+		return
+	await _click(main.navigation[2])
+	if not _check(panel.origin.get_selected_metadata() == "HKJK" and panel.aircraft.item_count == 1 and panel.procurement_button.visible, "Nairobi ATR with no destination offers the shortcut"):
+		return
+	_choose_airport(panel.destination, "FAOR")
+	if not _check(panel.procurement_button.visible and panel.create_button.disabled and "Reichweite überschritten" in panel.preview.text, "Shortcut stays with an out-of-range FAOR"):
+		return
+	await _click(panel.procurement_button)
+	for _i in range(4):
+		await process_frame
+	if not _check(main.current_page == 1 and main.fleet_tabs.current_tab == 1 and main.model_select.has_focus(), "Nairobi shortcut opens Procurement"):
+		return
+	for i in range(main.model_select.item_count):
+		if main.model_select.get_item_metadata(i)["id"] == "a320_200":
+			_choose(main.model_select, i)
+	await _click(main.lease_button)
+	await _click(main.navigation[2])
+	if not _check(panel.origin.get_selected_metadata() == "HKJK" and panel.destination.get_selected_metadata() == "FAOR" and panel.aircraft.item_count == 2 and "ATR" in panel.aircraft.get_item_text(panel.aircraft.selected) and panel.procurement_button.visible, "Return keeps HKJK, FAOR and the selected ATR with the new A320 listed"):
+		return
+	for i in range(panel.aircraft.item_count):
+		if "A320" in panel.aircraft.get_item_text(i):
+			_choose(panel.aircraft, i)
+	if not _check(not panel.procurement_button.visible and panel.destination_options["FAOR"]["in_range"] and not panel.create_button.disabled, "A320 makes FAOR an in-range choice and Create available"):
+		return
 	print("PASS: route UI, distances, range, multiple aircraft, add/remove assignments, delete, small window and new game")
 	main.queue_free()
 	await process_frame
 	quit(0)
+
+
+func _press_enter() -> void:
+	for pressed in [true, false]:
+		var key := InputEventKey.new()
+		key.keycode = KEY_ENTER
+		key.physical_keycode = KEY_ENTER
+		key.pressed = pressed
+		Input.parse_input_event(key)
+		await process_frame
 
 
 func _choose(select: OptionButton, index: int) -> void:

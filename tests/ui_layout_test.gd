@@ -186,6 +186,19 @@ func _run() -> void:
 			assert(root.get_visible_rect().encloses(empty_action.get_global_rect()))
 			await RenderingServer.frame_post_draw
 			assert(root.get_texture().get_image().save_png(capture_dir.path_join("empty-fleet-action-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
+			main._show_page(2)
+			var routes_scroll: ScrollContainer = main.routes_panel.get_parent().get_parent()
+			for frame in range(5): await process_frame
+			routes_scroll.ensure_control_visible(main.routes_panel.procurement_button)
+			for frame in range(5): await process_frame
+			assert(main.routes_panel.procurement_button.visible and root.get_visible_rect().encloses(main.routes_panel.procurement_button.get_global_rect()))
+			await RenderingServer.frame_post_draw
+			assert(root.get_texture().get_image().save_png(capture_dir.path_join("routes-procurement-shortcut-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
+			main.routes_panel.procurement_button.pressed.emit()
+			for frame in range(8): await process_frame
+			assert(main.current_page == 1 and main.model_select.has_focus() and scroll.get_global_rect().encloses(main.model_select.get_global_rect()))
+			await RenderingServer.frame_post_draw
+			assert(root.get_texture().get_image().save_png(capture_dir.path_join("procurement-from-routes-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
 	for i in range(3):
 		assert(sim.buy_aircraft("atr72_600").is_empty())
 	assert(sim.create_route("EDDF", "EDDM", 1).is_empty())
