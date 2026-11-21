@@ -406,6 +406,13 @@ func _run() -> void:
 					assert(root.get_texture().get_image().save_png(capture_dir.path_join("maintenance-dialog-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
 					main.decision_dialog.get_cancel_button().pressed.emit()
 					await process_frame
+					main.request_quit()
+					for frame in range(5): await process_frame
+					assert(root.get_visible_rect().encloses(main.quit_dialog.get_ok_button().get_global_rect()))
+					await RenderingServer.frame_post_draw
+					assert(root.get_texture().get_image().save_png(capture_dir.path_join("quit-dialog-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
+					main.quit_dialog.get_cancel_button().pressed.emit()
+					await process_frame
 				main.fleet_tabs.current_tab = 1
 				await process_frame
 				# Capture the market heading, then prove every nested buy control is reachable.

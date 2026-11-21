@@ -73,6 +73,9 @@ var founding_load_button: Button
 var cancel_founding_button: Button
 var founding_status: Label
 var new_game_dialog: Control
+var quit_dialog: Control
+var quit_handler: Callable
+var quit_requested_during_jump := false
 var founding_capital: Label
 var new_game_button: Button
 var terminal_notice: PanelContainer
@@ -221,6 +224,7 @@ func _send_ferry() -> void:
 func _ready() -> void:
 	RenderingServer.set_default_clear_color(ThemeTokens.GROUND)
 	get_window().min_size = Vector2i(680, 520)
+	get_tree().set_auto_accept_quit(false)
 	var margin := MarginContainer.new()
 	overview = margin
 	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -421,20 +425,52 @@ func _set_terminal_state(airline: Dictionary) -> void:
 	if is_instance_valid(commitments_jump_button): _refresh_commitments_jump()
 
 
+func _quit_prompt_open() -> bool:
+	return is_instance_valid(quit_dialog) and not quit_dialog.is_queued_for_deletion()
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_CLOSE_REQUEST: request_quit()
+
+
+func _exit_application() -> void:
+	if quit_handler.is_valid(): quit_handler.call()
+	else: get_tree().quit()
+
+
+func request_quit() -> void:
+	if not simulation.has_airline():
+		_exit_application()
+		return
+	if jump_in_progress:
+		quit_requested_during_jump = true
+		return
+	if _quit_prompt_open(): return
+	var return_focus := get_viewport().gui_get_focus_owner()
+	var body := tr("Aktuelle Airline: %s") % simulation.get_airline_info().get("name", "—")
+	body += "\n" + tr("Nicht gespeicherter Fortschritt geht verloren. Mit Abbrechen kannst du zurückkehren und über Speichern einen benannten Spielstand sichern.")
+	quit_dialog = UI.dialog(self, tr("Spiel beenden?"), body, tr("Abbrechen"), tr("Beenden"), _exit_application)
+	quit_dialog.add_to_group("quit_prompt")
+	quit_dialog.tree_exited.connect(func():
+		if is_inside_tree() and is_instance_valid(return_focus) and return_focus.is_inside_tree(): return_focus.grab_focus.call_deferred()
+	)
+	quit_dialog.popup_centered()
+
+
 func _autosave_tick(delta: float) -> void:
-	var ready: bool = simulation.has_airline() and not founding.visible and not jump_in_progress and not is_instance_valid(save_slots_dialog)
+	var ready: bool = simulation.has_airline() and not founding.visible and not jump_in_progress and not is_instance_valid(save_slots_dialog) and not _quit_prompt_open()
 	if not autosave.tick(delta, ready): return
 	var error: String = simulation.autosave(save_user_dir)
 	save_status.text = tr("Autosave gespeichert.") if error.is_empty() else tr("Autosave fehlgeschlagen: %s") % error
 
 
 func _jump(seconds: int) -> void:
-	if terminal_state or jump_in_progress or is_instance_valid(save_slots_dialog) or not simulation.begin_jump(seconds): return
+	if terminal_state or jump_in_progress or is_instance_valid(save_slots_dialog) or _quit_prompt_open() or not simulation.begin_jump(seconds): return
 	await _finish_jump()
 
 
 func _jump_to_commitment() -> void:
-	if terminal_state or jump_in_progress or is_instance_valid(save_slots_dialog) or commitments_jump_target.is_empty(): return
+	if terminal_state or jump_in_progress or is_instance_valid(save_slots_dialog) or _quit_prompt_open() or commitments_jump_target.is_empty(): return
 	var started: Dictionary = simulation.begin_jump_to_commitment(commitments_jump_target["at"])
 	if not started["started"]:
 		jump_status.text = started["message"]
@@ -464,6 +500,9 @@ func _finish_jump() -> void:
 	_refresh_attention()
 	_show_page(current_page)
 	if is_instance_valid(return_focus): return_focus.grab_focus()
+	if quit_requested_during_jump:
+		quit_requested_during_jump = false
+		request_quit()
 
 
 func _jump_progress() -> Window:
@@ -574,7 +613,7 @@ func _process(delta: float) -> void:
 	if jump_in_progress: return
 	if founding.visible:
 		return
-	if is_instance_valid(save_slots_dialog) and not save_slots_dialog.is_queued_for_deletion():
+	if _quit_prompt_open() or (is_instance_valid(save_slots_dialog) and not save_slots_dialog.is_queued_for_deletion()):
 		_refresh_time()
 		return
 	if not simulation.advance(delta):
