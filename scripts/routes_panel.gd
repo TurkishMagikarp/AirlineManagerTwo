@@ -2,6 +2,7 @@ extends VBoxContainer
 ## Presentation only: Rust owns routes, availability, distances and validation.
 
 signal changed
+signal procurement_requested
 const ThemeTokens = preload("res://scripts/ui/operations_theme.gd")
 const UI = preload("res://scripts/ui/components.gd")
 
@@ -11,6 +12,8 @@ var destination: OptionButton
 var aircraft: OptionButton
 var preview: Label
 var create_button: Button
+var procurement_button: Button
+var empty_action: Button
 var status: Label
 var season_label: Label
 var route_tree: Tree
@@ -86,14 +89,24 @@ func _ready() -> void:
 	create_button.theme_type_variation = "PrimaryButton"
 	create_button.pressed.connect(_create)
 	add_child(create_button)
+	procurement_button = Button.new()
+	procurement_button.text = "Flugzeug beschaffen"
+	procurement_button.tooltip_text = "Öffnet Flotte › Beschaffung. Start- und Zielflughafen bleiben hier erhalten."
+	procurement_button.visible = false
+	procurement_button.pressed.connect(func(): procurement_requested.emit())
+	add_child(procurement_button)
 	for select in [origin, destination, aircraft]:
 		select.item_selected.connect(func(_index: int): _preview())
 	status = _label("")
 	add_child(status)
 	empty_label = UI.empty_state("Noch keine Routen erstellt.", hint.text, create_button.text, func():
+		if aircraft.item_count == 0:
+			procurement_requested.emit()
+			return
 		get_parent().get_parent().ensure_control_visible(origin)
 		origin.grab_focus()
 	)
+	empty_action = empty_label.get_child(0).get_child(2)
 	add_child(empty_label)
 	route_tree = UI.table(["Route", "Strecke", "Entfernung", "Flugzeug", tr("TRANSFER_MARKET_HEADER"), "Auslastung", tr("FARE_AUTOPILOT")], [65, 140, 110, 170, 320, 200, 145], 180)
 	for i in range(6):
@@ -419,6 +432,7 @@ func refresh() -> void:
 			if plane["id"] == selected_plane:
 				aircraft.select(aircraft.item_count - 1)
 	aircraft.disabled = aircraft.item_count == 0
+	empty_action.text = "Flugzeug beschaffen" if aircraft.item_count == 0 else create_button.text
 	var routes: Array = simulation.get_routes()
 	empty_label.visible = routes.is_empty()
 	create_button.theme_type_variation = "Button" if routes.is_empty() else "PrimaryButton"
@@ -582,14 +596,24 @@ func sync_destinations() -> void:
 		destination.select(-1)
 
 
-func _range_hint() -> String:
-	var plane := _selected_id(aircraft)
-	if origin.selected < 0 or plane == 0:
-		return ""
+func _in_range_count() -> int:
 	var in_range := 0
 	for option in destination_options.values():
 		if option["in_range"]:
 			in_range += 1
+	return in_range
+
+
+func _update_procurement_shortcut() -> void:
+	var range_blocked := origin.selected >= 0 and _selected_id(aircraft) != 0 and _in_range_count() == 0
+	procurement_button.visible = aircraft.item_count == 0 or range_blocked
+
+
+func _range_hint() -> String:
+	var plane := _selected_id(aircraft)
+	if origin.selected < 0 or plane == 0:
+		return ""
+	var in_range := _in_range_count()
 	var plane_name := aircraft.get_item_text(aircraft.selected)
 	var origin_icao: String = origin.get_selected_metadata()
 	if in_range == 0:
@@ -608,6 +632,7 @@ func _preview() -> void:
 		create_button.disabled = true
 		if aircraft.item_count == 0:
 			preview.text += "\nKein freies Flugzeug. Im Flotte-Tab kaufen oder eine Zuweisung lösen."
+		_update_procurement_shortcut()
 		return
 	var result: Dictionary = simulation.preview_route(origin.get_selected_metadata(), destination.get_selected_metadata(), _selected_id(aircraft), 0)
 	preview.text = "Entfernung: %.1f km · %s" % [result["distance_km"], "Reichweite ausreichend" if result["error"].is_empty() else result["error"]]
@@ -618,6 +643,7 @@ func _preview() -> void:
 	create_button.disabled = not result["error"].is_empty()
 	if aircraft.item_count == 0:
 		preview.text += "\nKein freies Flugzeug. Im Flotte-Tab kaufen oder eine Zuweisung lösen."
+	_update_procurement_shortcut()
 
 
 func _selection_changed() -> void:
