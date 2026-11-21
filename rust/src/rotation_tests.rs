@@ -601,3 +601,73 @@ fn crew_blocked_in_flight_keeps_landing_then_blocks_and_recovers() {
     assert!(g.advance(2.0 * 86_400.0));
     assert!(g.finance.totals.flights > flights);
 }
+
+fn stopped_at_destination() -> Game {
+    let mut g = game(1);
+    g.schedule(1, 1, 120).unwrap();
+    g.clock.set_running(true);
+    let (flight, ground) = operations::timings(&g.routes[0], "atr72_600").unwrap();
+    assert!(g.advance((60 + flight + ground) as f64));
+    assert_eq!(g.fleet[0].status, AircraftStatus::Parked);
+    assert_eq!(g.fleet[0].location_icao, "EDDM");
+    g.stop_schedule(1).unwrap();
+    g
+}
+
+#[test]
+fn restart_from_destination_flies_return_leg_first_and_survives_save() {
+    let mut g = stopped_at_destination();
+    assert_eq!(g.routes[0].aircraft_id, Some(1));
+    let flights = g.finance.totals.flights;
+    g.schedule(1, 1, 180).unwrap();
+    let plan = g.routes[0].plan.clone().unwrap();
+    assert!(plan.reversed);
+    assert!(plan.is_return(0) && !plan.is_return(1));
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("restart.json");
+    save::save(&path, &g).unwrap();
+    let mut loaded = save::load(&path).unwrap();
+    assert_eq!(loaded.routes[0].plan, g.routes[0].plan);
+    let (flight, ground) = operations::timings(&g.routes[0], "atr72_600").unwrap();
+    for game in [&mut g, &mut loaded] {
+        assert!(game.advance(60.0 + 1.0));
+        assert_eq!(game.fleet[0].status, AircraftStatus::InFlight);
+        assert!(game.advance(flight as f64));
+        assert_eq!(game.fleet[0].location_icao, "EDDF");
+        assert_eq!(game.finance.totals.flights, flights + 1);
+        assert!(game.advance(ground as f64));
+    }
+    assert_eq!(state(&loaded), state(&g));
+    g.validate_operations().unwrap();
+}
+
+#[test]
+fn restart_at_origin_stays_outbound_and_mixed_endpoints_start_from_their_own() {
+    let mut g = game(2);
+    g.schedule(1, 1, 240).unwrap();
+    g.add_route_aircraft(1, 2).unwrap();
+    g.stop_schedule(1).unwrap();
+    g.schedule(1, 1, 240).unwrap();
+    assert!(g.routes.iter().all(|r| !r.plan.as_ref().unwrap().reversed));
+
+    g.stop_schedule(1).unwrap();
+    g.fleet[1].location_icao = "EDDM".into();
+    g.schedule(1, 1, 240).unwrap();
+    let plans: Vec<_> = g.routes.iter().map(|r| r.plan.clone().unwrap()).collect();
+    assert!(!plans[0].reversed && plans[1].reversed);
+    assert_eq!(plans[1].first_departure - plans[0].first_departure, 7200);
+    g.validate_operations().unwrap();
+}
+
+#[test]
+fn rejected_group_restart_leaves_routes_and_assignments_intact() {
+    let mut g = game(2);
+    g.schedule(1, 1, 240).unwrap();
+    g.add_route_aircraft(1, 2).unwrap();
+    g.stop_schedule(1).unwrap();
+    g.fleet[1].location_icao = "EDDL".into();
+    let before = state(&g);
+    assert!(g.schedule(1, 1, 240).is_err());
+    assert_eq!(state(&g), before);
+    assert!(g.routes.iter().all(|r| r.plan.is_none() && r.aircraft_id.is_some()));
+}

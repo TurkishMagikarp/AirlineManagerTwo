@@ -815,12 +815,15 @@ impl Game {
         {
             return Err("Wartung erforderlich: Zustand 0 %. Bitte zuerst warten.".into());
         }
-        if plane.location_icao != route.origin_icao || plane.status != AircraftStatus::Parked {
+        let at_endpoint = plane.location_icao == route.origin_icao
+            || plane.location_icao == route.destination_icao;
+        if !at_endpoint || plane.status != AircraftStatus::Parked {
             return Err(
-                "Das Flugzeug muss am Startflughafen geparkt sein; keine automatische Überführung."
+                "Das Flugzeug muss an einem Endflughafen der Route geparkt sein; keine automatische Überführung."
                     .into(),
             );
         }
+        let reversed = plane.location_icao == route.destination_icao;
         self.require_crew(&plane.model_id)?;
         let (flight, ground) = timings(route, &plane.model_id)?;
         let interval = u64::from(interval_minutes) * 60;
@@ -843,6 +846,7 @@ impl Game {
         self.route_mut(id)?.plan = Some(FlightPlan {
             first_departure: first,
             interval_seconds: interval,
+            reversed,
             ..FlightPlan::default()
         });
         self.initialize_disruptions()?;

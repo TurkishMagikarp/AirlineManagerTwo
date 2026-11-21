@@ -106,6 +106,37 @@ func _run() -> void:
 		return
 	if not _check(main.simulation.get_financial_summary()["flights"] == 101 and main.simulation.get_flight_results().size() == 100, "16x settles all flights and bounds history"):
 		return
+	for _i in range(400):
+		var plane: Dictionary = main.simulation.get_fleet()[0]
+		if plane["status"] == "parked" and plane["location_icao"] == "EDDM":
+			break
+		main.simulation.advance(60.0)
+	if not _check(main.simulation.get_fleet()[0]["status"] == "parked" and main.simulation.get_fleet()[0]["location_icao"] == "EDDM", "Aircraft parked at EDDM before stopping"):
+		return
+	main._show_page(2)
+	main._process(0.0)
+	var settled_flights: int = main.simulation.get_financial_summary()["flights"]
+	root.size = Vector2i(1440, 1000)
+	await process_frame
+	main.routes_panel.refresh()
+	main.routes_panel.route_tree.get_root().get_child(0).select(0)
+	main.routes_panel.route_tree.item_selected.emit()
+	await _click(main.routes_panel.stop_button)
+	if not _check(not main.simulation.get_routes()[0]["has_plan"] and main.simulation.get_routes()[0]["aircraft_ids"].size() == 1, "Stop at destination keeps the assignment: " + main.routes_panel.status.text):
+		return
+	main.routes_panel.interval_input.value = 180
+	await _click(main.routes_panel.schedule_button)
+	if not _check(main.simulation.get_routes()[0]["has_plan"], "Schedule restarts from the destination: " + main.routes_panel.status.text):
+		return
+	main.routes_panel.refresh_operations()
+	var restarted: Dictionary = main.simulation.get_operations()[0]
+	if not _check(restarted["origin"] == "EDDM" and restarted["destination"] == "EDDF" and restarted["next_departure"] != "—", "Board shows EDDM to EDDF with a departure"):
+		return
+	if not _check(main.simulation.get_financial_summary()["flights"] == settled_flights and main.simulation.get_flight_results().size() == 100, "Completed results stay under the route"):
+		return
+	main.simulation.advance(restarted["next_departure_seconds"] - main.simulation.get_elapsed_seconds() + 1.0)
+	if not _check(main.simulation.get_map_flights()[0]["origin"] == "EDDM", "Return leg flies first"):
+		return
 	await _click(main.navigation[0])
 	if not _check(main.metrics["profit"].is_visible_in_tree() and main.metrics["balance"].text == main.UI.money(main.simulation.get_airline_info()["capital_eur"]) and main.metrics["profit"].text == main.UI.money(main.simulation.get_financial_summary()["profit_eur"]), "Company financial overview displayed"):
 		return
