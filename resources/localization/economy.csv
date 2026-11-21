@@ -66,6 +66,8 @@ OPS_NEXT_CREW_BLOCKED,Besatzung fehlt,Crew missing
 OPS_STATE_TECH_WAIT,Wartet auf Techniker,Waiting for technicians
 OPS_NEXT_TECH_WAIT,Techniker fehlen,Technicians missing
 OPS_NEXT_RELEASE,Freigabe %s,Release %s
+OPS_STATE_MAINT_PENDING,Wartung nach Landung,Maintenance after landing
+OPS_NEXT_MAINT_PENDING,Wartung folgt,Maintenance follows
 OPS_STATE_NO_PLAN,Kein Flugplan,No schedule
 OPS_EMPTY_TITLE,Noch kein Flugbetrieb,No operations yet
 OPS_EMPTY_TEXT,Sobald ein Flugzeug einer Route zugewiesen ist, erscheinen hier Status und nächster Abflug.,Once an aircraft is assigned to a route its state and next departure appear here.

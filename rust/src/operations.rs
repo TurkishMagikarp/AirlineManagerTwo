@@ -542,6 +542,8 @@ pub struct BoardRow {
     pub crew_blocked: bool,
     /// Grounded in a check that has no technicians yet; no release time exists.
     pub technician_wait: bool,
+    /// A check is booked for after the current flight; the next departure is superseded.
+    pub maintenance_pending: bool,
 }
 
 pub fn board_row(
@@ -555,12 +557,15 @@ pub fn board_row(
     let crew_blocked = state.is_some_and(|s| s.crew_blocked);
     let grounded = plane.status == AircraftStatus::Maintenance;
     let technician_wait = grounded && plane.maintenance.as_ref().is_some_and(|v| !v.staffed);
+    let maintenance_pending = !grounded && airborne.is_some() && plane.maintenance.is_some();
     let state_kind = if technician_wait {
         "technician_wait"
     } else if grounded {
         "maintenance"
     } else if release_pending {
         "release"
+    } else if maintenance_pending {
+        "maintenance_pending"
     } else if let Some(s) = state {
         match s.status {
             AircraftStatus::InFlight => "airborne",
@@ -591,13 +596,14 @@ pub fn board_row(
         origin,
         destination,
         next_departure: state
-            .filter(|s| !release_pending && !s.crew_blocked && !grounded)
+            .filter(|s| !release_pending && !s.crew_blocked && !grounded && !maintenance_pending)
             .map(|s| s.next_departure),
         expected_landing: airborne.map(|s| s.landing),
         delay_seconds: state.map_or(0, |s| s.delay_seconds),
         weather_delay,
         crew_blocked,
         technician_wait,
+        maintenance_pending,
     }
 }
 
