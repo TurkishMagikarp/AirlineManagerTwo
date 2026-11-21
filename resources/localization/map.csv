@@ -111,3 +111,19 @@ Neue Airline: %s (Basis %s),Neue Airline: %s (Basis %s),New airline: %s (base %s
 Nicht gespeicherter Fortschritt in der aktuellen Airline geht verloren. Benannte Spielstände bleiben unter Laden erhalten.,Nicht gespeicherter Fortschritt in der aktuellen Airline geht verloren. Benannte Spielstände bleiben unter Laden erhalten.,Unsaved progress in the current airline will be lost. Named saves stay available under Load.
 Neue Airline gründen?,Neue Airline gründen?,Found a new airline?
 Airline gründen,Airline gründen,Found airline
+DEINE EIGENE FLUGGESELLSCHAFT,DEINE EIGENE FLUGGESELLSCHAFT,YOUR OWN AIRLINE
+Ein neuer Anfang.,Ein neuer Anfang.,A new beginning.
+Name deiner Airline,Name deiner Airline,Your airline's name
+Airline-Name (1–80 Zeichen),Airline-Name (1–80 Zeichen),Airline name (1–80 characters)
+Heimatland,Heimatland,Home country
+Heimatflughafen,Heimatflughafen,Home airport
+Die neue Airline startet pausiert bei Tag 1 und lässt sich danach in einem benannten Speicherplatz sichern.,Die neue Airline startet pausiert bei Tag 1 und lässt sich danach in einem benannten Speicherplatz sichern.,The new airline starts paused on day 1 and can then be saved to a named slot.
+Neues Spiel: Gründen ersetzt die laufende Airline samt ungespeichertem Fortschritt. Bestehende manuelle Spielstände bleiben unter Laden erhalten. Abbrechen kehrt zur laufenden Airline zurück.,Neues Spiel: Gründen ersetzt die laufende Airline samt ungespeichertem Fortschritt. Bestehende manuelle Spielstände bleiben unter Laden erhalten. Abbrechen kehrt zur laufenden Airline zurück.,New game: founding replaces the running airline together with its unsaved progress. Existing manual saves stay available under Load. Cancel returns to the running airline.
+Bitte Heimatland und Heimatflughafen auswählen.,Bitte Heimatland und Heimatflughafen auswählen.,Please choose a home country and a home airport.
+Bitte einen Airline-Namen mit 1 bis 80 Zeichen ohne Steuerzeichen eingeben.,Bitte einen Airline-Namen mit 1 bis 80 Zeichen ohne Steuerzeichen eingeben.,Please enter an airline name of 1 to 80 characters without control characters.
+Bitte ein verfügbares Heimatland auswählen.,Bitte ein verfügbares Heimatland auswählen.,Please choose an available home country.
+Bitte einen verfügbaren Heimatflughafen auswählen.,Bitte einen verfügbaren Heimatflughafen auswählen.,Please choose an available home airport.
+Der Heimatflughafen muss im gewählten Heimatland liegen.,Der Heimatflughafen muss im gewählten Heimatland liegen.,The home airport must be in the chosen home country.
+Zeitsprung läuft.,Zeitsprung läuft.,A time jump is running.
+Airline gegründet · bitte Spielstand speichern.,Airline gegründet · bitte Spielstand speichern.,Airline founded · please save the game.
+Alter Zeit-Spielstand geladen. Noch keine Airline vorhanden; Gründen beginnt ein neues Spiel.,Alter Zeit-Spielstand geladen. Noch keine Airline vorhanden; Gründen beginnt ein neues Spiel.,Old time-only save loaded. There is no airline yet; founding starts a new game.
