@@ -320,7 +320,7 @@ func _ready() -> void:
 const OPS_KINDS := {
 	"airborne": ["OPS_STATE_AIRBORNE", "info"], "ground": ["OPS_STATE_GROUND", "neutral"],
 	"scheduled": ["OPS_STATE_SCHEDULED", "neutral"], "weather_delay": ["OPS_STATE_WEATHER", "caution"],
-	"maintenance": ["OPS_STATE_MAINTENANCE", "caution"], "release": ["OPS_STATE_RELEASE", "caution"],
+	"maintenance": ["OPS_STATE_MAINTENANCE", "caution"], "release": ["OPS_STATE_RELEASE", "caution"], "crew_blocked": ["OPS_STATE_CREW_BLOCKED", "stop"],
 	"no_plan": ["OPS_STATE_NO_PLAN", "neutral"],
 }
 
@@ -342,7 +342,8 @@ func _refresh_operations_table(metrics: Dictionary) -> void:
 		UI.cell_text(row, 1, "%s → %s" % [operation["origin"], operation["destination"]])
 		var kind: Array = OPS_KINDS[operation["state_kind"]]
 		UI.cell_status(row, 2, tr(kind[0]), kind[1])
-		UI.cell_text(row, 3, operation["next_departure"])
+		var blocked: bool = operation["crew_blocked"] and operation["state_kind"] in ["crew_blocked", "airborne"]
+		UI.cell_text(row, 3, tr("OPS_NEXT_CREW_BLOCKED") if blocked else operation["next_departure"])
 		UI.cell_text(row, 4, operation["expected_landing"])
 		var delay_minutes := ceili(operation["delay_seconds"] / 60.0)
 		UI.cell_text(row, 5, ("%d min" % delay_minutes) if delay_minutes > 0 else "—")

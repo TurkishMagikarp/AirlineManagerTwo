@@ -1,4 +1,4 @@
-use crate::{aircraft::AircraftStatus, game::Game, operations, save};
+use crate::{aircraft::AircraftStatus, game::Game, operations, save, staff};
 
 fn game(planes: u32) -> Game {
     let mut g = Game::default();
@@ -534,4 +534,57 @@ fn adding_an_aircraft_parked_away_from_the_route_origin_is_rejected() {
     assert_eq!(state(&g), before);
     g.fleet[1].location_icao = origin;
     g.add_route_aircraft(1, 2).unwrap();
+}
+
+fn strip_pilots_to(g: &mut Game, keep: u32) {
+    while g.rated_count("ATR 72") > keep {
+        let i = g.staff.employees.iter().rposition(|e| e.role == staff::Role::Pilot).unwrap();
+        g.resign_employee(i).unwrap();
+    }
+    g.refresh_labour_holds().unwrap();
+}
+
+#[test]
+fn crew_blocked_departure_keeps_staffed_sibling_real() {
+    let mut g = game(2);
+    g.schedule(1, 1, 240).unwrap();
+    g.add_route_aircraft(1, 2).unwrap();
+    g.clock.set_running(true);
+    assert!(g.advance(100.0));
+    strip_pilots_to(&mut g, staff::needs("atr72_600").unwrap().pilots);
+    let rows = board(&g);
+    assert!(rows[0].state_kind == "airborne" && !rows[0].crew_blocked && rows[0].next_departure.is_some());
+    assert!(rows[1].crew_blocked && rows[1].state_kind == "crew_blocked");
+    assert!(rows[1].next_departure.is_none() && rows[1].delay_seconds == 0);
+    assert!(g.attention_snapshot().iter().all(|e| e.kind != "delay"));
+}
+
+#[test]
+fn crew_blocked_in_flight_keeps_landing_then_blocks_and_recovers() {
+    let mut g = game(1);
+    g.schedule(1, 1, 240).unwrap();
+    g.clock.set_running(true);
+    assert!(g.advance(100.0));
+    let before = board(&g)[0].expected_landing;
+    strip_pilots_to(&mut g, 0);
+    let row = &board(&g)[0];
+    assert_eq!(row.state_kind, "airborne");
+    assert!(row.expected_landing.is_some() && row.expected_landing == before);
+    assert!(row.crew_blocked && row.next_departure.is_none() && row.delay_seconds == 0);
+    assert!(g.attention_snapshot().iter().all(|e| e.kind != "delay"));
+    assert!(g.advance(86_400.0));
+    let row = &board(&g)[0];
+    assert!(row.state_kind == "crew_blocked" && row.next_departure.is_none() && row.delay_seconds == 0);
+    assert!(g.attention_snapshot().iter().all(|e| e.kind != "delay"));
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("blocked.json");
+    save::save(&path, &g).unwrap();
+    let mut g = save::load(&path).unwrap();
+    assert_eq!(board(&g)[0].state_kind, "crew_blocked");
+    g.hire_pilots("ATR 72", staff::needs("atr72_600").unwrap().pilots).unwrap();
+    let row = &board(&g)[0];
+    assert!(!row.crew_blocked && row.next_departure.is_some());
+    let flights = g.finance.totals.flights;
+    assert!(g.advance(2.0 * 86_400.0));
+    assert!(g.finance.totals.flights > flights);
 }

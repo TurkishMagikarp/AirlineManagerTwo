@@ -61,6 +61,8 @@ OPS_STATE_SCHEDULED,Geplant,Scheduled
 OPS_STATE_WEATHER,Wetterverzug,Weather delay
 OPS_STATE_MAINTENANCE,Wartung,Maintenance
 OPS_STATE_RELEASE,Freigabe vorgemerkt,Release pending
+OPS_STATE_CREW_BLOCKED,Abflug blockiert,Departure blocked
+OPS_NEXT_CREW_BLOCKED,Besatzung fehlt,Crew missing
 OPS_STATE_NO_PLAN,Kein Flugplan,No schedule
 OPS_EMPTY_TITLE,Noch kein Flugbetrieb,No operations yet
 OPS_EMPTY_TEXT,Sobald ein Flugzeug einer Route zugewiesen ist, erscheinen hier Status und nächster Abflug.,Once an aircraft is assigned to a route its state and next departure appear here.

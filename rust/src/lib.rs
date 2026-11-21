@@ -907,6 +907,7 @@ impl SimulationClock {
     #[func]
     fn get_operations(&self) -> Array<VarDictionary> {
         let mut rows = Vec::new();
+        let gaps = self.game.crew_gaps();
         for route in &self.game.routes {
             let Some(plane) = self
                 .game
@@ -980,6 +981,25 @@ impl SimulationClock {
             } else {
                 "Kein Flugplan".into()
             };
+            let blocked = state.as_ref().is_some_and(|s| s.crew_blocked);
+            let crew_missing = match gaps.iter().find(|g| g.0 == plane.id) {
+                Some(&(_, pilots, cabin)) if blocked => {
+                    let mut parts = Vec::new();
+                    if let (true, Ok(n)) = (pilots > 0, staff::needs(&plane.model_id)) {
+                        parts.push(format!("{pilots} Piloten ({})", n.rating));
+                    }
+                    if cabin > 0 {
+                        parts.push(format!("{cabin} Flugbegleiter"));
+                    }
+                    parts.join(" und ")
+                }
+                _ => String::new(),
+            };
+            let text = if blocked && !crew_missing.is_empty() {
+                format!("{text} · Abflug blockiert: Besatzung fehlt ({crew_missing})")
+            } else {
+                text
+            };
             let text = if route.remove_at.is_some() {
                 format!("{text} · Freigabe nach Bodenzeit vorgemerkt")
             } else {
@@ -992,6 +1012,7 @@ impl SimulationClock {
                 "origin" => board.origin.as_str(), "destination" => board.destination.as_str(),
                 "delay_seconds" => board.delay_seconds as i64,
                 "weather_delay" => board.weather_delay,
+                "crew_blocked" => board.crew_blocked, "crew_missing" => crew_missing.as_str(),
                 "expected_landing_seconds" => board.expected_landing.map(|t| t as i64).unwrap_or(-1),
                 "expected_landing" => board.expected_landing.map(operations::display_time).unwrap_or_else(|| "—".into()).as_str(),
                 "route_id" => route.public_id(), "aircraft_id" => plane.id,
