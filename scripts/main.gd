@@ -1078,6 +1078,8 @@ func _refresh_fleet() -> void:
 func _maintenance_summary(plane: Dictionary) -> String:
 	match plane.get("maintenance_state", "none"):
 		"active":
+			if plane.get("maintenance_waiting_staff", false):
+				return "Wartet auf Techniker"
 			return "%sWartung bis %s" % ["Ungeplante " if plane["maintenance_unscheduled"] else "", plane["maintenance_end"]]
 		"pending":
 			return "Nach Landung · bis %s" % plane["maintenance_end"]
@@ -1109,6 +1111,14 @@ func _build_maintenance(parent: VBoxContainer) -> void:
 	cancel_maintenance_button.visible = false
 	cancel_maintenance_button.pressed.connect(_cancel_maintenance)
 	maintenance_box.add_child(cancel_maintenance_button)
+	maintenance_staff_button = Button.new()
+	maintenance_staff_button.text = "Techniker einstellen"
+	maintenance_staff_button.theme_type_variation = "PrimaryButton"
+	maintenance_staff_button.visible = false
+	maintenance_staff_button.pressed.connect(func():
+		_show_page(5)
+		staff_panel.focus_technician_hiring())
+	maintenance_box.add_child(maintenance_staff_button)
 	maintenance_status = _label("", ThemeTokens.BODY)
 	maintenance_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	fleet_panel.add_child(maintenance_status)
@@ -1167,6 +1177,7 @@ func _refresh_maintenance() -> void:
 	cabin_button.text = "Kabine umbauen · %s · Fläche J:Y %d:1" % [UI.money(plane.get("cabin_fee_eur", 0)), plane.get("cabin_space_ratio", 2)]
 	maintenance_button.disabled = plane.is_empty() or not plane.get("can_request_maintenance", false)
 	cancel_maintenance_button.visible = plane.get("can_cancel_maintenance", false)
+	maintenance_staff_button.visible = plane.get("maintenance_waiting_staff", false)
 	disposal_button.disabled = plane.is_empty() or not String(plane.get("disposal_error", "")).is_empty()
 	disposal_button.text = "Leasing zurückgeben" if plane.get("leased", false) else "Flugzeug verkaufen"
 	disposal_details.text = ""
@@ -1188,6 +1199,9 @@ func _refresh_maintenance() -> void:
 	]
 	lines.append("Hier / nächster Landeort: %s · %s" % [plane["maintenance_location"], plane["maintenance_location_kind"]])
 	match plane["maintenance_state"]:
+		"active" when plane.get("maintenance_waiting_staff", false):
+			lines.append("%s wartet auf Techniker · %s" % ["Ungeplante Wartung" if plane["maintenance_unscheduled"] else "Wartung", UI.money(plane["maintenance_cost_eur"])])
+			lines.append("Das Flugzeug bleibt am Boden, bis genug Techniker zugeteilt sind und die Wartung abgeschlossen ist. Benötigt %d Techniker, derzeit frei: %d." % [plane["maintenance_technicians_needed"], plane["maintenance_technicians_available"]])
 		"active":
 			lines.append("%s läuft: %s – %s · %s" % ["Ungeplante Wartung" if plane["maintenance_unscheduled"] else "Wartung", plane["maintenance_start"], plane["maintenance_end"], UI.money(plane["maintenance_cost_eur"])])
 		"pending":
@@ -1567,6 +1581,9 @@ func _resize_frame() -> void:
 	search_button.text = "?" if compact else tr("Suche")
 
 
+var maintenance_staff_button: Button
+
+
 func _open_attention(entry: Dictionary) -> void:
 	var page: int = {"fleet": 1, "routes": 2, "finances": 4, "staff": 5}.get(entry["page"], 0)
 	if page == 1:
@@ -1579,12 +1596,14 @@ func _open_attention(entry: Dictionary) -> void:
 		scroll.call_deferred("ensure_control_visible", orders_panel.table)
 		orders_panel.table.grab_focus()
 		return
-	if page == 1 and entry.get("kind", "") == "forced_check":
+	if page == 1 and entry.get("kind", "") in ["forced_check", "technicians"]:
 		fleet_tabs.current_tab = 0
 		_select_fleet_aircraft(entry["aircraft_id"])
 		var scroll := fleet_panel.get_parent().get_parent() as ScrollContainer
-		scroll.call_deferred("ensure_control_visible", maintenance_box)
 		fleet_tree.grab_focus()
+		for frame in range(2):
+			await get_tree().process_frame
+		scroll.ensure_control_visible(maintenance_box)
 		return
 	if page == 1:
 		fleet_tree.ensure_cursor_is_visible()
