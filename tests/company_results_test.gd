@@ -36,6 +36,17 @@ func _accept_charter(sim: RefCounted) -> int:
 				return offer["id"]
 	return 0
 
+func _chart(sim: RefCounted, label: String) -> Dictionary:
+	var series: Array = sim.get_finance_series(0)
+	var sum := {"revenue": 0, "costs": 0, "profit": 0}
+	for sample in series:
+		_check(sample["revenue"] - sample["costs"] == sample["profit"], label + " sample result = revenue - costs")
+		for key in sum:
+			sum[key] += sample[key]
+	var t: Dictionary = sim.get_financial_summary()
+	_check(series.size() <= 64 and sum["revenue"] == t["company_revenue_eur"] and sum["costs"] == t["company_costs_eur"] and sum["profit"] == t["profit_eur"], label + " chart periods reconcile to company totals")
+	return sum
+
 func _run() -> void:
 	var main = load("res://scenes/main.tscn").instantiate()
 	root.add_child(main)
@@ -56,10 +67,22 @@ func _run() -> void:
 	sim.pause()
 	s = _agree(main, sim, "fee")
 	_check(s["charter_revenue_eur"] > 0 and s["charter_penalty_eur"] == 0, "completed charter adds its fee to revenue")
+	var fee_chart := _chart(sim, "fee")
+	_check(fee_chart["revenue"] >= s["charter_revenue_eur"], "chart revenue includes the fee")
 	var penalty_job := _accept_charter(sim)
+	for day in range(30):
+		if penalty_job > 0:
+			break
+		sim.start()
+		sim.advance(86400.0)
+		sim.pause()
+		penalty_job = _accept_charter(sim)
+	_check(penalty_job > 0, "second charter accepted for penalty")
 	if penalty_job > 0:
 		_check(sim.cancel_charter(penalty_job).is_empty(), "charter cancelled")
 		var after := _agree(main, sim, "penalty")
+		var penalty_chart := _chart(sim, "penalty")
+		_check(penalty_chart["costs"] >= after["charter_penalty_eur"], "chart costs include the penalty")
 		_check(after["charter_penalty_eur"] > 0 and after["charter_revenue_eur"] == s["charter_revenue_eur"], "penalty is a cost, fee unchanged")
 	var path := OS.get_environment("TMPDIR") + "/company_results.save"
 	if OS.get_environment("TMPDIR").is_empty(): path = "user://company_results.save"
@@ -68,6 +91,8 @@ func _run() -> void:
 	DirAccess.remove_absolute(path)
 	s = _agree(main, sim, "reloaded")
 	_check(s["company_revenue_eur"] == before["company_revenue_eur"] and s["company_costs_eur"] == before["company_costs_eur"] and s["profit_eur"] == before["profit_eur"], "totals survive reload")
+	var reloaded_chart := _chart(sim, "reloaded")
+	_check(reloaded_chart["revenue"] == s["company_revenue_eur"] and reloaded_chart["costs"] == s["company_costs_eur"], "chart equals totals after reload")
 	main.queue_free()
 	await process_frame
 	if failures == 0:
