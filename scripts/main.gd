@@ -354,6 +354,9 @@ func _ready() -> void:
 	routes_panel.simulation = simulation
 	routes_panel.changed.connect(func(): save_status.text = "Routen geändert · bitte Spielstand speichern.")
 	routes_panel.procurement_requested.connect(_open_procurement)
+	routes_panel.staff_requested.connect(func(aircraft_id: int):
+		_show_page(5)
+		staff_panel.focus_shortage(aircraft_id))
 	routes_panel.reposition_requested.connect(func(aircraft_id: int, destination: String, opener: Control):
 		_open_ferry(aircraft_id, destination, opener))
 	content.add_child(routes_panel)

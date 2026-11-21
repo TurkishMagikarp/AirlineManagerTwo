@@ -54,7 +54,7 @@ func _run() -> void:
 		root.size = Vector2i(680, 520)
 		main.routes_panel.interval_input.value = 1
 		await _click(main.routes_panel.schedule_button)
-		if not _check("mindestens" in main.routes_panel.status.text, "Impossible interval rejected via UI"):
+		if not _check("mindestens" in main.routes_panel.interval_input.get_meta("field_help").text, "Impossible interval rejected beside the interval field"):
 			return
 		main.routes_panel.interval_input.value = 120
 		await _click(main.routes_panel.schedule_button)

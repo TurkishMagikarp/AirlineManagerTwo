@@ -176,6 +176,7 @@ func _select_route() -> void:
 	main.routes_panel.route_tree.item_selected.emit()
 
 func _service(index: int) -> bool:
+	await _reveal(main.routes_panel.service_select)
 	await _click(main.routes_panel.service_select)
 	if not _check(main.routes_panel.service_select.get_popup().visible, "Service popup opens with mouse input"):
 		return false

@@ -21,6 +21,7 @@ func _run() -> void:
 	main._show_page(2)
 	await process_frame
 	var panel: Control = main.routes_panel
+	await process_frame
 	panel.get_parent().get_parent().ensure_control_visible(panel.cargo_button)
 	await process_frame
 	assert(root.get_visible_rect().encloses(panel.cargo_button.get_global_rect()))
