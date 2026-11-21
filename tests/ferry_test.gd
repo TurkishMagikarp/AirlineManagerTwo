@@ -54,6 +54,7 @@ func _run() -> void:
 	main.queue_free()
 	await process_frame
 	await _route_reposition()
+	await _existing_route_reposition()
 	print("PASS: ferry dialog range rejection, route-planner repositioning, Rust quote, dispatch, chip, toast, map, restart, landing and archive")
 	quit(0)
 
@@ -143,5 +144,91 @@ func _route_reposition() -> void:
 	var routes: Array = sim.get_routes()
 	assert(routes.size() == 1 and routes[0]["origin_icao"] == "EDDM" and panel._route().get("id", 0) == routes[0]["id"])
 	assert(sim.schedule_route(routes[0]["id"], 1, 120).is_empty())
+	m.queue_free()
+	await process_frame
+
+
+func _existing_route_reposition() -> void:
+	var m = load("res://scenes/main.tscn").instantiate()
+	root.add_child(m)
+	m.set_process(false)
+	root.size = Vector2i(680, 520)
+	var sim = m.simulation
+	assert(sim.found_airline("Add Air", "DE", "EDDF").is_empty())
+	assert(sim.buy_aircraft("atr72_600").is_empty() and sim.buy_aircraft("atr72_600").is_empty())
+	assert(sim.hire_pilots("ATR 72", 8).is_empty() and sim.hire_staff("cabin_crew", 6).is_empty())
+	var first: int = sim.get_fleet()[0]["id"]
+	var second: int = sim.get_fleet()[1]["id"]
+	var first_quote: Dictionary = sim.preview_ferry(first, "EDDM")
+	assert(sim.send_ferry(first, "EDDM").is_empty())
+	sim.set_speed(1)
+	sim.start()
+	assert(sim.advance(first_quote["flight_seconds"]))
+	sim.pause()
+	sim.jump(86400.0)
+	assert(sim.create_route("EDDM", "EDDF", first).is_empty())
+	var route_id: int = sim.get_routes()[0]["id"]
+	assert(not sim.add_route_aircraft(route_id, second).is_empty())
+	assert(sim.get_routes()[0]["aircraft_ids"] == [first] and sim.get_fleet()[1]["route_id"] == 0)
+	assert(sim.schedule_route(route_id, 1, 240).is_empty())
+	assert(not sim.add_route_aircraft(route_id, second).is_empty())
+	assert(sim.get_routes().size() == 1 and sim.get_fleet()[1]["route_id"] == 0)
+	m._sync_view()
+	m._show_page(2)
+	var panel = m.routes_panel
+	panel.refresh()
+	panel.focus_route(route_id)
+	for i in range(panel.assignment.item_count):
+		if panel.assignment.get_item_metadata(i) == second:
+			panel.assignment.select(i)
+			panel.assignment.item_selected.emit(i)
+	assert(panel.assign_button.disabled and panel.assign_ferry_button.visible)
+	assert("EDDF" in panel.assign_ferry_button.text and "EDDM" in panel.assign_ferry_button.text)
+	assert("EDDF" in panel.status.text and "EDDM" in panel.status.text)
+	panel.get_parent().get_parent().ensure_control_visible(panel.assign_ferry_button)
+	await process_frame
+	panel.assign_ferry_button.grab_focus()
+	await _press_enter()
+	await process_frame
+	assert(m.ferry_dialog.visible and m.ferry_aircraft == second and m.ferry_destination.get_selected_metadata() == "EDDM")
+	assert(not m.ferry_dialog.get_ok_button().disabled)
+	m.ferry_dialog.safe_button.pressed.emit()
+	for _i in range(3):
+		await process_frame
+	assert(panel.assign_ferry_button.has_focus() and sim.get_fleet()[1]["ferry_state"] == "")
+	assert(panel._selected_id(panel.assignment) == second and panel._route().get("id", 0) == route_id)
+	panel.assign_ferry_button.pressed.emit()
+	await process_frame
+	var quote: Dictionary = sim.preview_ferry(second, "EDDM")
+	m.ferry_dialog.get_ok_button().pressed.emit()
+	for _i in range(3):
+		await process_frame
+	assert(panel._selected_id(panel.assignment) == second and panel._route().get("id", 0) == route_id)
+	assert(panel.assign_button.disabled and "Überführung" in panel.status.text)
+	assert(not sim.add_route_aircraft(route_id, second).is_empty())
+	sim.set_speed(1)
+	sim.start()
+	assert(sim.advance(quote["flight_seconds"]))
+	sim.pause()
+	m._refresh_fleet()
+	panel.refresh_operations()
+	assert(sim.get_fleet()[1]["location_icao"] == "EDDM" and panel.assign_button.disabled and "Bodenzeit" in panel.assign_button.tooltip_text)
+	sim.jump(86400.0)
+	panel.refresh_operations()
+	assert(not panel.assign_button.disabled and not panel.assign_ferry_button.visible and panel._selected_id(panel.assignment) == second)
+	panel.assign_button.pressed.emit()
+	await process_frame
+	assert(sim.get_routes()[0]["aircraft_ids"].has(second) or sim.get_routes().size() == 2)
+	var flew := false
+	for _i in range(60):
+		sim.jump(600.0)
+		for flight in sim.get_map_flights():
+			if flight.get("aircraft_id", 0) == second:
+				flew = true
+	assert(flew and sim.get_fleet()[1]["route_id"] != 0)
+	panel._assignment_preview()
+	assert(panel.assign_button.text == "Flugzeug entfernen")
+	panel.assign_button.pressed.emit()
+	await process_frame
 	m.queue_free()
 	await process_frame

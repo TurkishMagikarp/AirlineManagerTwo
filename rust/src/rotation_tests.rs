@@ -516,3 +516,22 @@ fn wind_down_in_maintenance_keeps_check_and_clears_resume() {
     assert!(g.wind_down_route(1).is_err());
     g.delete_route(1).unwrap();
 }
+
+#[test]
+fn adding_an_aircraft_parked_away_from_the_route_origin_is_rejected() {
+    let mut g = game(2);
+    let origin = g.routes[0].origin_icao.clone();
+    g.fleet[1].location_icao = "EDDM".into();
+    if origin == "EDDM" {
+        g.fleet[1].location_icao = "EDDF".into();
+    }
+    let before = state(&g);
+    assert!(g.add_route_aircraft(1, 2).unwrap_err().contains("überführen"));
+    assert_eq!(state(&g), before);
+    g.schedule(1, 1, 240).unwrap();
+    let before = state(&g);
+    assert!(g.add_route_aircraft(1, 2).is_err());
+    assert_eq!(state(&g), before);
+    g.fleet[1].location_icao = origin;
+    g.add_route_aircraft(1, 2).unwrap();
+}

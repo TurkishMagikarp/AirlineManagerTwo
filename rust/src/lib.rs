@@ -1021,7 +1021,7 @@ impl SimulationClock {
             .err()
             .unwrap_or_default();
         let location = self.game.aircraft_location(aircraft_id).unwrap_or_default();
-        let misplaced = route_id == 0
+        let misplaced = (route_id == 0 || !self.game.aircraft_is_assigned(aircraft_id))
             && error.is_empty()
             && self.game.check_new_route_location(&a, aircraft_id).is_err();
         let error = if misplaced {

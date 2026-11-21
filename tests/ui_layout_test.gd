@@ -836,6 +836,7 @@ func _ferry_views(sim: RefCounted) -> void:
 		if not capture_dir.is_empty():
 			await RenderingServer.frame_post_draw
 			assert(root.get_texture().get_image().save_png(capture_dir.path_join("ferry-finances-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
+	await _assign_reposition_views(sim)
 
 
 func _reposition_views() -> void:
@@ -866,6 +867,57 @@ func _reposition_views() -> void:
 		if not capture_dir.is_empty():
 			await RenderingServer.frame_post_draw
 			assert(root.get_texture().get_image().save_png(capture_dir.path_join("routes-reposition-dialog-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
+		main.ferry_dialog.safe_button.pressed.emit()
+		for frame in range(3): await process_frame
+
+
+func _assign_reposition_views(sim: RefCounted) -> void:
+	var before: Array = []
+	for plane in sim.get_fleet():
+		before.append(plane["id"])
+	var err := str(sim.lease_aircraft("a330_300")) + str(sim.lease_aircraft("a330_300")) + str(sim.hire_pilots("A330", 8)) + str(sim.hire_staff("cabin_crew", 20))
+	assert(err.is_empty(), err)
+	var fresh: Array = []
+	for plane in sim.get_fleet():
+		if not plane["id"] in before:
+			fresh.append(plane["id"])
+	var lead: int = fresh[0]
+	var spare: int = fresh[1]
+	var quote: Dictionary = sim.preview_ferry(lead, "EDDM")
+	assert(sim.send_ferry(lead, "EDDM").is_empty())
+	sim.set_speed(1)
+	sim.start()
+	assert(sim.advance(quote["flight_seconds"]))
+	sim.pause()
+	sim.jump(86400.0)
+	assert(sim.create_route("EDDM", "EDDF", lead).is_empty())
+	var route_id: int = sim.get_routes()[0]["id"]
+	var sched_err: String = sim.schedule_route(route_id, 1, 480)
+	assert(sched_err.is_empty(), sched_err)
+	main._sync_view()
+	main._show_page(2)
+	var panel = main.routes_panel
+	panel.refresh()
+	panel.focus_route(route_id)
+	for i in range(panel.assignment.item_count):
+		if panel.assignment.get_item_metadata(i) == spare:
+			panel.assignment.select(i)
+			panel.assignment.item_selected.emit(i)
+	assert(panel.assign_ferry_button.visible and panel.assign_button.disabled)
+	var scroll: ScrollContainer = panel.get_parent().get_parent()
+	for dimensions in [Vector2i(1440, 1000), Vector2i(680, 520)]:
+		root.size = dimensions
+		for frame in range(5): await process_frame
+		scroll.ensure_control_visible(panel.assign_ferry_button)
+		for frame in range(5): await process_frame
+		assert(scroll.get_global_rect().encloses(panel.assign_ferry_button.get_global_rect()))
+		if not capture_dir.is_empty():
+			await RenderingServer.frame_post_draw
+			assert(root.get_texture().get_image().save_png(capture_dir.path_join("routes-assign-ferry-%dx%d.png" % [dimensions.x, dimensions.y])) == OK)
+		panel.assign_ferry_button.pressed.emit()
+		for frame in range(5): await process_frame
+		assert(root.get_visible_rect().encloses(main.ferry_dialog.card.get_global_rect()))
+		assert(main.ferry_destination.get_selected_metadata() == "EDDM")
 		main.ferry_dialog.safe_button.pressed.emit()
 		for frame in range(3): await process_frame
 
