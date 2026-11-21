@@ -42,6 +42,13 @@ func _run() -> void:
 		quit(0)
 		return
 	assert(sim.found_airline("Meridian Air", "DE", "EDDF").is_empty())
+	if OS.get_environment("AIRLINE_UI_CAPTURE_SCHEDULE_RECOVERY_ONLY") == "1":
+		await _schedule_recovery_views(sim)
+		main.queue_free()
+		await process_frame
+		print("PASS: Routes schedule blockers and Staff hiring at both sizes")
+		quit(0)
+		return
 	if not capture_dir.is_empty() and OS.get_environment("AIRLINE_UI_CAPTURE_FOUNDING_NEW_ONLY") != "0":
 		main._sync_view()
 		main._open_founding()
@@ -630,6 +637,53 @@ func _run() -> void:
 	await process_frame
 	print("PASS: populated overview/fleet/routes/map/finances/staff and founding at 1440x1000, 1100x720, 680x520; deep controls reachable; no financial changes")
 	quit(0)
+
+func _schedule_recovery_views(sim: RefCounted) -> void:
+	assert(sim.buy_aircraft("atr72_600").is_empty())
+	assert(sim.create_route("EDDF", "EDDM", 1).is_empty())
+	main._sync_view()
+	var routes = main.routes_panel
+	var staff = main.staff_panel
+	var scroll := routes.get_parent().get_parent() as ScrollContainer
+	for dimensions in [Vector2i(1440, 1000), Vector2i(680, 520)]:
+		root.size = dimensions
+		main._show_page(2)
+		routes.focus_route(1)
+		for frame in range(5): await process_frame
+		routes.crew_button.grab_focus()
+		await process_frame
+		scroll.scroll_vertical += int(routes.crew_button.get_global_rect().end.y - scroll.get_global_rect().end.y) + 16
+		await _schedule_recovery_shot("routes-crew-shortage", dimensions)
+		assert(scroll.get_global_rect().encloses(routes.maintenance_label.get_global_rect()))
+		assert(scroll.get_global_rect().encloses(routes.crew_button.get_global_rect()))
+		routes.results_empty_button.grab_focus()
+		await process_frame
+		scroll.ensure_control_visible(routes.results_empty)
+		await _schedule_recovery_shot("routes-results-crew-shortage", dimensions)
+		assert(scroll.get_global_rect().encloses(routes.results_empty.get_global_rect()))
+		routes.results_empty_button.pressed.emit()
+		for frame in range(8): await process_frame
+		assert(staff.hire_missing_button.has_focus())
+		await _schedule_recovery_shot("staff-schedule-shortage", dimensions)
+		assert(scroll.get_global_rect().encloses(staff.shortage_label.get_global_rect()))
+		assert(scroll.get_global_rect().encloses(staff.hire_missing_button.get_global_rect()))
+	staff.hire_missing_button.pressed.emit()
+	main._show_page(2)
+	routes.interval_input.value = 1
+	for dimensions in [Vector2i(1440, 1000), Vector2i(680, 520)]:
+		root.size = dimensions
+		for frame in range(5): await process_frame
+		routes.schedule_button.pressed.emit()
+		await _schedule_recovery_shot("routes-invalid-interval", dimensions)
+		assert(routes.interval_input.get_line_edit().has_focus() and not sim.get_routes()[0]["has_plan"])
+		assert(scroll.get_global_rect().encloses(routes.schedule_button.get_parent().get_global_rect()))
+
+
+func _schedule_recovery_shot(screen: String, dimensions: Vector2i) -> void:
+	for frame in range(5): await process_frame
+	await RenderingServer.frame_post_draw
+	assert(root.get_texture().get_image().save_png(capture_dir.path_join("%s-%dx%d.png" % [screen, dimensions.x, dimensions.y])) == OK)
+
 
 ## Extra helper specimens use only simulation figures, outside the game UI.
 func _capture_components(dimensions: Vector2i, sim: RefCounted) -> void:

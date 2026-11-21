@@ -37,7 +37,7 @@ func _run() -> void:
 	routes.schedule_button.pressed.emit()
 	assert(sim.get_routes() == before, "Rejected schedule cannot change the route")
 	var error: Label = routes.interval_input.get_meta("field_help")
-	assert(error.visible and not error.text.is_empty() and error.text == routes.status.text)
+	assert(error.visible and "mindestens" in error.text and routes.status.text.is_empty())
 	assert(routes.interval_input.get_line_edit().get_theme_stylebox("normal").border_color == Tokens.STOP)
 	routes.interval_input.value = 120
 	assert(routes.interval_input.get_line_edit().get_theme_stylebox("normal").border_color == Tokens.LINE_STRONG)

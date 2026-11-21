@@ -35,6 +35,7 @@ static func setup(main: Control, tree: SceneTree) -> void:
 	row.select(0)
 	panel.route_tree.item_selected.emit()
 	assert(sim.hire_missing_staff().is_empty())
+	panel.refresh_operations()
 	panel.delay_input.value = 1
 	panel.interval_input.value = 1440
 	panel.schedule_button.pressed.emit()

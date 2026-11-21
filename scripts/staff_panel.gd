@@ -450,11 +450,13 @@ func focus_shortage(aircraft_id: int) -> void:
 		row = row.get_next()
 	for frame in range(4):
 		await get_tree().process_frame
+	if not is_visible_in_tree():
+		return
 	hire_missing_button.grab_focus()
-	var scroll := get_parent().get_parent() as ScrollContainer
-	scroll.ensure_control_visible(hire_missing_button.get_parent())
 	await get_tree().process_frame
-	scroll.ensure_control_visible(hire_missing_button.get_parent())
+	if hire_missing_button.has_focus():
+		var scroll := get_parent().get_parent() as ScrollContainer
+		scroll.ensure_control_visible(hire_missing_button.get_parent().get_meta("panel_shell"))
 
 func focus_pay_group(index: int) -> void:
 	if index < 0 or index >= role_keys.size(): return

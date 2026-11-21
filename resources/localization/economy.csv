@@ -73,6 +73,20 @@ OPS_EMPTY_TITLE,Noch kein Flugbetrieb,No operations yet
 OPS_EMPTY_TEXT,Sobald ein Flugzeug einer Route zugewiesen ist, erscheinen hier Status und nächster Abflug.,Once an aircraft is assigned to a route its state and next departure appear here.
 OPS_EMPTY_ACTION,Route planen,Plan a route
 OPS_ROUTE_TIP,Route #%d · Pünktlichkeit: %s · %d erfasste Flüge,Route #%d · punctuality: %s · %d recorded flights
+ROUTE_OPEN_STAFF,Personal öffnen,Open Staff
+ROUTE_RESULTS_EMPTY,Noch keine Landungen,No landings yet
+ROUTE_RESULTS_START,Plane zuerst eine Route.,Plan a route first.
+ROUTE_RESULTS_PROCUREMENT,Beschaffe zuerst ein Flugzeug für deine Route.,Acquire an aircraft for your route first.
+ROUTE_RESULTS_BUY,Flugzeug beschaffen,Acquire an aircraft
+ROUTE_RESULTS_SELECT,Wähle im Register eine Route für deinen Flugplan.,Select a route in the register to set up a schedule.
+ROUTE_RESULTS_PICK,Route auswählen,Select a route
+ROUTE_RESULTS_ACTIVE,Der Flugplan ist aktiv. Ergebnisse erscheinen nach der ersten Landung.,The schedule is active. Results appear after the first landing.
+ROUTE_RESULTS_ASSIGN,Weise dieser Route ein Flugzeug zu.,Assign an aircraft to this route.
+ROUTE_RESULTS_ASSIGN_ACTION,Flugzeug zuweisen,Assign an aircraft
+ROUTE_RESULTS_NO_AIRCRAFT,Für diese Route wird ein freies Flugzeug benötigt.,This route needs an available aircraft.
+ROUTE_RESULTS_SCHEDULE,Lege den ersten Abflug und den Abstand zwischen den Flügen fest.,Set the first departure and the interval between flights.
+ROUTE_RESULTS_EDIT,Flugplan einrichten,Set up schedule
+ROUTE_RESULTS_BLOCKED,Der Flugplan kann derzeit nicht aktiviert werden.,The schedule cannot be activated right now.
 ROUTE_WIND_DOWN,Route abwickeln,Wind down route
 ROUTE_WIND_DOWN_TIP,"Gibt alle zugewiesenen Flugzeuge frei, sobald sie sicher am Boden sind. Die Route bleibt zum Löschen übrig.","Releases all assigned aircraft once they are safely on the ground and leaves the route available for deletion."
 ROUTE_WIND_DOWN_DONE,Freigabe aller Flugzeuge der Route angefordert.,Release of all aircraft on this route requested.
