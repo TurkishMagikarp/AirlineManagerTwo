@@ -65,13 +65,74 @@ func _run() -> void:
 		return
 	if not _check("ersetzt die laufende Airline" in main.founding_status.text and "ungespeichertem Fortschritt" in main.founding_status.text and "unter Laden" in main.founding_status.text, "New Game message: replaces running company, slots stay under Load"):
 		return
+	var before_cash: int = airline["capital_eur"]
+	main.simulation.advance(1.0)
+	var live: Dictionary = main.simulation.get_airline_info()
+	var live_time: float = main.simulation.get_elapsed_seconds()
+	main.name_input.text = "   "
+	await _click(main.found_button)
+	if not _check(main.founding.visible and "Namen" in main.founding_status.text and not is_instance_valid(main.new_game_dialog) and main.simulation.get_airline_info() == live, "Invalid New Game reports in place without confirmation"):
+		return
+	main.name_input.text = "Second Air"
+	await _click(main.found_button)
+	await process_frame
+	var dialog = main.new_game_dialog
+	if not _check(is_instance_valid(dialog) and dialog.visible and main.simulation.get_airline_info() == live, "Valid New Game asks before replacing"):
+		return
+	var dialog_text := ""
+	for node in dialog.find_children("*", "Label", true, false): dialog_text += node.text + "\n"
+	if not _check("Bosporus 日本 Air" in dialog_text and "Second Air" in dialog_text and ("Unsaved progress" in dialog_text or "ungespeichert" in dialog_text) and ("Named saves" in dialog_text or "Spielstände bleiben" in dialog_text), "Confirmation names both airlines and unsaved progress"):
+		return
+	if not _check(dialog.safe_button.has_focus(), "Initial focus on Cancel"):
+		return
+	var held: float = main.simulation.get_elapsed_seconds()
+	main._process(5.0)
+	if not _check(main.simulation.get_elapsed_seconds() == held, "Clock held while the confirmation is open"):
+		return
+	var event := InputEventKey.new()
+	event.keycode = KEY_ESCAPE
+	event.pressed = true
+	Input.parse_input_event(event)
+	await process_frame
+	await process_frame
+	await process_frame
+	if not _check(not is_instance_valid(main.new_game_dialog) and main.simulation.get_airline_info() == live and main.name_input.text == "Second Air" and main.found_button.has_focus() and main.founding.visible, "Escape dismisses, keeps the draft and refocuses Found"):
+		return
 	await _click(main.cancel_founding_button)
-	if not _check(main.overview.visible and main.simulation.get_elapsed_seconds() == 12.5 and main.simulation.is_running(), "Cancel keeps company, time and running status"):
+	if not _check(main.overview.visible and main.simulation.get_airline_info() == live and main.simulation.get_elapsed_seconds() == live_time and main.simulation.is_running() and live["capital_eur"] == before_cash, "Cancel keeps company, time and running status"):
 		return
 	await _click(main.new_game_button)
 	main.name_input.text = "Second Air"
+	root.size = Vector2i(680, 520)
+	await process_frame
 	await _click(main.found_button)
-	if not _check(main.heading.text == "Second Air" and main.simulation.get_elapsed_seconds() == 0.0 and not main.simulation.is_running(), "Confirmed new game replaces state and resets time"):
+	await process_frame
+	await process_frame
+	dialog = main.new_game_dialog
+	if not _check(is_instance_valid(dialog) and dialog.safe_button.has_focus() and root.get_visible_rect().encloses(dialog.card.get_global_rect()) and root.get_visible_rect().encloses(dialog.safe_button.get_global_rect()) and root.get_visible_rect().encloses(dialog.danger_button.get_global_rect()), "Confirmation fits 680x520 with initial focus on Cancel"):
+		return
+	for argument in OS.get_cmdline_user_args():
+		if argument.begins_with("--capture-dir="):
+			await RenderingServer.frame_post_draw
+			root.get_texture().get_image().save_png(argument.trim_prefix("--capture-dir=").path_join("new-game-confirm-680x520.png"))
+			root.size = Vector2i(1440, 1000)
+			await process_frame
+			await process_frame
+			await RenderingServer.frame_post_draw
+			root.get_texture().get_image().save_png(argument.trim_prefix("--capture-dir=").path_join("new-game-confirm-1440x1000.png"))
+			root.size = Vector2i(680, 520)
+			await process_frame
+	await _click(dialog.safe_button)
+	await process_frame
+	await process_frame
+	if not _check(main.founding.visible and main.found_button.has_focus() and main.simulation.get_airline_info() == live, "Cancel button dismisses and restores focus"):
+		return
+	root.size = Vector2i(1152, 648)
+	await _click(main.found_button)
+	await process_frame
+	await _click(main.new_game_dialog.danger_button)
+	await process_frame
+	if not _check(main.heading.text == "Second Air" and main.simulation.get_elapsed_seconds() == 0.0 and not main.simulation.is_running(), "Explicit confirmation replaces state and resets time"):
 		return
 	main.simulation.start()
 	main.simulation.advance(3.0)

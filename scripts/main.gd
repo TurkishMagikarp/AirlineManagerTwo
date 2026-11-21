@@ -72,6 +72,7 @@ var found_button: Button
 var founding_load_button: Button
 var cancel_founding_button: Button
 var founding_status: Label
+var new_game_dialog: Control
 var founding_capital: Label
 var new_game_button: Button
 var terminal_notice: PanelContainer
@@ -1405,9 +1406,29 @@ func _country_changed(index: int) -> void:
 
 
 func _found_airline() -> void:
+	if is_instance_valid(new_game_dialog) and not new_game_dialog.is_queued_for_deletion(): return
 	if country_select.selected < 0 or airport_select.selected < 0:
 		founding_status.text = "Bitte Heimatland und Heimatflughafen auswählen."
 		return
+	if not simulation.has_airline():
+		_start_new_world()
+		return
+	var error: String = simulation.validate_new_world(name_input.text, country_select.get_selected_metadata(), airport_select.get_selected_metadata(), _difficulty_level("capital"), _difficulty_level("competition"), _difficulty_level("crises"))
+	if not error.is_empty():
+		founding_status.text = error
+		return
+	var current: Dictionary = simulation.get_airline_info()
+	var body := tr("Aktuelle Airline: %s (Basis %s)") % [current.get("name", "—"), current.get("airport_icao", "—")]
+	body += "\n" + tr("Neue Airline: %s (Basis %s)") % [name_input.text.strip_edges(), airport_select.get_selected_metadata()]
+	body += "\n" + tr("Nicht gespeicherter Fortschritt in der aktuellen Airline geht verloren. Benannte Spielstände bleiben unter Laden erhalten.")
+	new_game_dialog = UI.dialog(self, tr("Neue Airline gründen?"), body, tr("Abbrechen"), tr("Airline gründen"), _start_new_world)
+	new_game_dialog.tree_exited.connect(func():
+		if is_inside_tree() and founding.visible: found_button.grab_focus.call_deferred()
+	)
+	new_game_dialog.popup_centered()
+
+
+func _start_new_world() -> void:
 	var error: String = simulation.start_new_world(name_input.text, country_select.get_selected_metadata(), airport_select.get_selected_metadata(), _difficulty_level("capital"), _difficulty_level("competition"), _difficulty_level("crises"))
 	if not error.is_empty():
 		founding_status.text = error

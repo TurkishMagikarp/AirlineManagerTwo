@@ -88,6 +88,23 @@ func _run() -> void:
 		return
 	main.name_input.text = "Neu Air"
 	await _click(main.found_button)
+	await process_frame
+	if not _check(is_instance_valid(main.new_game_dialog) and sim.get_airline_info() == terminal_airline, "Ended company asks before being replaced"):
+		return
+	await _click(main.new_game_dialog.safe_button)
+	await process_frame
+	await process_frame
+	if not _check(main.founding.visible and main.found_button.has_focus() and main.name_input.text == "Neu Air" and sim.get_airline_info() == terminal_airline, "Cancelling keeps the ended company and the draft"):
+		return
+	await _click(main.cancel_founding_button)
+	if not _check(main.overview.visible and main.terminal_notice.visible and sim.get_airline_info() == terminal_airline, "Ended company still inspectable after cancel"):
+		return
+	await _click(main.terminal_new_game_button)
+	main.name_input.text = "Neu Air"
+	await _click(main.found_button)
+	await process_frame
+	await _click(main.new_game_dialog.danger_button)
+	await process_frame
 	var fresh: Dictionary = sim.get_airline_info()
 	if not _check(fresh["name"] == "Neu Air" and not fresh["insolvent"] and not main.terminal_notice.visible and sim.get_elapsed_seconds() == 0.0 and not sim.is_running() and not main.start_button.disabled and not main.jump_buttons[0].disabled, "Valid founding starts a separate paused Day 1 world"):
 		return
