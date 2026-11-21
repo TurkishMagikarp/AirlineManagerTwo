@@ -259,11 +259,89 @@ fn autosave_roundtrip_failed_write_and_isolation() {
     assert_eq!(state(&slots::load_autosave(&root, false).unwrap()), first);
     assert!(slots::autosave_entry(&root).error.is_empty());
     slots::store_autosave(&root, &g).unwrap();
-    assert_eq!(state(&slots::load_autosave(&root, false).unwrap()), state(&g));
+    assert_eq!(
+        state(&slots::load_autosave(&root, false).unwrap()),
+        state(&g)
+    );
     assert_eq!(state(&slots::load_autosave(&root, true).unwrap()), first);
     let listed = slots::list(&root, &legacy).unwrap();
     assert_eq!(listed.iter().filter(|s| s.occupied).count(), 2);
     assert_eq!(files(&root.join("slot-01")), manual);
     assert_eq!(fs::read(&legacy).unwrap(), legacy_bytes);
     assert_eq!(state(&slots::load(&root, 1, false).unwrap()), first);
+}
+fn other_game() -> Game {
+    let mut g = Game::default();
+    g.found("Ünï Cargo 日本語", "DE", "EDDM").unwrap();
+    g
+}
+fn identity(h: &slots::Header) -> (Option<&str>, Option<&str>) {
+    (h.airline_name.as_deref(), h.home_airport_icao.as_deref())
+}
+#[test]
+fn save_slots_identify_each_generation_independently() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().join("saves");
+    let legacy = temp.path().join("savegame.json");
+    let (a, b) = (game(), other_game());
+    slots::store(&root, 0, "Vor Ausbau", &a, false).unwrap();
+    slots::store(&root, 1, "Vor Ausbau", &b, false).unwrap();
+    slots::store(&root, 2, "Wechsel", &a, false).unwrap();
+    slots::store(&root, 2, "Wechsel", &b, true).unwrap();
+    slots::store_autosave(&root, &a).unwrap();
+    slots::store_autosave(&root, &b).unwrap();
+    let rows = slots::list(&root, &legacy).unwrap();
+    let id = |r: usize| identity(rows[r].header.as_ref().unwrap());
+    assert_eq!(id(0), (Some("Slot Air"), Some("EDDF")));
+    assert_eq!(id(1), (Some("Ünï Cargo 日本語"), Some("EDDM")));
+    assert_eq!(id(2), (Some("Ünï Cargo 日本語"), Some("EDDM")));
+    assert_eq!(
+        identity(rows[2].backup.as_ref().unwrap()),
+        (Some("Slot Air"), Some("EDDF"))
+    );
+    let auto = slots::autosave_entry(&root);
+    assert_eq!(
+        identity(auto.header.as_ref().unwrap()),
+        (Some("Ünï Cargo 日本語"), Some("EDDM"))
+    );
+    assert_eq!(
+        identity(auto.backup.as_ref().unwrap()),
+        (Some("Slot Air"), Some("EDDF"))
+    );
+    let backup = slots::load_autosave(&root, true).unwrap();
+    assert_eq!(backup.airline.unwrap().home_airport_icao, "EDDF");
+}
+#[test]
+fn save_slots_legacy_headers_and_damaged_primary_keep_own_identity() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().join("saves");
+    let legacy = temp.path().join("savegame.json");
+    save::save(&legacy, &game()).unwrap();
+    let imported = slots::list(&root, &legacy).unwrap();
+    assert_eq!(
+        identity(imported[0].header.as_ref().unwrap()),
+        (Some("Slot Air"), Some("EDDF"))
+    );
+    slots::store(&root, 1, "Alt", &game(), false).unwrap();
+    let main = main_file(&root, 1);
+    let header = main.with_file_name("header.json");
+    let mut v: serde_json::Value = serde_json::from_slice(&fs::read(&header).unwrap()).unwrap();
+    v.as_object_mut().unwrap().remove("airline_name");
+    v.as_object_mut().unwrap().remove("home_airport_icao");
+    fs::write(&header, serde_json::to_vec(&v).unwrap()).unwrap();
+    let row = &slots::list(&root, &legacy).unwrap()[1];
+    assert!(row.error.is_empty());
+    assert_eq!(identity(row.header.as_ref().unwrap()), (None, None));
+    assert!(slots::load(&root, 1, false).is_ok());
+    slots::store(&root, 1, "Alt", &other_game(), true).unwrap();
+    let main = main_file(&root, 1);
+    fs::write(&main, b"{}").unwrap();
+    let row = &slots::list(&root, &legacy).unwrap()[1];
+    assert!(!row.error.is_empty());
+    assert_eq!(
+        identity(row.header.as_ref().unwrap()),
+        (Some("Ünï Cargo 日本語"), Some("EDDM"))
+    );
+    assert_eq!(identity(row.backup.as_ref().unwrap()), (None, None));
+    assert!(slots::load(&root, 1, true).is_ok());
 }

@@ -168,7 +168,7 @@ func _render_slot(row: Dictionary) -> void:
 	choose.add_theme_font_override("font", Tokens.font_for(Tokens.BODY_STRONG))
 	column.add_child(choose)
 	if not header.is_empty():
-		var facts := UI.label(_facts(header), Tokens.CODE, Tokens.INK_MUTED)
+		var facts := UI.label(_facts(header) + "\n" + _identity(header), Tokens.CODE, Tokens.INK_MUTED)
 		facts.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		column.add_child(facts)
 	if damaged:
@@ -182,7 +182,7 @@ func _render_slot(row: Dictionary) -> void:
 		actions.add_child(_button(tr("Löschen"), func(): request_delete(id, title), "DangerButton"))
 		if not row["backup"].is_empty():
 			var backup: Dictionary = row["backup"]
-			var backup_facts := UI.label(tr("Sicherung") + " · " + backup.get("name", "") + "\n" + _facts(backup), Tokens.CODE, Tokens.INK_MUTED)
+			var backup_facts := UI.label(tr("Sicherung") + " · " + backup.get("name", "") + "\n" + _facts(backup) + "\n" + _identity(backup), Tokens.CODE, Tokens.INK_MUTED)
 			backup_facts.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 			column.add_child(backup_facts)
 			column.add_child(_button(tr("Sicherung laden"), func(): request_load(id, true), "PrimaryButton" if damaged and not saving else ""))
@@ -206,7 +206,7 @@ func _render_autosave() -> void:
 	choose.add_theme_font_override("font", Tokens.font_for(Tokens.BODY_STRONG))
 	column.add_child(choose)
 	if not header.is_empty():
-		var facts := UI.label(_facts(header), Tokens.CODE, Tokens.INK_MUTED)
+		var facts := UI.label(_facts(header) + "\n" + _identity(header), Tokens.CODE, Tokens.INK_MUTED)
 		facts.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		column.add_child(facts)
 	if damaged:
@@ -219,7 +219,7 @@ func _render_autosave() -> void:
 		if not damaged: actions.add_child(_button(tr("Laden"), func(): request_load(AUTOSAVE_ID, false), "PrimaryButton"))
 		if not autosave["backup"].is_empty():
 			var backup: Dictionary = autosave["backup"]
-			var backup_facts := UI.label(tr("Vorheriger Autosave") + "\n" + _facts(backup), Tokens.CODE, Tokens.INK_MUTED)
+			var backup_facts := UI.label(tr("Vorheriger Autosave") + "\n" + _facts(backup) + "\n" + _identity(backup), Tokens.CODE, Tokens.INK_MUTED)
 			backup_facts.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 			column.add_child(backup_facts)
 			column.add_child(_button(tr("Sicherung laden"), func(): request_load(AUTOSAVE_ID, true), "PrimaryButton" if damaged else ""))
@@ -228,6 +228,12 @@ func _facts(header: Dictionary) -> String:
 	# Wall clock is display only; simulation time is already formatted by Rust.
 	var written := Time.get_datetime_string_from_unix_time(header["written_at"]).replace("T", " ")
 	return "%s · %s · %d %s · %s UTC" % [header["game_time"], UI.money(header["cash"]), header["fleet"], tr("Flugzeuge"), written]
+
+func _identity(header: Dictionary) -> String:
+	if not header.has("airline_name"): return tr("Airline unbekannt · älterer Spielstand ohne Airline-Angaben")
+	var airport: String = header["home_airport_icao"]
+	if not header.get("home_airport_name", "").is_empty(): airport += " " + header["home_airport_name"]
+	return "%s · %s" % [header["airline_name"], airport]
 
 func select_slot(id: int, title: String) -> void:
 	selected = id
@@ -265,7 +271,10 @@ func request_load(id: int, backup: bool) -> void:
 	elif shown.is_empty(): shown = tr("Beschädigter Spielstand")
 	if header.has("game_time"): shown += " · " + header["game_time"]
 	var question := tr("Sicherung laden?") if backup else (tr("Autosave laden?") if id == AUTOSAVE_ID else tr("Spielstand laden?"))
-	_confirm(question, shown + "\n" + tr("Nicht gespeicherter Fortschritt in der aktuellen Airline geht verloren."), tr("Sicherung laden") if backup else tr("Laden"), func(): load_slot(id, backup), _focus_selected)
+	var current: Dictionary = simulation.get_airline_info()
+	var current_line: String = tr("Aktuelle Airline") + ": " + current.get("name", "") + " · " + current.get("airport_icao", "")
+	var target_line: String = tr("Ziel") + ": " + shown + "\n" + (_identity(header) if not header.is_empty() else tr("Airline unbekannt · älterer Spielstand ohne Airline-Angaben"))
+	_confirm(question, current_line + "\n" + target_line + "\n" + tr("Nicht gespeicherter Fortschritt in der aktuellen Airline geht verloren."), tr("Sicherung laden") if backup else tr("Laden"), func(): load_slot(id, backup), _focus_selected)
 
 func _entry(id: int) -> Dictionary:
 	if id == AUTOSAVE_ID: return autosave
