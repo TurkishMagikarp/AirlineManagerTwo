@@ -206,7 +206,7 @@ Rust prüft den ungerundeten Wert; die UI zeigt eine Nachkommastelle.
 
 Im **Routen**-Tab eine Route auswählen, den ersten Abflug **in Spielminuten** und
 den **Abstand zwischen Abflügen** eingeben, dann **Flugplan aktivieren** drücken.
-Das zugewiesene Flugzeug muss am Startflughafen geparkt sein. Der Flugplan pendelt
+Das zugewiesene Flugzeug muss an einem Endflughafen der Route geparkt sein; ein beendeter Flugplan startet am aktuellen Flughafen (am Zielflughafen mit dem Rückflug). Der Flugplan pendelt
 automatisch zwischen Start und Ziel; der Abstand gilt für jeden einzelnen Hin-
 oder Rückflug, nicht erst für den gesamten Umlauf. Erster Abflug frühestens in
 einer Minute; zu knappe Abstände werden ohne Zustandsänderung abgelehnt.
