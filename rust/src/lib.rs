@@ -1860,16 +1860,22 @@ impl SimulationClock {
 
     #[func]
     fn preview_ferry(&self, aircraft_id: u32, destination: GString) -> VarDictionary {
-        match self.game.quote_ferry(aircraft_id, &destination.to_string()) {
+        match self
+            .game
+            .quote_ferry_checked(aircraft_id, &destination.to_string())
+        {
             Ok(f) => {
                 vdict! { "error" => "", "distance_km" => routes::distance_km(&f.quote.origin, &f.quote.destination).unwrap_or(0.0), "flight_seconds" => (f.quote.landing - f.departure) as i64, "cost_eur" => f.quote.totals.costs(), "fuel_eur" => f.quote.totals.fuel, "carbon_eur" => f.quote.totals.carbon, "airport_eur" => f.quote.totals.airport, "overhead_eur" => f.quote.totals.overhead }
             }
-            Err(error) => match self.game.ferry_blocker(aircraft_id) {
-                Err(operations::FerryBlocker::Pilots { rating, missing }) => {
-                    vdict! { "error" => error.as_str(), "pilot_rating" => rating.as_str(), "pilots_missing" => i64::from(missing) }
+            Err(operations::FerryBlocker::Pilots { rating, missing }) => {
+                let error = operations::FerryBlocker::Pilots {
+                    rating: rating.clone(),
+                    missing,
                 }
-                _ => vdict! { "error" => error.as_str() },
-            },
+                .message();
+                vdict! { "error" => error.as_str(), "pilot_rating" => rating.as_str(), "pilots_missing" => i64::from(missing) }
+            }
+            Err(operations::FerryBlocker::Other(error)) => vdict! { "error" => error.as_str() },
         }
     }
 

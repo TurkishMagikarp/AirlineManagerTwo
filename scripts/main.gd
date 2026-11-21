@@ -218,6 +218,7 @@ func _open_ferry(aircraft_id := 0, destination := "", opener: Control = null) ->
 	content.add_child(ferry_staff_button)
 	content.move_child(ferry_staff_button, 4)
 	var dialog := ferry_dialog
+	dialog.set_meta("from_fleet", from_fleet)
 	var staff_button := ferry_staff_button
 	staff_button.pressed.connect(func():
 		var rating: String = staff_button.get_meta("rating", "")
@@ -242,6 +243,8 @@ func _preview_ferry() -> void:
 	ferry_dialog.get_ok_button().disabled = not error.is_empty()
 	ferry_dialog.get_ok_button().tooltip_text = error
 	ferry_preview.text = error if not error.is_empty() else "%.0f km · %.0f min\nErwartete Kosten: %s\nTreibstoff %s · Flughäfen %s · Betrieb %s" % [quote["distance_km"], quote["flight_seconds"] / 60.0, UI.money(quote["cost_eur"]), UI.money(quote["fuel_eur"]), UI.money(quote["airport_eur"]), UI.money(quote["overhead_eur"])]
+	if not error.is_empty() and not ferry_dialog.get_meta("from_fleet", true) and not quote.has("pilots_missing"):
+		ferry_preview.text += "\nZurück zum Entwurf: Abbrechen wählen und Startflughafen oder Flugzeug ändern."
 	ferry_preview.add_theme_color_override("font_color", ThemeTokens.STOP if not error.is_empty() else ThemeTokens.INK)
 	var missing: int = quote.get("pilots_missing", 0)
 	ferry_staff_button.visible = missing > 0
