@@ -86,7 +86,9 @@ fn offers_are_deterministic_seasonal_and_economy_dependent() {
     }
     assert!(summer > winter, "{summer} vs {winter}");
     for o in &a {
-        assert!(o.window_start >= o.created && o.window_end > o.window_start && o.expires > o.created);
+        assert!(
+            o.window_start >= o.created && o.window_end > o.window_start && o.expires > o.created
+        );
         assert!(o.origin != o.destination && o.fee_eur > 0);
         assert!(["tour_operator", "sports_team", "freight"].contains(&o.kind.as_str()));
     }
@@ -104,7 +106,11 @@ fn charter_refusals_say_exactly_why() {
     let mut expired = ok.clone();
     expired.expires = now;
     assert!(refusal(&g, &expired).contains("abgelaufen"));
-    assert!(g.quote_charter_offer(&ok, 99).unwrap_err().contains("Unbekannt"));
+    assert!(
+        g.quote_charter_offer(&ok, 99)
+            .unwrap_err()
+            .contains("Unbekannt")
+    );
 
     let mut due = g.clone();
     due.fleet[0].wear = due.fleet[0].wear.added(100_000_000, 100_000).unwrap();
@@ -125,7 +131,10 @@ fn charter_refusals_say_exactly_why() {
     let f = game("b737_800bcf");
     assert!(refusal(&f, &offer("tour_operator", "EDDF", "EDDM", 10, now)).contains("Frachter"));
     assert!(refusal(&f, &offer("freight", "EDDF", "EDDM", 30, now)).contains("Nutzlast"));
-    assert!(f.quote_charter_offer(&offer("freight", "EDDF", "EDDM", 20, now), 1).is_ok());
+    assert!(
+        f.quote_charter_offer(&offer("freight", "EDDF", "EDDM", 20, now), 1)
+            .is_ok()
+    );
 }
 
 #[test]
@@ -197,7 +206,10 @@ fn failed_charter_costs_penalty_and_reputation() {
     assert!(!g.charters.recent.last().unwrap().delivered);
     let t = g.clock.elapsed().as_secs();
     assert_eq!(
-        g.history.as_ref().unwrap().charter_through(t, Kind::CharterPenalty),
+        g.history
+            .as_ref()
+            .unwrap()
+            .charter_through(t, Kind::CharterPenalty),
         -i128::from(o.penalty_eur())
     );
     assert!(g.cancel_charter(o.id).is_err());
@@ -207,7 +219,9 @@ fn failed_charter_costs_penalty_and_reputation() {
     let o = pick(&s, true);
     s.fleet[0].location_icao = o.origin.clone();
     s.accept_charter_offer(&o, 1).unwrap();
-    s.sell_aircraft(1).or_else(|_| s.return_aircraft(1)).unwrap();
+    s.sell_aircraft(1)
+        .or_else(|_| s.return_aircraft(1))
+        .unwrap();
     assert!(s.charters.jobs.is_empty());
     assert!(!s.charters.recent.last().unwrap().delivered);
 
@@ -238,8 +252,15 @@ fn failed_charter_stops_a_time_jump_and_shows_attention() {
     g.charters.taken.push((o.id, o.expires));
     g.staff.employees.clear();
     let r = g.jump(20.0 * DAY as f64).unwrap();
-    assert!(!r.reason.is_empty(), "jump should stop on the failed charter");
-    assert!(g.attention_snapshot().iter().any(|e| e.kind == "charter_failed"));
+    assert!(
+        !r.reason.is_empty(),
+        "jump should stop on the failed charter"
+    );
+    assert!(
+        g.attention_snapshot()
+            .iter()
+            .any(|e| e.kind == "charter_failed")
+    );
 }
 
 #[test]
@@ -255,7 +276,11 @@ fn expiring_offer_that_fits_an_idle_aircraft_is_in_attention() {
     .unwrap();
     let fits = g.open_charters().iter().any(|x| x.id == o.id);
     if fits {
-        assert!(g.attention_snapshot().iter().any(|e| e.kind == "charter_expiring"));
+        assert!(
+            g.attention_snapshot()
+                .iter()
+                .any(|e| e.kind == "charter_expiring")
+        );
     }
 }
 
@@ -290,7 +315,11 @@ fn charters_are_identical_at_all_speeds_and_across_restart_mid_flight() {
             left -= step;
         }
         g.clock.set_speed(1);
-        assert_eq!(state(&g)["charters"], state(&baseline)["charters"], "speed {speed}");
+        assert_eq!(
+            state(&g)["charters"],
+            state(&baseline)["charters"],
+            "speed {speed}"
+        );
         assert_eq!(g.cash(), baseline.cash(), "speed {speed}");
     }
 }
@@ -331,19 +360,41 @@ fn an_ai_airline_can_take_an_offer_before_the_player() {
     let before = g.open_charters();
     g.ai_charters(0).unwrap();
     AI_DISABLED.with(|d| d.set(true));
-    assert!(!g.competitors[0].game.charters.jobs.is_empty(), "AI took nothing from {} offers", before.len());
-    assert!(g.competitors[0].game.charters.jobs.iter().any(|j| j.aircraft_id == id));
+    assert!(
+        !g.competitors[0].game.charters.jobs.is_empty(),
+        "AI took nothing from {} offers",
+        before.len()
+    );
+    assert!(
+        g.competitors[0]
+            .game
+            .charters
+            .jobs
+            .iter()
+            .any(|j| j.aircraft_id == id)
+    );
     let player_offers = g.open_charters();
     assert!(player_offers.len() < before.len());
     let ids: Vec<u64> = g
         .competitors
         .iter()
-        .flat_map(|c| c.game.charters.jobs.iter().map(|j| j.offer.id).chain(c.game.charters.recent.iter().map(|o| o.offer_id)))
+        .flat_map(|c| {
+            c.game
+                .charters
+                .jobs
+                .iter()
+                .map(|j| j.offer.id)
+                .chain(c.game.charters.recent.iter().map(|o| o.offer_id))
+        })
         .collect();
     assert!(g.charters.taken.iter().any(|t| ids.contains(&t.0)));
     assert!(g.open_charters().iter().all(|o| !ids.contains(&o.id)));
     // No two airlines hold the same offer.
-    let mut jobs: Vec<u64> = g.competitors.iter().flat_map(|c| c.game.charters.jobs.iter().map(|j| j.offer.id)).collect();
+    let mut jobs: Vec<u64> = g
+        .competitors
+        .iter()
+        .flat_map(|c| c.game.charters.jobs.iter().map(|j| j.offer.id))
+        .collect();
     jobs.extend(g.charters.jobs.iter().map(|j| j.offer.id));
     let n = jobs.len();
     jobs.sort();
@@ -417,7 +468,10 @@ fn with_crewed_spare(g: &Game) -> (Game, u32) {
         e.training = None;
     }
     let n = crate::staff::needs("a320_200").unwrap();
-    assert!(ai.rated_available(&n.rating) >= n.pilots, "spare must be crewed");
+    assert!(
+        ai.rated_available(&n.rating) >= n.pilots,
+        "spare must be crewed"
+    );
     (h, id)
 }
 
@@ -456,7 +510,10 @@ fn an_ai_with_a_crewed_idle_aircraft_earns_charter_income_over_two_years() {
         }
     }
     eprintln!("weeks with a taken charter: {taken}/104, first charter fee income {earned:?}");
-    assert!(taken > 0, "a crewed idle aircraft never found a paying charter in two years");
+    assert!(
+        taken > 0,
+        "a crewed idle aircraft never found a paying charter in two years"
+    );
     assert!(earned.unwrap() > 0, "the taken charter paid no fee");
 }
 
@@ -482,22 +539,34 @@ fn charters_ai_idle_funnel_audit() {
             // Quote as if crewed: the crew block alone is reported separately.
             let mut crewed = c.game.clone();
             for id in &ids {
-                let model = crewed.fleet.iter().find(|p| p.id == *id).unwrap().model_id.clone();
+                let model = crewed
+                    .fleet
+                    .iter()
+                    .find(|p| p.id == *id)
+                    .unwrap()
+                    .model_id
+                    .clone();
                 crewed.equip_staff_for(&model).unwrap();
             }
             for e in &mut crewed.staff.employees {
                 e.training = None;
             }
             for id in ids {
-                let blocked = c.game.quote_charter_offer(&offers[0], id).is_err_and(|e| e.starts_with("Berechtigte Piloten"));
-                *why.entry(format!("[aircraft without free crew: {blocked}]")).or_default() += 1;
+                let blocked = c
+                    .game
+                    .quote_charter_offer(&offers[0], id)
+                    .is_err_and(|e| e.starts_with("Berechtigte Piloten"));
+                *why.entry(format!("[aircraft without free crew: {blocked}]"))
+                    .or_default() += 1;
                 for o in &offers {
                     quotes += 1;
                     let key = match crewed.quote_charter_offer(o, id) {
                         Err(e) => e.split(':').next().unwrap().to_string(),
                         Ok(q) => {
                             let net = o.fee_eur - q.cost_eur();
-                            if net >= RULES.ai_min_net_eur && net * 100 >= q.cost_eur() * RULES.ai_min_margin_percent {
+                            if net >= RULES.ai_min_net_eur
+                                && net * 100 >= q.cost_eur() * RULES.ai_min_margin_percent
+                            {
                                 "ACCEPTABLE".into()
                             } else if net > 0 {
                                 "profit below the AI thresholds".into()
@@ -511,7 +580,9 @@ fn charters_ai_idle_funnel_audit() {
             }
         }
     }
-    eprintln!("ten years: {ticks} airline-weeks, {idle_ticks} with an idle aircraft, {quotes} aircraft/offer pairs");
+    eprintln!(
+        "ten years: {ticks} airline-weeks, {idle_ticks} with an idle aircraft, {quotes} aircraft/offer pairs"
+    );
     for (k, n) in &why {
         eprintln!("  {n:6} {k}");
     }

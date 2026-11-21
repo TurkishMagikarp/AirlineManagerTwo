@@ -1031,6 +1031,21 @@ impl SimulationClock {
     }
 
     #[func]
+    fn get_route_destinations(&self, origin: GString, aircraft_id: u32) -> Array<VarDictionary> {
+        let range = self.game.aircraft_range_km(aircraft_id);
+        routes::destination_options(&origin.to_string(), range)
+            .unwrap_or_default()
+            .into_iter()
+            .map(|o| {
+                vdict! { "icao" => o.icao.as_str(), "iata" => o.iata.as_str(),
+                "name" => o.name.as_str(), "charge_percent" => o.charge_percent,
+                "distance_km" => o.distance_km, "in_range" => o.in_range,
+                "ranged" => range.is_some() }
+            })
+            .collect()
+    }
+
+    #[func]
     fn create_route(&mut self, origin: GString, destination: GString, aircraft_id: u32) -> GString {
         self.game
             .create_route(&origin.to_string(), &destination.to_string(), aircraft_id)
@@ -2270,7 +2285,10 @@ impl SimulationClock {
                     }
                     (
                         "short",
-                        format!("Besatzung fehlt: {} · Flugplan angehalten", parts.join(" und ")),
+                        format!(
+                            "Besatzung fehlt: {} · Flugplan angehalten",
+                            parts.join(" und ")
+                        ),
                     )
                 }
                 _ if reserved => ("crewed", String::new()),
@@ -3061,13 +3079,16 @@ fn flight_dictionary(f: &economy::FlightResult) -> VarDictionary {
 fn jump_dictionary(result: Result<jumps::ResultSummary, &'static str>) -> VarDictionary {
     match result {
         Ok(result) => {
-            let attention = result.attention.as_ref().map_or_else(VarDictionary::new, |e| {
-                vdict! {
-                    "kind" => e.kind, "page" => e.page, "route_id" => e.route_id,
-                    "aircraft_id" => e.aircraft_id, "employee_id" => e.employee_id,
-                    "order_id" => e.order_id as i64
-                }
-            });
+            let attention = result
+                .attention
+                .as_ref()
+                .map_or_else(VarDictionary::new, |e| {
+                    vdict! {
+                        "kind" => e.kind, "page" => e.page, "route_id" => e.route_id,
+                        "aircraft_id" => e.aircraft_id, "employee_id" => e.employee_id,
+                        "order_id" => e.order_id as i64
+                    }
+                });
             vdict! {
                 "advanced_seconds" => result.advanced_seconds as i64,
                 "stopped" => !result.reason.is_empty(),

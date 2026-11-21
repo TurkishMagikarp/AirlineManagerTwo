@@ -92,7 +92,9 @@ pub struct Factors {
 }
 impl Event {
     pub fn announced_at(&self) -> u64 {
-        self.start_day.saturating_sub(self.kind.rules().warning_days) * DAY
+        self.start_day
+            .saturating_sub(self.kind.rules().warning_days)
+            * DAY
     }
     pub fn starts_at(&self) -> u64 {
         self.start_day * DAY
@@ -109,8 +111,8 @@ impl Event {
         let zero = ZERO_REACTIONS.with(|v| v.get());
         #[cfg(not(test))]
         let zero = false;
-        let effect = self.effect_bps as f64 / 10000.0
-            * if self.kind == Type::Boom { 1.0 } else { -1.0 };
+        let effect =
+            self.effect_bps as f64 / 10000.0 * if self.kind == Type::Boom { 1.0 } else { -1.0 };
         let f = |reaction: f64| 1.0 + if zero { 0.0 } else { effect * reaction };
         Factors {
             business: f(r.business_reaction),
@@ -211,9 +213,10 @@ fn pick<T: Copy>(items: impl Iterator<Item = (T, u64)>, draw: u64) -> Option<T> 
 
 fn derive(cycle: &Cycle, kind: Type, lane: u64, slot: u64) -> Option<Event> {
     let rules = kind.rules();
-    let mut d = Draws(mix(
-        cycle.seed ^ 0x45564e5453 ^ ((kind as u64 + 1) << 56) ^ (lane << 48),
-    ) ^ slot.wrapping_mul(0xd6e8feb86659fd93));
+    let mut d = Draws(
+        mix(cycle.seed ^ 0x45564e5453 ^ ((kind as u64 + 1) << 56) ^ (lane << 48))
+            ^ slot.wrapping_mul(0xd6e8feb86659fd93),
+    );
     let chance = d.next() % 1000;
     let duration = rules.min_days + d.next() % (rules.max_days - rules.min_days + 1);
     let offset = d.next() % (rules.slot_days - duration + 1);
@@ -304,7 +307,9 @@ fn build(cycle: &Cycle, day: u64) -> DayCache {
         factors: Vec::new(),
         by_airport: HashMap::new(),
     };
-    let airports = crate::airports::catalog().map(|c| &c.airports[..]).unwrap_or(&[]);
+    let airports = crate::airports::catalog()
+        .map(|c| &c.airports[..])
+        .unwrap_or(&[]);
     for e in visible_at(cycle, day * DAY)
         .into_iter()
         .filter(|e| e.is_active(day * DAY))
@@ -315,7 +320,11 @@ fn build(cycle: &Cycle, day: u64) -> DayCache {
             Place::Airport(icao) => a.icao == icao,
             Place::Country(code) => a.country_code == code,
         }) {
-            cache.by_airport.entry(a.icao.as_str()).or_default().push(index);
+            cache
+                .by_airport
+                .entry(a.icao.as_str())
+                .or_default()
+                .push(index);
         }
     }
     cache

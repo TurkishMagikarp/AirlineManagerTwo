@@ -27,12 +27,49 @@ func _run() -> void:
 	await _click(main.navigation[2])
 	if not _check(panel.destination.selected == -1 and panel.create_button.disabled and "Ziel" in panel.preview.text and not "km" in panel.preview.text, "No destination: Create disabled, no distance claims even with aircraft"):
 		return
-	_choose_airport(panel.destination, "EDDF")
-	if not _check(panel.create_button.disabled and "verschieden" in panel.preview.text, "Same airport rejected in preview"):
+	if not _check(_destination_index(panel, "EDDF") < 0 and panel.destination.item_count > 1, "Origin is excluded from the destination picker"):
 		return
+	if not _check(panel.destination.get_item_metadata(0) != "" and "km" in panel.destination.get_item_text(0) and "Gebühren" in panel.destination.get_item_text(0) and "(" + panel.destination.get_item_metadata(0) + ")" in panel.destination.get_item_text(0), "Destination rows show code, distance, fees and ICAO"):
+		return
+	var ranks := _ranks(panel)
+	var near: int = ranks["EDDM"]
+	var far: int = ranks["LTFM"]
+	if not _check(near < far and not "außer Reichweite" in panel.destination.get_item_text(near) and "außer Reichweite" in panel.destination.get_item_text(far), "EDDM is in range and ahead of out-of-range LTFM, which is labelled"):
+		return
+	var last := -1.0
+	var seen_far := false
 	for i in range(panel.destination.item_count):
-		if panel.destination.get_item_metadata(i) == "LTFM":
-			_choose(panel.destination, i)
+		var option: Dictionary = panel.destination_options[panel.destination.get_item_metadata(i)]
+		if not option["in_range"] and not seen_far:
+			seen_far = true
+			last = -1.0
+		if not _check(option["in_range"] != seen_far and option["distance_km"] >= last, "In-range destinations first, nearest first within each group"):
+			return
+		last = option["distance_km"]
+	_choose_airport(panel.destination, "LTFM")
+	if not _check(panel.create_button.disabled and "Reichweite überschritten" in panel.preview.text, "Out-of-range selection keeps Create disabled with the explanation"):
+		return
+	panel.aircraft.select(-1)
+	panel.aircraft.item_selected.emit(-1)
+	if not _check(panel.destination.get_selected_metadata() == "LTFM" and not "außer Reichweite" in panel.destination.get_item_text(panel.destination.selected) and panel.destination.get_item_metadata(0) != "", "Without an aircraft airports are browsable without range labels and the selection is kept"):
+		return
+	panel.aircraft.select(0)
+	panel.aircraft.item_selected.emit(0)
+	panel.destination.select(-1)
+	panel._preview()
+	if not _check(panel.destination.selected == -1 and "kein Zielflughafen" not in panel.preview.text and "in Reichweite" in panel.preview.text, "In-range hint appears with no destination and nothing is picked automatically"):
+		return
+	_choose_airport(panel.origin, "HKJK")
+	if not _check(panel.destination.selected == -1 and "HKJK" in panel.preview.text and "ATR" in panel.preview.text and "kein Zielflughafen" in panel.preview.text and "größerer Reichweite" in panel.preview.text and "Flotte" in panel.preview.text and panel.create_button.disabled, "Nairobi with an ATR explains that nothing is in range and how to proceed"):
+		return
+	if not _check(_destination_index(panel, "HKJK") < 0 and panel.destination.get_item_metadata(0) == "FAOR" and "außer Reichweite" in panel.destination.get_item_text(0), "Nairobi list excludes itself, lists FAOR first as out of range"):
+		return
+	_choose_airport(panel.destination, "FAOR")
+	_choose_airport(panel.origin, "EDDF")
+	if not _check(panel.destination.get_selected_metadata() == "FAOR" and _destination_index(panel, "EDDF") < 0 and _destination_index(panel, "HKJK") >= 0 and panel.create_button.disabled, "Origin change keeps the destination by ICAO and recomputes the list"):
+		return
+	_choose_airport(panel.destination, "EDDM")
+	_choose_airport(panel.destination, "LTFM")
 	if not _check(panel.create_button.disabled and "Reichweite überschritten" in panel.preview.text, "Long route rejected in preview"):
 		return
 	_choose_airport(panel.destination, "EDDM")
@@ -105,6 +142,50 @@ func _run() -> void:
 	await process_frame
 	await _click(main.navigation[2])
 	if not _check(main.simulation.get_routes().is_empty() and panel.empty_label.visible and panel.create_button.disabled, "New game clears routes and stale assignments"):
+		return
+	if not _check(main.simulation.buy_aircraft("atr72_600").is_empty() and main.simulation.lease_aircraft("a320_200").is_empty(), "Fresh company gets an ATR and a leased A320"):
+		return
+	await _click(main.navigation[2])
+	var atr_index := -1
+	var a320_index := -1
+	for i in range(panel.aircraft.item_count):
+		if "ATR" in panel.aircraft.get_item_text(i):
+			atr_index = i
+		if "A320" in panel.aircraft.get_item_text(i):
+			a320_index = i
+	if not _check(atr_index >= 0 and a320_index >= 0, "Fresh company owns an ATR and an A320 for range comparison"):
+		return
+	_choose_airport(panel.origin, "HKJK")
+	_choose(panel.aircraft, atr_index)
+	if not _check(panel.destination.selected == -1 and "kein Zielflughafen" in panel.preview.text, "Nairobi with ATR has no destination in range"):
+		return
+	_choose(panel.aircraft, a320_index)
+	var faor: int = _destination_index(panel, "FAOR")
+	if not _check(panel.destination.selected == -1 and faor == 0 and not "außer Reichweite" in panel.destination.get_item_text(faor) and not "kein Zielflughafen" in panel.preview.text, "Switching to an A320 puts FAOR in range at the top and picks nothing"):
+		return
+	_choose_airport(panel.destination, "FAOR")
+	_choose(panel.aircraft, atr_index)
+	if not _check(panel.destination.get_selected_metadata() == "FAOR" and panel.create_button.disabled and "Reichweite überschritten" in panel.preview.text, "Destination kept by ICAO when its aircraft range class changes"):
+		return
+	_choose_airport(panel.origin, "EDDF")
+	_choose(panel.aircraft, atr_index)
+	panel.destination.select(-1)
+	panel._preview()
+	panel.destination.grab_focus()
+	for pressed in [true, false]:
+		var key := InputEventKey.new()
+		key.keycode = KEY_ENTER
+		key.physical_keycode = KEY_ENTER
+		key.pressed = pressed
+		Input.parse_input_event(key)
+		await process_frame
+	await process_frame
+	if not _check(panel.destination.get_popup().visible and panel.destination.get_popup().item_count == panel.destination.item_count, "Keyboard opens the destination picker at minimum size"):
+		return
+	panel.destination.get_popup().hide()
+	panel.get_parent().get_parent().ensure_control_visible(panel.preview)
+	await process_frame
+	if not _check(root.get_visible_rect().intersects(panel.preview.get_global_rect()) and panel.preview.text.length() > 0 and panel.destination.focus_mode != Control.FOCUS_NONE, "Destination picker and range explanation reachable at minimum size"):
 		return
 	_choose_airport(panel.destination, "EDDM")
 	await _click(main.new_game_button)
@@ -197,3 +278,17 @@ func _choose_airport(select: OptionButton, code: String) -> void:
 			_choose(select, i)
 			return
 	assert(false, "Missing airport: " + code)
+
+
+func _destination_index(panel, code: String) -> int:
+	for i in range(panel.destination.item_count):
+		if panel.destination.get_item_metadata(i) == code:
+			return i
+	return -1
+
+
+func _ranks(panel) -> Dictionary:
+	var ranks := {}
+	for i in range(panel.destination.item_count):
+		ranks[panel.destination.get_item_metadata(i)] = i
+	return ranks

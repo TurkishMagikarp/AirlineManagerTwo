@@ -253,12 +253,12 @@ impl Game {
         if !ai && self.alliances.blocked_until > now {
             return Err(refuse(
                 "ALLIANCE_COOLDOWN",
-                &[crate::operations::display_time(self.alliances.blocked_until)],
+                &[crate::operations::display_time(
+                    self.alliances.blocked_until,
+                )],
             ));
         }
-        if self.alliance_of(owner).is_some()
-            || (!ai && self.alliances.application.is_some())
-        {
+        if self.alliance_of(owner).is_some() || (!ai && self.alliances.application.is_some()) {
             return Err(refuse("ALLIANCE_ACTIVE", &[]));
         }
         let members = self.alliance_members(alliance).count();
@@ -339,7 +339,15 @@ impl Game {
         if self.airline.is_none() || self.insolvent() || self.competitors.is_empty() {
             return None;
         }
-        Some((self.alliances.reviewed_at.max(self.clock.elapsed().as_secs()) / cycle() + 1) * cycle())
+        Some(
+            (self
+                .alliances
+                .reviewed_at
+                .max(self.clock.elapsed().as_secs())
+                / cycle()
+                + 1)
+                * cycle(),
+        )
     }
     fn alliance_notice(&mut self, kind: &str, alliance: &str, text: String) {
         let id = self.alliances.next_notice;
@@ -357,7 +365,12 @@ impl Game {
     }
     fn remove_player_member(&mut self, kind: &str, why: &str) {
         let now = self.clock.elapsed().as_secs();
-        let Some(i) = self.alliances.members.iter().position(|m| m.owner == PLAYER) else {
+        let Some(i) = self
+            .alliances
+            .members
+            .iter()
+            .position(|m| m.owner == PLAYER)
+        else {
             return;
         };
         let alliance = self.alliances.members.remove(i).alliance;
@@ -369,17 +382,16 @@ impl Game {
         let Some(mine) = self.alliance_of(PLAYER).map(|m| m.alliance.clone()) else {
             return false;
         };
-        let rivals: Vec<String> = self
-            .codeshares
-            .iter()
-            .filter(|a| {
-                self.alliances
-                    .members
-                    .iter()
-                    .any(|m| self.alliance_offer_key(&m.owner) == a.partner && m.alliance != mine)
-            })
-            .map(|a| a.partner.clone())
-            .collect();
+        let rivals: Vec<String> =
+            self.codeshares
+                .iter()
+                .filter(|a| {
+                    self.alliances.members.iter().any(|m| {
+                        self.alliance_offer_key(&m.owner) == a.partner && m.alliance != mine
+                    })
+                })
+                .map(|a| a.partner.clone())
+                .collect();
         self.codeshares.retain(|a| !rivals.contains(&a.partner));
         !rivals.is_empty()
     }
@@ -420,7 +432,12 @@ impl Game {
         let before = (self.alliances.members.clone(), self.codeshares.len());
         self.prune_alliances();
         // Distressed members are dropped; AI members also leave when their network shrinks.
-        let owners: Vec<String> = self.alliances.members.iter().map(|m| m.owner.clone()).collect();
+        let owners: Vec<String> = self
+            .alliances
+            .members
+            .iter()
+            .map(|m| m.owner.clone())
+            .collect();
         for owner in owners {
             let Some(g) = self.alliance_game(&owner) else {
                 continue;
@@ -459,7 +476,9 @@ impl Game {
             && app.applied_at < now
         {
             self.alliances.application = None;
-            let name = def(&app.alliance).map_or("", |d| d.name.as_str()).to_owned();
+            let name = def(&app.alliance)
+                .map_or("", |d| d.name.as_str())
+                .to_owned();
             match self.alliance_check(PLAYER, &app.alliance) {
                 Ok(()) => {
                     self.alliances.members.push(Member {
@@ -530,7 +549,10 @@ impl Game {
         }
         let mut groups: BTreeMap<&str, Vec<String>> = BTreeMap::new();
         for m in &self.alliances.members {
-            if self.alliance_game(&m.owner).is_some_and(|g| !unavailable(g)) {
+            if self
+                .alliance_game(&m.owner)
+                .is_some_and(|g| !unavailable(g))
+            {
                 groups
                     .entry(m.alliance.as_str())
                     .or_default()
@@ -577,12 +599,17 @@ impl Game {
         let bad = || Err("Ungültige Allianzdaten.".to_string());
         let now = self.clock.elapsed().as_secs();
         let s = &self.alliances;
-        if self.competitors.iter().any(|c| !c.game.alliances.is_empty())
+        if self
+            .competitors
+            .iter()
+            .any(|c| !c.game.alliances.is_empty())
             || s.reviewed_at > now
             || s.blocked_until > now + RULES.reapply_cooldown_days * DAY
             || s.notices.len() > NOTICE_LIMIT
             || s.notices.windows(2).any(|w| w[0].id >= w[1].id)
-            || s.notices.iter().any(|n| n.at > now || n.id >= s.next_notice)
+            || s.notices
+                .iter()
+                .any(|n| n.at > now || n.id >= s.next_notice)
         {
             return bad();
         }

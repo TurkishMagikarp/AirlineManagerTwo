@@ -273,6 +273,7 @@ func _action(caption: String, route_id: int, airport_icao: String = "") -> void:
 		var scroll: ScrollContainer = routes.get_parent().get_parent()
 		if not airport_icao.is_empty():
 			for select in [routes.origin, routes.destination]:
+				if select == routes.destination: routes.sync_destinations()
 				var code: String = canvas.base_icao if select == routes.origin else airport_icao
 				for index in range(select.item_count):
 					if select.get_item_metadata(index) == code: select.select(index)

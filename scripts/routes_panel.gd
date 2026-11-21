@@ -58,6 +58,8 @@ var fare_key: Array = []
 var fare_cached: Dictionary = {}
 var results_empty: Control
 var editor_panel: Control
+var destination_key: Array = []
+var destination_options: Dictionary = {}
 
 
 func _ready() -> void:
@@ -71,10 +73,9 @@ func _ready() -> void:
 		airports.append_array(simulation.get_airports(country["code"]))
 	airports.sort_custom(func(a: Dictionary, b: Dictionary): return a["iata"].naturalnocasecmp_to(b["iata"]) < 0)
 	for airport in airports:
-		for select in [origin, destination]:
-			select.add_item("%s · Gebühren %d %% · %s (%s)" % [airport["iata"], airport["charge_percent"], String(airport["name"]).left(32) + ("…" if String(airport["name"]).length() > 32 else ""), airport["icao"]])
-			select.set_item_metadata(select.item_count - 1, airport["icao"])
-			select.set_item_tooltip(select.item_count - 1, "%s · Gebührenstufe %d %% des Modell-/Passagiertarifs an diesem Endpunkt; Start und Ziel werden addiert." % [airport["name"], airport["charge_percent"]])
+		origin.add_item("%s · Gebühren %d %% · %s (%s)" % [airport["iata"], airport["charge_percent"], _short_name(airport["name"]), airport["icao"]])
+		origin.set_item_metadata(origin.item_count - 1, airport["icao"])
+		origin.set_item_tooltip(origin.item_count - 1, _fee_tip(airport))
 	origin.select(-1)
 	destination.select(-1)
 	aircraft = _select("Verfügbares Flugzeug")
@@ -529,15 +530,80 @@ func reset_for_world() -> void:
 		if origin.get_item_metadata(i) == home:
 			origin.select(i)
 	destination.select(-1)
+	destination_key = []
 	aircraft.clear()
 	route_tree.deselect_all()
 	refresh()
 	status.text = ""
 
 
+func _short_name(name: String, limit := 32) -> String:
+	return name.left(limit) + ("…" if name.length() > limit else "")
+
+
+func _fee_tip(airport: Dictionary) -> String:
+	return "%s · Gebührenstufe %d %% des Modell-/Passagiertarifs an diesem Endpunkt; Start und Ziel werden addiert." % [airport["name"], airport["charge_percent"]]
+
+
+func sync_destinations() -> void:
+	var origin_icao: String = origin.get_selected_metadata() if origin.selected >= 0 else ""
+	var plane := _selected_id(aircraft)
+	var key := [origin_icao, plane]
+	if key == destination_key:
+		return
+	destination_key = key
+	var kept: String = destination.get_selected_metadata() if destination.selected >= 0 else ""
+	destination.clear()
+	destination_options.clear()
+	var options: Array = []
+	if origin_icao.is_empty():
+		for country in simulation.get_countries():
+			options.append_array(simulation.get_airports(country["code"]))
+		options.sort_custom(func(a: Dictionary, b: Dictionary): return a["iata"].naturalnocasecmp_to(b["iata"]) < 0)
+		for airport in options:
+			airport["ranged"] = false
+			airport["in_range"] = true
+	else:
+		options = simulation.get_route_destinations(origin_icao, plane)
+	for option in options:
+		var text := "%s (%s) · " % [option["iata"], option["icao"]]
+		if not origin_icao.is_empty():
+			text += "%s km · " % UI.decimal(option["distance_km"], 0)
+		if option["ranged"] and not option["in_range"]:
+			text += "außer Reichweite · "
+		text += "Gebühren %d %% · %s" % [option["charge_percent"], _short_name(option["name"])]
+		destination.add_item(text)
+		destination.set_item_metadata(destination.item_count - 1, option["icao"])
+		destination.set_item_tooltip(destination.item_count - 1, _fee_tip(option) + (" Außerhalb der Referenzreichweite des gewählten Flugzeugs." if option["ranged"] and not option["in_range"] else ""))
+		destination_options[option["icao"]] = option
+		if option["icao"] == kept:
+			destination.select(destination.item_count - 1)
+	if kept.is_empty() or not destination_options.has(kept):
+		destination.select(-1)
+
+
+func _range_hint() -> String:
+	var plane := _selected_id(aircraft)
+	if origin.selected < 0 or plane == 0:
+		return ""
+	var in_range := 0
+	for option in destination_options.values():
+		if option["in_range"]:
+			in_range += 1
+	var plane_name := aircraft.get_item_text(aircraft.selected)
+	var origin_icao: String = origin.get_selected_metadata()
+	if in_range == 0:
+		return "Von %s aus liegt mit %s kein Zielflughafen des Katalogs in Reichweite. Wähle ein Flugzeug mit größerer Reichweite oder sieh im Flotte-Tab unter Beschaffung nach." % [origin_icao, plane_name]
+	return "%d Zielflughäfen in Reichweite von %s stehen zuerst, nächster zuerst; weiter entfernte sind als außer Reichweite markiert." % [in_range, origin_icao]
+
+
 func _preview() -> void:
+	sync_destinations()
 	if origin.selected < 0 or destination.selected < 0:
 		preview.text = "Wähle Start- und Zielflughafen, um Entfernung und Reichweite zu prüfen." if origin.selected < 0 else "Zielflughafen wählen: Startflughafen ist %s." % origin.get_selected_metadata()
+		var hint := _range_hint()
+		if not hint.is_empty():
+			preview.text += "\n" + hint
 		UI.field_error(aircraft, "")
 		create_button.disabled = true
 		if aircraft.item_count == 0:

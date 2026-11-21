@@ -32,7 +32,8 @@ fn game() -> Game {
         g.buy_aircraft("a320_200").unwrap();
         g.staff_up();
         g.create_route("EDDF", destination, id).unwrap();
-        g.set_ticket_price(id, if id == 1 { 90 } else { 120 }).unwrap();
+        g.set_ticket_price(id, if id == 1 { 90 } else { 120 })
+            .unwrap();
         g.schedule(id, 1, 240).unwrap();
     }
     g.clock.set_running(true);
@@ -90,12 +91,25 @@ fn disabled_weather_is_exactly_neutral() {
     let mut with = with_seed(game(), 7);
     let mut without = with.clone();
     clear_weather(&mut without);
-    assert!(with.routes.iter().all(|r| r.plan.as_ref().unwrap().disruption.as_ref().unwrap().weather.is_some()));
+    assert!(with.routes.iter().all(|r| {
+        r.plan
+            .as_ref()
+            .unwrap()
+            .disruption
+            .as_ref()
+            .unwrap()
+            .weather
+            .is_some()
+    }));
     assert!(with.advance(120.0 * DAY as f64) && without.advance(120.0 * DAY as f64));
     assert_eq!(state(&with)["finance"], state(&without)["finance"]);
     assert_eq!(state(&with)["fleet"], state(&without)["fleet"]);
     assert_eq!(with.cash(), without.cash());
-    assert!(with.attention_snapshot().iter().all(|a| a.kind != "weather"));
+    assert!(
+        with.attention_snapshot()
+            .iter()
+            .all(|a| a.kind != "weather")
+    );
 }
 
 #[test]
@@ -105,8 +119,15 @@ fn episodes_are_pure_functions_with_configured_shapes() {
     for seed in [0, 1, 7, u64::MAX] {
         let c = w(seed);
         let days: Vec<u64> = (0..1460).step_by(2).collect();
-        let forward: Vec<_> = days.iter().map(|d| weather::visible_at(&c, d * DAY + 77)).collect();
-        let backward: Vec<_> = days.iter().rev().map(|d| weather::visible_at(&c, d * DAY + 80000)).collect();
+        let forward: Vec<_> = days
+            .iter()
+            .map(|d| weather::visible_at(&c, d * DAY + 77))
+            .collect();
+        let backward: Vec<_> = days
+            .iter()
+            .rev()
+            .map(|d| weather::visible_at(&c, d * DAY + 80000))
+            .collect();
         assert!(forward.iter().eq(backward.iter().rev()));
         for (i, day) in days.iter().enumerate() {
             for e in &forward[i] {
@@ -115,13 +136,24 @@ fn episodes_are_pure_functions_with_configured_shapes() {
                 assert!((k.min_days..=k.max_days).contains(&(e.end_day - e.start_day)));
                 assert!((k.min_delay_seconds..=k.max_delay_seconds).contains(&e.delay_seconds));
                 assert!((k.min_abs_latitude..=k.max_abs_latitude).contains(&a.latitude.abs()));
-                assert_eq!(e.announced_at(), e.start_day.saturating_sub(RULES.warning_days) * DAY);
+                assert_eq!(
+                    e.announced_at(),
+                    e.start_day.saturating_sub(RULES.warning_days) * DAY
+                );
                 assert!(e.announced_at() <= day * DAY && day * DAY < e.ends_at());
                 assert!(e.is_active(e.starts_at()) && !e.is_active(e.ends_at()));
-                let shift = if a.latitude < 0.0 { RULES.southern_shift_days } else { 0 };
+                let shift = if a.latitude < 0.0 {
+                    RULES.southern_shift_days
+                } else {
+                    0
+                };
                 let doy = (e.start_day + 365 - shift) % 365;
                 let (s, t) = (k.season_start_day, k.season_end_day);
-                assert!(if s <= t { (s..t).contains(&doy) } else { doy >= s || doy < t });
+                assert!(if s <= t {
+                    (s..t).contains(&doy)
+                } else {
+                    doy >= s || doy < t
+                });
                 // Delay applies on active days only, at midnight boundaries.
                 if e.is_active(day * DAY) {
                     assert!(weather::delay_seconds(&c, e.icao, day * DAY) >= e.delay_seconds);
@@ -130,7 +162,9 @@ fn episodes_are_pure_functions_with_configured_shapes() {
         }
         assert_ne!(
             forward,
-            days.iter().map(|d| weather::visible_at(&w(seed.wrapping_add(1)), d * DAY + 77)).collect::<Vec<_>>()
+            days.iter()
+                .map(|d| weather::visible_at(&w(seed.wrapping_add(1)), d * DAY + 77))
+                .collect::<Vec<_>>()
         );
     }
 }
@@ -147,10 +181,18 @@ fn weather_follows_latitude_and_season_and_stays_mild() {
             }
         }
     }
-    let total = |icao: &str| bad_days.iter().filter(|((i, _), _)| *i == icao).map(|(_, n)| n).sum::<u32>();
+    let total = |icao: &str| {
+        bad_days
+            .iter()
+            .filter(|((i, _), _)| *i == icao)
+            .map(|(_, n)| n)
+            .sum::<u32>()
+    };
     // Northern airport: far more bad days in winter quarters than summer.
-    let eddf_winter = bad_days.get(&("EDDF", 0)).copied().unwrap_or(0) + bad_days.get(&("EDDF", 3)).copied().unwrap_or(0);
-    let eddf_summer = bad_days.get(&("EDDF", 1)).copied().unwrap_or(0) + bad_days.get(&("EDDF", 2)).copied().unwrap_or(0);
+    let eddf_winter = bad_days.get(&("EDDF", 0)).copied().unwrap_or(0)
+        + bad_days.get(&("EDDF", 3)).copied().unwrap_or(0);
+    let eddf_summer = bad_days.get(&("EDDF", 1)).copied().unwrap_or(0)
+        + bad_days.get(&("EDDF", 2)).copied().unwrap_or(0);
     assert!(eddf_winter > eddf_summer * 2, "{bad_days:?}");
     for icao in ["EDDF", "SBGR", "WSSS", "YSSY", "OMDB"] {
         let share = f64::from(total(icao)) / 3650.0;
@@ -185,8 +227,12 @@ fn weather_delays_a_departure_and_the_rotation_behind_it() {
     let first = route(&g).plan.as_ref().unwrap().first_departure;
     let day_delay = weather::delay_seconds(&w(seed), "EDDF", first);
     // Scheduled departures that day pick up the weather delay at EDDF.
-    let hit = crate::disruptions::project(&route(&g), model, first + 1).unwrap().state;
-    let none = crate::disruptions::project(&route(&calm), model, first + 1).unwrap().state;
+    let hit = crate::disruptions::project(&route(&g), model, first + 1)
+        .unwrap()
+        .state;
+    let none = crate::disruptions::project(&route(&calm), model, first + 1)
+        .unwrap()
+        .state;
     if day_delay > 0 {
         assert!(hit.delay_seconds >= none.delay_seconds + day_delay.min(delay));
         assert_eq!(hit.weather_seconds, day_delay.min(hit.delay_seconds));
@@ -218,7 +264,12 @@ fn player_and_ai_share_airports_days_and_delays() {
             }
         }
     }
-    let ai_routes: Vec<_> = g.competitors.iter().flat_map(|c| c.game.routes.iter()).filter(|r| r.plan.is_some()).collect();
+    let ai_routes: Vec<_> = g
+        .competitors
+        .iter()
+        .flat_map(|c| c.game.routes.iter())
+        .filter(|r| r.plan.is_some())
+        .collect();
     assert!(!ai_routes.is_empty());
     let mut hit = 0;
     for r in ai_routes {
@@ -256,7 +307,10 @@ fn weather_matches_across_speeds_step_sizes_jumps_and_restarts() {
     assert_eq!(normal(&stepped), normal(&expected));
     let mut jumped = initial.clone();
     jumped.jump(90.0 * DAY as f64).ok();
-    assert_eq!(state(&jumped)["world_economy"], state(&expected)["world_economy"]);
+    assert_eq!(
+        state(&jumped)["world_economy"],
+        state(&expected)["world_economy"]
+    );
 }
 
 #[test]
@@ -268,11 +322,19 @@ fn v43_saves_get_no_retroactive_weather() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("old.json");
     crate::save::save(&path, &g).unwrap();
-    let mut old: serde_json::Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    let mut old: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
     old["version"] = 43.into();
     let strip = |game: &mut serde_json::Value| {
-        game["world_economy"].as_object_mut().unwrap().remove("weather_from");
-        for r in game["routes"]["routes"].as_array_mut().into_iter().flatten() {
+        game["world_economy"]
+            .as_object_mut()
+            .unwrap()
+            .remove("weather_from");
+        for r in game["routes"]["routes"]
+            .as_array_mut()
+            .into_iter()
+            .flatten()
+        {
             if let Some(c) = r.pointer_mut("/plan/disruption") {
                 c.as_object_mut().unwrap().remove("weather");
             }
@@ -287,7 +349,16 @@ fn v43_saves_get_no_retroactive_weather() {
     assert_eq!(loaded.world_economy.weather_from, now);
     let adopted = Weather::of(&loaded.world_economy);
     for r in &loaded.routes {
-        assert_eq!(r.plan.as_ref().unwrap().disruption.as_ref().unwrap().weather, Some(adopted));
+        assert_eq!(
+            r.plan
+                .as_ref()
+                .unwrap()
+                .disruption
+                .as_ref()
+                .unwrap()
+                .weather,
+            Some(adopted)
+        );
     }
     for c in &loaded.competitors {
         assert_eq!(c.game.world_economy, loaded.world_economy);
@@ -304,12 +375,21 @@ fn v43_saves_get_no_retroactive_weather() {
         }
     }
     for d in 0..400 {
-        assert!(weather::visible_at(&adopted, now + d * DAY).iter().all(|e| e.announced_at() >= now));
+        assert!(
+            weather::visible_at(&adopted, now + d * DAY)
+                .iter()
+                .all(|e| e.announced_at() >= now)
+        );
     }
     assert!((0..800).any(|d| !weather::visible_at(&adopted, now + d * DAY).is_empty()));
     assert_eq!(loaded.finance, g.finance);
     assert_eq!(loaded.cash(), g.cash());
-    assert!(loaded.attention_snapshot().iter().all(|a| a.kind != "weather"));
+    assert!(
+        loaded
+            .attention_snapshot()
+            .iter()
+            .all(|a| a.kind != "weather")
+    );
 }
 
 #[test]
@@ -319,7 +399,10 @@ fn attention_lists_weather_at_airports_the_player_flies_from() {
     'seeds: for seed in 1..3000 {
         let c = w(seed);
         for day in 3..120 {
-            if weather::visible_at(&c, day * DAY).iter().any(|e| e.icao == "EDDF" && e.announced_at() == day * DAY) {
+            if weather::visible_at(&c, day * DAY)
+                .iter()
+                .any(|e| e.icao == "EDDF" && e.announced_at() == day * DAY)
+            {
                 found = Some((seed, day));
                 break 'seeds;
             }
@@ -328,7 +411,11 @@ fn attention_lists_weather_at_airports_the_player_flies_from() {
     let (seed, day) = found.unwrap();
     let mut g = with_seed(game(), seed);
     assert!(g.advance((day * DAY + 100) as f64));
-    let entries: Vec<_> = g.attention_snapshot().into_iter().filter(|a| a.kind == "weather").collect();
+    let entries: Vec<_> = g
+        .attention_snapshot()
+        .into_iter()
+        .filter(|a| a.kind == "weather")
+        .collect();
     assert!(!entries.is_empty());
     assert!(entries.iter().all(|e| e.text.starts_with("Wetter in")));
 }
@@ -352,11 +439,18 @@ fn ten_year_ai_comparison_with_weather_on_and_off() {
                 println!(
                     "WEATHER year={year} airline={} fleet={}/{} cash={}/{} insolvent={}/{} late={}/{} of {}/{} delay_s={}/{}",
                     a.game.airline.as_ref().unwrap().name,
-                    a.game.fleet.len(), b.game.fleet.len(),
-                    a.game.cash(), b.game.cash(),
-                    a.game.insolvent(), b.game.insolvent(),
-                    ta.late_flights, tb.late_flights, ta.punctuality_flights, tb.punctuality_flights,
-                    ta.delay_seconds, tb.delay_seconds
+                    a.game.fleet.len(),
+                    b.game.fleet.len(),
+                    a.game.cash(),
+                    b.game.cash(),
+                    a.game.insolvent(),
+                    b.game.insolvent(),
+                    ta.late_flights,
+                    tb.late_flights,
+                    ta.punctuality_flights,
+                    tb.punctuality_flights,
+                    ta.delay_seconds,
+                    tb.delay_seconds
                 );
                 assert!(!a.game.insolvent() && !a.game.distressed());
                 assert!(a.game.cash() > b.game.cash() / 2 && a.game.cash() < b.game.cash() * 3 / 2);
@@ -376,7 +470,9 @@ fn board_row_reports_weather_delay_once_the_departure_is_late() {
     let first = r.plan.as_ref().unwrap().first_departure;
     let day_delay = weather::delay_seconds(&w(seed), "EDDF", first);
     if day_delay > 0 {
-        let state = crate::disruptions::project(r, "a320_200", first + 1).unwrap().state;
+        let state = crate::disruptions::project(r, "a320_200", first + 1)
+            .unwrap()
+            .state;
         let row = crate::operations::board_row(r, &g.fleet[0], Some(&state));
         assert_eq!(row.state_kind, "weather_delay");
         assert!(row.weather_delay && row.delay_seconds >= day_delay);

@@ -168,7 +168,11 @@ impl Cursor {
     pub(crate) fn weather_delay(&self, route: &Route, index: u64, scheduled: u64) -> u64 {
         let Some(w) = &self.weather else { return 0 };
         let reversed = route.plan.as_ref().is_some_and(|p| p.is_return(index));
-        let origin = if reversed { &route.destination_icao } else { &route.origin_icao };
+        let origin = if reversed {
+            &route.destination_icao
+        } else {
+            &route.origin_icao
+        };
         crate::weather::delay_seconds(w, origin, scheduled)
     }
     pub fn landed(&mut self, leg: Leg) -> Result<(), String> {
