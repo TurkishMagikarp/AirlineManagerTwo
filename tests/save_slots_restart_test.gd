@@ -107,10 +107,22 @@ func _outcome() -> Dictionary:
 func _continue(landing_seconds: int) -> Dictionary:
 	sim.start()
 	sim.set_speed(1)
-	assert(sim.advance(float(landing_seconds + 60) - sim.get_elapsed_seconds()))
+	if not _check(sim.advance(float(landing_seconds + 60) - sim.get_elapsed_seconds()), "Controlled advance to the landing"):
+		return {}
 	var landed := _outcome()
-	assert(sim.advance(86400.0))
+	if not _check(sim.advance(86400.0), "Controlled advance one day past the landing"):
+		return {}
 	return {"landed": landed, "later": _outcome()}
+
+
+## Revenue of the flights booked since `before` (newest archive entries), summed from the archive.
+func _new_flight_revenue(before: Dictionary, after: Dictionary) -> int:
+	var count: int = after["finance"]["flights"] - before["finance"]["flights"]
+	var archive: Array = after["archive"]
+	var total := 0
+	for i in range(mini(count, archive.size())):
+		total += archive[i]["revenue_eur"]
+	return total
 
 
 func _landings(archive: Array, landing: String) -> int:
@@ -242,6 +254,8 @@ func _write() -> void:
 	if not _check(_landings(snap_b["results"], landing_text) == 0, "Landing not booked yet at B"):
 		return
 	var reference := _continue(landing)
+	if reference.is_empty():
+		return
 	var landed: Dictionary = reference["landed"]
 	if not _check(_landings(landed["archive"], landing_text) == 1 and landed["finance"]["flights"] == snap_b["finance"]["flights"] + 1, "Reference lands the identified flight once"):
 		return
@@ -355,6 +369,8 @@ func _continue_checks(expected: Dictionary) -> void:
 		return
 	var reference: Dictionary = expected["reference"]
 	var again := _continue(expected["landing_seconds"])
+	if again.is_empty():
+		return
 	for stage in ["landed", "later"]:
 		var got: Dictionary = again[stage]
 		var want: Dictionary = reference[stage]
@@ -363,10 +379,17 @@ func _continue_checks(expected: Dictionary) -> void:
 				return
 		if not _check(_landings(got["archive"], landing) == 1 and _landings(got["results"], landing) == 1, "%s: identified flight appears exactly once" % stage):
 			return
-	var before_flights: int = expected["b"]["finance"]["flights"]
-	var landed_result: Dictionary = again["landed"]["archive"].filter(func(f): return f["landing"] == landing)[0]
-	var delta: int = again["landed"]["finance"]["company_revenue_eur"] - expected["b"]["finance"]["company_revenue_eur"]
-	if not _check(again["landed"]["finance"]["flights"] == before_flights + 1 and delta >= landed_result["revenue_eur"], "Landing booked once in company flights and revenue"):
+	var before: Dictionary = expected["b"]
+	var booked: Dictionary = again["landed"]
+	var new_flights: int = booked["finance"]["flights"] - before["finance"]["flights"]
+	if not _check(new_flights == 1, "Landing booked once in company flights (%d new)" % new_flights):
+		return
+	var landed_result: Dictionary = booked["archive"].filter(func(f): return f["landing"] == landing)[0]
+	var delta: int = booked["finance"]["company_revenue_eur"] - before["finance"]["company_revenue_eur"]
+	if not _check(delta == landed_result["revenue_eur"] and delta == _new_flight_revenue(before, booked), "Company revenue rose by exactly the landing's revenue (%d vs %d)" % [delta, landed_result["revenue_eur"]]):
+		return
+	var later: Dictionary = again["later"]
+	if not _check(later["finance"]["company_revenue_eur"] - before["finance"]["company_revenue_eur"] == _new_flight_revenue(before, later), "Revenue after a further day equals the archive sum"):
 		return
 
 
