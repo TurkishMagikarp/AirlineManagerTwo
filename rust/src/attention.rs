@@ -191,11 +191,10 @@ impl Game {
                 });
             }
         }
+        let gaps = self.crew_gaps();
         for p in &self.fleet {
             if let Ok(n) = staff::needs(&p.model_id)
-                && self.planned_route(p.id).is_some()
-                && (self.rated_count(&n.rating) < self.rated_busy(&n.rating)
-                    || self.staff_count(staff::Role::CabinCrew) < self.reserved_crew().1)
+                && gaps.iter().any(|g| g.0 == p.id)
             {
                 add(
                     "crew",
